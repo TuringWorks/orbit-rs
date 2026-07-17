@@ -170,6 +170,42 @@ make all                # Full pipeline: format, check, test, build
 - Tokio with `#[tokio::main]` for binaries
 - `#[tokio::test]` for async tests
 
+### Code Design Principles
+
+Beyond passing `make check`, write code that is idiomatic, functional-leaning, and operable. These apply to all new and refactored Rust code.
+
+#### Rust Idioms & Design Patterns
+- **Model with the type system.** Use the newtype pattern (`struct NodeId(Uuid)`) to give primitives meaning; make illegal states unrepresentable with enums rather than boolean flags or sentinel values.
+- **Builder / type-state patterns** for multi-step construction and configuration; prefer a builder over functions with many `Option` parameters.
+- **Program to traits, not concretes.** Define behavior in traits (as `PersistenceProvider` does); use `impl Trait`/generic bounds for static dispatch on hot paths and `dyn Trait` behind `Arc` for pluggable backends.
+- **RAII for resources.** Encode acquire/release of locks, connections, leases, and transactions in ownership and `Drop`; never expose manual `close()`-then-forget lifecycles.
+- **Conversions via traits.** Implement `From`/`TryFrom` instead of ad-hoc `to_x`/`parse_x` helpers; accept `impl AsRef<str>` / `impl Into<T>` at API boundaries.
+- **Keep public APIs evolvable** with sealed traits and `#[non_exhaustive]` on public enums and error types; add `#[must_use]` to guards, builders, and `Result`-like handles.
+
+#### Functional Style
+- **Immutability by default** — prefer `let` over `let mut`; use `mut` only when it measurably simplifies or speeds up the code.
+- **Iterators over manual loops** — express transformations as `iter().map().filter().collect()` / `fold` / `try_fold` chains rather than index loops with mutable accumulators.
+- **Combinators over branching** — use `Option`/`Result` combinators (`map`, `and_then`, `ok_or`, `unwrap_or_else`, `?`) and `match` instead of nested `if let` ladders.
+- **Pure functions at the core, effects at the edges.** Keep business/query logic side-effect-free and testable; push I/O, logging, and mutation to the boundaries.
+- **Avoid shared mutable state**; when unavoidable, isolate it behind an actor, a channel, or a single documented `Arc<Mutex<_>>`/`RwLock<_>`.
+
+#### Reliability & Maintainability
+- **Never `.unwrap()`/`.expect()`/`panic!` in non-test, non-`main` code** — propagate with `?`, model errors as `thiserror` variants, and add context via `anyhow::Context`.
+- **Exhaustive `match`** — avoid catch-all `_ =>` arms on domain enums so new variants surface as compile errors.
+- **Small, single-responsibility functions** that respect the cognitive-complexity-15 limit.
+- **Document every public item** with `///` (with an example and `# Errors` / `# Panics` sections where relevant).
+- **`unsafe` is a last resort** — justify each block with a `// SAFETY:` comment and cover it with tests.
+- **Test the contract, not the implementation** — prefer property/table-driven tests for pure logic; keep async tests deterministic.
+
+#### 12-Factor App Principles (where applicable)
+Orbit-RS already uses `tracing` + `tracing-subscriber` (env-filter), `serde`/TOML config, `clap`, and graceful shutdown — build on these:
+- **III. Config in the environment** — read tunables from env vars layered over `config/orbit-server.toml`; never hardcode ports, hosts, credentials, or paths; keep secrets out of source.
+- **IV. Backing services as attached resources** — treat RocksDB, S3/Iceberg, etcd, TiKV, and peer nodes as swappable resources addressed by config/URL (the `PersistenceProvider` trait models this).
+- **VI. Stateless, share-nothing processes** — keep durable state in backing services; a restart must be safe and actor/session state recoverable or replicated.
+- **IX. Disposability** — fast startup, graceful shutdown on SIGTERM/ctrl-c (drain connections, flush WAL, release leases); make operations crash-safe and idempotent where possible.
+- **XI. Logs as event streams** — emit structured events via `tracing` to stdout/stderr; never manage log files in-process; use spans for context and `RUST_LOG` for verbosity.
+- **X. Dev/prod parity** — same binary and config schema across dev, cluster, and Kubernetes; express differences through config/env, not `#[cfg]` forks of behavior.
+
 ## Key Directories
 
 ```

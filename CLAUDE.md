@@ -163,6 +163,43 @@ orbit-rs/
 - Tokio with `#[tokio::main]` for binaries
 - `#[tokio::test]` for async tests
 
+## Code Design Principles
+
+Beyond passing `make check`, write code that is idiomatic, functional-leaning, and operable. These apply to all new and refactored Rust code.
+
+### Rust Idioms & Design Patterns
+- **Model with the type system.** Use the newtype pattern (`struct NodeId(Uuid)`) to give primitives meaning and prevent mix-ups. Make illegal states unrepresentable with enums rather than boolean flags or sentinel values.
+- **Builder / type-state patterns** for multi-step construction and configuration (server, cluster, connection, transaction builders). Prefer a builder over functions with many `Option` parameters.
+- **Program to traits, not concretes.** Define behavior in traits (as `PersistenceProvider` already does); use `impl Trait`/generic bounds for static dispatch on hot paths and `dyn Trait` behind `Arc` for pluggable backends.
+- **RAII for resources.** Encode acquire/release of locks, connections, leases, and transactions in ownership and `Drop`; never expose a manual `close()`-then-forget lifecycle.
+- **Conversions via traits.** Implement `From`/`TryFrom` instead of ad-hoc `to_x`/`parse_x` helpers; accept `impl AsRef<str>` / `impl Into<T>` at API boundaries.
+- **Keep public APIs evolvable** with sealed traits and `#[non_exhaustive]` on public enums and error types.
+- Add `#[must_use]` to functions returning guards, builders, or `Result`-like handles that must not be silently dropped.
+
+### Functional Style
+- **Immutability by default.** Prefer `let` over `let mut`; reach for `mut` only when it measurably simplifies or speeds up the code.
+- **Iterators over manual loops.** Express transformations as `iter().map().filter().collect()` / `fold` / `try_fold` chains rather than index loops with mutable accumulators.
+- **Combinators over branching.** Use `Option`/`Result` combinators (`map`, `and_then`, `ok_or`, `unwrap_or_else`, `?`) and `match` instead of nested `if let` ladders.
+- **Pure functions at the core, effects at the edges.** Keep business/query logic in side-effect-free functions that take inputs and return values; push I/O, logging, and mutation to the boundaries. Pure logic is trivially testable.
+- **Avoid shared mutable state.** When it is unavoidable, isolate it behind an actor, a channel, or a single `Arc<Mutex<_>>`/`RwLock<_>` with a documented invariant.
+
+### Reliability & Maintainability
+- **Never `.unwrap()`/`.expect()`/`panic!` in non-test, non-`main` code.** Propagate with `?`, model errors as `thiserror` variants, and add context with `anyhow::Context` (`.with_context(|| ...)`).
+- **Exhaustive `match`.** Avoid catch-all `_ =>` arms on domain enums so new variants surface as compile errors.
+- **Small, single-responsibility functions** that respect the cognitive-complexity-15 limit. Extract helpers rather than nest deeply.
+- **Document every public item** with `///`, including an example and `# Errors` / `# Panics` sections where relevant.
+- **`unsafe` is a last resort** — justify each block with a `// SAFETY:` comment and cover it with tests.
+- **Test the contract, not the implementation.** Prefer property/table-driven tests for pure logic; keep async tests deterministic.
+
+### 12-Factor App Principles (where applicable)
+Orbit-RS already uses `tracing` + `tracing-subscriber` (env-filter), `serde`/TOML config, `clap`, and graceful shutdown — build on these:
+- **III. Config in the environment.** Read tunables from env vars layered over `config/orbit-server.toml`; never hardcode ports, hosts, credentials, or paths. Secrets come from env or a secret store, never source.
+- **IV. Backing services as attached resources.** Treat RocksDB, S3/Iceberg, etcd, TiKV, and peer nodes as swappable resources addressed by config/URL — swapping a backend requires no code change (the `PersistenceProvider` trait already models this).
+- **VI. Stateless, share-nothing processes.** Keep durable state in backing services; a process restart must be safe, and actor/session state must be recoverable or replicated.
+- **IX. Disposability.** Fast startup and graceful shutdown on SIGTERM/ctrl-c (drain connections, flush WAL, release leases); make operations crash-safe and idempotent where possible.
+- **XI. Logs as event streams.** Emit structured events via `tracing` to stdout/stderr; never manage log files in-process. Use spans for request/transaction context and control verbosity with `RUST_LOG`.
+- **X. Dev/prod parity.** Same binary and config schema across dev, cluster, and Kubernetes; express differences through config/env, not `#[cfg]` forks of behavior.
+
 ## TLS Integration Tests
 
 TLS tests require self-signed certificates in `config/certs/`. These tests are marked `#[ignore]` and must be run explicitly:

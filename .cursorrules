@@ -74,6 +74,35 @@ When making breaking changes to protocols/APIs, also update:
 - Functions: snake_case
 - Constants: SCREAMING_SNAKE_CASE
 
+## Code Design Principles
+
+### Rust Idioms & Patterns
+- Model with the type system: newtypes for domain IDs, enums to make illegal states unrepresentable (no boolean flags / sentinel values).
+- Use builder / type-state patterns instead of functions with many `Option` params.
+- Program to traits (e.g., `PersistenceProvider`): `impl Trait`/generics for static dispatch, `dyn Trait` behind `Arc` for pluggable backends.
+- RAII for locks/connections/leases/transactions via ownership + `Drop`; no manual `close()` lifecycles.
+- Prefer `From`/`TryFrom` over ad-hoc converters; use `#[non_exhaustive]` on public enums/errors and `#[must_use]` on guards/builders.
+
+### Functional Style
+- Immutability by default — prefer `let` over `let mut`.
+- Iterators/combinators over manual loops (`map`/`filter`/`fold`/`try_fold`).
+- `Option`/`Result` combinators and `?` over nested `if let`; exhaustive `match` (no catch-all `_` on domain enums).
+- Pure functions at the core; push I/O, logging, and mutation to the edges. Avoid shared mutable state.
+
+### Reliability & Maintainability
+- Never `.unwrap()`/`.expect()`/`panic!` outside tests/`main` — propagate with `?`, add `anyhow::Context`, model errors with `thiserror`.
+- Small, single-responsibility functions (cognitive complexity ≤ 15); document public items with `///`.
+- `unsafe` only as a last resort, with a `// SAFETY:` comment and tests.
+
+### 12-Factor App (where applicable)
+Build on existing `tracing`/`tracing-subscriber`, TOML config, `clap`, and graceful shutdown:
+- Config in the environment (env vars over `config/orbit-server.toml`); no hardcoded ports/hosts/secrets.
+- Backing services (RocksDB, S3/Iceberg, etcd, TiKV, peers) as swappable, config-addressed resources.
+- Stateless, share-nothing processes; state lives in backing services and must survive restart.
+- Graceful shutdown on SIGTERM/ctrl-c (drain, flush WAL, release leases); idempotent operations.
+- Logs as event streams via `tracing` to stdout/stderr (`RUST_LOG` controls verbosity); no in-process log files.
+- Dev/prod parity: same binary + config schema across dev, cluster, and K8s.
+
 ## Testing
 ```bash
 make test               # All tests
