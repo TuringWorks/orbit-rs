@@ -118,8 +118,8 @@ paste = "1.0"
 exponential-backoff = "2.0"  # Replaces unmaintained backoff
 
 # Testing
-mockall = "0.13"
-cucumber = "0.21"
+mockall = "0.15"
+cucumber = "0.23"
 proptest = "1.4"
 tokio-test = "0.4"
 rand = "0.10"
