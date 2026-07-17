@@ -229,15 +229,15 @@ impl EventStore {
     pub async fn get_events_by_type(&self, aggregate_type: &str) -> OrbitResult<Vec<DomainEvent>> {
         let events = self.events.read().await;
 
-        let mut result = Vec::new();
-        for aggregate_events in events.values() {
-            result.extend(
+        let mut result: Vec<DomainEvent> = events
+            .values()
+            .flat_map(|aggregate_events| {
                 aggregate_events
                     .iter()
                     .filter(|e| e.aggregate_type == aggregate_type)
-                    .cloned(),
-            );
-        }
+                    .cloned()
+            })
+            .collect();
 
         // Sort by timestamp
         result.sort_by_key(|e| e.timestamp);
@@ -280,32 +280,17 @@ impl EventStore {
         T: Clone,
         F: Fn(T, &DomainEvent) -> OrbitResult<T>,
     {
-        let mut state = initial_state;
-
-        // Check for snapshot first
-        if let Some(snapshot) = self.get_snapshot(aggregate_id).await {
-            // In a real implementation, we would deserialize state from snapshot
-            // For now, we'll start from initial state
+        // Replay from just after a snapshot's sequence when one exists, otherwise
+        // from the beginning. (Snapshot state deserialization is not yet implemented,
+        // so we always begin from `initial_state` and replay the remaining events.)
+        let from_sequence = self.get_snapshot(aggregate_id).await.map(|snapshot| {
             debug!("Using snapshot at sequence {}", snapshot.last_sequence);
+            snapshot.last_sequence + 1
+        });
 
-            // Get events after snapshot
-            let events = self
-                .get_events(aggregate_id, Some(snapshot.last_sequence + 1))
-                .await?;
+        let events = self.get_events(aggregate_id, from_sequence).await?;
 
-            for event in events {
-                state = apply_event(state, &event)?;
-            }
-        } else {
-            // No snapshot, replay all events
-            let events = self.get_events(aggregate_id, None).await?;
-
-            for event in events {
-                state = apply_event(state, &event)?;
-            }
-        }
-
-        Ok(state)
+        events.iter().try_fold(initial_state, apply_event)
     }
 
     /// Get event store statistics
@@ -467,6 +452,30 @@ mod tests {
             .unwrap();
 
         assert_eq!(final_state, 15); // 1+2+3+4+5
+    }
+
+    #[tokio::test]
+    async fn test_rebuild_state_propagates_apply_error() {
+        let store = EventStore::new(EventStoreConfig::default());
+        for i in 1..=3 {
+            let event = DomainEvent::new(
+                "counter-err".to_string(),
+                "Counter".to_string(),
+                "Incremented".to_string(),
+                serde_json::json!({ "amount": i }),
+            );
+            store.append_event(event).await.unwrap();
+        }
+
+        // try_fold must short-circuit on the first Err returned by apply_event.
+        let result: OrbitResult<i64> = store
+            .rebuild_state("counter-err", 0i64, |_state, _event| {
+                Err(crate::error::OrbitError::internal("apply failed"))
+            })
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("apply failed"));
     }
 
     #[test]
