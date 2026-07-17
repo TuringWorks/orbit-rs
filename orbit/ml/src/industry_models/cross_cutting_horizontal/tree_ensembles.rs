@@ -64,7 +64,7 @@ impl TreeNode {
         let n_features_to_try = ((n_features as f64).sqrt().ceil() as usize).max(1);
         let feature_indices: Vec<usize> = (0..n_features).collect();
         let sampled_features: Vec<usize> = feature_indices
-            .choose_multiple(rng, n_features_to_try.min(n_features))
+            .sample(rng, n_features_to_try.min(n_features))
             .cloned()
             .collect();
 
@@ -422,7 +422,7 @@ impl IndustryModel for GradientBoostingModel {
                 let n_subsample = ((n_samples as f64 * self.subsample) as usize).max(1);
                 (0..n_samples)
                     .collect::<Vec<_>>()
-                    .choose_multiple(&mut rng, n_subsample)
+                    .sample(&mut rng, n_subsample)
                     .cloned()
                     .collect()
             } else {

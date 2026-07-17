@@ -4389,12 +4389,12 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
 
                     // Miscellaneous expressions: $rand, $meta, bitwise ops, $sortArray
                     "$rand" => {
-                        use rand::Rng;
+                        use rand::RngExt;
                         let mut rng = rand::rng();
                         Bson::Double(rng.random::<f64>())
                     }
                     "$sampleRate" => {
-                        use rand::Rng;
+                        use rand::RngExt;
                         if let Some(rate) = bson_to_f64(args) {
                             let mut rng = rand::rng();
                             Bson::Boolean(rng.random::<f64>() < rate)

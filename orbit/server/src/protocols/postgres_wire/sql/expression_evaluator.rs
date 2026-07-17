@@ -4047,7 +4047,7 @@ impl ExpressionEvaluator {
                 use rand::seq::IndexedRandom;
                 let mut rng = rand::rng();
                 let count = (*n).max(0) as usize;
-                let sample: Vec<SqlValue> = arr.choose_multiple(&mut rng, count).cloned().collect();
+                let sample: Vec<SqlValue> = arr.sample(&mut rng, count).cloned().collect();
                 Ok(SqlValue::Array(sample))
             }
             (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),

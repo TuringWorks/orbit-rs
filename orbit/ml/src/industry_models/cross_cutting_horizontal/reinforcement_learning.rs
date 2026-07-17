@@ -10,7 +10,7 @@
 
 use super::super::common::{IndustryModel, IndustryModelError, ModelMetrics, Result};
 use rand::distr::Uniform;
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 
 // ============================================================================

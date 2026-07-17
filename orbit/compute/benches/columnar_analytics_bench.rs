@@ -7,7 +7,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use orbit_compute::columnar_analytics::{
     AggregateFunction, ColumnarAnalyticsConfig, GPUColumnarAnalytics,
 };
-use rand::Rng;
+use rand::RngExt;
 
 /// Generate random i32 values for testing
 fn generate_random_i32(count: usize) -> Vec<i32> {

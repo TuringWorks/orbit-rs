@@ -2164,7 +2164,7 @@ impl AqlQueryEngine {
                 }
             }
             "RAND" => {
-                use rand::Rng;
+                use rand::RngExt;
                 let mut rng = rand::rng();
                 Ok(AqlValue::Number(
                     serde_json::Number::from_f64(rng.random::<f64>())
@@ -2172,7 +2172,7 @@ impl AqlQueryEngine {
                 ))
             }
             "RANDOM_TOKEN" => {
-                use rand::Rng;
+                use rand::RngExt;
                 let length = args
                     .first()
                     .and_then(|v| {
