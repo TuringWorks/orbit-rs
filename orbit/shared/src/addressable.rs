@@ -24,11 +24,70 @@ impl fmt::Display for Key {
     }
 }
 
+impl Key {
+    /// Construct a string key from anything convertible into a `String`.
+    pub fn string(key: impl Into<String>) -> Self {
+        Key::StringKey { key: key.into() }
+    }
+
+    /// Construct a 32-bit integer key.
+    pub fn int32(key: i32) -> Self {
+        Key::Int32Key { key }
+    }
+
+    /// Construct a 64-bit integer key.
+    pub fn int64(key: i64) -> Self {
+        Key::Int64Key { key }
+    }
+
+    /// Returns `true` if this is [`Key::NoKey`].
+    pub fn is_no_key(&self) -> bool {
+        matches!(self, Key::NoKey)
+    }
+}
+
+impl From<&str> for Key {
+    fn from(key: &str) -> Self {
+        Key::StringKey {
+            key: key.to_owned(),
+        }
+    }
+}
+
+impl From<String> for Key {
+    fn from(key: String) -> Self {
+        Key::StringKey { key }
+    }
+}
+
+impl From<i32> for Key {
+    fn from(key: i32) -> Self {
+        Key::Int32Key { key }
+    }
+}
+
+impl From<i64> for Key {
+    fn from(key: i64) -> Self {
+        Key::Int64Key { key }
+    }
+}
+
 /// Reference to an addressable (type + key)
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AddressableReference {
     pub addressable_type: AddressableType,
     pub key: Key,
+}
+
+impl AddressableReference {
+    /// Build a reference from an addressable type name and any value convertible
+    /// into a [`Key`] (`&str`, `String`, `i32`, `i64`, or an existing `Key`).
+    pub fn new(addressable_type: impl Into<AddressableType>, key: impl Into<Key>) -> Self {
+        Self {
+            addressable_type: addressable_type.into(),
+            key: key.into(),
+        }
+    }
 }
 
 impl fmt::Display for AddressableReference {
@@ -42,6 +101,22 @@ impl fmt::Display for AddressableReference {
 pub struct NamespacedAddressableReference {
     pub namespace: String,
     pub addressable_reference: AddressableReference,
+}
+
+impl NamespacedAddressableReference {
+    /// Build a namespaced reference from a namespace and an existing reference.
+    pub fn new(namespace: impl Into<String>, addressable_reference: AddressableReference) -> Self {
+        Self {
+            namespace: namespace.into(),
+            addressable_reference,
+        }
+    }
+}
+
+impl fmt::Display for NamespacedAddressableReference {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}/{}", self.namespace, self.addressable_reference)
+    }
 }
 
 /// Arguments for an addressable invocation
@@ -428,5 +503,57 @@ mod tests {
     #[test]
     fn test_addressable_trait() {
         assert_eq!(TestActor::addressable_type(), "TestActor");
+    }
+
+    #[test]
+    fn test_key_from_conversions() {
+        assert_eq!(Key::from("abc"), Key::StringKey { key: "abc".into() });
+        assert_eq!(Key::from(String::from("abc")), Key::string("abc"));
+        assert_eq!(Key::from(42i32), Key::int32(42));
+        assert_eq!(Key::from(42i64), Key::int64(42));
+    }
+
+    #[test]
+    fn test_key_constructors_and_is_no_key() {
+        assert_eq!(Key::string("x").to_string(), "x");
+        assert_eq!(Key::int32(7).to_string(), "7");
+        assert_eq!(Key::int64(-1).to_string(), "-1");
+        assert!(Key::NoKey.is_no_key());
+        assert!(!Key::string("x").is_no_key());
+    }
+
+    #[test]
+    fn test_addressable_reference_new_accepts_any_key_type() {
+        // `impl Into<Key>` lets &str / i32 / i64 / Key all be passed directly.
+        assert_eq!(
+            AddressableReference::new("StringActor", "test").to_string(),
+            "StringActor:test"
+        );
+        assert_eq!(
+            AddressableReference::new("Int32Actor", 42i32).to_string(),
+            "Int32Actor:42"
+        );
+        assert_eq!(
+            AddressableReference::new("SingletonActor", Key::NoKey).to_string(),
+            "SingletonActor:no-key"
+        );
+        // Equivalent to the struct-literal form it replaces.
+        assert_eq!(
+            AddressableReference::new("A", "k"),
+            AddressableReference {
+                addressable_type: "A".to_string(),
+                key: Key::StringKey {
+                    key: "k".to_string()
+                },
+            }
+        );
+    }
+
+    #[test]
+    fn test_namespaced_reference_new_and_display() {
+        let ns =
+            NamespacedAddressableReference::new("prod", AddressableReference::new("Bank", 7i64));
+        assert_eq!(ns.namespace, "prod");
+        assert_eq!(ns.to_string(), "prod/Bank:7");
     }
 }
