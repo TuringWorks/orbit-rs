@@ -41,8 +41,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
-
+thiserror.workspace = true
 # Utilities
 chrono = "0.4"
 dirs = "5.0"
