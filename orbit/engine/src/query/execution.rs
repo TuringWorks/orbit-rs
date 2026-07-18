@@ -604,17 +604,17 @@ impl VectorizedExecutor {
 
     /// Extract specific rows from a batch by index
     fn select_rows(&self, batch: &ColumnBatch, indices: &[usize]) -> EngineResult<ColumnBatch> {
-        let mut new_columns = Vec::new();
-        let mut new_null_bitmaps = Vec::new();
+        let new_columns = batch
+            .columns
+            .iter()
+            .map(|column| self.select_column_rows(column, indices))
+            .collect::<EngineResult<Vec<_>>>()?;
 
-        for (col_idx, column) in batch.columns.iter().enumerate() {
-            let new_column = self.select_column_rows(column, indices)?;
-            let new_null_bitmap =
-                self.select_null_bitmap_rows(&batch.null_bitmaps[col_idx], indices);
-
-            new_columns.push(new_column);
-            new_null_bitmaps.push(new_null_bitmap);
-        }
+        let new_null_bitmaps = batch
+            .null_bitmaps
+            .iter()
+            .map(|bitmap| self.select_null_bitmap_rows(bitmap, indices))
+            .collect();
 
         Ok(ColumnBatch {
             columns: new_columns,
