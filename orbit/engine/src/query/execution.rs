@@ -324,37 +324,38 @@ impl VectorizedExecutor {
         batch: &ColumnBatch,
         column_indices: &[usize],
     ) -> EngineResult<ColumnBatch> {
-        let mut new_columns = Vec::new();
-        let mut new_null_bitmaps = Vec::new();
-        let mut new_column_names = Vec::new();
-
-        for &idx in column_indices {
-            if idx >= batch.columns.len() {
-                return Err(EngineError::storage(format!(
-                    "Column index {} out of bounds",
-                    idx
-                )));
-            }
-
-            new_columns.push(batch.columns[idx].clone());
-            new_null_bitmaps.push(batch.null_bitmaps[idx].clone());
-
-            if let Some(ref names) = batch.column_names {
-                new_column_names.push(names[idx].clone());
-            }
+        // Validate all indices up front so the projection itself is infallible.
+        if let Some(&idx) = column_indices
+            .iter()
+            .find(|&&idx| idx >= batch.columns.len())
+        {
+            return Err(EngineError::storage(format!(
+                "Column index {idx} out of bounds"
+            )));
         }
 
-        let column_names = if new_column_names.is_empty() {
-            None
-        } else {
-            Some(new_column_names)
-        };
-
         Ok(ColumnBatch {
-            columns: new_columns,
-            null_bitmaps: new_null_bitmaps,
+            columns: column_indices
+                .iter()
+                .map(|&idx| batch.columns[idx].clone())
+                .collect(),
+            null_bitmaps: column_indices
+                .iter()
+                .map(|&idx| batch.null_bitmaps[idx].clone())
+                .collect(),
             row_count: batch.row_count,
-            column_names,
+            // Names are carried only when the source batch has them and at least
+            // one column is projected (matches the original accumulation logic).
+            column_names: batch
+                .column_names
+                .as_ref()
+                .filter(|_| !column_indices.is_empty())
+                .map(|names| {
+                    column_indices
+                        .iter()
+                        .map(|&idx| names[idx].clone())
+                        .collect()
+                }),
         })
     }
 
@@ -2012,6 +2013,35 @@ mod tests {
         } else {
             panic!("Expected column names");
         }
+    }
+
+    #[test]
+    fn test_projection_out_of_bounds_errors() {
+        let executor = VectorizedExecutor::new();
+        let batch = ColumnBatch {
+            columns: vec![Column::Int32(vec![1, 2, 3])],
+            null_bitmaps: vec![NullBitmap::new_all_valid(3)],
+            row_count: 3,
+            column_names: Some(vec!["id".to_string()]),
+        };
+        // Index 5 is out of range for a single-column batch.
+        assert!(executor.execute_projection(&batch, &[0, 5]).is_err());
+    }
+
+    #[test]
+    fn test_projection_empty_indices_drops_names() {
+        let executor = VectorizedExecutor::new();
+        let batch = ColumnBatch {
+            columns: vec![Column::Int32(vec![1, 2, 3])],
+            null_bitmaps: vec![NullBitmap::new_all_valid(3)],
+            row_count: 3,
+            column_names: Some(vec!["id".to_string()]),
+        };
+        let projected = executor.execute_projection(&batch, &[]).unwrap();
+        assert_eq!(projected.columns.len(), 0);
+        assert_eq!(projected.row_count, 3);
+        // No columns selected => no names carried, even though the source had them.
+        assert!(projected.column_names.is_none());
     }
 
     #[test]
