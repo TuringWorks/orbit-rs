@@ -11,6 +11,7 @@ pub mod graphrag;
 pub mod hash;
 pub mod hyperloglog;
 pub mod list;
+pub mod llm;
 pub mod pubsub;
 pub mod scripting;
 pub mod server;
@@ -36,7 +37,7 @@ mod handler {
     use super::{
         acl::AclCommands, cluster::ClusterCommands, connection::ConnectionCommands,
         functions::FunctionCommands, graph::GraphCommands, graphrag::GraphRAGCommands,
-        hash::HashCommands, hyperloglog::HyperLogLogCommands, list::ListCommands,
+        hash::HashCommands, hyperloglog::HyperLogLogCommands, list::ListCommands, llm::LlmCommands,
         pubsub::PubSubCommands, scripting::ScriptingCommands, server::ServerCommands,
         set::SetCommands, sorted_set::SortedSetCommands, stream::StreamCommands,
         string::StringCommands, time_series::TimeSeriesCommands, transactions::TransactionCommands,
@@ -68,6 +69,7 @@ mod handler {
         TimeSeries,
         Graph,
         GraphRAG,
+        Llm,
         Server,
         Transactions,
         Unknown,
@@ -98,6 +100,7 @@ mod handler {
         time_series: TimeSeriesCommands,
         graph: GraphCommands,
         graphrag: GraphRAGCommands,
+        llm: LlmCommands,
         server: ServerCommands,
         transactions: TransactionCommands,
     }
@@ -140,6 +143,7 @@ mod handler {
                 time_series: TimeSeriesCommands::new(orbit_client.clone(), local_registry.clone()),
                 graph: GraphCommands::new(orbit_client.clone(), local_registry.clone()),
                 graphrag: GraphRAGCommands::new(orbit_client.clone(), local_registry.clone()),
+                llm: LlmCommands::new(orbit_client.clone(), local_registry.clone()),
                 server: ServerCommands::new(orbit_client.clone(), local_registry.clone()),
                 transactions: TransactionCommands::new(
                     orbit_client.clone(),
@@ -223,6 +227,9 @@ mod handler {
                 }
                 CommandCategory::GraphRAG => {
                     CommandHandlerTrait::handle(&self.graphrag, &command_name, &args).await
+                }
+                CommandCategory::Llm => {
+                    CommandHandlerTrait::handle(&self.llm, &command_name, &args).await
                 }
                 CommandCategory::Server => {
                     CommandHandlerTrait::handle(&self.server, &command_name, &args).await
@@ -329,6 +336,9 @@ mod handler {
 
                 // GraphRAG commands
                 cmd if cmd.starts_with("GRAPHRAG.") => CommandCategory::GraphRAG,
+
+                // LLM model-management and inference commands
+                cmd if cmd.starts_with("LLM.") => CommandCategory::Llm,
 
                 // Server commands
                 "INFO" | "DBSIZE" | "FLUSHDB" | "FLUSHALL" | "COMMAND" => CommandCategory::Server,

@@ -633,6 +633,111 @@ commit_interval_secs = 5
 enable_merge_optimization = true
 
 # ================================
+# LLM PROVIDERS AND MODEL PROFILES
+# ================================
+#
+# Named, switchable model profiles. Every AI surface (GraphRAG, the RESP LLM.* commands) resolves
+# models through this registry, so switching one switches all of them.
+#
+# Runtime switching needs no restart and no edit to this file:
+#   redis-cli LLM.MODELS
+#   redis-cli LLM.REGISTER fast ollama llama3.2 TEMPERATURE 0.2
+#   redis-cli LLM.USE fast
+#   redis-cli LLM.STATS
+#
+# CREDENTIALS DO NOT BELONG IN THIS FILE (12-factor III). Leave api_key unset and supply it from
+# the environment; anything set here is redacted when the config is dumped, but it is still a
+# secret checked into a config directory.
+#
+# Environment variables, in increasing precedence:
+#   OPENAI_API_KEY / ANTHROPIC_API_KEY   credential for any profile of that provider lacking one
+#   OLLAMA_HOST                          base URL for every Ollama profile
+#   ORBIT_LLM_DEFAULT_PROFILE            overrides default_profile below
+#   ORBIT_LLM_<PROFILE>_API_KEY          credential for one profile
+#   ORBIT_LLM_<PROFILE>_BASE_URL         endpoint for one profile
+#   ORBIT_LLM_<PROFILE>_MODEL            model for one profile
+# <PROFILE> is the profile name uppercased with '-' and '.' replaced by '_'.
+#
+# If no [llm] section and no credentials are present, AI features report that no model is
+# configured rather than failing inside a query.
+
+[llm]
+enabled = false
+
+# Profile used when a request names none. LLM.USE changes this at runtime.
+default_profile = "local"
+
+# --- A local Ollama daemon: no credential, no per-token cost ---
+[llm.profiles.local]
+provider = "ollama"
+model = "llama3.2"
+embedding_model = "nomic-embed-text"
+timeout_ms = 60000
+
+[llm.profiles.local.params]
+temperature = 0.3
+max_tokens = 2048
+
+# --- Anthropic. Supply ANTHROPIC_API_KEY from the environment. ---
+# max_tokens is REQUIRED by the Messages API; there is no server-side default.
+# [llm.profiles.claude]
+# provider = "anthropic"
+# model = "claude-sonnet-4-5"
+# fallbacks = ["local"]          # tried in order if this profile fails
+# timeout_ms = 45000
+#
+# [llm.profiles.claude.params]
+# temperature = 0.2
+# max_tokens = 4096
+#
+# Prices are per MILLION tokens and are optional. Orbit-RS ships no built-in price table: one
+# baked into the binary goes stale silently and then reports confident wrong costs. Without
+# this block, LLM.STATS reports tokens but no cost.
+# [llm.profiles.claude.pricing]
+# prompt_usd_per_million = 3.0
+# completion_usd_per_million = 15.0
+
+# --- OpenAI. Supply OPENAI_API_KEY from the environment. ---
+# [llm.profiles.gpt]
+# provider = "openai"
+# model = "gpt-4o-mini"
+# embedding_model = "text-embedding-3-small"
+# fallbacks = ["local"]
+#
+# [llm.profiles.gpt.params]
+# temperature = 0.3
+# max_tokens = 2048
+
+# --- Any OpenAI-compatible endpoint: vLLM, Groq, Together, OpenRouter, LM Studio, DeepSeek,
+#     Fireworks. One shape, many services; base_url is required because a compatible server
+#     could be anywhere. ---
+# [llm.profiles.groq]
+# provider = "groq"
+# model = "llama-3.3-70b-versatile"
+# base_url = "https://api.groq.com/openai/v1"
+
+# --- Azure OpenAI: the deployment name goes in `model`, and api_version is required. ---
+# [llm.profiles.azure]
+# provider = "azure"
+# model = "my-gpt4o-deployment"
+# base_url = "https://contoso.openai.azure.com"
+# api_version = "2024-10-21"
+
+# Retry and circuit-breaker tuning are per profile and default to sensible values
+# (2 retries with jittered exponential backoff; breaker opens after 5 consecutive
+# provider-health failures and probes again after 30s).
+# [llm.profiles.local.retry]
+# max_retries = 2
+# initial_backoff_ms = 250
+# max_backoff_ms = 8000
+# backoff_multiplier_pct = 200
+#
+# [llm.profiles.local.breaker]
+# failure_threshold = 5
+# open_duration_ms = 30000
+# success_threshold = 2
+
+# ================================
 # EXAMPLE USAGE INSTRUCTIONS
 # ================================
 
@@ -659,3 +764,9 @@ enable_merge_optimization = true
 
 # Connect to AQL/ArangoDB:
 #   arangosh --server.endpoint tcp://localhost:8529
+
+# Inspect and switch LLM models at runtime:
+#   redis-cli LLM.PROVIDERS
+#   redis-cli LLM.MODELS
+#   redis-cli LLM.USE claude
+#   redis-cli LLM.GENERATE "why is the sky blue?"

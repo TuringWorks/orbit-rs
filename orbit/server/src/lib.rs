@@ -25,6 +25,7 @@ pub mod features;
 pub mod fts;
 #[cfg(any(feature = "js-boa", feature = "js-quickjs"))]
 pub mod js;
+pub mod llm;
 pub mod load_balancer;
 pub mod lua;
 pub mod mesh;

@@ -552,6 +552,231 @@ class OrbitClient:
             raise ValueError("ts_deleterule() is only available for Redis protocol")
         return self._protocol_client.execute("TS.DELETERULE", source_key, dest_key)
 
+    # ------------------------------------------------------------------
+    # LLM model management and inference (Redis protocol, LLM.* commands)
+    # ------------------------------------------------------------------
+
+    def _require_redis(self, method: str) -> None:
+        """Raise unless the active protocol is Redis."""
+        if self._protocol != Protocol.REDIS:
+            raise ValueError(f"{method}() is only available for Redis protocol")
+
+    def llm_providers(self) -> List[Any]:
+        """
+        List the LLM provider shapes this server build supports (Redis only).
+
+        Example:
+            >>> client.llm_providers()
+        """
+        self._require_redis("llm_providers")
+        return self._protocol_client.execute("LLM.PROVIDERS")
+
+    def llm_models(self) -> List[Any]:
+        """
+        List registered model profiles, marking the default (Redis only).
+
+        Example:
+            >>> client.llm_models()
+        """
+        self._require_redis("llm_models")
+        return self._protocol_client.execute("LLM.MODELS")
+
+    def llm_info(self, profile: str) -> List[Any]:
+        """
+        Get full detail for one model profile (Redis only).
+
+        Credentials are never included in the response.
+
+        Args:
+            profile: Profile name
+
+        Example:
+            >>> client.llm_info("claude")
+        """
+        self._require_redis("llm_info")
+        return self._protocol_client.execute("LLM.INFO", profile)
+
+    def llm_register(
+        self,
+        profile: str,
+        provider: str,
+        model: str,
+        *,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        api_version: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        timeout_ms: Optional[int] = None,
+        fallbacks: Optional[List[str]] = None,
+        price_prompt: Optional[float] = None,
+        price_completion: Optional[float] = None,
+    ) -> str:
+        """
+        Register or replace a model profile at runtime (Redis only).
+
+        Takes effect on the next request; no server restart is required.
+
+        Args:
+            profile: Name to register the model under
+            provider: One of openai, anthropic, ollama, or an OpenAI-compatible
+                alias (azure, vllm, groq, together, openrouter, lmstudio,
+                deepseek, fireworks, local)
+            model: Model identifier, or the deployment name for Azure
+            api_key: Credential, where the provider needs one
+            base_url: Endpoint root; required for OpenAI-compatible providers
+            api_version: Required by Azure OpenAI
+            embedding_model: Model used for llm_embed()
+            temperature: Default sampling temperature
+            max_tokens: Default output cap; required for Anthropic
+            timeout_ms: Per-attempt deadline
+            fallbacks: Profiles to try, in order, if this one fails
+            price_prompt: USD per million input tokens; enables cost reporting
+            price_completion: USD per million output tokens
+
+        Note:
+            Prices are optional and have no defaults. Without both, llm_stats()
+            reports tokens but no cost, rather than reporting a guessed figure.
+
+        Example:
+            >>> client.llm_register(
+            ...     "claude", "anthropic", "claude-sonnet-4-5",
+            ...     max_tokens=4096, fallbacks=["local"],
+            ... )
+        """
+        self._require_redis("llm_register")
+        args = [profile, provider, model]
+        options = [
+            ("APIKEY", api_key),
+            ("BASEURL", base_url),
+            ("APIVERSION", api_version),
+            ("EMBEDDINGMODEL", embedding_model),
+            ("TEMPERATURE", temperature),
+            ("MAXTOKENS", max_tokens),
+            ("TIMEOUTMS", timeout_ms),
+            ("FALLBACKS", ",".join(fallbacks) if fallbacks else None),
+            ("PRICEPROMPT", price_prompt),
+            ("PRICECOMPLETION", price_completion),
+        ]
+        for key, value in options:
+            if value is not None:
+                args.extend([key, str(value)])
+        return self._protocol_client.execute("LLM.REGISTER", *args)
+
+    def llm_unregister(self, profile: str) -> str:
+        """
+        Remove a model profile (Redis only).
+
+        Fails if another profile lists this one as a fallback.
+
+        Args:
+            profile: Profile name
+
+        Example:
+            >>> client.llm_unregister("claude")
+        """
+        self._require_redis("llm_unregister")
+        return self._protocol_client.execute("LLM.UNREGISTER", profile)
+
+    def llm_use(self, profile: str) -> str:
+        """
+        Switch the default model profile (Redis only).
+
+        Takes effect on the next request across every AI surface, including
+        GraphRAG. No restart required.
+
+        Args:
+            profile: Profile name to make default
+
+        Example:
+            >>> client.llm_use("claude")
+        """
+        self._require_redis("llm_use")
+        return self._protocol_client.execute("LLM.USE", profile)
+
+    def llm_generate(
+        self,
+        prompt: str,
+        *,
+        model: Optional[str] = None,
+        system: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> List[Any]:
+        """
+        Generate text through a model profile (Redis only).
+
+        Args:
+            prompt: The prompt text
+            model: Profile to use; defaults to the registry default
+            system: System message framing the exchange
+            max_tokens: Output cap, overriding the profile default
+            temperature: Sampling temperature, overriding the profile default
+
+        Returns:
+            Flat key/value list including text, model, profile, latency_ms, and
+            — only where the provider reported them — tokens_used, cost_usd,
+            finish_reason, and fallbacks_used.
+
+        Example:
+            >>> client.llm_generate("why is the sky blue?", max_tokens=100)
+        """
+        self._require_redis("llm_generate")
+        args: List[str] = [prompt]
+        for key, value in (
+            ("MODEL", model),
+            ("SYSTEM", system),
+            ("MAXTOKENS", max_tokens),
+            ("TEMPERATURE", temperature),
+        ):
+            if value is not None:
+                args.extend([key, str(value)])
+        return self._protocol_client.execute("LLM.GENERATE", *args)
+
+    def llm_embed(self, *inputs: str, model: Optional[str] = None) -> List[Any]:
+        """
+        Produce embeddings for one or more inputs (Redis only).
+
+        Inputs are batched into a single provider call and returned in input
+        order.
+
+        Args:
+            inputs: One or more texts to embed
+            model: Profile to use; defaults to the registry default
+
+        Example:
+            >>> client.llm_embed("hello world", "second input")
+        """
+        self._require_redis("llm_embed")
+        if not inputs:
+            raise ValueError("llm_embed() requires at least one input")
+        args = list(inputs)
+        if model is not None:
+            args.extend(["MODEL", model])
+        return self._protocol_client.execute("LLM.EMBED", *args)
+
+    def llm_stats(self, profile: Optional[str] = None) -> List[Any]:
+        """
+        Get request, failure, fallback, token, and cost counters (Redis only).
+
+        Args:
+            profile: Restrict to one profile; omit for all
+
+        Note:
+            ``tokens_complete`` reports whether the token totals cover every
+            request. When false, they are a lower bound — some provider did not
+            report counts — not a total. ``cost_usd`` appears only for profiles
+            that carry configured prices.
+
+        Example:
+            >>> client.llm_stats()
+        """
+        self._require_redis("llm_stats")
+        if profile is None:
+            return self._protocol_client.execute("LLM.STATS")
+        return self._protocol_client.execute("LLM.STATS", profile)
+
     @property
     def protocol(self) -> Protocol:
         """Get current protocol."""

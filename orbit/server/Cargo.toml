@@ -16,6 +16,7 @@ orbit-shared = { path = "../shared" }
 orbit-proto = { path = "../proto" }
 orbit-client = { path = "../client" }
 orbit-ml = { path = "../ml" }
+orbit-llm = { path = "../llm" }
 orbit-compute = { path = "../compute", optional = true }
 orbit-engine = { path = "../engine" }
 tokio.workspace = true

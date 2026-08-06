@@ -49,6 +49,14 @@ pub struct OrbitServerConfig {
 
     /// Unified cross-protocol storage configuration
     pub unified_storage: Option<UnifiedStorageCfg>,
+
+    /// LLM provider and model-profile configuration.
+    ///
+    /// Consumed by [`crate::llm`], which layers `LLM_*` environment variables over whatever is
+    /// here (12-factor III). Absent means AI features report that no model is configured rather
+    /// than failing per request.
+    #[serde(default)]
+    pub llm: Option<orbit_llm::LlmConfig>,
 }
 
 /// Server identification and basic settings
@@ -2020,6 +2028,9 @@ impl Default for OrbitServerConfig {
             persistence: Some(PersistenceConfig::default()),
             storage: Some(StorageConfig::default()),
             unified_storage: Some(UnifiedStorageCfg::default()),
+            // No default model: a fabricated provider would either fail on first use or silently
+            // send data somewhere the operator never chose.
+            llm: None,
         }
     }
 }

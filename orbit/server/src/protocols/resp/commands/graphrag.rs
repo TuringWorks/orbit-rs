@@ -16,7 +16,6 @@ use crate::protocols::graphrag::graph_rag_actor::{
 use crate::protocols::resp::simple_local::SimpleLocalRegistry;
 use crate::protocols::resp::types::RespValue;
 use orbit_client::OrbitClient;
-use orbit_shared::graphrag::LLMProvider;
 use std::sync::Arc;
 
 /// GraphRAG command handler
@@ -48,28 +47,10 @@ impl GraphRAGCommands {
         let mut actor = GraphRAGActor::new(kg_name.to_string());
         actor.initialize_components();
 
-        // Try to add default LLM provider if available
-        if let Ok(ollama_model) = std::env::var("OLLAMA_MODEL") {
-            actor.add_llm_provider(
-                "ollama".to_string(),
-                LLMProvider::Ollama {
-                    model: ollama_model,
-                    temperature: Some(0.7),
-                },
-            );
-        }
-
-        if let Ok(openai_key) = std::env::var("OPENAI_API_KEY") {
-            actor.add_llm_provider(
-                "openai".to_string(),
-                LLMProvider::OpenAI {
-                    api_key: openai_key,
-                    model: "gpt-4".to_string(),
-                    temperature: Some(0.7),
-                    max_tokens: Some(2048),
-                },
-            );
-        }
+        // LLM providers are no longer reconstructed here from environment variables with a
+        // hardcoded model name. The shared runtime (`crate::llm`) owns model configuration, so the
+        // actor simply adopts its default — which `LLM.USE` can change without a restart.
+        actor.default_llm_provider = crate::llm::runtime().registry().default_profile();
 
         Ok(Arc::new(actor))
     }
@@ -194,9 +175,10 @@ impl GraphRAGCommands {
         // In production, this would use the actor system properly
         let mut actor_mut = GraphRAGActor::new(kg_name.clone());
         actor_mut.initialize_components();
-
-        // Copy LLM providers if any were configured
-        // (This is a limitation of the current design - actors should be managed by the actor system)
+        // The actor built above is discarded by this path, so the default has to be applied here
+        // too — otherwise a RAG query issued over RESP has no model and fails with
+        // "no default profile" even when one is registered.
+        actor_mut.default_llm_provider = crate::llm::runtime().registry().default_profile();
 
         let result = actor_mut
             .query_rag(orbit_client, query)
