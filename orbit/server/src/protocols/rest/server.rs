@@ -53,6 +53,11 @@ pub struct RestApiServer {
     ws_handler: Arc<WebSocketHandler>,
     /// Optional MCP server for natural language queries
     mcp_server: Option<Arc<crate::protocols::mcp::server::McpServer>>,
+    /// SQL engine backing `/sql`, `/tables` and `/schemas`.
+    ///
+    /// Without one those endpoints report that SQL is unavailable rather than
+    /// answering with example data.
+    query_engine: Option<Arc<crate::protocols::postgres_wire::QueryEngine>>,
 }
 
 impl RestApiServer {
@@ -63,7 +68,21 @@ impl RestApiServer {
             orbit_client: Arc::new(orbit_client),
             ws_handler: Arc::new(WebSocketHandler::new()),
             mcp_server: None,
+            query_engine: None,
         }
+    }
+
+    /// Attach the SQL engine that `/sql` and the catalogue endpoints will use.
+    ///
+    /// Share the engine's storage with the other protocols so a table created
+    /// over PostgreSQL is visible here.
+    #[must_use]
+    pub fn with_query_engine(
+        mut self,
+        query_engine: Arc<crate::protocols::postgres_wire::QueryEngine>,
+    ) -> Self {
+        self.query_engine = Some(query_engine);
+        self
     }
 
     /// Create a new REST API server with MCP support
@@ -77,6 +96,7 @@ impl RestApiServer {
             orbit_client: Arc::new(orbit_client),
             ws_handler: Arc::new(WebSocketHandler::new()),
             mcp_server: Some(mcp_server),
+            query_engine: None,
         }
     }
 
@@ -90,6 +110,7 @@ impl RestApiServer {
         let state = ApiState {
             orbit_client: self.orbit_client.clone(),
             mcp_server: self.mcp_server.clone(),
+            query_engine: self.query_engine.clone(),
         };
 
         // API v1 routes

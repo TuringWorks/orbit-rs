@@ -11,11 +11,89 @@ use tokio::sync::{Mutex, RwLock};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::graphrag_engine::GraphRAGQueryEngine;
 use crate::protocols::postgres_wire::persistent_storage::{
-    PersistentTableStorage, QueryCondition, TableRow,
+    ColumnType, PersistentTableStorage, QueryCondition, TableRow,
 };
 use crate::protocols::postgres_wire::sql::{ConfigurableSqlEngine, UnifiedExecutionResult};
 use crate::protocols::postgres_wire::vector_engine::VectorQueryEngine;
 use orbit_client::OrbitClient;
+
+/// The result shape of a statement, determined without running it.
+///
+/// The extended query protocol requires the server to answer `Describe` before
+/// the client sends `Execute`, so this must be derivable from the statement and
+/// the catalogue alone. Executing to find out is not an option: `Describe` on an
+/// `INSERT` must not insert anything.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatementDescription {
+    /// Columns the statement will return.
+    ///
+    /// Empty means the statement returns no result set, which the protocol
+    /// reports as `NoData`.
+    pub columns: Vec<ColumnDescription>,
+}
+
+/// One described output column.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColumnDescription {
+    pub name: String,
+    /// PostgreSQL type OID.
+    ///
+    /// Taken from the table's declared schema where one is known. Where it is
+    /// not, `text` — the engine stores every value as text, and a type guessed
+    /// from a value's characters is a claim the catalogue does not support.
+    pub type_oid: i32,
+}
+
+impl ColumnDescription {
+    /// A column of unknown declared type, reported as `text`.
+    pub fn text(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            type_oid: super::messages::type_oids::TEXT,
+        }
+    }
+}
+
+impl StatementDescription {
+    /// A statement that returns no rows.
+    pub fn no_data() -> Self {
+        Self {
+            columns: Vec::new(),
+        }
+    }
+
+    /// A statement returning the named columns, all typed `text`.
+    pub fn returning_text(columns: Vec<String>) -> Self {
+        Self {
+            columns: columns.into_iter().map(ColumnDescription::text).collect(),
+        }
+    }
+
+    /// A statement returning fully described columns.
+    pub fn returning(columns: Vec<ColumnDescription>) -> Self {
+        Self { columns }
+    }
+
+    /// Whether the statement produces a result set.
+    pub fn returns_rows(&self) -> bool {
+        !self.columns.is_empty()
+    }
+}
+
+/// Map a declared column type to the PostgreSQL type OID the wire advertises.
+pub fn column_type_oid(column_type: &ColumnType) -> i32 {
+    use super::messages::type_oids;
+
+    match column_type {
+        ColumnType::Serial | ColumnType::Integer => type_oids::INT4,
+        ColumnType::BigInt => type_oids::INT8,
+        ColumnType::Boolean => type_oids::BOOL,
+        ColumnType::Double => type_oids::FLOAT8,
+        ColumnType::Timestamp => type_oids::TIMESTAMPTZ,
+        ColumnType::Json => type_oids::JSON,
+        ColumnType::Text | ColumnType::Varchar(_) => type_oids::TEXT,
+    }
+}
 
 /// Query result types
 #[derive(Debug, Clone)]
@@ -199,6 +277,366 @@ impl QueryEngine {
     pub async fn get_current_database(&self) -> String {
         let db = self.current_database.read().await;
         db.clone()
+    }
+
+    /// Determine what `sql` will return, without executing it.
+    ///
+    /// Used to answer the extended query protocol's `Describe`, which the
+    /// client sends before `Execute`. Column names come from the statement's
+    /// own select list, or from the table's schema for `SELECT *`.
+    ///
+    /// # Errors
+    /// Returns an error only when the catalogue cannot be read. A statement
+    /// this engine cannot parse is reported as returning rows of unknown
+    /// shape — see [`QueryEngine::describe_unparsed`] — rather than failing,
+    /// so that `Describe` never rejects a statement `Execute` would accept.
+    pub async fn describe_statement(&self, sql: &str) -> ProtocolResult<StatementDescription> {
+        // A statement being described still carries its `$n` placeholders, which
+        // the parser does not accept. The result *shape* never depends on the
+        // parameter values, so they are stood in for by NULL purely to make the
+        // statement parseable here. The statement executed later is the one with
+        // the real values bound.
+        let sql = Self::placeholders_as_null(sql);
+        let sql = sql.as_str();
+        let sql_upper = sql.trim().to_uppercase();
+
+        // These paths build their result set dynamically and cannot be
+        // described from the catalogue.
+        if self.is_graphrag_query(&sql_upper)
+            || self
+                .vector_engine
+                .as_ref()
+                .is_some_and(|_| self.is_vector_query(&sql_upper))
+        {
+            return self.describe_by_probing(sql, &sql_upper).await;
+        }
+
+        let Ok(statement) = self.parse_sql(sql) else {
+            return self.describe_by_probing(sql, &sql_upper).await;
+        };
+
+        match statement {
+            Statement::Select { columns, table, .. } => {
+                self.describe_select(columns, &table).await
+            }
+            // Everything else completes with a command tag and no result set.
+            Statement::Insert { .. }
+            | Statement::Update { .. }
+            | Statement::Delete { .. }
+            | Statement::CreateTable { .. }
+            | Statement::DropTable { .. } => Ok(StatementDescription::no_data()),
+        }
+    }
+
+    /// Replace `$n` placeholders with `NULL` so a statement can be parsed for
+    /// description. Placeholders inside string literals are left alone.
+    fn placeholders_as_null(sql: &str) -> String {
+        let bytes = sql.as_bytes();
+        let mut out = String::with_capacity(sql.len());
+        let mut index = 0usize;
+        let mut in_literal = false;
+
+        while index < bytes.len() {
+            let ch = bytes[index];
+
+            if ch == b'\'' {
+                in_literal = !in_literal;
+                out.push('\'');
+                index += 1;
+                continue;
+            }
+
+            if ch != b'$' || in_literal {
+                out.push(ch as char);
+                index += 1;
+                continue;
+            }
+
+            let start = index + 1;
+            let end = start
+                + bytes[start..]
+                    .iter()
+                    .take_while(|b| b.is_ascii_digit())
+                    .count();
+
+            if end == start {
+                out.push('$');
+                index += 1;
+            } else {
+                out.push_str("NULL");
+                index = end;
+            }
+        }
+
+        out
+    }
+
+    /// Infer the type of each `$n` parameter from where it is used.
+    ///
+    /// Returns one OID per placeholder, in position order. A client that
+    /// declares no parameter types relies entirely on this answer to decide how
+    /// to serialise its values, so reporting everything as `text` would force
+    /// every caller to stringify integers by hand.
+    ///
+    /// Two shapes are resolved, which between them cover ordinary
+    /// parameterised statements:
+    ///
+    /// * a comparison against a column — `WHERE id = $1`, `SET name = $2`;
+    /// * an `INSERT ... VALUES` list, by position.
+    ///
+    /// Anything else falls back to `text`, which is what the engine stores.
+    ///
+    /// # Errors
+    /// Returns an error only if the catalogue cannot be read.
+    pub async fn describe_parameters(&self, sql: &str) -> ProtocolResult<Vec<i32>> {
+        use super::messages::type_oids;
+
+        let count = Self::highest_placeholder(sql);
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut types = vec![type_oids::TEXT; count];
+
+        let neutralised = Self::placeholders_as_null(sql);
+        let Ok(statement) = self.parse_sql(&neutralised) else {
+            return Ok(types);
+        };
+
+        let (table, insert_columns) = match &statement {
+            Statement::Select { table, .. }
+            | Statement::Update { table, .. }
+            | Statement::Delete { table, .. } => (table.clone(), None),
+            Statement::Insert { table, columns, .. } => (table.clone(), Some(columns.clone())),
+            Statement::CreateTable { .. } | Statement::DropTable { .. } => return Ok(types),
+        };
+
+        let Some(storage) = &self.persistent_storage else {
+            return Ok(types);
+        };
+        let Some(schema) = storage.get_table_schema(&table).await? else {
+            return Ok(types);
+        };
+
+        let oid_of = |column: &str| {
+            schema
+                .columns
+                .iter()
+                .find(|c| c.name.eq_ignore_ascii_case(column))
+                .map(|c| column_type_oid(&c.data_type))
+        };
+
+        if let Some(columns) = insert_columns {
+            // Every placeholder in an INSERT belongs to the VALUES list, so the
+            // nth placeholder is the nth column.
+            for (position, column) in columns.iter().enumerate().take(count) {
+                if let Some(oid) = oid_of(column) {
+                    types[position] = oid;
+                }
+            }
+            return Ok(types);
+        }
+
+        for (position, column) in Self::placeholder_comparisons(sql) {
+            if position <= count {
+                if let Some(oid) = oid_of(&column) {
+                    types[position - 1] = oid;
+                }
+            }
+        }
+
+        Ok(types)
+    }
+
+    /// Highest `$n` position appearing outside string literals.
+    fn highest_placeholder(sql: &str) -> usize {
+        Self::scan_placeholders(sql)
+            .into_iter()
+            .map(|(position, _)| position)
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Every placeholder as `(position, byte offset of the `$`)`.
+    fn scan_placeholders(sql: &str) -> Vec<(usize, usize)> {
+        let bytes = sql.as_bytes();
+        let mut found = Vec::new();
+        let mut index = 0usize;
+        let mut in_literal = false;
+
+        while index < bytes.len() {
+            match bytes[index] {
+                b'\'' => {
+                    in_literal = !in_literal;
+                    index += 1;
+                }
+                b'$' if !in_literal => {
+                    let start = index + 1;
+                    let end = start
+                        + bytes[start..]
+                            .iter()
+                            .take_while(|b| b.is_ascii_digit())
+                            .count();
+                    if end > start {
+                        if let Ok(position) = sql[start..end].parse::<usize>() {
+                            found.push((position, index));
+                        }
+                        index = end;
+                    } else {
+                        index += 1;
+                    }
+                }
+                _ => index += 1,
+            }
+        }
+
+        found
+    }
+
+    /// Placeholders that sit on the right of a comparison, paired with the
+    /// column name on the left: `WHERE id = $1` yields `(1, "id")`.
+    fn placeholder_comparisons(sql: &str) -> Vec<(usize, String)> {
+        const OPERATOR_CHARS: [char; 6] = ['=', '<', '>', '!', '~', '@'];
+
+        Self::scan_placeholders(sql)
+            .into_iter()
+            .filter_map(|(position, offset)| {
+                let before = sql[..offset].trim_end();
+
+                // Step back over the operator, which may be one or two
+                // characters (`=`, `>=`, `<>`), or a word such as LIKE.
+                let before = if before.ends_with(|c| OPERATOR_CHARS.contains(&c)) {
+                    before.trim_end_matches(|c| OPERATOR_CHARS.contains(&c))
+                } else {
+                    let word_start = before.rfind(char::is_whitespace).map_or(0, |i| i + 1);
+                    let word = &before[word_start..];
+                    if word.eq_ignore_ascii_case("LIKE") || word.eq_ignore_ascii_case("ILIKE") {
+                        &before[..word_start]
+                    } else {
+                        return None;
+                    }
+                };
+
+                let identifier: String = before
+                    .trim_end()
+                    .chars()
+                    .rev()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect();
+
+                (!identifier.is_empty()).then_some((position, identifier))
+            })
+            .collect()
+    }
+
+    /// Test hook for [`QueryEngine::placeholder_comparisons`].
+    #[cfg(test)]
+    pub fn placeholder_comparisons_for_test(sql: &str) -> Vec<(usize, String)> {
+        Self::placeholder_comparisons(sql)
+    }
+
+    /// Test hook for [`QueryEngine::placeholders_as_null`].
+    #[cfg(test)]
+    pub fn placeholders_as_null_for_test(sql: &str) -> String {
+        Self::placeholders_as_null(sql)
+    }
+
+    /// Column list for a `SELECT`, resolving `*` against the table's schema.
+    async fn describe_select(
+        &self,
+        columns: Vec<String>,
+        table: &str,
+    ) -> ProtocolResult<StatementDescription> {
+        let selects_everything = columns.len() == 1 && columns[0] == "*";
+
+        if table.to_uppercase() == "ACTORS" {
+            let all = ["actor_id", "actor_type", "state"];
+            let names: Vec<String> = if selects_everything {
+                all.iter().map(|c| (*c).to_string()).collect()
+            } else {
+                columns
+            };
+            return Ok(StatementDescription::returning_text(names));
+        }
+
+        let Some(storage) = &self.persistent_storage else {
+            return Ok(StatementDescription::no_data());
+        };
+
+        // Unknown table: let `Execute` produce the real error rather than
+        // failing the describe with a different one.
+        let Some(schema) = storage.get_table_schema(table).await? else {
+            return Ok(StatementDescription::no_data());
+        };
+
+        let described = |name: &str| ColumnDescription {
+            // Casing mirrors what `execute_persistent_select` produces, so the
+            // description matches the rows that follow it.
+            name: name.to_uppercase(),
+            type_oid: schema
+                .columns
+                .iter()
+                .find(|c| c.name.eq_ignore_ascii_case(name))
+                .map_or(super::messages::type_oids::TEXT, |c| {
+                    column_type_oid(&c.data_type)
+                }),
+        };
+
+        let described_columns = if selects_everything {
+            schema
+                .columns
+                .iter()
+                .map(|c| described(&c.name))
+                .collect()
+        } else {
+            columns.iter().map(|c| described(c)).collect()
+        };
+
+        Ok(StatementDescription::returning(described_columns))
+    }
+
+    /// Statements whose shape cannot be derived from the catalogue.
+    ///
+    /// `Execute` never sends a `RowDescription` — only `Describe` does — so
+    /// answering `NoData` for a statement that does return rows makes the client
+    /// discard them. For a read-only statement the shape is therefore learned by
+    /// running it here and keeping only the column names; the rows are thrown
+    /// away and fetched again by `Execute`, which costs a second execution but
+    /// cannot report a result set that does not match what arrives.
+    ///
+    /// Anything not recognisably read-only is described as returning no rows
+    /// rather than being run: `Describe` must not have side effects.
+    async fn describe_by_probing(
+        &self,
+        sql: &str,
+        sql_upper: &str,
+    ) -> ProtocolResult<StatementDescription> {
+        const READ_ONLY_PREFIXES: [&str; 6] =
+            ["SELECT", "SHOW", "WITH", "EXPLAIN", "VALUES", "TABLE"];
+
+        if !READ_ONLY_PREFIXES
+            .iter()
+            .any(|keyword| sql_upper.starts_with(keyword))
+        {
+            return Ok(StatementDescription::no_data());
+        }
+
+        match self.execute_query(sql).await {
+            Ok(QueryResult::Select { columns, .. })
+            | Ok(QueryResult::Merge { columns, .. }) => {
+                Ok(StatementDescription::returning_text(columns))
+            }
+            Ok(_) => Ok(StatementDescription::no_data()),
+            // A statement that fails here will fail the same way at `Execute`,
+            // which is where the client should see the error.
+            Err(e) => {
+                tracing::debug!("describe probe failed, reporting no rows: {e}");
+                Ok(StatementDescription::no_data())
+            }
+        }
     }
 
     /// Execute a SQL query and return results

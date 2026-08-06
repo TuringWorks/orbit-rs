@@ -24,6 +24,8 @@ pub struct ApiState {
     pub orbit_client: Arc<OrbitClient>,
     /// MCP server for natural language queries (optional)
     pub mcp_server: Option<Arc<McpServer>>,
+    /// SQL engine backing the `/sql` and catalogue endpoints.
+    pub query_engine: Option<Arc<crate::protocols::postgres_wire::QueryEngine>>,
 }
 
 /// Pagination query parameters
@@ -749,61 +751,159 @@ fn parse_key_from_string(key_str: &str) -> Key {
     tag = "sql"
 )]
 pub async fn execute_sql_query(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     Json(request): Json<SqlQueryRequest>,
 ) -> impl IntoResponse {
+    match run_sql(&state, &request).await {
+        Ok(response) => {
+            tracing::info!(
+                query = %request.query,
+                execution_time_ms = response.execution_time_ms,
+                "SQL query executed via REST API"
+            );
+            (StatusCode::OK, Json(SuccessResponse::new(response))).into_response()
+        }
+        Err((status, error)) => (status, Json(error)).into_response(),
+    }
+}
+
+/// Execute one statement through the shared SQL engine.
+///
+/// Returns the HTTP status and error body to send when the statement cannot be
+/// run, so both the single and batch endpoints report failures identically.
+async fn run_sql(
+    state: &ApiState,
+    request: &SqlQueryRequest,
+) -> Result<SqlQueryResponse, (StatusCode, ErrorResponse)> {
+    use crate::protocols::postgres_wire::QueryResult;
+
     let start = std::time::Instant::now();
 
-    // Validate query is not empty
     if request.query.trim().is_empty() {
-        return (
+        return Err((
             StatusCode::BAD_REQUEST,
-            Json(ErrorResponse::new(
-                "EMPTY_QUERY",
-                "SQL query cannot be empty",
-            )),
-        )
-            .into_response();
+            ErrorResponse::new("EMPTY_QUERY", "SQL query cannot be empty"),
+        ));
     }
 
-    // For now, return a mock response indicating the query was received
-    // In a full implementation, this would use the OptimizedQueryEngine
-    let response = SqlQueryResponse {
-        columns: vec![
-            ColumnInfo {
-                name: "id".to_string(),
-                data_type: "integer".to_string(),
-                nullable: false,
-            },
-            ColumnInfo {
-                name: "name".to_string(),
-                data_type: "varchar".to_string(),
-                nullable: true,
-            },
-        ],
-        rows: vec![vec![serde_json::json!(1), serde_json::json!("example")]],
-        row_count: 1,
-        rows_affected: None,
-        execution_time_ms: start.elapsed().as_millis() as u64,
-        has_more: false,
-        query_plan: if request.explain.unwrap_or(false) {
-            Some(serde_json::json!({
-                "plan": "Sequential Scan",
-                "estimated_cost": 100,
-                "note": "Query plan generation requires full query engine integration"
-            }))
-        } else {
-            None
+    let Some(engine) = &state.query_engine else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            ErrorResponse::new(
+                "SQL_UNAVAILABLE",
+                "This server was started without a SQL engine, so SQL cannot be executed here.",
+            ),
+        ));
+    };
+
+    // Parameters would have to be substituted into the statement text. Rejecting
+    // them is better than ignoring them and running a statement whose
+    // placeholders are still literal text.
+    if request.parameters.as_ref().is_some_and(|p| !p.is_empty()) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            ErrorResponse::new(
+                "PARAMETERS_UNSUPPORTED",
+                "Query parameters are not supported over REST; inline the values or use the \
+                 PostgreSQL protocol, which binds parameters server-side.",
+            ),
+        ));
+    }
+
+    if request.explain.unwrap_or(false) {
+        return Err((
+            StatusCode::NOT_IMPLEMENTED,
+            ErrorResponse::new(
+                "EXPLAIN_UNSUPPORTED",
+                "Query plans are not available from this endpoint.",
+            ),
+        ));
+    }
+
+    let timeout = std::time::Duration::from_millis(request.timeout_ms.unwrap_or(30_000));
+    let executed = tokio::time::timeout(timeout, engine.execute_query(&request.query)).await;
+
+    let result = match executed {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                ErrorResponse::new("QUERY_FAILED", e.to_string()),
+            ))
+        }
+        Err(_) => {
+            return Err((
+                StatusCode::REQUEST_TIMEOUT,
+                ErrorResponse::new(
+                    "QUERY_TIMEOUT",
+                    format!("Query exceeded {} ms", timeout.as_millis()),
+                ),
+            ))
+        }
+    };
+
+    // `limit` trims the response; `has_more` says whether anything was dropped,
+    // so a truncated result is never mistaken for the whole answer.
+    let limit = request.limit.unwrap_or(1000);
+
+    let response = match result {
+        QueryResult::Select { columns, rows } | QueryResult::Merge { columns, rows, .. } => {
+            let total = rows.len();
+            let truncated: Vec<Vec<serde_json::Value>> = rows
+                .into_iter()
+                .take(limit)
+                .map(|row| {
+                    row.into_iter()
+                        .map(|value| {
+                            value.map_or(serde_json::Value::Null, serde_json::Value::String)
+                        })
+                        .collect()
+                })
+                .collect();
+
+            SqlQueryResponse {
+                columns: columns
+                    .into_iter()
+                    .map(|name| ColumnInfo {
+                        name,
+                        // The engine holds every value as text and reports no
+                        // per-column type, so this says text rather than
+                        // guessing something narrower.
+                        data_type: "text".to_string(),
+                        nullable: true,
+                    })
+                    .collect(),
+                row_count: truncated.len(),
+                rows_affected: None,
+                execution_time_ms: start.elapsed().as_millis() as u64,
+                has_more: total > truncated.len(),
+                rows: truncated,
+                query_plan: None,
+            }
+        }
+        QueryResult::Insert { count } | QueryResult::Update { count } | QueryResult::Delete { count } => {
+            SqlQueryResponse {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                row_count: 0,
+                rows_affected: Some(count as u64),
+                execution_time_ms: start.elapsed().as_millis() as u64,
+                has_more: false,
+                query_plan: None,
+            }
+        }
+        QueryResult::Set { .. } => SqlQueryResponse {
+            columns: Vec::new(),
+            rows: Vec::new(),
+            row_count: 0,
+            rows_affected: None,
+            execution_time_ms: start.elapsed().as_millis() as u64,
+            has_more: false,
+            query_plan: None,
         },
     };
 
-    tracing::info!(
-        query = %request.query,
-        execution_time_ms = response.execution_time_ms,
-        "SQL query executed via REST API"
-    );
-
-    (StatusCode::OK, Json(SuccessResponse::new(response))).into_response()
+    Ok(response)
 }
 
 /// Execute multiple SQL queries in batch
@@ -821,36 +921,39 @@ pub async fn execute_sql_query(
     tag = "sql"
 )]
 pub async fn execute_batch_sql(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     Json(request): Json<BatchSqlQueryRequest>,
 ) -> impl IntoResponse {
     let start = std::time::Instant::now();
     let mut results = Vec::new();
     let mut successful = 0;
-    let failed = 0;
+    let mut failed = 0;
 
-    for (index, _query_req) in request.queries.iter().enumerate() {
-        // Execute each query
-        let query_start = std::time::Instant::now();
-
-        // Mock execution result
-        let result = SqlQueryResponse {
-            columns: vec![],
-            rows: vec![],
-            row_count: 0,
-            rows_affected: Some(0),
-            execution_time_ms: query_start.elapsed().as_millis() as u64,
-            has_more: false,
-            query_plan: None,
-        };
-
-        results.push(BatchQueryResult {
-            index,
-            success: true,
-            result: Some(result),
-            error: None,
-        });
-        successful += 1;
+    for (index, query_req) in request.queries.iter().enumerate() {
+        // Each statement is really executed, and a failure is reported as one.
+        // Previously every entry was recorded as a success without anything
+        // having run.
+        match run_sql(&state, query_req).await {
+            Ok(result) => {
+                successful += 1;
+                results.push(BatchQueryResult {
+                    index,
+                    success: true,
+                    result: Some(result),
+                    error: None,
+                });
+            }
+            Err((_, error)) => {
+                failed += 1;
+                let message = error.error.message.clone();
+                results.push(BatchQueryResult {
+                    index,
+                    success: false,
+                    result: None,
+                    error: Some(message),
+                });
+            }
+        }
     }
 
     let response = BatchSqlQueryResponse {

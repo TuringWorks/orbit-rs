@@ -1513,6 +1513,57 @@ mod live_tests {
         }
     }
 
+    /// The server must now answer `Describe`, so the driver's `prepare()` — the
+    /// gate every conforming PostgreSQL client goes through — has to succeed.
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn the_server_supports_the_extended_query_protocol() {
+        let session = PostgresSession::connect(&info(ConnectionType::PostgreSQL, 5432))
+            .await
+            .expect("connect");
+
+        assert!(
+            session.extended_protocol,
+            "prepare() must succeed against orbit-server; the client only falls back to \
+             simple queries when Describe is unusable"
+        );
+    }
+
+    /// A bound parameter must filter the result, not be executed as the literal
+    /// text `$1`.
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn bound_parameters_filter_rows_on_the_server() {
+        let mut session = PostgresSession::connect(&info(ConnectionType::PostgreSQL, 5432))
+            .await
+            .expect("connect");
+
+        let table = "desktop_param_check";
+        for statement in [
+            format!("DROP TABLE IF EXISTS {table}"),
+            format!("CREATE TABLE {table} (id INTEGER, name TEXT)"),
+            format!("INSERT INTO {table} (id, name) VALUES (1, 'alice')"),
+            format!("INSERT INTO {table} (id, name) VALUES (2, 'bob')"),
+        ] {
+            session
+                .execute(&statement)
+                .await
+                .unwrap_or_else(|e| panic!("setup statement failed: {statement}: {e}"));
+        }
+
+        // Goes through prepare/bind/execute in the driver, so the server must
+        // substitute the parameter.
+        let rows = session
+            .client
+            .query(&format!("SELECT name FROM {table} WHERE id = $1"), &[&2i32])
+            .await
+            .expect("parameterised query should execute");
+
+        assert_eq!(rows.len(), 1, "the parameter should select exactly one row");
+
+        let _ = session.execute(&format!("DROP TABLE IF EXISTS {table}")).await;
+    }
+
     #[tokio::test]
     #[ignore = "requires a running orbit-server on 6379"]
     async fn redis_session_runs_commands_and_decodes_replies() {
