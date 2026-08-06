@@ -17,6 +17,7 @@ tauri-build = { version = "1.5", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.48", features = ["full"] }
+async-trait = "0.1"
 tauri = { version = "1.5", features = [ "dialog-message", "notification-all", "http-request", "window-unminimize", "window-unmaximize", "fs-rename-file", "fs-create-dir", "fs-remove-file", "dialog-ask", "fs-read-dir", "window-minimize", "fs-read-file", "fs-write-file", "dialog-open", "window-close", "window-maximize", "fs-remove-dir", "fs-exists", "window-show", "window-start-dragging", "shell-open", "window-hide", "fs-copy-file", "dialog-save", "dialog-confirm"] }
 uuid = { version = "1.19", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -26,6 +27,8 @@ tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_j
 redis = { version = "0.32", features = ["tokio-comp", "connection-manager"] }
 mysql_async = { version = "0.34", features = ["chrono", "native-tls"] }
 sqlparser = "0.39"
+# NUMERIC/DECIMAL decoding for PostgreSQL result sets
+rust_decimal = { version = "1.39", features = ["db-tokio-postgres"] }
 
 # HTTP client for API calls
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }

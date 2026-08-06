@@ -1,43 +1,49 @@
-//! Orbit Desktop - Desktop UI for Orbit-RS Database Management
+//! Orbit Desktop — a database client for Orbit-RS.
 //!
-//! This is a Tauri-based desktop application that provides a UI similar to RedisInsights
-//! for managing Orbit-RS databases, running PostgreSQL queries, OrbitQL queries, and Redis commands.
+//! Provides connection management, statement execution against Orbit's wire
+//! protocols, and lifecycle control for a local development cluster.
 
 #![cfg_attr(
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
 
-use chrono;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::{Manager, State};
 use tokio::sync::RwLock;
+
+mod cluster;
 mod connections;
 mod encryption;
 mod models;
 mod queries;
 mod storage;
 
-use connections::{
-    Connection, ConnectionInfo, ConnectionManager, ConnectionStatus, ConnectionType,
-};
+use cluster::{ClusterManager, ClusterStatus};
+use connections::{Connection, ConnectionInfo, ConnectionManager, ConnectionStatus, ConnectionType};
 use encryption::EncryptionManager;
 use models::{MLFunctionInfo, ModelInfo, ModelManager};
-use queries::{QueryExecutor, QueryRequest, QueryResult};
-use storage::{AppStorage, StorageManager};
+use queries::{QueryExecutor, QueryHistoryEntry, QueryRequest, QueryResult};
+use storage::StorageManager;
 
-/// Application state
+/// Shared application state.
+///
+/// [`ConnectionManager`] locks internally, so it is held behind an `Arc` rather
+/// than an outer lock: opening a session for one connection must not block
+/// queries running against another.
 struct AppState {
-    connections: RwLock<ConnectionManager>,
+    connections: Arc<ConnectionManager>,
     query_executor: RwLock<QueryExecutor>,
     model_manager: RwLock<ModelManager>,
     storage: StorageManager,
     encryption: EncryptionManager,
+    /// The Orbit-RS checkout whose cluster this app manages, once located.
+    cluster_root: RwLock<Option<ClusterManager>>,
 }
 
-/// Response wrapper for all API calls
+/// Uniform envelope for every command result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiResponse<T> {
     success: bool,
@@ -56,48 +62,66 @@ impl<T> ApiResponse<T> {
         }
     }
 
-    fn error(message: String) -> Self {
+    fn error(message: impl std::fmt::Display) -> Self {
         Self {
             success: false,
             data: None,
-            error: Some(message),
+            error: Some(message.to_string()),
             timestamp: chrono::Utc::now(),
         }
     }
 }
 
-/// Connection Management Commands
+/// Run a fallible body, turning its error into an [`ApiResponse::error`].
+///
+/// The outer `Result` is `Ok` for both outcomes: Tauri's `Err` channel loses
+/// the envelope, so failures travel in the payload where the UI can show them.
+macro_rules! respond {
+    ($body:expr) => {
+        match $body {
+            Ok(value) => Ok(ApiResponse::success(value)),
+            Err(e) => Ok(ApiResponse::error(e)),
+        }
+    };
+}
+
+// ============================ Connections ============================
+
+/// Persist the current in-memory connection list.
+async fn persist_connections(state: &AppState) -> Result<(), String> {
+    let mut storage = state
+        .storage
+        .load()
+        .map_err(|e| format!("Failed to load storage: {e}"))?;
+
+    let connections = state.connections.list_connections().await;
+    storage.connections = connections
+        .iter()
+        .map(|connection| connection.to_stored(&state.encryption))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to encrypt connections: {e}"))?;
+
+    state
+        .storage
+        .save(&storage)
+        .map_err(|e| format!("Failed to save storage: {e}"))
+}
 
 #[tauri::command]
 async fn create_connection(
     connection_info: ConnectionInfo,
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<String>, String> {
-    let mut manager = state.connections.write().await;
-    let connection_id = match manager.create_connection(connection_info.clone()).await {
+    let id = match state.connections.create_connection(connection_info).await {
         Ok(id) => id,
-        Err(e) => return Ok(ApiResponse::error(e.to_string())),
+        Err(e) => return Ok(ApiResponse::error(e)),
     };
 
-    // Save to storage
-    let mut storage = state
-        .storage
-        .load()
-        .map_err(|e| format!("Failed to load storage: {}", e))?;
-
-    if let Some(conn) = manager.get_connection(&connection_id).await {
-        let stored_conn = conn
-            .to_stored(&state.encryption)
-            .map_err(|e| format!("Failed to encrypt connection: {}", e))?;
-        storage.connections.push(stored_conn);
-
-        state
-            .storage
-            .save(&storage)
-            .map_err(|e| format!("Failed to save storage: {}", e))?;
+    if let Err(e) = persist_connections(&state).await {
+        return Ok(ApiResponse::error(e));
     }
 
-    Ok(ApiResponse::success(connection_id))
+    Ok(ApiResponse::success(id))
 }
 
 #[tauri::command]
@@ -105,43 +129,31 @@ async fn test_connection(
     connection_info: ConnectionInfo,
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<ConnectionStatus>, String> {
-    let manager = state.connections.read().await;
-    match manager.test_connection(&connection_info).await {
-        Ok(status) => Ok(ApiResponse::success(status)),
-        Err(e) => Ok(ApiResponse::error(e.to_string())),
-    }
+    Ok(ApiResponse::success(
+        state.connections.test_connection(&connection_info).await,
+    ))
 }
 
 #[tauri::command]
 async fn get_connections(
-    state: tauri::State<'_, AppState>,
+    state: State<'_, AppState>,
 ) -> Result<ApiResponse<Vec<Connection>>, String> {
-    // Load connections from storage
-    let storage = state
-        .storage
-        .load()
-        .map_err(|e| format!("Failed to load storage: {}", e))?;
+    Ok(ApiResponse::success(
+        state.connections.list_connections().await,
+    ))
+}
 
-    let mut connections = Vec::new();
-    for stored_conn in &storage.connections {
-        match stored_conn.to_connection(&state.encryption) {
-            Ok(conn) => connections.push(conn),
-            Err(e) => {
-                tracing::warn!("Failed to load connection {}: {}", stored_conn.id, e);
-            }
-        }
+/// Open a session now rather than on first query, so the UI can report whether
+/// a saved connection is actually usable.
+#[tauri::command]
+async fn connect(
+    connection_id: String,
+    state: State<'_, AppState>,
+) -> Result<ApiResponse<ConnectionStatus>, String> {
+    match state.connections.session(&connection_id).await {
+        Ok(_) => Ok(ApiResponse::success(ConnectionStatus::Connected)),
+        Err(e) => Ok(ApiResponse::error(e)),
     }
-
-    // Update connection manager with loaded connections
-    {
-        let mut manager = state.connections.write().await;
-        for conn in &connections {
-            // Store connection metadata (without active connection)
-            // Active connections will be created on demand
-        }
-    }
-
-    Ok(ApiResponse::success(connections))
 }
 
 #[tauri::command]
@@ -149,11 +161,8 @@ async fn disconnect(
     connection_id: String,
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<bool>, String> {
-    let mut manager = state.connections.write().await;
-    match manager.disconnect(&connection_id).await {
-        Ok(_) => Ok(ApiResponse::success(true)),
-        Err(e) => Ok(ApiResponse::error(e.to_string())),
-    }
+    state.connections.disconnect(&connection_id).await;
+    Ok(ApiResponse::success(true))
 }
 
 #[tauri::command]
@@ -161,41 +170,59 @@ async fn delete_connection(
     connection_id: String,
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<bool>, String> {
-    let mut manager = state.connections.write().await;
-    match manager.delete_connection(&connection_id).await {
-        Ok(_) => {}
-        Err(e) => return Ok(ApiResponse::error(e.to_string())),
-    }
-
-    // Remove from storage
-    let mut storage = state
-        .storage
-        .load()
-        .map_err(|e| format!("Failed to load storage: {}", e))?;
-
-    storage.connections.retain(|c| c.id != connection_id);
-
-    state
-        .storage
-        .save(&storage)
-        .map_err(|e| format!("Failed to save storage: {}", e))?;
-
+    state.connections.delete_connection(&connection_id).await;
+    persist_connections(&state).await?;
     Ok(ApiResponse::success(true))
 }
 
-/// Query Execution Commands
+/// The connection types the UI can offer, with their default ports.
+#[tauri::command]
+async fn list_connection_types() -> Result<ApiResponse<Vec<ConnectionTypeInfo>>, String> {
+    Ok(ApiResponse::success(
+        ConnectionType::ALL
+            .into_iter()
+            .map(|connection_type| ConnectionTypeInfo {
+                id: connection_type.as_str().to_string(),
+                default_port: connection_type.default_port(),
+                native_wire_protocol: connection_type.is_native_wire_protocol(),
+            })
+            .collect(),
+    ))
+}
+
+/// A connection type as offered in the connection dialog.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ConnectionTypeInfo {
+    id: String,
+    default_port: u16,
+    /// False for the HTTP-backed protocols, whose server handlers still return
+    /// canned rows; the dialog warns instead of implying they return data.
+    native_wire_protocol: bool,
+}
+
+// ============================ Queries ============================
 
 #[tauri::command]
 async fn execute_query(
     request: QueryRequest,
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<QueryResult>, String> {
-    let connection_manager = state.connections.read().await;
     let mut executor = state.query_executor.write().await;
-    match executor.execute_query(request, &connection_manager).await {
-        Ok(result) => Ok(ApiResponse::success(result)),
-        Err(e) => Ok(ApiResponse::error(e.to_string())),
-    }
+    respond!(executor.execute(request, &state.connections).await)
+}
+
+#[tauri::command]
+async fn explain_query(
+    request: QueryRequest,
+    analyze: Option<bool>,
+    state: State<'_, AppState>,
+) -> Result<ApiResponse<QueryResult>, String> {
+    let mut executor = state.query_executor.write().await;
+    respond!(
+        executor
+            .explain(request, analyze.unwrap_or(false), &state.connections)
+            .await
+    )
 }
 
 #[tauri::command]
@@ -203,37 +230,96 @@ async fn get_query_history(
     connection_id: String,
     limit: Option<usize>,
     state: State<'_, AppState>,
-) -> Result<ApiResponse<Vec<QueryRequest>>, String> {
+) -> Result<ApiResponse<Vec<QueryHistoryEntry>>, String> {
     let executor = state.query_executor.read().await;
-    let history = executor
-        .get_history(&connection_id, limit.unwrap_or(50))
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(ApiResponse::success(history))
+    Ok(ApiResponse::success(
+        executor.history(&connection_id, limit.unwrap_or(50)),
+    ))
+}
+
+// ============================ Cluster ============================
+
+/// Resolve the cluster manager, or explain why there is none.
+async fn with_cluster<T, F, Fut>(state: &AppState, action: F) -> Result<ApiResponse<T>, String>
+where
+    F: FnOnce(&ClusterManager) -> Fut,
+    Fut: std::future::Future<Output = Result<T, cluster::ClusterError>>,
+{
+    let guard = state.cluster_root.read().await;
+    let Some(manager) = guard.as_ref() else {
+        return Ok(ApiResponse::error(cluster::ClusterError::RootNotSet));
+    };
+    respond!(action(manager).await)
 }
 
 #[tauri::command]
-async fn explain_query(
-    request: QueryRequest,
-    state: State<'_, AppState>,
-) -> Result<ApiResponse<QueryResult>, String> {
-    let connection_manager = state.connections.read().await;
-    let mut executor = state.query_executor.write().await;
-    match executor.explain_query(request, &connection_manager).await {
-        Ok(result) => Ok(ApiResponse::success(result)),
-        Err(e) => Ok(ApiResponse::error(e.to_string())),
-    }
+async fn get_cluster_status(state: State<'_, AppState>) -> Result<ApiResponse<ClusterStatus>, String> {
+    with_cluster(&state, |manager| async move { manager.status().await }).await
 }
 
-/// ML Model Management Commands
+/// Point the cluster panel at an Orbit-RS checkout.
+#[tauri::command]
+async fn set_cluster_root(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<ApiResponse<ClusterStatus>, String> {
+    let manager = match ClusterManager::new(&path) {
+        Ok(manager) => manager,
+        Err(e) => return Ok(ApiResponse::error(e)),
+    };
+
+    let status = match manager.status().await {
+        Ok(status) => status,
+        Err(e) => return Ok(ApiResponse::error(e)),
+    };
+
+    *state.cluster_root.write().await = Some(manager);
+    Ok(ApiResponse::success(status))
+}
+
+#[tauri::command]
+async fn start_cluster(
+    size: u8,
+    state: State<'_, AppState>,
+) -> Result<ApiResponse<bool>, String> {
+    with_cluster(&state, |manager| async move {
+        manager.start(size).await.map(|()| true)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn stop_cluster(state: State<'_, AppState>) -> Result<ApiResponse<bool>, String> {
+    with_cluster(&state, |manager| async move {
+        manager.stop().await.map(|()| true)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn get_cluster_log(
+    node_id: Option<String>,
+    lines: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<ApiResponse<String>, String> {
+    let lines = lines.unwrap_or(200);
+    with_cluster(&state, |manager| async move {
+        match node_id {
+            Some(node_id) => manager.node_log(&node_id, lines),
+            None => manager.control_log(lines),
+        }
+    })
+    .await
+}
+
+// ============================ ML models ============================
 
 #[tauri::command]
 async fn list_ml_functions(
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<Vec<MLFunctionInfo>>, String> {
     let manager = state.model_manager.read().await;
-    let functions = manager.get_ml_functions().await?;
-    Ok(ApiResponse::success(functions))
+    respond!(manager.get_ml_functions().await)
 }
 
 #[tauri::command]
@@ -242,10 +328,7 @@ async fn list_models(
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<Vec<ModelInfo>>, String> {
     let manager = state.model_manager.read().await;
-    match manager.get_models(&connection_id).await {
-        Ok(models) => Ok(ApiResponse::success(models)),
-        Err(e) => Ok(ApiResponse::error(e.to_string())),
-    }
+    respond!(manager.get_models(&connection_id).await)
 }
 
 #[tauri::command]
@@ -255,10 +338,7 @@ async fn get_model_info(
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<ModelInfo>, String> {
     let manager = state.model_manager.read().await;
-    match manager.get_model_info(&connection_id, &model_name).await {
-        Ok(model_info) => Ok(ApiResponse::success(model_info)),
-        Err(e) => Ok(ApiResponse::error(e.to_string())),
-    }
+    respond!(manager.get_model_info(&connection_id, &model_name).await)
 }
 
 #[tauri::command]
@@ -268,34 +348,25 @@ async fn delete_model(
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<bool>, String> {
     let manager = state.model_manager.read().await;
-    match manager.delete_model(&connection_id, &model_name).await {
-        Ok(_) => Ok(ApiResponse::success(true)),
-        Err(e) => Ok(ApiResponse::error(e.to_string())),
-    }
+    respond!(manager
+        .delete_model(&connection_id, &model_name)
+        .await
+        .map(|()| true))
 }
 
-/// System Info Commands
+// ============================ System ============================
 
 #[tauri::command]
 async fn get_system_info() -> Result<ApiResponse<HashMap<String, serde_json::Value>>, String> {
-    let mut info = HashMap::new();
-
-    info.insert(
-        "version".to_string(),
-        serde_json::Value::String("0.1.0".to_string()),
-    );
-    info.insert(
-        "os".to_string(),
-        serde_json::Value::String(std::env::consts::OS.to_string()),
-    );
-    info.insert(
-        "arch".to_string(),
-        serde_json::Value::String(std::env::consts::ARCH.to_string()),
-    );
-    info.insert(
-        "timestamp".to_string(),
-        serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
-    );
+    let info = [
+        ("version", env!("CARGO_PKG_VERSION").to_string()),
+        ("os", std::env::consts::OS.to_string()),
+        ("arch", std::env::consts::ARCH.to_string()),
+        ("timestamp", chrono::Utc::now().to_rfc3339()),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_string(), serde_json::Value::String(value)))
+    .collect();
 
     Ok(ApiResponse::success(info))
 }
@@ -308,35 +379,44 @@ async fn save_settings(
     let mut storage = state
         .storage
         .load()
-        .map_err(|e| format!("Failed to load storage: {}", e))?;
+        .map_err(|e| format!("Failed to load storage: {e}"))?;
 
-    // Update settings from provided values
-    if let Some(theme) = settings.get("theme").and_then(|v| v.as_str()) {
-        storage.settings.theme = theme.to_string();
+    let current = &mut storage.settings;
+    if let Some(value) = settings.get("theme").and_then(|v| v.as_str()) {
+        current.theme = value.to_string();
     }
-    if let Some(auto_save) = settings.get("auto_save").and_then(|v| v.as_bool()) {
-        storage.settings.auto_save = auto_save;
+    if let Some(value) = settings.get("auto_save").and_then(serde_json::Value::as_bool) {
+        current.auto_save = value;
     }
-    if let Some(timeout) = settings.get("query_timeout").and_then(|v| v.as_u64()) {
-        storage.settings.query_timeout = timeout;
+    if let Some(value) = settings.get("query_timeout").and_then(serde_json::Value::as_u64) {
+        current.query_timeout = value;
     }
-    if let Some(font_size) = settings.get("editor_font_size").and_then(|v| v.as_u64()) {
-        storage.settings.editor_font_size = font_size as u16;
+    if let Some(value) = settings
+        .get("editor_font_size")
+        .and_then(serde_json::Value::as_u64)
+    {
+        current.editor_font_size = value as u16;
     }
-    if let Some(editor_theme) = settings.get("editor_theme").and_then(|v| v.as_str()) {
-        storage.settings.editor_theme = editor_theme.to_string();
+    if let Some(value) = settings.get("editor_theme").and_then(|v| v.as_str()) {
+        current.editor_theme = value.to_string();
     }
-    if let Some(show_line_numbers) = settings.get("show_line_numbers").and_then(|v| v.as_bool()) {
-        storage.settings.show_line_numbers = show_line_numbers;
+    if let Some(value) = settings
+        .get("show_line_numbers")
+        .and_then(serde_json::Value::as_bool)
+    {
+        current.show_line_numbers = value;
     }
-    if let Some(word_wrap) = settings.get("word_wrap").and_then(|v| v.as_bool()) {
-        storage.settings.word_wrap = word_wrap;
+    if let Some(value) = settings.get("word_wrap").and_then(serde_json::Value::as_bool) {
+        current.word_wrap = value;
+    }
+    if let Some(value) = settings.get("cluster_root").and_then(|v| v.as_str()) {
+        current.cluster_root = Some(value.to_string());
     }
 
     state
         .storage
         .save(&storage)
-        .map_err(|e| format!("Failed to save settings: {}", e))?;
+        .map_err(|e| format!("Failed to save settings: {e}"))?;
 
     Ok(ApiResponse::success(true))
 }
@@ -348,117 +428,187 @@ async fn load_settings(
     let storage = state
         .storage
         .load()
-        .map_err(|e| format!("Failed to load storage: {}", e))?;
+        .map_err(|e| format!("Failed to load storage: {e}"))?;
 
-    let mut settings = HashMap::new();
-    settings.insert(
-        "theme".to_string(),
-        serde_json::Value::String(storage.settings.theme),
-    );
-    settings.insert(
-        "auto_save".to_string(),
-        serde_json::Value::Bool(storage.settings.auto_save),
-    );
-    settings.insert(
-        "query_timeout".to_string(),
-        serde_json::Value::Number(storage.settings.query_timeout.into()),
-    );
-    settings.insert(
-        "editor_font_size".to_string(),
-        serde_json::Value::Number(storage.settings.editor_font_size.into()),
-    );
-    settings.insert(
-        "editor_theme".to_string(),
-        serde_json::Value::String(storage.settings.editor_theme),
-    );
-    settings.insert(
-        "show_line_numbers".to_string(),
-        serde_json::Value::Bool(storage.settings.show_line_numbers),
-    );
-    settings.insert(
-        "word_wrap".to_string(),
-        serde_json::Value::Bool(storage.settings.word_wrap),
-    );
+    let settings = storage.settings;
+    let map = [
+        ("theme", serde_json::Value::String(settings.theme)),
+        ("auto_save", serde_json::Value::Bool(settings.auto_save)),
+        (
+            "query_timeout",
+            serde_json::Value::Number(settings.query_timeout.into()),
+        ),
+        (
+            "editor_font_size",
+            serde_json::Value::Number(settings.editor_font_size.into()),
+        ),
+        (
+            "editor_theme",
+            serde_json::Value::String(settings.editor_theme),
+        ),
+        (
+            "show_line_numbers",
+            serde_json::Value::Bool(settings.show_line_numbers),
+        ),
+        ("word_wrap", serde_json::Value::Bool(settings.word_wrap)),
+        (
+            "cluster_root",
+            settings
+                .cluster_root
+                .map(serde_json::Value::String)
+                .unwrap_or(serde_json::Value::Null),
+        ),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.to_string(), value))
+    .collect();
 
-    Ok(ApiResponse::success(settings))
+    Ok(ApiResponse::success(map))
 }
 
-/// Menu event handlers
 #[tauri::command]
 async fn show_about_dialog(app: tauri::AppHandle) {
-    let window = app.get_window("main").unwrap();
+    let Some(window) = app.get_window("main") else {
+        tracing::warn!("about dialog requested but the main window is gone");
+        return;
+    };
 
     tauri::api::dialog::message(
         Some(&window),
         "About Orbit Desktop",
-        "Orbit Desktop v0.1.0\n\nA powerful desktop interface for Orbit-RS database management with support for PostgreSQL, OrbitQL, and Redis commands.\n\nBuilt with ❤️ using Tauri and React."
+        format!(
+            "Orbit Desktop v{}\n\nA desktop client for Orbit-RS: connection management, \
+             SQL and Redis execution, and local cluster lifecycle control.",
+            env!("CARGO_PKG_VERSION")
+        ),
     );
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    // Initialize tracing
+// ============================ Startup ============================
+
+/// Restore saved connections so they are queryable straight after launch.
+///
+/// Descriptions are registered without contacting any server; the session opens
+/// on first use. A connection whose stored form cannot be decoded is reported
+/// and skipped rather than aborting startup.
+async fn restore_connections(
+    storage: &StorageManager,
+    encryption: &EncryptionManager,
+    connections: &ConnectionManager,
+) {
+    let stored = match storage.load() {
+        Ok(storage) => storage.connections,
+        Err(e) => {
+            tracing::error!("could not load saved connections: {e}");
+            return;
+        }
+    };
+
+    let mut restored = 0usize;
+    for entry in &stored {
+        match entry.to_connection(encryption) {
+            Ok(connection) => {
+                connections.register(connection).await;
+                restored += 1;
+            }
+            Err(e) => tracing::warn!("skipping saved connection {}: {e}", entry.id),
+        }
+    }
+
+    tracing::info!("restored {restored} of {} saved connections", stored.len());
+}
+
+/// Locate the Orbit-RS checkout to manage: the saved path if it still verifies,
+/// otherwise a search upward from the working directory.
+fn locate_cluster_root(saved: Option<&str>) -> Option<ClusterManager> {
+    if let Some(path) = saved {
+        match ClusterManager::new(path) {
+            Ok(manager) => return Some(manager),
+            Err(e) => tracing::warn!("saved cluster root is unusable: {e}"),
+        }
+    }
+
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| ClusterManager::discover(&cwd))
+}
+
+fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    tracing::info!("Starting Orbit Desktop application");
+    tracing::info!("starting Orbit Desktop");
 
     let context = tauri::generate_context!();
-    let config = context.config();
 
-    // Initialize storage and encryption
-    let storage = StorageManager::new(config).expect("Failed to initialize storage manager");
-    let encryption =
-        EncryptionManager::new(config).expect("Failed to initialize encryption manager");
-
-    // Load connections from storage
-    let storage_data = storage.load().unwrap_or_default();
-    let mut connection_manager = ConnectionManager::new();
-
-    // Load connections into manager
-    for stored_conn in &storage_data.connections {
-        if let Ok(conn) = stored_conn.to_connection(&encryption) {
-            // Connection will be created on-demand when needed
-            // For now, just store the metadata
+    let storage = match StorageManager::new(context.config()) {
+        Ok(storage) => storage,
+        Err(e) => {
+            tracing::error!("cannot initialise storage: {e}");
+            std::process::exit(1);
         }
+    };
+    let encryption = match EncryptionManager::new(context.config()) {
+        Ok(encryption) => encryption,
+        Err(e) => {
+            tracing::error!("cannot initialise encryption: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let saved_root = storage
+        .load()
+        .ok()
+        .and_then(|storage| storage.settings.cluster_root);
+    let cluster_root = locate_cluster_root(saved_root.as_deref());
+    match &cluster_root {
+        Some(manager) => tracing::info!("managing cluster at {}", manager.root().display()),
+        None => tracing::info!("no Orbit-RS checkout found; set one in the cluster panel"),
     }
 
+    let connections = Arc::new(ConnectionManager::new());
+
     let app_state = AppState {
-        connections: RwLock::new(connection_manager),
+        connections: Arc::clone(&connections),
         query_executor: RwLock::new(QueryExecutor::new()),
         model_manager: RwLock::new(ModelManager::new()),
         storage,
         encryption,
+        cluster_root: RwLock::new(cluster_root),
     };
 
     tauri::Builder::default()
         .manage(app_state)
         .menu(create_menu())
         .on_menu_event(|event| match event.menu_item_id() {
-            "quit" => {
-                std::process::exit(0);
-            }
+            "quit" => std::process::exit(0),
             "about" => {
                 let app = event.window().app_handle();
-                tauri::async_runtime::spawn(async move {
-                    show_about_dialog(app).await;
-                });
+                tauri::async_runtime::spawn(show_about_dialog(app));
             }
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            // Connection management
+            // Connections
             create_connection,
             test_connection,
             get_connections,
+            connect,
             disconnect,
             delete_connection,
-            // Query execution
+            list_connection_types,
+            // Queries
             execute_query,
-            get_query_history,
             explain_query,
-            // ML model management
+            get_query_history,
+            // Cluster
+            get_cluster_status,
+            set_cluster_root,
+            start_cluster,
+            stop_cluster,
+            get_cluster_log,
+            // ML models
             list_ml_functions,
             list_models,
             get_model_info,
@@ -469,31 +619,32 @@ pub fn run() {
             load_settings,
             show_about_dialog,
         ])
-        .setup(|app| {
-            tracing::info!("Application setup complete");
+        .setup(move |app| {
+            let state = app.state::<AppState>();
+            let storage = state.storage.clone();
+            let encryption = state.encryption.clone();
+            let connections = Arc::clone(&connections);
+
+            tauri::async_runtime::spawn(async move {
+                restore_connections(&storage, &encryption, &connections).await;
+            });
+
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(context)
+        .expect("Tauri failed to start");
 }
 
 fn create_menu() -> tauri::Menu {
     use tauri::{CustomMenuItem, Menu, MenuItem, Submenu};
 
-    let quit = CustomMenuItem::new("quit", "Quit");
-    let about = CustomMenuItem::new("about", "About");
-
     let app_menu = Submenu::new(
         "Orbit Desktop",
         Menu::new()
-            .add_item(about)
+            .add_item(CustomMenuItem::new("about", "About"))
             .add_native_item(MenuItem::Separator)
-            .add_item(quit),
+            .add_item(CustomMenuItem::new("quit", "Quit")),
     );
 
     Menu::new().add_submenu(app_menu)
-}
-
-fn main() {
-    run();
 }
