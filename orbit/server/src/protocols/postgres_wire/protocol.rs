@@ -46,6 +46,25 @@ pub struct PostgresWireProtocol {
     portals: HashMap<String, (String, Vec<Option<bytes::Bytes>>)>,
     auth_manager: AuthManager,
     scram_auth: Option<ScramAuth>,
+    /// Whether this session is inside a transaction block, and whether that
+    /// block has already failed.
+    ///
+    /// Reported in every `ReadyForQuery`. It used to be hardcoded to `Idle`,
+    /// which told drivers no transaction was ever open — so a driver could not
+    /// tell a committed statement from one queued in an aborted block.
+    transaction: TransactionState,
+}
+
+/// Transaction state of a session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransactionState {
+    /// No transaction block open; each statement commits on its own.
+    Idle,
+    /// Inside a transaction block that is still good.
+    Open,
+    /// Inside a transaction block that has hit an error. Every statement is
+    /// rejected until ROLLBACK.
+    Failed,
 }
 
 /// Result of processing data in the connection loop
@@ -87,6 +106,7 @@ impl PostgresWireProtocol {
             portals: HashMap::new(),
             auth_manager,
             scram_auth: None,
+            transaction: TransactionState::Idle,
         }
     }
 
@@ -110,6 +130,47 @@ impl PostgresWireProtocol {
             portals: HashMap::new(),
             auth_manager,
             scram_auth: None,
+            transaction: TransactionState::Idle,
+        }
+    }
+
+    /// Transaction status to report in `ReadyForQuery`.
+    fn transaction_status(&self) -> TransactionStatus {
+        match self.transaction {
+            TransactionState::Idle => TransactionStatus::Idle,
+            TransactionState::Open => TransactionStatus::InTransaction,
+            TransactionState::Failed => TransactionStatus::InFailedTransaction,
+        }
+    }
+
+    /// Update the transaction state from a statement about to run.
+    ///
+    /// Recognises the transaction-control statements themselves; everything
+    /// else leaves the state alone.
+    fn note_statement(&mut self, sql: &str) {
+        let head: String = sql
+            .trim_start()
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect::<String>()
+            .to_uppercase();
+
+        match head.as_str() {
+            "BEGIN" | "START" => self.transaction = TransactionState::Open,
+            "COMMIT" | "END" | "ROLLBACK" | "ABORT" => {
+                self.transaction = TransactionState::Idle
+            }
+            _ => {}
+        }
+    }
+
+    /// Record that a statement failed.
+    ///
+    /// Inside a transaction block this poisons it: PostgreSQL rejects every
+    /// later statement until the block is rolled back.
+    fn note_failure(&mut self) {
+        if self.transaction == TransactionState::Open {
+            self.transaction = TransactionState::Failed;
         }
     }
 
@@ -215,6 +276,15 @@ impl PostgresWireProtocol {
                 MessageResult::Error(e) => {
                     error!("Error handling message: {}", e);
                     self.send_error(write_buf, &e.to_string());
+                    // The protocol requires a ReadyForQuery after an error
+                    // before the client may send anything else. Without it the
+                    // client waits for a message that never comes and the
+                    // session appears to have died — one bad statement took
+                    // the whole connection down.
+                    BackendMessage::ReadyForQuery {
+                        status: self.transaction_status(),
+                    }
+                    .encode(write_buf);
                 }
             }
 

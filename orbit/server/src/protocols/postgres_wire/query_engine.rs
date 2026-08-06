@@ -80,6 +80,25 @@ impl StatementDescription {
     }
 }
 
+/// Fold a SQL identifier the way PostgreSQL does.
+///
+/// An unquoted identifier folds to lower case; a double-quoted one keeps the
+/// case it was written with. This parser used to fold to *upper* case while the
+/// comprehensive SQL engine folded to lower, so a table created through one
+/// path was invisible to the other — `CREATE TABLE t` over the simple query
+/// protocol stored `t`, and `INSERT INTO t` over the extended protocol looked
+/// for `T` and reported that the table did not exist.
+pub fn fold_identifier(identifier: &str) -> String {
+    let trimmed = identifier.trim().trim_end_matches(';').trim();
+    match trimmed
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+    {
+        Some(quoted) => quoted.to_string(),
+        None => trimmed.to_lowercase(),
+    }
+}
+
 /// Map a declared column type to the PostgreSQL type OID the wire advertises.
 pub fn column_type_oid(column_type: &ColumnType) -> i32 {
     use super::messages::type_oids;
@@ -405,7 +424,7 @@ impl QueryEngine {
         if let Some(schema) = storage.get_table_schema(table).await? {
             return Ok(Some(schema));
         }
-        storage.get_table_schema(&table.to_uppercase()).await
+        storage.get_table_schema(&fold_identifier(table)).await
     }
 
     /// Infer the type of each `$n` parameter from where it is used.
@@ -612,7 +631,7 @@ impl QueryEngine {
         let described = |name: &str| ColumnDescription {
             // Casing mirrors what `execute_persistent_select` produces, so the
             // description matches the rows that follow it.
-            name: name.to_uppercase(),
+            name: fold_identifier(name),
             type_oid: schema
                 .columns
                 .iter()
@@ -1163,7 +1182,7 @@ impl QueryEngine {
         };
 
         // Parse table - convert to uppercase and trim semicolon
-        let table = parts[from_idx + 1].trim_end_matches(';').to_uppercase();
+        let table = fold_identifier(parts[from_idx + 1]);
 
         // Parse WHERE clause if present
         let where_idx = parts.iter().position(|&p| p.to_uppercase() == "WHERE");
@@ -1199,10 +1218,12 @@ impl QueryEngine {
         let val_keyword_pos = sql_upper.find("VALUES").unwrap() + 6;
 
         // Extract data using original SQL to preserve case
-        let table = sql[table_start..table_end].trim().to_uppercase();
-        let columns: Vec<String> = sql_upper[col_start..col_end]
+        let table = fold_identifier(&sql[table_start..table_end]);
+        // Folded from the original text, not the uppercased copy, so a quoted
+        // identifier keeps its case.
+        let columns: Vec<String> = sql[col_start..col_end]
             .split(',')
-            .map(|s| s.trim().to_string())
+            .map(fold_identifier)
             .collect();
 
         // Parse values list: (v1, v2), (v3, v4)
@@ -1285,7 +1306,7 @@ impl QueryEngine {
             ));
         }
 
-        let table = parts[1].trim_end_matches(';').to_uppercase();
+        let table = fold_identifier(parts[1]);
 
         // Find SET
         let set_idx = parts
@@ -1332,7 +1353,7 @@ impl QueryEngine {
             .position(|&p| p.to_uppercase() == "FROM")
             .ok_or_else(|| ProtocolError::PostgresError("Missing FROM clause".to_string()))?;
 
-        let table = parts[from_idx + 1].trim_end_matches(';').to_uppercase();
+        let table = fold_identifier(parts[from_idx + 1]);
 
         // Parse WHERE clause
         let where_idx = parts.iter().position(|&p| p.to_uppercase() == "WHERE");
@@ -1522,7 +1543,7 @@ impl QueryEngine {
         };
 
         let table_end = sql[table_start..].find('(').unwrap() + table_start;
-        let table_name = sql[table_start..table_end].trim().to_uppercase();
+        let table_name = fold_identifier(&sql[table_start..table_end]);
 
         // Find column definitions between parentheses
         let col_start = table_end + 1;
@@ -1575,10 +1596,7 @@ impl QueryEngine {
             sql_upper.find("TABLE").unwrap() + 5
         };
 
-        let table_name = sql[table_start..]
-            .trim()
-            .trim_end_matches(';')
-            .to_uppercase();
+        let table_name = fold_identifier(&sql[table_start..]);
 
         Ok(Statement::DropTable {
             table: table_name,
@@ -1828,7 +1846,7 @@ impl QueryEngine {
             wc.conditions
                 .into_iter()
                 .map(|c| QueryCondition {
-                    column: c.column.to_uppercase(), // Normalize column names to uppercase
+                    column: fold_identifier(&c.column),
                     operator: c.operator,
                     value: match serde_json::from_str(&c.value) {
                         Ok(json_val) => json_val,
@@ -1846,7 +1864,7 @@ impl QueryEngine {
             vec![]
         } else {
             // Normalize column names to uppercase
-            columns.into_iter().map(|c| c.to_uppercase()).collect()
+            columns.into_iter().map(|c| fold_identifier(&c)).collect()
         };
 
         let rows = storage
@@ -1860,7 +1878,7 @@ impl QueryEngine {
                 schema
                     .columns
                     .into_iter()
-                    .map(|c| c.name.to_uppercase())
+                    .map(|c| fold_identifier(&c.name))
                     .collect()
             } else {
                 vec![]
@@ -2028,7 +2046,7 @@ impl QueryEngine {
             wc.conditions
                 .into_iter()
                 .map(|c| QueryCondition {
-                    column: c.column.to_uppercase(), // Normalize column names to uppercase
+                    column: fold_identifier(&c.column),
                     operator: c.operator,
                     value: match serde_json::from_str(&c.value) {
                         Ok(json_val) => json_val,
@@ -2068,7 +2086,7 @@ impl QueryEngine {
             wc.conditions
                 .into_iter()
                 .map(|c| QueryCondition {
-                    column: c.column.to_uppercase(), // Normalize column names to uppercase
+                    column: fold_identifier(&c.column),
                     operator: c.operator,
                     value: match serde_json::from_str(&c.value) {
                         Ok(json_val) => json_val,
