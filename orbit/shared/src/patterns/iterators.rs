@@ -376,7 +376,8 @@ where
 // ===== Result Iterator (Fallible) =====
 
 /// Boxed mapping closure used by [`ResultIterator`].
-type FallibleMapper<I, E> = Box<dyn FnMut(<I as Iterator>::Item) -> Result<<I as Iterator>::Item, E>>;
+type FallibleMapper<I, E> =
+    Box<dyn FnMut(<I as Iterator>::Item) -> Result<<I as Iterator>::Item, E>>;
 
 /// Iterator that can fail during iteration
 pub struct ResultIterator<I, E>

@@ -36,6 +36,12 @@ pub struct DatabaseConnection<S: ConnectionState> {
     _state: PhantomData<S>,
 }
 
+impl Default for DatabaseConnection<Uninitialized> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DatabaseConnection<Uninitialized> {
     /// Create a new uninitialized connection
     pub fn new() -> Self {
@@ -135,6 +141,12 @@ pub struct ConfigBuilder<S: BuilderState> {
     username: Option<String>,
     password: Option<String>,
     _state: PhantomData<S>,
+}
+
+impl Default for ConfigBuilder<Incomplete> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Default for ConfigBuilder<Incomplete> {
