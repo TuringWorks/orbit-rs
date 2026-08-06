@@ -94,6 +94,31 @@ When making breaking changes to protocols/APIs, also update:
 - Small, single-responsibility functions (cognitive complexity ≤ 15); document public items with `///`.
 - `unsafe` only as a last resort, with a `// SAFETY:` comment and tests.
 
+### Modelling Honesty
+- Ask what a default asserts: `unwrap_or(0)` on a count asserts "none"; `unwrap_or_else(Utc::now)` on a record timestamp asserts "this happened now" — a claim nobody checked. Keep absent data absent (`Option`), and refuse to derive from it.
+- A clamp is not a value — when a guard rail binds, report it in the type instead of returning the bound as if it were a measurement.
+- A parameter that can be removed without changing any output is not modelling anything — delete it or wire it up.
+
+### Performance (measure first)
+- Measure a number, not a hunch; idle CPU is the cheapest health check.
+- Attribute from the **call tree**, not the leaf histogram (`cargo flamegraph`, `dhat`, `tokio-console`).
+- Fix in yield order: cadence → eager work → per-iteration rebuilds → redundant notifications → algorithms/allocation.
+- Re-measure like-for-like, then **verify the feature still works** — a metric that improved because a path stopped working is a regression.
+- Don't optimize what wasn't measured as a problem; record what you deliberately left alone.
+
+### Allocation (hot paths only)
+- Reuse buffers over recreating them; `with_capacity`/`reserve` when the size is known.
+- Borrow, don't clone; take `&str`/`&[T]`/`impl AsRef<_>` at boundaries.
+- Flat over pointer-chasing; indices over pointers; compound keys over nested maps.
+- Cheap reject before expensive check; batch to amortize overhead; sample high-frequency metrics; bound anything that grows.
+
+### Verification — a green build proves almost nothing
+- Run it, read stderr, exercise the changed path with a real client (`psql`, `redis-cli`, `cqlsh`, `curl`).
+- Reconcile at least one number against an external reference, not your own expectation.
+- For enum/registry dispatch, confirm every variant appears at a call site — the compiler is silent when the enum is data, not control flow.
+- Diff duplicated contracts (`.proto`, schemas, command tables) that have no codegen between them.
+- "An error appeared after my change" ≠ "my change caused it" — check provenance and say which it was.
+
 ### 12-Factor App (where applicable)
 Build on existing `tracing`/`tracing-subscriber`, TOML config, `clap`, and graceful shutdown:
 - Config in the environment (env vars over `config/orbit-server.toml`); no hardcoded ports/hosts/secrets.

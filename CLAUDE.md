@@ -85,6 +85,42 @@ Beyond passing `make check`, write code that is idiomatic, functional-leaning, a
 - **`unsafe` is a last resort** — justify each block with a `// SAFETY:` comment and cover it with tests.
 - **Test the contract, not the implementation.** Prefer property/table-driven tests for pure logic; keep async tests deterministic.
 
+### Modelling Honesty
+A model that cannot be wrong is not a model. These are correctness rules, not style:
+- **Ask what a default asserts.** `unwrap_or(0)` on a count asserts "none" — usually true. `unwrap_or_else(Utc::now)` on a record's timestamp asserts "this happened now" — a claim about the world nobody checked, and it stamps every imported row with the import time. Absent data stays absent: model it (`Option`, or a documented sentinel), refuse to derive from it, and surface it as unknown.
+- **A clamp is not a value.** When a guard rail binds, say so in the type (return the clamped flag alongside the value) rather than silently substituting a bound that reads as a real measurement.
+- **Decorative parameters invite false confidence.** If a config knob or tuning parameter can be removed without changing any output, it is not doing anything — delete it or wire it up.
+- **Prefer unit-free derivations.** Where two provider/config fields meet in one expression, cross-check against a ratio that carries no units.
+
+### Performance
+Measure before optimizing; the order matters more than the micro-work:
+1. **Measure** a number, not a hunch — CPU, memory, or latency? Idle CPU is the cheapest health check and almost nothing watches it.
+2. **Attribute from the call tree**, not the leaf histogram. A flat "hottest functions" list names symptoms; only the tree says who asked for the work. Use `cargo flamegraph`, `dhat` for allocations, `tokio-console` for task stalls.
+3. **Fix in yield order** — cadence (is this poll/tick running more often than the data changes?), eager work (built before it is needed?), reuse (rebuilt per iteration?), redundant notification (does it wake watchers when nothing changed?) — *then* algorithms and allocation.
+4. **Re-measure like-for-like**, same protocol and warm-up; quote the stable extreme of a noisy counter and say it is noisy.
+5. **Verify the feature still works.** A performance number that improved because a code path stopped doing its job is the easiest way to ship a regression while celebrating it.
+
+Do not optimize what has not been measured as a problem. When leaving a latent issue alone, write down why.
+
+### Allocation Discipline (hot paths only, after measuring)
+- **Reuse over recreate** — hoist buffers/`Vec`s out of loops; keep scratch space on the struct.
+- **`with_capacity`/`reserve`** whenever the size is known or estimable.
+- **Borrow, don't clone.** Clone for ownership, never to quiet the borrow checker. Take `&str`/`&[T]`/`impl AsRef<_>` at boundaries.
+- **Flat over pointer-chasing** — `Vec` and flat maps beat node-per-entry trees; store indices (`u32`) rather than pointers in transient containers; flatten nested maps behind a compound key.
+- **Cheap reject before expensive check** — a length or first-byte test before a regex, hash, or allocation; fast path first, cold handling `#[cold]`/out-of-line.
+- **Batch** to amortize per-call overhead, and **sample** high-frequency metrics (one in 32 via a power-of-two mask) so instrumentation does not dominate what it measures.
+- **Bound anything that grows.** A cache that only ignores stale entries but never evicts them grows forever.
+
+### Verification — a green build proves almost nothing
+`make check` passing is the floor, not evidence the change works. In yield order:
+- **Run it and read stderr.** `make dev` / start the server and watch the log.
+- **Exercise the path you changed** with a real client (`psql`, `redis-cli`, `cqlsh`, `curl`) — code reachable only from an untested path is unverified no matter how green the build.
+- **Reconcile one number against an external reference** — protocol conformance against the real server's behavior, not against your own expectation.
+- **Prove the artifact carries the change** when packaging or deploying; verify the binary, not that files were copied.
+- **Audit affordances.** For enum/registry dispatch, confirm every variant appears at a call site — the compiler will not tell you when the enum is data rather than control flow. A schema, a config key, or a trait impl that nothing calls is not a feature.
+- **Duplicated contracts drift silently.** If a `.proto`, schema, or command table exists in two places with no codegen between them, diff them in CI.
+- **"An error appeared after my change" ≠ "my change caused it."** Check provenance before assuming causation, and say which it was.
+
 ### 12-Factor App Principles (where applicable)
 Orbit-RS already uses `tracing` + `tracing-subscriber` (env-filter), `serde`/TOML config, `clap`, and graceful shutdown — build on these:
 - **III. Config in the environment.** Read tunables from env vars layered over `config/orbit-server.toml`; never hardcode ports, hosts, credentials, or paths. Secrets come from env or a secret store, never source.
