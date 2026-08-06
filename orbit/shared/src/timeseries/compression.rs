@@ -196,7 +196,13 @@ impl<'a> Cursor<'a> {
     /// contain keeps a corrupt header from requesting a huge allocation before the
     /// first truncated read is even attempted; the decode loop then fails normally.
     const fn capacity_for(&self, count: usize, min_bytes: usize) -> usize {
-        let affordable = self.remaining() / min_bytes;
+        // `min_bytes` is a per-format constant, but dividing by a parameter that
+        // could be zero is a panic waiting for the next caller.
+        let affordable = if min_bytes == 0 {
+            count
+        } else {
+            self.remaining() / min_bytes
+        };
         if count < affordable {
             count
         } else {
