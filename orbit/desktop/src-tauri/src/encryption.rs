@@ -9,15 +9,18 @@ use aes_gcm::{
 };
 use base64::{engine::general_purpose, Engine as _};
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use tauri::api::path::app_data_dir;
 use tauri::Config;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
-/// Encryption key manager
+/// Encryption key manager.
+///
+/// Cloning shares the same key material, so every clone can read what any
+/// other wrote.
+#[derive(Clone)]
 pub struct EncryptionManager {
     key: Aes256Gcm,
-    key_file: PathBuf,
 }
 
 impl EncryptionManager {
@@ -26,18 +29,17 @@ impl EncryptionManager {
         let app_name = config
             .package
             .product_name
-            .as_ref()
-            .map(|s| s.as_str())
+            .as_deref()
             .unwrap_or("orbit-desktop");
 
         let app_dir = app_data_dir(config)
             .ok_or_else(|| {
-                EncryptionError::ConfigError("Could not determine app data directory".to_string())
+                EncryptionError::Config("Could not determine app data directory".to_string())
             })?
             .join(app_name);
 
         std::fs::create_dir_all(&app_dir).map_err(|e| {
-            EncryptionError::IoError(format!("Failed to create app directory: {}", e))
+            EncryptionError::Io(format!("Failed to create app directory: {}", e))
         })?;
 
         let key_file = app_dir.join(".encryption_key");
@@ -45,14 +47,14 @@ impl EncryptionManager {
         let key = if key_file.exists() {
             // Load existing key
             let key_bytes = fs::read(&key_file)
-                .map_err(|e| EncryptionError::IoError(format!("Failed to read key file: {}", e)))?;
+                .map_err(|e| EncryptionError::Io(format!("Failed to read key file: {}", e)))?;
 
             if key_bytes.len() != 32 {
                 warn!("Key file has invalid length, generating new key");
                 Self::generate_and_save_key(&key_file)?
             } else {
                 Aes256Gcm::new_from_slice(&key_bytes)
-                    .map_err(|e| EncryptionError::KeyError(format!("Invalid key: {}", e)))?
+                    .map_err(|e| EncryptionError::Key(format!("Invalid key: {}", e)))?
             }
         } else {
             // Generate new key
@@ -60,39 +62,45 @@ impl EncryptionManager {
             Self::generate_and_save_key(&key_file)?
         };
 
-        Ok(Self { key, key_file })
+        Ok(Self { key })
     }
 
-    fn generate_and_save_key(key_file: &PathBuf) -> Result<Aes256Gcm, EncryptionError> {
+    fn generate_and_save_key(key_file: &Path) -> Result<Aes256Gcm, EncryptionError> {
         let key = Aes256Gcm::generate_key(&mut OsRng);
 
         // Save key to file with restricted permissions (Unix only)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(key_file.parent().unwrap())
-                .map_err(|e| EncryptionError::IoError(format!("Failed to get metadata: {}", e)))?
+            let parent = key_file.parent().ok_or_else(|| {
+                EncryptionError::Config(format!(
+                    "key path {} has no parent directory",
+                    key_file.display()
+                ))
+            })?;
+            let mut perms = fs::metadata(parent)
+                .map_err(|e| EncryptionError::Io(format!("Failed to get metadata: {}", e)))?
                 .permissions();
             perms.set_mode(0o700); // rwx------
-            fs::set_permissions(key_file.parent().unwrap(), perms).map_err(|e| {
-                EncryptionError::IoError(format!("Failed to set permissions: {}", e))
+            fs::set_permissions(parent, perms).map_err(|e| {
+                EncryptionError::Io(format!("Failed to set permissions: {}", e))
             })?;
         }
 
-        fs::write(key_file, key.as_slice())
-            .map_err(|e| EncryptionError::IoError(format!("Failed to write key file: {}", e)))?;
+        fs::write(key_file, AsRef::<[u8]>::as_ref(&key))
+            .map_err(|e| EncryptionError::Io(format!("Failed to write key file: {}", e)))?;
 
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mut perms = fs::metadata(key_file)
                 .map_err(|e| {
-                    EncryptionError::IoError(format!("Failed to get key file metadata: {}", e))
+                    EncryptionError::Io(format!("Failed to get key file metadata: {}", e))
                 })?
                 .permissions();
             perms.set_mode(0o600); // rw-------
             fs::set_permissions(key_file, perms).map_err(|e| {
-                EncryptionError::IoError(format!("Failed to set key file permissions: {}", e))
+                EncryptionError::Io(format!("Failed to set key file permissions: {}", e))
             })?;
         }
 
@@ -105,7 +113,7 @@ impl EncryptionManager {
         let ciphertext = self
             .key
             .encrypt(&nonce, plaintext.as_bytes())
-            .map_err(|e| EncryptionError::EncryptionError(e.to_string()))?;
+            .map_err(|e| EncryptionError::Encrypt(e.to_string()))?;
 
         // Combine nonce and ciphertext
         let mut combined = nonce.to_vec();
@@ -120,26 +128,30 @@ impl EncryptionManager {
         // Decode from base64
         let combined = general_purpose::STANDARD
             .decode(ciphertext)
-            .map_err(|e| EncryptionError::DecryptionError(format!("Invalid base64: {}", e)))?;
+            .map_err(|e| EncryptionError::Decrypt(format!("Invalid base64: {}", e)))?;
 
         if combined.len() < 12 {
-            return Err(EncryptionError::DecryptionError(
+            return Err(EncryptionError::Decrypt(
                 "Ciphertext too short".to_string(),
             ));
         }
 
-        // Extract nonce (first 12 bytes) and ciphertext
-        let nonce = Nonce::from_slice(&combined[..12]);
+        // Extract nonce (first 12 bytes) and ciphertext. The length check above
+        // guarantees the slice is exactly nonce-sized, so the conversion holds.
+        let nonce_bytes: [u8; 12] = combined[..12]
+            .try_into()
+            .map_err(|_| EncryptionError::Decrypt("Malformed nonce".to_string()))?;
+        let nonce = Nonce::from(nonce_bytes);
         let ciphertext = &combined[12..];
 
         // Decrypt
         let plaintext = self
             .key
-            .decrypt(nonce, ciphertext)
-            .map_err(|e| EncryptionError::DecryptionError(e.to_string()))?;
+            .decrypt(&nonce, ciphertext)
+            .map_err(|e| EncryptionError::Decrypt(e.to_string()))?;
 
         String::from_utf8(plaintext)
-            .map_err(|e| EncryptionError::DecryptionError(format!("Invalid UTF-8: {}", e)))
+            .map_err(|e| EncryptionError::Decrypt(format!("Invalid UTF-8: {}", e)))
     }
 }
 
@@ -147,13 +159,13 @@ impl EncryptionManager {
 #[derive(Debug, thiserror::Error)]
 pub enum EncryptionError {
     #[error("IO error: {0}")]
-    IoError(String),
+    Io(String),
     #[error("Key error: {0}")]
-    KeyError(String),
+    Key(String),
     #[error("Encryption error: {0}")]
-    EncryptionError(String),
+    Encrypt(String),
     #[error("Decryption error: {0}")]
-    DecryptionError(String),
+    Decrypt(String),
     #[error("Config error: {0}")]
-    ConfigError(String),
+    Config(String),
 }

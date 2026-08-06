@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { ConnectionInfo, ConnectionType, ConnectionStatus } from '@/types';
-import { TauriService } from '@/services/tauri';
+import {
+  ConnectionInfo,
+  ConnectionType,
+  ConnectionTypeInfo,
+  connectionStatusError,
+  isConnected,
+} from '@/types';
+import { TauriService, handleTauriError } from '@/services/tauri';
 
 interface ConnectionDialogProps {
   isOpen: boolean;
@@ -248,6 +254,16 @@ export const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connectionTypes, setConnectionTypes] = useState<ConnectionTypeInfo[]>([]);
+
+  // The backend owns the protocol table: which types exist, their default
+  // ports, and which are served by a native wire implementation.
+  useEffect(() => {
+    if (!isOpen) return;
+    TauriService.listConnectionTypes()
+      .then(setConnectionTypes)
+      .catch(err => setError(handleTauriError(err)));
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -279,22 +295,17 @@ export const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
     setError(null);
   };
 
-  const getDefaultPort = (type: ConnectionType): number => {
-    switch (type) {
-      case ConnectionType.PostgreSQL: return 5432;
-      case ConnectionType.MySQL: return 3306;
-      case ConnectionType.OrbitQL: return 8081;
-      case ConnectionType.Redis: return 6379;
-      case ConnectionType.CQL: return 9042;
-      case ConnectionType.Cypher: return 7687;
-      case ConnectionType.AQL: return 8529;
-      default: return 5432;
-    }
-  };
+  // Default ports come from the backend, which owns the protocol table. A copy
+  // here had already drifted (OrbitQL 8081 against the server's 8080).
+  const defaultPortFor = (type: ConnectionType): number | undefined =>
+    connectionTypes.find(candidate => candidate.id === type)?.default_port;
 
   const handleConnectionTypeChange = (type: ConnectionType) => {
     updateFormData('connection_type', type);
-    updateFormData('port', getDefaultPort(type));
+    const port = defaultPortFor(type);
+    if (port !== undefined) {
+      updateFormData('port', port);
+    }
   };
 
   const handleTest = async () => {
@@ -304,15 +315,17 @@ export const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
 
     try {
       const status = await TauriService.testConnection(formData);
-      if (status === ConnectionStatus.Connected) {
-        setTestResult({ success: true, message: 'Connection successful!' });
-      } else if (status === ConnectionStatus.Error) {
-        setTestResult({ success: false, message: 'Connection failed. Please check your settings.' });
+      if (isConnected(status)) {
+        setTestResult({ success: true, message: 'Connection successful.' });
       } else {
-        setTestResult({ success: false, message: 'Connection test returned unexpected status.' });
+        // Show what the server actually said, not a generic sentence.
+        setTestResult({
+          success: false,
+          message: connectionStatusError(status) ?? 'Connection could not be opened.',
+        });
       }
-    } catch (err: any) {
-      setTestResult({ success: false, message: err.message || 'Connection test failed' });
+    } catch (err) {
+      setTestResult({ success: false, message: handleTauriError(err) });
     } finally {
       setTesting(false);
     }
@@ -388,14 +401,24 @@ export const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
             value={formData.connection_type}
             onChange={(e) => handleConnectionTypeChange(e.target.value as ConnectionType)}
           >
-            <option value={ConnectionType.PostgreSQL}>PostgreSQL</option>
-            <option value={ConnectionType.MySQL}>MySQL</option>
-            <option value={ConnectionType.OrbitQL}>OrbitQL</option>
-            <option value={ConnectionType.Redis}>Redis</option>
-            <option value={ConnectionType.CQL}>CQL (Cassandra)</option>
-            <option value={ConnectionType.Cypher}>Cypher (Neo4j)</option>
-            <option value={ConnectionType.AQL}>AQL (ArangoDB)</option>
+            {connectionTypes.map(type => (
+              <option key={type.id} value={type.id}>
+                {type.id} ({type.default_port})
+              </option>
+            ))}
           </Select>
+          {connectionTypes
+            .filter(t => t.id === formData.connection_type && !t.native_wire_protocol)
+            .map(t => (
+              <div
+                key={t.id}
+                style={{ marginTop: 6, fontSize: 12, color: '#ffb454', lineHeight: 1.5 }}
+              >
+                ⚠️ {t.id} goes through orbit-server's REST API, whose SQL and catalog
+                handlers still return fixed example rows. Queries will succeed but the
+                results are not data from the database.
+              </div>
+            ))}
         </FormGroup>
 
         <FormGroup>
@@ -413,7 +436,14 @@ export const ConnectionDialog: React.FC<ConnectionDialogProps> = ({
           <Input
             type="number"
             value={formData.port}
-            onChange={(e) => updateFormData('port', parseInt(e.target.value) || getDefaultPort(formData.connection_type))}
+            onChange={(e) =>
+              updateFormData(
+                'port',
+                parseInt(e.target.value, 10) ||
+                  defaultPortFor(formData.connection_type) ||
+                  formData.port
+              )
+            }
             min="1"
             max="65535"
           />

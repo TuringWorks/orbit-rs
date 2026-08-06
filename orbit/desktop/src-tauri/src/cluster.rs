@@ -114,6 +114,7 @@ pub struct ClusterStatus {
 }
 
 /// Locates the repository and drives `start-cluster.sh`.
+#[derive(Debug)]
 pub struct ClusterManager {
     root: PathBuf,
 }
@@ -550,5 +551,161 @@ mod tests {
         let error = ClusterManager::new(std::env::temp_dir())
             .expect_err("the temp dir is not an Orbit-RS checkout");
         assert!(matches!(error, ClusterError::NotARepository(..)));
+    }
+}
+
+/// Tests that need the real repository and real processes.
+///
+/// These verify the parts that cannot be checked from a unit test: that a pid
+/// file written on disk is discovered, that `ps` on this machine reports the
+/// process, and that a port with a real listener behind it probes as reachable
+/// while a port without one does not.
+///
+/// ```text
+/// cargo test --manifest-path orbit/desktop/src-tauri/Cargo.toml -- --ignored --test-threads=1
+/// ```
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+
+    /// A port pair well outside the ranges `start-cluster.sh` uses, so a real
+    /// cluster running alongside this test cannot be mistaken for the fixture.
+    const LISTENING_PORT: u16 = 47731;
+    const SILENT_PORT: u16 = 47732;
+
+    /// Removes the fixture's pid file even if an assertion panics, so a failed
+    /// run cannot leave a stale node in the user's cluster panel.
+    struct Fixture {
+        pid_file: PathBuf,
+        child: std::process::Child,
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            let _ = std::fs::remove_file(&self.pid_file);
+        }
+    }
+
+    fn repo_root() -> ClusterManager {
+        // CARGO_MANIFEST_DIR is <repo>/orbit/desktop/src-tauri.
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        ClusterManager::discover(&manifest).expect("tests run inside the orbit-rs checkout")
+    }
+
+    /// Spawn a process that holds one port open and leaves the cluster's port
+    /// flags on its own command line, which is where `status` reads them from.
+    fn spawn_fixture(manager: &ClusterManager, node_id: &str) -> Fixture {
+        let script = format!(
+            "import socket, time, sys\n\
+             s = socket.socket()\n\
+             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n\
+             s.bind(('127.0.0.1', {LISTENING_PORT}))\n\
+             s.listen(8)\n\
+             time.sleep(600)\n"
+        );
+
+        let child = std::process::Command::new("python3")
+            .arg("-c")
+            .arg(script)
+            .arg("--postgres-port")
+            .arg(LISTENING_PORT.to_string())
+            .arg("--redis-port")
+            .arg(SILENT_PORT.to_string())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("python3 is needed to stand up the fixture listener");
+
+        let pid_dir = manager.pid_dir();
+        std::fs::create_dir_all(&pid_dir).expect("create pid dir");
+        let pid_file = pid_dir.join(format!("{node_id}.pid"));
+        std::fs::write(&pid_file, child.id().to_string()).expect("write pid file");
+
+        Fixture { pid_file, child }
+    }
+
+    #[tokio::test]
+    #[ignore = "spawns a real process and binds a real port"]
+    async fn status_reports_a_live_process_and_distinguishes_open_from_closed_ports() {
+        let manager = repo_root();
+        let node_id = "node-test-fixture";
+        let fixture = spawn_fixture(&manager, node_id);
+
+        // Give the listener a moment to reach listen(2).
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        let status = manager.status().await.expect("status should read the pid dir");
+        assert!(status.initialized, "the pid directory exists");
+
+        let node = status
+            .nodes
+            .iter()
+            .find(|n| n.node_id == node_id)
+            .expect("the fixture's pid file should be discovered");
+
+        let ProcessState::Running { pid, .. } = node.process else {
+            panic!("the fixture process is alive, so it must report as running");
+        };
+        assert_eq!(pid, fixture.child.id(), "the reported pid is the fixture's");
+
+        let by_protocol: HashMap<&str, &Endpoint> = node
+            .endpoints
+            .iter()
+            .map(|e| (e.protocol.as_str(), e))
+            .collect();
+
+        // Both flags were on the command line, so both are reported...
+        assert_eq!(by_protocol.len(), 2, "two --*-port flags were passed");
+        // ...but only the bound one answers. This is the distinction the panel
+        // relies on to show "running but not serving".
+        assert!(
+            by_protocol["PostgreSQL"].reachable,
+            "port {LISTENING_PORT} has a live listener"
+        );
+        assert!(
+            !by_protocol["Redis"].reachable,
+            "port {SILENT_PORT} has nothing bound to it"
+        );
+        assert!(node.is_serving(), "one reachable port counts as serving");
+    }
+
+    #[tokio::test]
+    #[ignore = "spawns a real process and binds a real port"]
+    async fn a_pid_file_whose_process_has_gone_reports_as_exited() {
+        let manager = repo_root();
+        let node_id = "node-test-exited";
+
+        let pid_dir = manager.pid_dir();
+        std::fs::create_dir_all(&pid_dir).expect("create pid dir");
+        let pid_file = pid_dir.join(format!("{node_id}.pid"));
+
+        // Start a process, record it, then let it finish: the pid file now
+        // points at something that no longer exists, exactly as it would after
+        // a node crashed.
+        let mut child = std::process::Command::new("true")
+            .spawn()
+            .expect("spawn a process that exits immediately");
+        std::fs::write(&pid_file, child.id().to_string()).expect("write pid file");
+        let _ = child.wait();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        let status = manager.status().await.expect("status");
+        let node = status
+            .nodes
+            .iter()
+            .find(|n| n.node_id == node_id)
+            .expect("the pid file should still be discovered");
+
+        assert!(
+            matches!(node.process, ProcessState::Exited { .. }),
+            "a dead pid must not be reported as running, got {:?}",
+            node.process
+        );
+        assert!(node.endpoints.is_empty(), "no ports are claimed for a dead node");
+        assert!(!node.is_serving());
+
+        let _ = std::fs::remove_file(&pid_file);
     }
 }

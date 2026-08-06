@@ -25,12 +25,18 @@ use std::time::Duration;
 use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
-use crate::queries::{ColumnInfo, QueryPayload, StatementOutcome};
+use crate::queries::{ColumnInfo, QueryPayload};
 
 /// How long to wait for a TCP connect / handshake when the user has not said.
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Types of database endpoints the desktop app can talk to.
+///
+/// The acronym spellings are deliberate: these names are the serialized
+/// contract. They appear verbatim in `storage.json`, in the `ConnectionType`
+/// enum in `src/types/index.ts`, and on the IPC boundary between them. Renaming
+/// `CQL` to `Cql` would orphan every saved connection of that type.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ConnectionType {
     PostgreSQL,
@@ -203,6 +209,27 @@ pub struct Connection {
     pub created_at: Option<DateTime<Utc>>,
     pub last_used: Option<DateTime<Utc>>,
     pub query_count: u64,
+}
+
+/// Render an error together with everything that caused it.
+///
+/// Drivers routinely put the useful part in the source chain: `tokio_postgres`
+/// reports a missing password as the top-level string "invalid configuration",
+/// which tells the user nothing about what to change. The chain says
+/// "invalid configuration: password missing".
+fn describe(error: &dyn std::error::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        let text = cause.to_string();
+        // Drivers often repeat the outer message in the first source.
+        if !message.contains(&text) {
+            message.push_str(": ");
+            message.push_str(&text);
+        }
+        source = cause.source();
+    }
+    message
 }
 
 /// Failures opening or using a connection.
@@ -445,10 +472,40 @@ async fn open_session(
 /// A PostgreSQL session held open across statements.
 pub struct PostgresSession {
     client: tokio_postgres::Client,
+    /// Whether the peer answers `Describe` well enough for `prepare()`.
+    ///
+    /// Real PostgreSQL does. `orbit-server`'s wire implementation replies to
+    /// every `Describe` with `NoData` instead of a `ParameterDescription`, so
+    /// `prepare()` fails there with "unexpected message from server" and the
+    /// simple query protocol has to be used instead. Which one applies is
+    /// decided once per session rather than per statement.
+    extended_protocol: bool,
 }
 
 impl PostgresSession {
     async fn connect(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        let client = Self::open_client(info).await?;
+
+        // Probe with a statement that cannot fail for any reason except an
+        // unsupported extended protocol. The client stays usable either way —
+        // a failed `prepare` does not disturb subsequent simple queries — so
+        // this costs one round trip and no extra connection.
+        let extended_protocol = client.prepare("SELECT 1").await.is_ok();
+        if !extended_protocol {
+            tracing::info!(
+                host = %info.host,
+                port = info.port,
+                "peer does not support the extended query protocol; using simple queries"
+            );
+        }
+
+        Ok(Self {
+            client,
+            extended_protocol,
+        })
+    }
+
+    async fn open_client(info: &ConnectionInfo) -> Result<tokio_postgres::Client, ConnectionError> {
         // Built through `Config` rather than a connection string so that
         // passwords containing spaces, quotes or backslashes cannot corrupt
         // (or inject into) the parameter list.
@@ -469,7 +526,7 @@ impl PostgresSession {
         let (client, connection) = config
             .connect(tokio_postgres::NoTls)
             .await
-            .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+            .map_err(|e| ConnectionError::ConnectionFailed(describe(&e)))?;
 
         // The connection future drives the socket; it ends when the client is
         // dropped, which is what closes the session.
@@ -479,31 +536,25 @@ impl PostgresSession {
             }
         });
 
-        Ok(Self { client })
-    }
-}
-
-#[async_trait]
-impl DatabaseSession for PostgresSession {
-    fn connection_type(&self) -> ConnectionType {
-        ConnectionType::PostgreSQL
+        Ok(client)
     }
 
-    async fn execute(&mut self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+    /// Run a statement over the extended protocol, with server-declared types.
+    async fn execute_extended(&self, statement: &str) -> Result<QueryPayload, ConnectionError> {
         // Preparing first tells us whether the statement returns a result set,
         // and gives real column types instead of guessing from a Debug string.
         let prepared = self
             .client
             .prepare(statement)
             .await
-            .map_err(|e| ConnectionError::QueryFailed(e.to_string()))?;
+            .map_err(|e| ConnectionError::QueryFailed(describe(&e)))?;
 
         if prepared.columns().is_empty() {
             let affected = self
                 .client
                 .execute(&prepared, &[])
                 .await
-                .map_err(|e| ConnectionError::QueryFailed(e.to_string()))?;
+                .map_err(|e| ConnectionError::QueryFailed(describe(&e)))?;
             return Ok(QueryPayload::affected(affected));
         }
 
@@ -517,7 +568,7 @@ impl DatabaseSession for PostgresSession {
             .client
             .query(&prepared, &[])
             .await
-            .map_err(|e| ConnectionError::QueryFailed(e.to_string()))?;
+            .map_err(|e| ConnectionError::QueryFailed(describe(&e)))?;
 
         let shaped = rows
             .iter()
@@ -533,6 +584,88 @@ impl DatabaseSession for PostgresSession {
             .collect();
 
         Ok(QueryPayload::returned(columns, shaped))
+    }
+
+    /// Run a statement over the simple query protocol.
+    ///
+    /// Every value arrives as text and the protocol carries no type OIDs to the
+    /// client, so columns are reported as `text`. That is what the wire actually
+    /// said; guessing a richer type from the characters in a value would put an
+    /// unverified claim in the type column.
+    async fn execute_simple(&self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+        use tokio_postgres::SimpleQueryMessage;
+
+        let messages = self
+            .client
+            .simple_query(statement)
+            .await
+            .map_err(|e| ConnectionError::QueryFailed(describe(&e)))?;
+
+        let mut columns: Vec<ColumnInfo> = Vec::new();
+        let mut rows: Vec<HashMap<String, serde_json::Value>> = Vec::new();
+        let mut affected: Option<u64> = None;
+
+        for message in messages {
+            match message {
+                SimpleQueryMessage::Row(row) => {
+                    if columns.is_empty() {
+                        columns = row
+                            .columns()
+                            .iter()
+                            .map(|column| ColumnInfo::new(column.name(), "text"))
+                            .collect();
+                    }
+                    rows.push(
+                        columns
+                            .iter()
+                            .enumerate()
+                            .map(|(index, column)| {
+                                let value = row
+                                    .get(index)
+                                    .map(|text| serde_json::Value::String(text.to_string()))
+                                    // A missing field here is SQL NULL: the
+                                    // simple protocol sends those as absent.
+                                    .unwrap_or(serde_json::Value::Null);
+                                (column.name.clone(), value)
+                            })
+                            .collect(),
+                    );
+                }
+                SimpleQueryMessage::CommandComplete(count) => {
+                    affected = Some(affected.unwrap_or(0) + count);
+                }
+                // The enum is non_exhaustive; anything new carries no rows.
+                _ => {}
+            }
+        }
+
+        if !columns.is_empty() {
+            return Ok(QueryPayload::returned(columns, rows));
+        }
+
+        match affected {
+            Some(count) => Ok(QueryPayload::affected(count)),
+            None => Ok(QueryPayload {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                outcome: crate::queries::StatementOutcome::Completed,
+            }),
+        }
+    }
+}
+
+#[async_trait]
+impl DatabaseSession for PostgresSession {
+    fn connection_type(&self) -> ConnectionType {
+        ConnectionType::PostgreSQL
+    }
+
+    async fn execute(&mut self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+        if self.extended_protocol {
+            self.execute_extended(statement).await
+        } else {
+            self.execute_simple(statement).await
+        }
     }
 
     async fn ping(&mut self) -> Result<(), ConnectionError> {
@@ -665,7 +798,7 @@ impl DatabaseSession for MySqlSession {
             .map(|column| {
                 ColumnInfo::new(
                     column.name_str().as_ref(),
-                    &format!("{:?}", column.column_type()).to_lowercase(),
+                    format!("{:?}", column.column_type()).to_lowercase(),
                 )
             })
             .collect();
@@ -705,6 +838,8 @@ impl DatabaseSession for MySqlSession {
     }
 
     async fn ping(&mut self) -> Result<(), ConnectionError> {
+        use mysql_async::prelude::Queryable;
+
         self.conn
             .ping()
             .await
@@ -1269,5 +1404,167 @@ mod tests {
     #[test]
     fn hex_encoding_pads_every_byte() {
         assert_eq!(hex_encode(&[0x00, 0x0f, 0xff]), "000fff");
+    }
+}
+
+/// Tests that need a running `orbit-server`.
+///
+/// A green unit-test run says nothing about whether the app can actually reach
+/// Orbit, so these drive the real session types against real listeners. They
+/// are `#[ignore]`d because they need a server:
+///
+/// ```text
+/// ./target/debug/orbit-server --dev-mode --data-dir /tmp/orbit-verify &
+/// cargo test --manifest-path orbit/desktop/src-tauri/Cargo.toml -- --ignored --test-threads=1
+/// ```
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+
+    /// `orbit-server` auto-registers an unknown user with the password set to
+    /// the username, so these credentials work against a fresh dev server.
+    const USER: &str = "orbit";
+
+    fn info(connection_type: ConnectionType, port: u16) -> ConnectionInfo {
+        ConnectionInfo {
+            name: format!("live-{connection_type}"),
+            connection_type,
+            host: "127.0.0.1".to_string(),
+            port,
+            database: None,
+            username: Some(USER.to_string()),
+            password: Some(USER.to_string()),
+            ssl_mode: None,
+            connection_timeout: Some(5_000),
+            additional_params: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn a_connection_failure_reports_the_underlying_cause() {
+        // The driver's own message here is the useless "invalid configuration";
+        // the reason lives one level down in the source chain.
+        let mut without_password = info(ConnectionType::PostgreSQL, 5432);
+        without_password.password = None;
+
+        let message = match PostgresSession::connect(&without_password).await {
+            Ok(_) => panic!("the server asks for a password, so this must fail"),
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            message.contains("password"),
+            "the message must name the cause, got: {message}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn postgres_session_runs_a_statement_and_shapes_the_rows() {
+        let mut session = PostgresSession::connect(&info(ConnectionType::PostgreSQL, 5432))
+            .await
+            .expect("orbit-server should accept a PostgreSQL connection");
+
+        session.ping().await.expect("ping should succeed");
+
+        let payload = session
+            .execute("SELECT 1 AS one")
+            .await
+            .expect("SELECT 1 should execute");
+
+        assert_eq!(payload.columns.len(), 1, "one column expected");
+        assert_eq!(payload.columns[0].name, "one");
+        assert_eq!(
+            payload.outcome,
+            crate::queries::StatementOutcome::Returned { rows: 1 }
+        );
+
+        // Both protocol paths must surface the value. The extended path decodes
+        // int4 to a JSON number; the simple path can only report the text the
+        // wire carried, and says so in the column type rather than guessing.
+        let value = payload.rows[0].get("one").expect("the column must be present");
+        assert!(
+            *value == serde_json::json!(1) || *value == serde_json::json!("1"),
+            "expected the value 1 in either form, got {value}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn a_session_survives_across_statements() {
+        let mut session = PostgresSession::connect(&info(ConnectionType::PostgreSQL, 5432))
+            .await
+            .expect("connect");
+
+        // Three statements on one session: if the manager were reconnecting per
+        // query this would still pass, but the session would be a new one each
+        // time and any SET or temp table would vanish.
+        for expected in 1..=3 {
+            let payload = session
+                .execute(&format!("SELECT {expected} AS n"))
+                .await
+                .expect("statement should execute on the reused session");
+            let value = payload.rows[0].get("n").expect("column n");
+            assert!(
+                *value == serde_json::json!(expected)
+                    || *value == serde_json::json!(expected.to_string()),
+                "expected {expected} in either form, got {value}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 6379"]
+    async fn redis_session_runs_commands_and_decodes_replies() {
+        let mut session = RedisSession::connect(&info(ConnectionType::Redis, 6379))
+            .await
+            .expect("orbit-server should accept a Redis connection");
+
+        session.ping().await.expect("PING should succeed");
+
+        let payload = session.execute("PING").await.expect("PING should execute");
+        assert_eq!(payload.columns.len(), 1);
+        assert!(
+            !payload.rows.is_empty(),
+            "a Redis reply should produce one row"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn the_manager_reopens_a_session_for_a_restored_connection() {
+        let manager = ConnectionManager::new();
+
+        // Exactly the startup path: register a description with no live session,
+        // as `restore_connections` does for every connection loaded from disk.
+        let connection = Connection {
+            id: "restored".to_string(),
+            info: info(ConnectionType::PostgreSQL, 5432),
+            status: ConnectionStatus::Disconnected,
+            created_at: None,
+            last_used: None,
+            query_count: 0,
+        };
+        manager.register(connection).await;
+
+        let session = manager
+            .session("restored")
+            .await
+            .expect("a restored connection must be usable without being recreated");
+
+        let payload = session
+            .lock()
+            .await
+            .execute("SELECT 1 AS one")
+            .await
+            .expect("query on the lazily opened session");
+        let value = payload.rows[0].get("one").expect("column one");
+        assert!(
+            *value == serde_json::json!(1) || *value == serde_json::json!("1"),
+            "expected 1 in either form, got {value}"
+        );
+
+        let listed = manager.list_connections().await;
+        assert_eq!(listed[0].status, ConnectionStatus::Connected);
     }
 }

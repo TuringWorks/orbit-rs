@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import styled, { ThemeProvider, createGlobalStyle } from 'styled-components';
 import Split from 'react-split';
 import { Tabs, TabList, Tab, TabPanel } from 'react-tabs';
@@ -10,17 +10,18 @@ import { DataVisualization } from '@/components/DataVisualization';
 import { SampleQueries } from '@/components/SampleQueries';
 import QueryResultsTable from '@/components/QueryResultsTable';
 import { ConnectionManager } from '@/components/ConnectionManager';
+import { ClusterPanel } from '@/components/ClusterPanel';
 import { QueryHistoryPanel } from '@/components/QueryHistoryPanel';
 import { KeyboardShortcuts } from '@/components/KeyboardShortcuts';
-import { TauriService, handleTauriError } from '@/services/tauri';
+import { TauriService, handleTauriError, isTauri } from '@/services/tauri';
 import { useQueryTabs } from '@/hooks/useQueryTabs';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { 
-  Connection, 
-  QueryType, 
+import {
+  Connection,
+  QueryType,
   QueryRequest,
-  QueryTab,
-  Theme
+  Theme,
+  isConnected,
 } from '@/types';
 
 // Global styles
@@ -322,20 +323,30 @@ const ResultsContent = styled.div`
   overflow: auto;
 `;
 
+type RightPanelView = 'samples' | 'connections' | 'cluster' | 'history' | 'models';
+
+const RIGHT_PANEL_TABS: ReadonlyArray<{ id: RightPanelView; label: string }> = [
+  { id: 'samples', label: '📚 Samples' },
+  { id: 'connections', label: '🔌 Connections' },
+  { id: 'cluster', label: '🖥️ Cluster' },
+  { id: 'history', label: '📜 History' },
+  { id: 'models', label: '🤖 Models' },
+];
+
 const App: React.FC = () => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [currentConnection, setCurrentConnection] = useState<Connection | null>(null);
   const [resultsView, setResultsView] = useState<'table' | 'chart' | 'models'>('table');
-  const [rightPanelView, setRightPanelView] = useState<'models' | 'samples' | 'connections' | 'history'>('samples');
+  const [rightPanelView, setRightPanelView] = useState<RightPanelView>('samples');
   const [error, setError] = useState<string | null>(null);
-  const [showConnectionManager, setShowConnectionManager] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  
+
   const {
     queryTabs,
     activeTabIndex,
     setActiveTabIndex,
     createNewTab,
+    openTab,
     closeTab,
     updateTabQuery,
     updateTabState,
@@ -347,30 +358,28 @@ const App: React.FC = () => {
     setShowShortcuts(true);
   });
 
-  useEffect(() => {
-    loadConnections();
-    
-    // Check if running in browser mode and show notification
-    if (globalThis.window !== undefined && (!globalThis.window.__TAURI_IPC__ || typeof globalThis.window.__TAURI_IPC__ !== 'function')) {
-      console.log('🌐 Running in browser mode with mock data. For full functionality, run as Tauri desktop app.');
-    }
-  }, []);
-
-  const loadConnections = async () => {
+  const loadConnections = useCallback(async () => {
     try {
       const connectionList = await TauriService.getConnections();
       setConnections(connectionList);
-      
-      // Auto-select first connected connection
-      const connected = connectionList.find(c => c.status === 'Connected');
-      if (connected && !currentConnection) {
-        setCurrentConnection(connected);
-      }
-    } catch (err) {
-      console.error('Failed to load connections:', err);
-    }
-  };
+      setError(null);
 
+      // Prefer a connection with a live session; fall back to the first saved
+      // one so a restored connection is selectable before it has been opened.
+      setCurrentConnection(previous => {
+        if (previous && connectionList.some(c => c.id === previous.id)) {
+          return connectionList.find(c => c.id === previous.id) ?? previous;
+        }
+        return connectionList.find(c => isConnected(c.status)) ?? connectionList[0] ?? null;
+      });
+    } catch (err) {
+      setError(handleTauriError(err));
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadConnections();
+  }, [loadConnections]);
 
   const executeQuery = async (query: string) => {
     if (!currentConnection) {
@@ -378,10 +387,6 @@ const App: React.FC = () => {
       return;
     }
 
-    const currentTab = getCurrentTab();
-    if (!currentTab) return;
-
-    // Update tab state to executing
     updateTabState(activeTabIndex, {
       is_executing: true,
       unsaved_changes: false,
@@ -392,36 +397,34 @@ const App: React.FC = () => {
       const request: QueryRequest = {
         connection_id: currentConnection.id,
         query,
-        query_type: currentTab.query_type,
-        timeout: 30000,
+        timeout_ms: 30000,
       };
 
       const result = await TauriService.executeQuery(request);
-      
-      // Update tab with result
+
       updateTabState(activeTabIndex, {
         result,
         is_executing: false,
       });
 
-      // Switch to appropriate results view
-      if (result.data && result.data.rows.length > 0) {
-        const numericColumns = result.data.columns.filter(col => 
-          col.type.includes('int') || col.type.includes('float') || col.type.includes('decimal')
-        );
-        
-        if (numericColumns.length > 0 && result.data.rows.length > 1) {
-          setResultsView('chart');
-        } else {
-          setResultsView('table');
-        }
+      // A failed statement's message lives in the results grid, but surface it
+      // in the banner too so it is visible without switching views.
+      if (!result.success && result.error) {
+        setError(result.error);
       }
 
+      // Only offer the chart view when there is something plottable; never
+      // switch away from the grid on the user's behalf otherwise.
+      const rows = result.data?.rows ?? [];
+      const numericColumns = (result.data?.columns ?? []).filter(col =>
+        /int|float|double|decimal|numeric|real|serial/i.test(col.type)
+      );
+      setResultsView(numericColumns.length > 0 && rows.length > 1 ? 'chart' : 'table');
+
+      // Usage counters and session state changed; refresh the connection list.
+      void loadConnections();
     } catch (err) {
-      const errorMessage = handleTauriError(err);
-      setError(errorMessage);
-      
-      // Clear executing state
+      setError(handleTauriError(err));
       updateTabState(activeTabIndex, { is_executing: false });
     }
   };
@@ -432,45 +435,38 @@ const App: React.FC = () => {
       return;
     }
 
+    setError(null);
     try {
-      const request: QueryRequest = {
+      // The backend prefixes EXPLAIN itself and defaults to the non-executing
+      // form, so a plan request cannot modify data.
+      const result = await TauriService.explainQuery({
         connection_id: currentConnection.id,
-        query: `EXPLAIN ANALYZE ${query}`,
-        query_type: QueryType.SQL,
-      };
+        query,
+        timeout_ms: 30000,
+      });
 
-      const result = await TauriService.explainQuery(request);
-      
-      // Update tab with explain result
       updateTabState(activeTabIndex, { result });
       setResultsView('table');
-
+      if (!result.success && result.error) {
+        setError(result.error);
+      }
     } catch (err) {
       setError(handleTauriError(err));
     }
   };
 
   const handleConnectionChange = (connectionId: string) => {
-    const connection = connections.find(c => c.id === connectionId);
-    setCurrentConnection(connection || null);
+    setCurrentConnection(connections.find(c => c.id === connectionId) ?? null);
+    setError(null);
   };
 
   const handleSampleQuerySelect = (query: string, queryType: QueryType) => {
-    const newTab: QueryTab = {
-      id: Date.now().toString(),
-      name: `Sample ${queryTabs.length + 1}`,
-      query: query,
-      query_type: queryType,
-      unsaved_changes: false,
-      is_executing: false,
-    };
-
-    setQueryTabs([...queryTabs, newTab]);
-    setActiveTabIndex(queryTabs.length);
+    openTab(query, queryType, `Sample ${queryTabs.length + 1}`);
   };
 
   const currentTab = getCurrentTab();
-  const hasResults = currentTab?.result?.success && currentTab.result.data;
+  const currentResult = currentTab?.result;
+  const hasResults = Boolean(currentResult?.success && currentResult.data);
 
   return (
     <ThemeProvider theme={theme}>
@@ -508,7 +504,16 @@ const App: React.FC = () => {
           </Logo>
           
           <ConnectionStatus>
-            <StatusDot connected={!!currentConnection} />
+            <StatusDot
+              connected={Boolean(currentConnection && isConnected(currentConnection.status))}
+              title={
+                currentConnection
+                  ? isConnected(currentConnection.status)
+                    ? 'Session open'
+                    : 'Saved, but no session open yet'
+                  : 'No connection selected'
+              }
+            />
             <ConnectionSelect
               value={currentConnection?.id || ''}
               onChange={(e) => handleConnectionChange(e.target.value)}
@@ -520,17 +525,30 @@ const App: React.FC = () => {
                 </option>
               ))}
             </ConnectionSelect>
-            
-            <Button 
-              onClick={() => setShowConnectionManager(true)}
+
+            <Button
+              onClick={() => setRightPanelView('connections')}
               title="Manage Connections"
             >
               ⚙️ Manage
             </Button>
-            
+
             <Button onClick={() => createNewTab()}>+ New Query</Button>
           </ConnectionStatus>
         </Header>
+
+        {!isTauri() && (
+          <div style={{
+            padding: '8px 16px',
+            background: 'rgba(255, 140, 0, 0.12)',
+            borderBottom: '1px solid rgba(255, 140, 0, 0.3)',
+            color: '#ffb454',
+            fontSize: '12px',
+          }}>
+            Running in a plain browser: there is no IPC bridge to the database, so every
+            action will report an error. Launch the desktop app for a working session.
+          </div>
+        )}
 
         <MainContent>
           <Split
@@ -605,26 +623,42 @@ const App: React.FC = () => {
                         
                         <ResultsContent>
                           {error && (
-                            <div style={{ 
-                              padding: '16px', 
-                              background: 'rgba(209, 52, 56, 0.1)', 
+                            <div style={{
+                              padding: '16px',
+                              background: 'rgba(209, 52, 56, 0.1)',
                               color: '#d13438',
                               border: '1px solid rgba(209, 52, 56, 0.3)',
                               margin: '16px',
-                              borderRadius: '4px'
+                              borderRadius: '4px',
+                              whiteSpace: 'pre-wrap',
                             }}>
                               {error}
                             </div>
                           )}
-                          
-                          {resultsView === 'table' && currentTab?.result && (
-                            <QueryResultsTable result={currentTab.result} />
+
+                          {currentResult?.notice && (
+                            <div style={{
+                              padding: '12px 16px',
+                              background: 'rgba(255, 140, 0, 0.1)',
+                              color: '#ffb454',
+                              border: '1px solid rgba(255, 140, 0, 0.3)',
+                              margin: '16px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              lineHeight: 1.5,
+                            }}>
+                              ⚠️ {currentResult.notice}
+                            </div>
                           )}
-                          
-                          {resultsView === 'chart' && hasResults && (
-                            <DataVisualization data={currentTab.result.data!} />
+
+                          {resultsView === 'table' && currentResult && (
+                            <QueryResultsTable result={currentResult} />
                           )}
-                          
+
+                          {resultsView === 'chart' && currentResult?.data && (
+                            <DataVisualization data={currentResult.data} />
+                          )}
+
                           {resultsView === 'models' && (
                             <MLModelManager connection={currentConnection} />
                           )}
@@ -639,75 +673,38 @@ const App: React.FC = () => {
             {/* Right Panel - Additional Tools */}
             <div style={{ background: '#1e1e1e', borderLeft: '1px solid #3c3c3c', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', borderBottom: '1px solid #3c3c3c', background: '#2d2d2d', flexWrap: 'wrap' }}>
-                <button
-                  style={{
-                    padding: '8px 12px',
-                    background: rightPanelView === 'samples' ? '#0078d4' : 'transparent',
-                    border: 'none',
-                    color: rightPanelView === 'samples' ? 'white' : '#cccccc',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    borderBottom: rightPanelView === 'samples' ? '2px solid #0078d4' : '2px solid transparent'
-                  }}
-                  onClick={() => setRightPanelView('samples')}
-                >
-                  📚 Samples
-                </button>
-                <button
-                  style={{
-                    padding: '8px 12px',
-                    background: rightPanelView === 'connections' ? '#0078d4' : 'transparent',
-                    border: 'none',
-                    color: rightPanelView === 'connections' ? 'white' : '#cccccc',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    borderBottom: rightPanelView === 'connections' ? '2px solid #0078d4' : '2px solid transparent'
-                  }}
-                  onClick={() => setRightPanelView('connections')}
-                >
-                  🔌 Connections
-                </button>
-                <button
-                  style={{
-                    padding: '8px 12px',
-                    background: rightPanelView === 'history' ? '#0078d4' : 'transparent',
-                    border: 'none',
-                    color: rightPanelView === 'history' ? 'white' : '#cccccc',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    borderBottom: rightPanelView === 'history' ? '2px solid #0078d4' : '2px solid transparent'
-                  }}
-                  onClick={() => setRightPanelView('history')}
-                >
-                  📜 History
-                </button>
-                <button
-                  style={{
-                    padding: '8px 12px',
-                    background: rightPanelView === 'models' ? '#0078d4' : 'transparent',
-                    border: 'none',
-                    color: rightPanelView === 'models' ? 'white' : '#cccccc',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    borderBottom: rightPanelView === 'models' ? '2px solid #0078d4' : '2px solid transparent'
-                  }}
-                  onClick={() => setRightPanelView('models')}
-                >
-                  🤖 Models
-                </button>
+                {RIGHT_PANEL_TABS.map(tab => (
+                  <button
+                    key={tab.id}
+                    style={{
+                      padding: '8px 12px',
+                      background: rightPanelView === tab.id ? '#0078d4' : 'transparent',
+                      border: 'none',
+                      color: rightPanelView === tab.id ? 'white' : '#cccccc',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      borderBottom:
+                        rightPanelView === tab.id ? '2px solid #0078d4' : '2px solid transparent',
+                    }}
+                    onClick={() => setRightPanelView(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
               <div style={{ flex: 1, overflow: 'hidden' }}>
                 {rightPanelView === 'samples' && (
                   <SampleQueries onSelectQuery={handleSampleQuerySelect} />
                 )}
                 {rightPanelView === 'connections' && (
-                  <ConnectionManager 
-                    connections={connections} 
+                  <ConnectionManager
+                    connections={connections}
                     onConnectionsChange={loadConnections}
                   />
                 )}
+                {rightPanelView === 'cluster' && <ClusterPanel />}
                 {rightPanelView === 'history' && (
-                  <QueryHistoryPanel 
+                  <QueryHistoryPanel
                     connectionId={currentConnection?.id}
                     onSelectQuery={handleSampleQuerySelect}
                   />

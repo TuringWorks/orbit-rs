@@ -239,22 +239,27 @@ async fn get_query_history(
 
 // ============================ Cluster ============================
 
-/// Resolve the cluster manager, or explain why there is none.
-async fn with_cluster<T, F, Fut>(state: &AppState, action: F) -> Result<ApiResponse<T>, String>
-where
-    F: FnOnce(&ClusterManager) -> Fut,
-    Fut: std::future::Future<Output = Result<T, cluster::ClusterError>>,
-{
-    let guard = state.cluster_root.read().await;
-    let Some(manager) = guard.as_ref() else {
-        return Ok(ApiResponse::error(cluster::ClusterError::RootNotSet));
-    };
-    respond!(action(manager).await)
+/// Run `$body` against the configured [`ClusterManager`], or report that no
+/// Orbit-RS checkout has been located.
+///
+/// A macro rather than a generic helper: the body borrows the manager out of a
+/// lock guard, which a `FnOnce -> Future` bound cannot express without naming
+/// the guard's lifetime.
+macro_rules! with_cluster {
+    ($state:expr, |$manager:ident| $body:expr) => {{
+        let guard = $state.cluster_root.read().await;
+        match guard.as_ref() {
+            None => Ok(ApiResponse::error(cluster::ClusterError::RootNotSet)),
+            Some($manager) => respond!($body),
+        }
+    }};
 }
 
 #[tauri::command]
-async fn get_cluster_status(state: State<'_, AppState>) -> Result<ApiResponse<ClusterStatus>, String> {
-    with_cluster(&state, |manager| async move { manager.status().await }).await
+async fn get_cluster_status(
+    state: State<'_, AppState>,
+) -> Result<ApiResponse<ClusterStatus>, String> {
+    with_cluster!(state, |manager| manager.status().await)
 }
 
 /// Point the cluster panel at an Orbit-RS checkout.
@@ -278,22 +283,13 @@ async fn set_cluster_root(
 }
 
 #[tauri::command]
-async fn start_cluster(
-    size: u8,
-    state: State<'_, AppState>,
-) -> Result<ApiResponse<bool>, String> {
-    with_cluster(&state, |manager| async move {
-        manager.start(size).await.map(|()| true)
-    })
-    .await
+async fn start_cluster(size: u8, state: State<'_, AppState>) -> Result<ApiResponse<bool>, String> {
+    with_cluster!(state, |manager| manager.start(size).await.map(|()| true))
 }
 
 #[tauri::command]
 async fn stop_cluster(state: State<'_, AppState>) -> Result<ApiResponse<bool>, String> {
-    with_cluster(&state, |manager| async move {
-        manager.stop().await.map(|()| true)
-    })
-    .await
+    with_cluster!(state, |manager| manager.stop().await.map(|()| true))
 }
 
 #[tauri::command]
@@ -303,13 +299,10 @@ async fn get_cluster_log(
     state: State<'_, AppState>,
 ) -> Result<ApiResponse<String>, String> {
     let lines = lines.unwrap_or(200);
-    with_cluster(&state, |manager| async move {
-        match node_id {
-            Some(node_id) => manager.node_log(&node_id, lines),
-            None => manager.control_log(lines),
-        }
+    with_cluster!(state, |manager| match node_id.as_deref() {
+        Some(node_id) => manager.node_log(node_id, lines),
+        None => manager.control_log(lines),
     })
-    .await
 }
 
 // ============================ ML models ============================

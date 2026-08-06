@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { QueryRequest, QueryType } from '@/types';
-import { TauriService } from '@/services/tauri';
+import { QueryHistoryEntry, QueryType, describeOutcome } from '@/types';
+import { TauriService, handleTauriError } from '@/services/tauri';
 
 interface QueryHistoryPanelProps {
   connectionId?: string;
@@ -82,24 +82,20 @@ const QueryMeta = styled.div`
   color: #999999;
 `;
 
-const QueryTypeBadge = styled.span<{ type: QueryType }>`
+const OutcomeBadge = styled.span<{ ok: boolean }>`
   padding: 2px 6px;
   border-radius: 10px;
   font-size: 10px;
   font-weight: 600;
-  background: ${props => {
-    switch (props.type) {
-      case QueryType.SQL: return '#0078d4';
-      case QueryType.MySQL: return '#00758f';
-      case QueryType.OrbitQL: return '#107c10';
-      case QueryType.Redis: return '#d83b01';
-      case QueryType.CQL: return '#1287b1';
-      case QueryType.Cypher: return '#008cc1';
-      case QueryType.AQL: return '#dd5324';
-      default: return '#5a5a5a';
-    }
-  }};
+  background: ${props => (props.ok ? '#107c10' : '#a4262c')};
   color: white;
+`;
+
+const FailureNote = styled.div`
+  color: #f2a3a5;
+  font-size: 11px;
+  margin-top: 4px;
+  line-height: 1.4;
 `;
 
 const EmptyState = styled.div`
@@ -120,8 +116,9 @@ export const QueryHistoryPanel: React.FC<QueryHistoryPanelProps> = ({
   connectionId,
   onSelectQuery
 }) => {
-  const [history, setHistory] = useState<QueryRequest[]>([]);
+  const [history, setHistory] = useState<QueryHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (connectionId) {
@@ -135,20 +132,21 @@ export const QueryHistoryPanel: React.FC<QueryHistoryPanelProps> = ({
     if (!connectionId) return;
     
     setLoading(true);
+    setError(null);
     try {
       const queryHistory = await TauriService.getQueryHistory(connectionId, 50);
       setHistory(queryHistory);
     } catch (err) {
-      console.error('Failed to load query history:', err);
+      setError(handleTauriError(err));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleQueryClick = (query: QueryRequest) => {
-    if (onSelectQuery) {
-      onSelectQuery(query.query, query.query_type);
-    }
+  const handleQueryClick = (entry: QueryHistoryEntry) => {
+    // History records the statement, not which editor mode it was typed in;
+    // the new tab opens in SQL, which the user can change.
+    onSelectQuery?.(entry.query, QueryType.SQL);
   };
 
   const formatTime = (timestamp: string) => {
@@ -193,6 +191,10 @@ export const QueryHistoryPanel: React.FC<QueryHistoryPanelProps> = ({
         )}
       </Header>
 
+      {error && (
+        <EmptyState style={{ color: '#f2a3a5', padding: '16px 0' }}>{error}</EmptyState>
+      )}
+
       {history.length === 0 ? (
         <EmptyState>
           <div>No query history yet</div>
@@ -202,15 +204,24 @@ export const QueryHistoryPanel: React.FC<QueryHistoryPanelProps> = ({
         </EmptyState>
       ) : (
         <HistoryList>
-          {history.map((query, index) => (
-            <HistoryItem key={index} onClick={() => handleQueryClick(query)}>
-              <QueryPreview>{query.query}</QueryPreview>
+          {history.map(entry => (
+            <HistoryItem key={entry.id} onClick={() => handleQueryClick(entry)}>
+              <QueryPreview>{entry.query}</QueryPreview>
               <QueryMeta>
-                <QueryTypeBadge type={query.query_type}>
-                  {query.query_type}
-                </QueryTypeBadge>
-                <span>{formatTime(new Date().toISOString())}</span>
+                <OutcomeBadge ok={entry.success}>
+                  {entry.success
+                    ? entry.outcome
+                      ? describeOutcome(entry.outcome)
+                      : 'OK'
+                    : 'Failed'}
+                </OutcomeBadge>
+                <span>{entry.execution_time_ms.toFixed(1)}ms</span>
+                {/* The real execution time, not the moment this list rendered. */}
+                <span title={new Date(entry.executed_at).toLocaleString()}>
+                  {formatTime(entry.executed_at)}
+                </span>
               </QueryMeta>
+              {!entry.success && entry.error && <FailureNote>{entry.error}</FailureNote>}
             </HistoryItem>
           ))}
         </HistoryList>

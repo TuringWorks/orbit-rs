@@ -1,213 +1,128 @@
 /**
- * ReDoS Safety Tests for Query Formatter
- * 
- * These tests verify that the regex patterns used in query formatting
- * are safe from Regular Expression Denial of Service (ReDoS) attacks.
+ * ReDoS safety tests for the query formatter.
+ *
+ * These import the formatter the editor actually calls. An earlier version of
+ * this file re-declared the logic inline, so it could not fail when the real
+ * implementation changed.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  MAX_QUERY_SIZE,
+  collapseWhitespace,
+  safeFormatQuery,
+} from './queryFormatter';
 
-// Mock the formatter function from QueryEditor.tsx
-const safeFormatQuery = (input: string): string => {
-  const MAX_QUERY_SIZE = 1024 * 100; // 100KB limit
-  if (input.length > MAX_QUERY_SIZE) {
-    throw new Error(`Query too large for formatting (${input.length} chars, max: ${MAX_QUERY_SIZE})`);
-  }
-
-  const formatWithTimeout = (text: string, timeoutMs: number = 5000): string => {
-    const start = Date.now();
-    
-    const checkTimeout = () => {
-      if (Date.now() - start > timeoutMs) {
-        throw new Error('Query formatting timeout - potential ReDoS detected');
-      }
-    };
-
-    let result = text;
-    
-    checkTimeout();
-    // Safe: atomic group prevents backtracking on whitespace sequences
-    result = result.replace(/(?:[ \t\r\n])+/g, ' ');
-    
-    checkTimeout();
-    // Safe: limited quantifiers with character classes
-    result = result.replace(/[ \t]*,[ \t]*/g, ',\n  ');
-    
-    // Safe: individual keyword replacements avoid alternation backtracking
-    const keywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT'];
-    for (const keyword of keywords) {
-      checkTimeout();
-      const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-      result = result.replace(regex, `\n${keyword}`);
-    }
-    
-    checkTimeout();
-    // Safe: anchored pattern with character class, no backtracking
-    result = result.replace(/^[ \t]+/gm, '  ');
-    
-    return result.trim();
-  };
-
-  return formatWithTimeout(input);
-};
-
-describe('Query Formatter ReDoS Safety Tests', () => {
-  let consoleErrorSpy: jest.SpyInstance;
-
-  beforeEach(() => {
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
+describe('safeFormatQuery', () => {
   afterEach(() => {
-    consoleErrorSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 
-  describe('Input Size Limits', () => {
-    it('should reject queries larger than 100KB', () => {
-      const largeQuery = 'SELECT * FROM table WHERE ' + 'a'.repeat(1024 * 101);
-      
-      expect(() => safeFormatQuery(largeQuery)).toThrow(
-        /Query too large for formatting/
-      );
+  describe('input size limits', () => {
+    it('rejects queries larger than the cap', () => {
+      const large = `SELECT * FROM t WHERE ${'a'.repeat(MAX_QUERY_SIZE + 1)}`;
+      expect(() => safeFormatQuery(large)).toThrow(/Query too large for formatting/);
     });
 
-    it('should accept queries within size limits', () => {
-      const normalQuery = 'SELECT * FROM table WHERE col = 1';
-      
-      expect(() => safeFormatQuery(normalQuery)).not.toThrow();
+    it('accepts queries within the cap', () => {
+      expect(() => safeFormatQuery('SELECT * FROM t WHERE col = 1')).not.toThrow();
     });
   });
 
-  describe('ReDoS Attack Patterns', () => {
-    it('should handle catastrophic backtracking patterns safely', () => {
-      // Classic ReDoS pattern that would cause exponential backtracking in vulnerable regex
-      const maliciousInput = 'SELECT' + ' '.repeat(10000) + 'FROM' + '\t'.repeat(10000) + 'WHERE';
-      
+  describe('pathological inputs complete in linear time', () => {
+    it('handles long whitespace runs', () => {
+      const input = `SELECT${' '.repeat(10000)}FROM${'\t'.repeat(10000)}WHERE`;
+
       const start = Date.now();
-      const result = safeFormatQuery(maliciousInput);
-      const executionTime = Date.now() - start;
-      
-      // Should complete in reasonable time (< 1 second)
-      expect(executionTime).toBeLessThan(1000);
+      const result = safeFormatQuery(input);
+      expect(Date.now() - start).toBeLessThan(1000);
+
       expect(result).toContain('SELECT');
       expect(result).toContain('FROM');
       expect(result).toContain('WHERE');
     });
 
-    it('should handle nested quantifier patterns without exponential time', () => {
-      // Pattern that could cause ReDoS: repeated whitespace with alternation
-      const nestedPattern = 'SELECT' + '  \t  \n  '.repeat(1000) + 'FROM table';
-      
+    it('handles repeated mixed whitespace without blowing up', () => {
+      const input = `SELECT${'  \t  \n  '.repeat(1000)}FROM table`;
+
       const start = Date.now();
-      const result = safeFormatQuery(nestedPattern);
-      const executionTime = Date.now() - start;
-      
-      // Should complete quickly
-      expect(executionTime).toBeLessThan(500);
+      const result = safeFormatQuery(input);
+      expect(Date.now() - start).toBeLessThan(500);
+
       expect(result).toMatch(/SELECT\s+FROM/);
     });
 
-    it('should timeout on extremely long processing', () => {
-      // Create a pattern that would take very long if not protected
-      const extremeInput = 'SELECT ' + '/* ' + 'a'.repeat(50000) + ' */ FROM table';
-      
-      // Mock Date.now to simulate timeout condition
-      const originalDateNow = Date.now;
-      let callCount = 0;
-      Date.now = jest.fn(() => {
-        callCount++;
-        // Simulate timeout after several calls
-        return callCount > 5 ? originalDateNow() + 10000 : originalDateNow();
-      });
+    it('handles a very long comment body', () => {
+      const input = `SELECT /* ${'a'.repeat(50000)} */ FROM table`;
 
-      try {
-        expect(() => safeFormatQuery(extremeInput)).toThrow(
-          /Query formatting timeout/
-        );
-      } finally {
-        Date.now = originalDateNow;
-      }
+      const start = Date.now();
+      expect(() => safeFormatQuery(input)).not.toThrow();
+      expect(Date.now() - start).toBeLessThan(1000);
     });
   });
 
-  describe('Regex Pattern Safety', () => {
-    it('should use linear time complexity for whitespace normalization', () => {
-      const inputs = [
-        '   SELECT    FROM   table   ',
-        '\t\t\tSELECT\n\n\nFROM\r\r\rtable',
-        ' '.repeat(1000) + 'SELECT' + '\n'.repeat(1000) + 'FROM'
-      ];
-
-      inputs.forEach(input => {
-        const start = Date.now();
-        const result = safeFormatQuery(input);
-        const executionTime = Date.now() - start;
-        
-        expect(executionTime).toBeLessThan(100);
-        expect(result).not.toMatch(/\s{2,}/); // Should not have multiple consecutive spaces
+  describe('timeout guard', () => {
+    it('aborts once the clock passes the budget mid-format', () => {
+      // The guard is what stops a pathological pattern running unbounded, so
+      // drive the clock rather than trusting a real format to be slow.
+      const real = Date.now();
+      let call = 0;
+      vi.spyOn(Date, 'now').mockImplementation(() => {
+        call += 1;
+        // First call sets the start; later calls appear far in the future.
+        return call === 1 ? real : real + 60_000;
       });
+
+      expect(() => safeFormatQuery('SELECT a, b FROM t')).toThrow(
+        /Query formatting timeout/
+      );
     });
 
-    it('should handle comma formatting without backtracking', () => {
-      const commaHeavyQuery = 'SELECT col1,col2,  col3 ,col4,   col5 FROM table';
-      
-      const start = Date.now();
-      const result = safeFormatQuery(commaHeavyQuery);
-      const executionTime = Date.now() - start;
-      
-      expect(executionTime).toBeLessThan(50);
-      expect(result).toMatch(/,\s*\n/g); // Commas should be followed by newlines
-    });
-
-    it('should format SQL keywords without alternation backtracking', () => {
-      const keywordQuery = 'select col from table where id = 1 group by col having count > 0 order by col limit 10';
-      
-      const start = Date.now();
-      const result = safeFormatQuery(keywordQuery);
-      const executionTime = Date.now() - start;
-      
-      expect(executionTime).toBeLessThan(100);
-      // Each keyword should be on its own line
-      expect(result).toMatch(/\nSELECT/);
-      expect(result).toMatch(/\nFROM/);
-      expect(result).toMatch(/\nWHERE/);
-      expect(result).toMatch(/\nGROUP BY/);
+    it('does not abort a normal query under the default budget', () => {
+      expect(() => safeFormatQuery('SELECT a, b FROM t')).not.toThrow();
     });
   });
 
-  describe('Edge Cases', () => {
-    it('should handle empty input safely', () => {
-      expect(() => safeFormatQuery('')).not.toThrow();
+  describe('formatting behaviour', () => {
+    it('puts clause keywords on their own lines and normalises their case', () => {
+      const result = safeFormatQuery('select a from t where a = 1 order by a');
+      const lines = result.split('\n').map(line => line.trim());
+
+      // Keyword replacement substitutes the canonical spelling, so lowercase
+      // input comes back uppercased.
+      expect(lines).toContain('SELECT a');
+      expect(lines.some(line => line.startsWith('FROM'))).toBe(true);
+      expect(lines.some(line => line.startsWith('WHERE'))).toBe(true);
+      expect(lines.some(line => line.startsWith('ORDER BY'))).toBe(true);
+    });
+
+    it('breaks select lists on commas', () => {
+      expect(safeFormatQuery('SELECT a,b FROM t')).toContain(',\n');
+    });
+
+    it('is idempotent: formatting twice matches formatting once', () => {
+      const once = safeFormatQuery('SELECT a, b FROM t WHERE a = 1');
+      expect(safeFormatQuery(once)).toBe(once);
+    });
+
+    it('leaves an empty input empty', () => {
       expect(safeFormatQuery('')).toBe('');
+      expect(safeFormatQuery('   \n\t ')).toBe('');
     });
+  });
+});
 
-    it('should handle input with only whitespace', () => {
-      const whitespaceOnly = '   \t\t\n\n   ';
-      const result = safeFormatQuery(whitespaceOnly);
-      expect(result).toBe('');
-    });
+describe('collapseWhitespace', () => {
+  it('reduces every whitespace run to a single space', () => {
+    expect(collapseWhitespace('SELECT \t\n  a   FROM  t ')).toBe('SELECT a FROM t');
+  });
 
-    it('should handle unicode and special characters safely', () => {
-      const unicodeQuery = 'SELECT 你好, прив世ет FROM tåble_ñame WHERE çøl = "spéçiål"';
-      
-      expect(() => safeFormatQuery(unicodeQuery)).not.toThrow();
-      const result = safeFormatQuery(unicodeQuery);
-      expect(result).toContain('你好');
-      expect(result).toContain('прив世ет');
-    });
+  it('handles input that is only whitespace', () => {
+    expect(collapseWhitespace('  \t\n ')).toBe('');
+  });
 
-    it('should preserve query semantics while formatting', () => {
-      const originalQuery = 'SELECT id,name FROM users WHERE active=1 ORDER BY created_at LIMIT 100';
-      const formatted = safeFormatQuery(originalQuery);
-      
-      // Should contain all original elements
-      expect(formatted).toContain('SELECT');
-      expect(formatted).toContain('id');
-      expect(formatted).toContain('name');
-      expect(formatted).toContain('FROM users');
-      expect(formatted).toContain('WHERE active=1');
-      expect(formatted).toContain('ORDER BY');
-      expect(formatted).toContain('LIMIT 100');
-    });
+  it('accepts input far larger than the formatter cap', () => {
+    const huge = `SELECT ${'a '.repeat(MAX_QUERY_SIZE)}`;
+    expect(() => collapseWhitespace(huge)).not.toThrow();
   });
 });

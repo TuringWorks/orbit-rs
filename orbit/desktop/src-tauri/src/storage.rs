@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::api::path::app_data_dir;
 use tauri::Config;
 use tracing::info;
@@ -116,7 +116,6 @@ impl Default for AppStorage {
 /// Storage manager for persisting application data
 #[derive(Clone)]
 pub struct StorageManager {
-    storage_dir: PathBuf,
     storage_file: PathBuf,
 }
 
@@ -126,19 +125,18 @@ impl StorageManager {
         let app_name = config
             .package
             .product_name
-            .as_ref()
-            .map(|s| s.as_str())
+            .as_deref()
             .unwrap_or("orbit-desktop");
 
         let storage_dir = app_data_dir(config)
             .ok_or_else(|| {
-                StorageError::ConfigError("Could not determine app data directory".to_string())
+                StorageError::Config("Could not determine app data directory".to_string())
             })?
             .join(app_name);
 
         // Create directory if it doesn't exist
         std::fs::create_dir_all(&storage_dir).map_err(|e| {
-            StorageError::IoError(format!("Failed to create storage directory: {}", e))
+            StorageError::Io(format!("Failed to create storage directory: {}", e))
         })?;
 
         let storage_file = storage_dir.join("storage.json");
@@ -146,10 +144,7 @@ impl StorageManager {
         info!("Storage directory: {:?}", storage_dir);
         info!("Storage file: {:?}", storage_file);
 
-        Ok(Self {
-            storage_dir,
-            storage_file,
-        })
+        Ok(Self { storage_file })
     }
 
     /// Load application storage from disk
@@ -162,10 +157,10 @@ impl StorageManager {
         }
 
         let content = std::fs::read_to_string(&self.storage_file)
-            .map_err(|e| StorageError::IoError(format!("Failed to read storage file: {}", e)))?;
+            .map_err(|e| StorageError::Io(format!("Failed to read storage file: {}", e)))?;
 
         let storage: AppStorage = serde_json::from_str(&content).map_err(|e| {
-            StorageError::ParseError(format!("Failed to parse storage file: {}", e))
+            StorageError::Parse(format!("Failed to parse storage file: {}", e))
         })?;
 
         info!(
@@ -180,16 +175,16 @@ impl StorageManager {
     /// Save application storage to disk
     pub fn save(&self, storage: &AppStorage) -> Result<(), StorageError> {
         let content = serde_json::to_string_pretty(storage).map_err(|e| {
-            StorageError::SerializeError(format!("Failed to serialize storage: {}", e))
+            StorageError::Serialize(format!("Failed to serialize storage: {}", e))
         })?;
 
         // Write to temporary file first, then rename (atomic write)
         let temp_file = self.storage_file.with_extension("tmp");
         std::fs::write(&temp_file, content)
-            .map_err(|e| StorageError::IoError(format!("Failed to write storage file: {}", e)))?;
+            .map_err(|e| StorageError::Io(format!("Failed to write storage file: {}", e)))?;
 
         std::fs::rename(&temp_file, &self.storage_file)
-            .map_err(|e| StorageError::IoError(format!("Failed to rename storage file: {}", e)))?;
+            .map_err(|e| StorageError::Io(format!("Failed to rename storage file: {}", e)))?;
 
         info!(
             "Saved storage with {} connections and {} query history entries",
@@ -199,37 +194,27 @@ impl StorageManager {
 
         Ok(())
     }
-
-    /// Get storage directory path
-    pub fn storage_dir(&self) -> &Path {
-        &self.storage_dir
-    }
-
-    /// Get storage file path
-    pub fn storage_file(&self) -> &Path {
-        &self.storage_file
-    }
 }
 
 /// Storage errors
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
     #[error("IO error: {0}")]
-    IoError(String),
+    Io(String),
     #[error("Parse error: {0}")]
-    ParseError(String),
+    Parse(String),
     #[error("Serialize error: {0}")]
-    SerializeError(String),
+    Serialize(String),
     #[error("Config error: {0}")]
-    ConfigError(String),
+    Config(String),
 }
 
-/// Helper functions for converting between storage and runtime types
+// Conversions between the persisted and runtime representations.
 
 impl StoredConnection {
     /// Convert to Connection with password decryption
     /// # Errors
-    /// Returns [`StorageError::ParseError`] when the stored protocol name is
+    /// Returns [`StorageError::Parse`] when the stored protocol name is
     /// not one this build knows.
     pub fn to_connection(
         &self,
@@ -251,7 +236,7 @@ impl StoredConnection {
             .info
             .connection_type
             .parse()
-            .map_err(|e| StorageError::ParseError(format!("{e}")))?;
+            .map_err(|e| StorageError::Parse(format!("{e}")))?;
 
         /// Parse an RFC 3339 stamp, reporting `None` instead of substituting
         /// the current time for one that will not parse.
@@ -301,7 +286,7 @@ impl Connection {
         // Encrypt password if present
         let password_encrypted = if let Some(password) = &self.info.password {
             Some(enc_manager.encrypt(password).map_err(|e| {
-                StorageError::SerializeError(format!("Failed to encrypt password: {}", e))
+                StorageError::Serialize(format!("Failed to encrypt password: {}", e))
             })?)
         } else {
             None
