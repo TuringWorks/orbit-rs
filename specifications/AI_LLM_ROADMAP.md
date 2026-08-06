@@ -16,10 +16,10 @@ reasoning so it can be overturned deliberately rather than by accident.
 | D1 | **Build `orbit/llm` as a new workspace crate** rather than depend on `rig` or `genai` | The value is the router (fallback, breaker, cost, hot-swap) and its integration with `OrbitError`/`tracing`/Prometheus — none of which a third-party crate provides. HTTP shaping over `reqwest` (already a dependency) is the cheap part. | Low — the provider trait is the seam; a `genai`-backed provider could be added behind it |
 | D2 | **Four provider shapes, not twenty** — OpenAI, Anthropic, Ollama, OpenAI-compatible | The compatible shape covers Azure, vLLM, Groq, Together, OpenRouter, LM Studio, DeepSeek, Fireworks, and any local server. Chasing a provider count is vanity; the trait makes each new one ~80 LOC. | None — additive |
 | D3 | **No bundled model price table** | A price map baked into a database binary goes stale silently and then reports confident wrong costs. Prices are configured per model profile; cost is `None` when unpriced. | None |
-| D4 | **`SecretString` for all credentials**, redacting `Debug`/`Display` and refusing `Serialize` | `LLMProvider` today is `Serialize` with a plain `String` api_key. Config dumps and error paths can print it. | None |
+| D4 | **`SecretString` for all credentials**, redacting `Debug`/`Display` and emitting a redaction marker from `Serialize` | `LLMProvider` today is `Serialize` with a plain `String` api_key. Config dumps and error paths can print it. | None |
 | D5 | **Registry is hot-swappable at runtime** via `RwLock`-guarded snapshot, exposed over RESP `LLM.*` | The explicit ask. Read-mostly access pattern; a write is a config change, a read is every request. | None |
 | D6 | **Keep `graphrag::LLMProvider` as a compatibility shim** that converts into an `orbit-llm` profile | It is public API re-exported from `orbit_shared::lib`. Breaking it would ripple through the RESP/Cypher/AQL/Postgres GraphRAG engines for no user benefit. | n/a |
-| D7 | **Gate `orbit/ml::industry_models` behind an `experimental-industry-models` feature**, default off | 470 stub bodies shipping in a default-on crate is package-level overclaiming (§2.5 of the analysis). Feature-gating is reversible and immediately stops the overclaim. | Low |
+| D7 | **Gate `orbit/ml::industry_models` behind an `experimental-industry-models` feature**, default off *(done)* | 470 stub bodies shipping in a default-on crate is package-level overclaiming (§2.5 of the analysis). Feature-gating is reversible and immediately stops the overclaim. | Low |
 | D8 | **Milestones M1–M5 are implemented in this workstream; M6–M8 are specified but not built** | M1–M5 form a coherent shippable unit: provider abstraction → providers → router → integration → control surface. M6+ each depend on M1–M5 landing first. | n/a |
 
 ---
@@ -30,7 +30,7 @@ reasoning so it can be overturned deliberately rather than by accident.
 
 The crate skeleton and everything provider-independent.
 
-- `LlmProvider` / `EmbeddingProvider` traits (`async_trait`, object-safe, sealed-adjacent)
+- `LlmProvider` / `EmbeddingProvider` traits (`async_trait`, object-safe, stored as `Arc<dyn _>`)
 - Request/response types: `ChatRequest`, `ChatResponse`, `Message`, `Role`, `TokenUsage`,
   `FinishReason`, `EmbeddingRequest`, `EmbeddingResponse`
 - `SecretString` — redacting `Debug`/`Display`, `Serialize` emits a redaction marker, `Deserialize`
@@ -39,7 +39,9 @@ The crate skeleton and everything provider-independent.
 - Shared `reqwest::Client` with connection pooling and a bounded timeout
 - `RetryPolicy` — exponential backoff with full jitter, retry-budget capped
 - `CircuitBreaker` — closed/open/half-open, per-provider
-- `UsageAccountant` — token and cost aggregation, `None` when unknown
+- `ProfileCounters` / `UsageSnapshot` — token, cost, latency, and failure aggregation in atomics;
+  cost accumulated in integer micro-dollars so it does not drift; unreported token counts are
+  counted separately rather than summed as zero
 
 **Acceptance:** `cargo test -p orbit-llm` green; no `unwrap`/`expect` outside tests; a `SecretString`
 round-trips through `Debug` without revealing its contents (test asserts this).
@@ -65,7 +67,12 @@ the profile appears in the emitted body — verified by test, not by inspection.
 - `LlmRegistry` — named profiles, a default, `register`/`remove`/`set_default`, all at runtime
 - `Router` — the request path: resolve → timeout → retry → breaker → fallback → account
 - Config layering: `LLM_*` env vars over `[llm]` TOML, per 12-factor III
-- Prometheus-shaped metrics: requests, failures, fallbacks fired, breaker state, tokens, latency
+- Counters surfaced through `LLM.STATS`: requests, failures, fallbacks fired and used, tokens,
+  cost, mean latency, breaker state
+
+> **Not built:** these counters are *not* registered with the `metrics` crate, so they do not
+> appear on the Prometheus endpoint yet. `LLM.STATS` is the only way to read them. Wiring them to
+> `orbit-server-prometheus` is a small follow-up, listed here rather than claimed as done.
 
 **Acceptance:** tests cover — fallback fires on primary failure and is *counted*; breaker opens
 after threshold and rejects fast; retry respects the budget; a non-retryable error (401) does not
@@ -100,9 +107,9 @@ Runtime switchability, exposed over RESP (the protocol with the cleanest command
 | `LLM.EMBED <text...> [MODEL p]` | Embeddings |
 | `LLM.STATS [profile]` | Requests, failures, fallbacks, tokens, cost, breaker state |
 
-**Acceptance:** `redis-cli` session demonstrates registering a second profile, switching to it with
+**Acceptance:** a live session demonstrates registering a second profile, switching to it with
 `LLM.USE`, and seeing `LLM.STATS` attribute the next generation to the new profile — all without
-restarting the server.
+restarting the server. **Verified**, see §4.2.
 
 ### M6 — Streaming *(specified, not built)*
 
@@ -155,21 +162,77 @@ by D7), and benchmarking `orbit/compute` (§3.7).
 - **Not** an agent framework. Orbit-RS is the memory and retrieval layer agents call, not the loop.
   This is the boundary that makes `rig` the wrong dependency (D1).
 - **Not** a bundled price table (D3).
+- **Not** Prometheus-exported LLM metrics yet — see the note under M3. Deliberately deferred, not
+  overlooked.
 - **Not** fine-tuning or training orchestration. `orbit/ml` has not earned more surface area (D7).
 
 ---
 
-## 4. Verification Plan
+## 4. Verification — What Was Actually Run
 
-Per `CLAUDE.md` → *Verification*: a green build proves almost nothing. In yield order:
+Per `CLAUDE.md` → *Verification*: a green build proves almost nothing. Executed in yield order,
+2026-08-05.
 
-1. `cargo test -p orbit-llm` — router, registry, config layering, secret redaction, request shaping
-2. `make check` + `make format` — zero warnings
-3. **Run it.** `make dev`, then a `redis-cli` session against a local Ollama exercising
-   `LLM.REGISTER` → `LLM.USE` → `LLM.GENERATE` → `LLM.STATS`
-4. **Reconcile against an external reference** — the Anthropic request body is checked against the
-   documented Messages API shape (system as top-level field, `max_tokens` required), not against
-   our own expectation of it
-5. **Audit affordances** — every `Provider` enum variant must appear at a construction site, and
-   every registered command must appear in the dispatch table. An unreachable variant is data
-   pretending to be control flow.
+### 4.1 Automated
+
+| Step | Result |
+|---|---|
+| `cargo test -p orbit-llm` | **160 passed**, 0 failed (+ 2 doc-tests) |
+| `cargo test -p orbit-server --lib` | **1706 passed**, 0 failed, 55 ignored |
+| `cargo test -p orbit-ml --lib` | **78 passed**, 0 failed |
+| `make check` (clippy `-D warnings`) | **clean** — zero findings in any new or modified file |
+| `make format` | applied |
+
+### 4.2 Run it — live session against a real provider
+
+The server was started on isolated ports with a live Ollama daemon and driven over the Redis wire
+protocol. (`redis-cli` is not installed on this machine; a minimal RESP client was used instead.)
+
+| Claim | How it was verified | Result |
+|---|---|---|
+| Generation works end to end | `LLM.GENERATE` against `llama3.2` | `"The sky appears blue on a clear day."`, 52 tokens, 10.1s |
+| **Model switching needs no restart** | `LLM.REGISTER granite …` → `LLM.USE granite` → `LLM.GENERATE` | answered by `granite4.1:3b`; `LLM.MODELS` showed the default moved |
+| Embeddings work | `LLM.EMBED` two inputs via `nomic-embed-text` | 2 vectors, 768 dimensions, batched in one call |
+| Fallback fires **and is visible** | primary pointed at a dead port with `FALLBACKS granite` | served by `granite`, response carried `fallbacks_used: ["broken"]` |
+| Failover is attributed to both sides | `LLM.STATS` after the above | `broken`: `failures=1, fallbacks_fired=1`; `granite`: `fallback_uses=1` |
+| Breaker opens and costs nothing | 6 consecutive failures against a dead endpoint | breaker `open`; subsequent calls rejected instantly without dialling |
+| GraphRAG uses the switchable registry | `GRAPHRAG.QUERY` after `LLM.USE granite` | real LLM response, served by the newly selected profile |
+
+### 4.3 Reconciled against an external reference
+
+The Anthropic path was probed against the **real** `api.anthropic.com` with an invalid key:
+
+```text
+ERR anthropic returned HTTP 401:
+{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},...}
+```
+
+An `authentication_error` naming `x-api-key` — rather than a 404, a 400, or a version complaint —
+confirms the URL, the `x-api-key` header, and the `anthropic-version` header are all correct
+against the live API, not merely against our own expectation of it. The 401 also correctly did
+**not** retry and did **not** trip the breaker.
+
+### 4.4 What verification found that the tests did not
+
+Running it surfaced a defect the green build hid:
+
+> **`[llm] enabled = false` was ignored.** The bootstrap registered every profile in the config
+> file regardless of the flag. A kill switch that changes nothing is the exact "decorative
+> parameter" this document warns about in D3's neighbourhood, shipped by the author of the warning.
+> Fixed in `server/src/llm/mod.rs::register_config_profiles`, with a test
+> (`the_enabled_flag_actually_gates_registration`) asserting a disabled section registers nothing.
+
+This is the argument for §4.2 in one bullet: the unit tests were green, clippy was clean, and the
+flag did not work.
+
+### 4.5 Affordance audit
+
+- Every `ProviderKind` variant has a construction site in `providers::build_provider`, asserted by
+  `every_provider_kind_is_constructible`, which also asserts the case count equals
+  `ProviderKind::all().len()` — so adding a variant without wiring it fails the test.
+- Every `LLMProvider` legacy variant converts, asserted by
+  `every_legacy_variant_has_a_conventional_name_and_converts`.
+- Every command in `SUPPORTED` appears in the `handle` dispatch, asserted by
+  `every_supported_command_is_reachable_from_dispatch`.
+- `orbit-ml`'s industry scaffolding is off by default, asserted by
+  `industry_scaffolding_is_off_by_default` (D7).

@@ -101,7 +101,7 @@ This is where the distance from the market is largest, and it is also the cheape
 | Feature | Orbit-RS **before** this work | Best-in-class | Gap severity |
 |---|---|---|---|
 | LLM provider abstraction | **Partial** — `LLMClient` trait, 348 LOC, GraphRAG-internal | `rig` (20+), `genai` (26+), LiteLLM (100+) | High |
-| Anthropic support | **No** — `Err("Anthropic client not yet implemented")` | Universal | **High — a named enum variant that returns an error** |
+| Anthropic support | **No** — `Err("Anthropic client not yet implemented")` | Universal | **High — a named enum variant that returns an error** ✅ *closed; verified against the live API* |
 | Azure OpenAI / Bedrock / Vertex / Gemini | **No** | LiteLLM, Portkey | High (enterprise procurement blocker) |
 | OpenAI-compatible endpoints (vLLM, Groq, Together, OpenRouter, LM Studio) | **Partial** — one hardcoded `Local` variant | LiteLLM | Medium |
 | **Runtime model switching (no restart)** | **No** — provider baked into actor construction | LiteLLM, Portkey | **High — the explicit ask** |
@@ -128,7 +128,7 @@ This is where the distance from the market is largest, and it is also the cheape
 | Feature | Orbit-RS | Gap |
 |---|---|---|
 | Structured logging (`tracing`) | **Yes** | — |
-| Prometheus metrics | **Yes** (`orbit-server-prometheus`) | LLM/AI metrics absent |
+| Prometheus metrics | **Yes** (`orbit-server-prometheus`) | LLM counters exist but are not yet exported — readable only via `LLM.STATS` |
 | K8s operator + Helm | **Yes** | — |
 | Config from env over TOML | **Partial** | AI subsystem read env ad hoc (`std::env::var("OPENAI_API_KEY")` inline in a RESP handler) |
 | Backup/PITR | **Partial** | Maturity |
@@ -169,11 +169,11 @@ Ranked by (competitive damage if unfixed) ÷ (effort to fix).
 4. **Vector quantization + pre-filtered search.** The pure scale/quality gap vs Qdrant. Larger
    effort, no dependency on items 1–3, can run in parallel.
 5. **Managed cloud offering.** Largest adoption blocker, entirely outside this workstream.
-6. **Decide `orbit/ml`'s fate.** Either (a) gate `industry_models` behind a `experimental-`
-   feature flag and remove it from public docs until real, or (b) delete it and reintroduce
-   verticals one at a time with tests. Leaving 470 stub bodies in a shipped crate is a
-   modelling-honesty failure at the package level. Recommendation: **(a) now, (b) as capacity
-   allows** — cheaper, reversible, and immediately stops overclaiming.
+6. **Decide `orbit/ml`'s fate.** ✅ **(a) done.** `industry_models` is now gated behind
+   `experimental-industry-models`, default off, with the crate-level docs corrected to say it is
+   scaffolding and a test asserting a default build does not advertise it. Leaving 470 stub bodies
+   in a shipped crate was a modelling-honesty failure at the package level. Step (b) — delete and
+   reintroduce verticals one at a time with tests — remains open as capacity allows.
 7. **Benchmark the SIMD/GPU claim.** `orbit/compute` is 28.7k LOC of differentiator with no
    published number against ClickHouse or DuckDB. Unmeasured performance work is indistinguishable
    from no performance work.
@@ -208,7 +208,7 @@ Local) and a factory. Reading it against the market list produces eleven concret
 | Depend on `rig` | Agent framework — brings a vector-store abstraction Orbit-RS *is*, and an agent loop it does not want. Impedance mismatch. |
 | Depend on `genai` | Closest fit, 26+ providers. But: no fallback/circuit-breaker/cost layer, no `OrbitError` integration, and it owns the retry policy Orbit-RS must own. |
 | Depend on `async-openai` | OpenAI-shaped only. |
-| **Build `orbit-llm`** | **Chosen.** ~1.5k LOC of HTTP shaping over `reqwest` (already a dependency). The value is not the HTTP calls — it is the *router*: fallback, breaker, cost, registry, and hot-swap, all of which need to be Orbit-native to integrate with `OrbitError`, `tracing` spans, Prometheus, and the config layering. A wrapper around `genai` would still need all of that, plus a translation layer. |
+| **Build `orbit-llm`** | **Chosen.** ~1.5k LOC of HTTP shaping over `reqwest` (already a dependency). The value is not the HTTP calls — it is the *router*: fallback, breaker, cost, registry, and hot-swap, all of which need to be Orbit-native to integrate with `OrbitError`, `tracing` spans, the config layering, and (pending) Prometheus. A wrapper around `genai` would still need all of that, plus a translation layer. |
 
 **Decision recorded:** build `orbit/llm` as a first-class workspace crate, depending only on
 `reqwest`/`serde`/`tokio`/`orbit-shared`. No new heavyweight dependency. Providers are
@@ -261,6 +261,7 @@ implementation for this category:
 | Capability | LiteLLM | Orbit-RS after M5 |
 |---|---|---|
 | Provider count | 100+ | 4 native shapes covering ~15 named services |
+| Metrics endpoint | Yes | Counters via `LLM.STATS`; Prometheus export pending |
 | Unified API | Yes | Yes |
 | Fallback chains | Yes | Yes |
 | Retries + backoff | Yes | Yes (+ jitter) |

@@ -64,6 +64,7 @@ orbit-rs/
 │   ├── engine/                      # Storage engine (OrbitQL, adapters)
 │   ├── compute/                     # Hardware acceleration (SIMD, GPU)
 │   ├── ml/                          # Machine learning inference
+│   ├── llm/                         # LLM provider abstraction, registry, router
 │   ├── proto/                       # Protocol Buffer definitions
 │   ├── cli/                         # Interactive CLI client
 │   ├── operator/                    # Kubernetes operator
@@ -113,6 +114,7 @@ orbit/server/src/
 │   │   ├── commands/                # Command handlers
 │   │   │   ├── mod.rs               # Command dispatcher
 │   │   │   ├── traits.rs            # CommandHandler trait
+│   │   │   ├── llm.rs               # LLM.* model management and inference
 │   │   │   ├── string_persistent.rs # String commands with RocksDB
 │   │   │   ├── hash_commands.rs     # Hash commands
 │   │   │   ├── list_commands.rs     # List commands
@@ -416,6 +418,45 @@ orbit/ml/src/
     └── mod.rs
 ```
 
+### orbit-llm
+
+**Path**: `orbit/llm/`
+**Purpose**: Provider-agnostic LLM and embedding layer — a model gateway inside the database process
+
+```text
+orbit/llm/src/
+├── lib.rs                           # Crate exports
+├── types.rs                         # ChatRequest/Response, Message, TokenUsage, Cost
+├── provider.rs                      # LlmProvider / EmbeddingProvider traits, ProviderKind
+├── config.rs                        # ModelProfile, ProviderConfig, LlmConfig, env layering
+├── registry.rs                      # LlmRegistry — named, hot-swappable model profiles
+├── router.rs                        # timeout → retry → breaker → fallback → accounting
+├── retry.rs                         # Exponential backoff with full jitter
+├── breaker.rs                       # Per-profile circuit breaker
+├── usage.rs                         # Token/cost/failure counters
+├── secret.rs                        # SecretString (redacting Debug/Display/Serialize)
+├── http.rs                          # Shared pooled reqwest client
+├── compat.rs                        # orbit_shared::graphrag::LLMProvider → ModelProfile
+├── testing.rs                       # In-process stub provider (test-only)
+└── providers/
+    ├── openai_shape.rs              # Shared /chat/completions + /embeddings wire shape
+    ├── openai.rs                    # OpenAI (max_completion_tokens)
+    ├── anthropic.rs                 # Anthropic Messages API
+    ├── ollama.rs                    # Ollama /api/chat + /api/embed
+    └── compatible.rs                # Azure/vLLM/Groq/Together/OpenRouter/LM Studio/DeepSeek
+```
+
+**Capabilities**: unified API over 4 wire shapes (~15 named services), named model profiles
+switchable at runtime with no restart, fallback chains, retries with jittered backoff, per-profile
+circuit breakers, per-attempt timeouts, connection pooling, and token/cost accounting.
+
+**Consumers**: GraphRAG (`server/src/protocols/graphrag/`), the `LLM.*` RESP commands
+(`server/src/protocols/resp/commands/llm.rs`), via the shared runtime in `server/src/llm/`.
+
+**Design notes**: token counts and cost are `Option` — a provider that reports nothing yields
+absent, never zero. No model price table is bundled; cost is computed only from configured prices.
+See [`AI_LLM_ROADMAP.md`](AI_LLM_ROADMAP.md) and [`COMPETITIVE_ANALYSIS.md`](COMPETITIVE_ANALYSIS.md).
+
 ### orbit-operator
 
 **Path**: `orbit/operator/`
@@ -554,6 +595,100 @@ npm run compile
 # Press F5 in VS Code to launch extension
 ```
 
+### orbit-desktop (Desktop GUI)
+
+**Path**: `orbit/desktop/`
+**Language**: Rust (Tauri 1.x backend) + TypeScript/React (frontend)
+**Purpose**: Desktop client for connecting to Orbit-RS, running statements,
+reading results, and controlling a local development cluster.
+
+> Note: this crate carries its own `[workspace]` in `src-tauri/Cargo.toml`, so
+> it is **not** built by the root workspace. `make check` and `cargo test` at the
+> repository root do not cover it — it must be built and tested separately.
+
+#### Desktop Structure
+
+```text
+orbit/desktop/
+├── src-tauri/
+│   ├── src/
+│   │   ├── main.rs              # Tauri commands + application state
+│   │   ├── connections.rs       # Connection descriptions and live sessions
+│   │   ├── queries.rs           # Statement execution, timeouts, history
+│   │   ├── cluster.rs           # Local cluster lifecycle and observation
+│   │   ├── models.rs            # ML function catalogue
+│   │   ├── storage.rs           # Persisted connections and settings
+│   │   └── encryption.rs        # AES-GCM password storage
+│   └── Cargo.toml               # Separate workspace
+├── src/
+│   ├── App.tsx                  # Shell, editor tabs, results, side panels
+│   ├── components/
+│   │   ├── ConnectionDialog.tsx # Create/edit a connection
+│   │   ├── ConnectionManager.tsx# Connect, disconnect, delete
+│   │   ├── ClusterPanel.tsx     # Cluster start/stop/status/logs
+│   │   ├── QueryEditor.tsx      # CodeMirror editor
+│   │   ├── QueryResultsTable.tsx# Result grid and CSV/JSON export
+│   │   ├── QueryHistoryPanel.tsx# Past statements with real timings
+│   │   ├── DataVisualization.tsx# Chart.js views
+│   │   └── MLModelManager.tsx   # ML function reference
+│   ├── services/tauri.ts        # Typed wrapper over the Tauri commands
+│   ├── utils/queryFormatter.ts  # ReDoS-hardened SQL formatter
+│   └── types/index.ts           # Mirrors the Rust command payloads
+└── package.json
+```
+
+#### Connection Model
+
+A **connection** is a saved description (host, port, credentials); a **session**
+is a live handle opened from it. Descriptions persist across restarts, sessions
+do not. Sessions open lazily on first use and are held open across statements,
+so `SET`, temporary tables, open transactions and Redis `SELECT` behave as
+expected. A dead session is detected by ping and transparently reopened.
+
+| Protocol | Client | Statement support |
+|----------|--------|-------------------|
+| PostgreSQL | `tokio-postgres` | Full: typed columns, real affected-row counts |
+| MySQL | `mysql_async` | Full: real column names and types |
+| Redis | `redis` (multiplexed) | Full: quoted-argument parsing, recursive RESP decoding |
+| CQL | TCP probe only | Reachability only — no binary-protocol client; statements are refused |
+| OrbitQL, Cypher, AQL, FlightSQL, OrbitWire | HTTP | Reaches the REST API (see caveat below) |
+
+#### Cluster Lifecycle
+
+The cluster panel drives `scripts/start-cluster.sh` and reports only observed
+state: PID files on disk, process liveness and uptime from `ps`, port numbers
+read from each live process's own command line, and TCP reachability probed per
+port. It deliberately does **not** read `/api/v1/cluster/*`, whose handlers
+return fixed values rather than measurements. "Running" and "serving" are
+reported separately so a node that is up with dead listeners is visible.
+
+#### Known Limitations
+
+- **REST API returns canned data.** `orbit-server`'s `/api/v1/sql`, `/tables`,
+  `/schemas`, `/queries/history`, `/stats` and `/cluster/*` handlers return
+  hardcoded example rows regardless of input. The HTTP-backed connection types
+  therefore verify connectivity but do not return database contents; the UI
+  labels these results rather than presenting them as data.
+- **No TLS.** `ssl_mode` values that request encryption are rejected rather than
+  silently downgraded to plaintext.
+- **Model management is not implemented.** Listing and deleting models report
+  that plainly instead of returning fabricated models.
+
+#### Development
+
+```bash
+cd orbit/desktop
+npm install
+npm run dev                  # Vite + Tauri
+npm run typecheck            # tsc --noEmit
+npm test                     # vitest
+
+# Backend (separate workspace)
+cargo test --manifest-path src-tauri/Cargo.toml
+# Tests marked #[ignore] need a running server / spawn real processes:
+cargo test --manifest-path src-tauri/Cargo.toml -- --ignored --test-threads=1
+```
+
 ---
 
 ## Protocol Implementations
@@ -598,6 +733,8 @@ OrbitQL queries can be executed via two purpose-built wire protocols:
 | Time Series | TS.CREATE, TS.ADD, TS.RANGE, TS.CREATERULE | `time_series.rs` |
 | Vectors | VECTOR.ADD, VECTOR.SEARCH | `vector.rs` |
 | Graph | GRAPH.QUERY | `graph.rs` |
+| GraphRAG | GRAPHRAG.BUILD, GRAPHRAG.QUERY, GRAPHRAG.STATS | `graphrag.rs` |
+| LLM | LLM.PROVIDERS, LLM.MODELS, LLM.INFO, LLM.REGISTER, LLM.UNREGISTER, LLM.USE, LLM.GENERATE, LLM.EMBED, LLM.STATS | `llm.rs` |
 
 ### Time Series Commands
 
@@ -615,6 +752,47 @@ TS.DELETERULE sourceKey destKey
 ```
 
 **Aggregation Types**: AVG, SUM, MIN, MAX, RANGE, COUNT, FIRST, LAST, STD.P, VAR.P, TWA
+
+### LLM Commands
+
+Model management and inference. Registering or switching a model takes effect on the next request
+with no server restart, and applies to every AI surface (GraphRAG included) because all of them
+resolve models through one registry.
+
+```text
+LLM.PROVIDERS                       # wire shapes this build supports
+LLM.MODELS                          # registered profiles, marking the default
+LLM.INFO <profile>                  # full profile detail (credentials redacted)
+LLM.REGISTER <profile> <provider> <model> [option value ...]
+LLM.UNREGISTER <profile>
+LLM.USE <profile>                   # switch the default model, no restart
+LLM.GENERATE <prompt> [MODEL p] [SYSTEM s] [MAXTOKENS n] [TEMPERATURE t]
+LLM.EMBED <text> [text ...] [MODEL p]
+LLM.STATS [profile]                 # requests, failures, fallbacks, tokens, cost, breaker state
+```
+
+**Providers**: `openai`, `anthropic`, `ollama`, and the OpenAI-compatible shape, reachable by the
+service aliases `azure`, `vllm`, `groq`, `together`, `openrouter`, `lmstudio`, `deepseek`,
+`fireworks`, `local`.
+
+**`LLM.REGISTER` options**: `APIKEY`, `BASEURL`, `APIVERSION`, `ORGANIZATION`, `PROJECT`,
+`EMBEDDINGMODEL`, `TEMPERATURE`, `MAXTOKENS`, `TIMEOUTMS`, `FALLBACKS` (comma-separated),
+`PRICEPROMPT`, `PRICECOMPLETION` (USD per million tokens).
+
+An unrecognized option is rejected rather than ignored, so a typo cannot silently do nothing.
+
+**Example** — add a second model and switch to it at runtime:
+
+```text
+LLM.REGISTER groq groq llama-3.3-70b-versatile BASEURL https://api.groq.com/openai/v1 APIKEY $KEY
+LLM.REGISTER claude anthropic claude-sonnet-4-5 MAXTOKENS 4096 FALLBACKS groq
+LLM.USE claude
+LLM.GENERATE "summarise the last incident" MAXTOKENS 200
+LLM.STATS
+```
+
+Configuration lives in the `[llm]` section of `config/orbit-server.toml`, layered under `LLM_*`
+environment variables. Credentials belong in the environment, never the file.
 
 ---
 
@@ -1002,6 +1180,8 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | Learning Engine | `ai/learning.rs` | Model improvement |
 | Decision Engine | `ai/decision.rs` | Policy-based decisions |
 | Knowledge Base | `ai/knowledge.rs` | Pattern storage |
+| LLM Runtime | `server/src/llm/` | Shared model registry + router bootstrap |
+| LLM Provider Layer | `orbit-llm/` | Provider abstraction, fallback, cost accounting |
 
 ---
 
@@ -1110,7 +1290,14 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | **AI/ML Features** | | | |
 | AI-Native Features | Complete | 14 | `server/src/ai/` |
 | Heterogeneous Compute | Complete | 83 | `orbit-compute/` |
-| Machine Learning | Complete | 283 | `orbit-ml/` |
+| Machine Learning (core) | Partial | 283 | `orbit-ml/` — engine, inference, streaming |
+| Machine Learning (industry verticals) | Scaffolding | 0 | `orbit-ml/industry_models/` — ~470 unimplemented stubs; feature-gated off by default behind `experimental-industry-models` |
+| LLM Provider Layer | Complete | 160 | `orbit-llm/` — OpenAI, Anthropic, Ollama, OpenAI-compatible |
+| LLM Registry & Router | Complete | (incl. above) | Runtime model switching, fallback, breaker, cost |
+| LLM RESP Commands | Complete | 15 | `resp/commands/llm.rs` — `LLM.*` |
+| LLM Streaming | Planned | 0 | Roadmap M6 |
+| Semantic Cache | Planned | 0 | Roadmap M7 |
+| Auto-embedding on write | Planned | 0 | Roadmap M8 |
 | **Infrastructure** | | | |
 | Kubernetes Operator | Active | 0 | `orbit-operator/` |
 
