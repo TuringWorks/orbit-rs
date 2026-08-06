@@ -24,8 +24,7 @@ async fn test_lb_tls_passthrough() {
         .ok();
 
     // 1. Setup paths (relative to workspace root)
-    let certs_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../config/certs");
+    let certs_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../config/certs");
     let ca_cert_path = certs_dir.join("ca_cert.pem");
     let server_cert_path = certs_dir.join("server_cert.pem");
     let server_key_path = certs_dir.join("server_key.pem");
@@ -33,7 +32,13 @@ async fn test_lb_tls_passthrough() {
     let client_key_path = certs_dir.join("client_key.pem");
 
     // Verify cert files exist
-    for path in [&ca_cert_path, &server_cert_path, &server_key_path, &client_cert_path, &client_key_path] {
+    for path in [
+        &ca_cert_path,
+        &server_cert_path,
+        &server_key_path,
+        &client_cert_path,
+        &client_key_path,
+    ] {
         assert!(path.exists(), "Missing cert file: {}", path.display());
     }
 
