@@ -108,8 +108,8 @@ impl DatabaseConnection<Connected> {
 }
 
 impl DatabaseConnection<Closed> {
-    /// Cannot execute queries on closed connection (compile error if attempted)
-    /// This demonstrates the power of typestate - invalid operations don't exist
+    // A closed connection has no `execute`: the method simply does not exist in
+    // this state, so misuse is a compile error rather than a runtime check.
 
     /// Get final statistics
     pub fn final_stats(&self) -> String {

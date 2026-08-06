@@ -186,14 +186,13 @@ impl AtomicMetrics {
         MetricsSnapshot {
             total_operations: self.operations.load(Ordering::Relaxed),
             total_errors: self.errors.load(Ordering::Relaxed),
-            average_duration_ns: {
-                let ops = self.operations.load(Ordering::Relaxed);
-                if ops == 0 {
-                    0
-                } else {
-                    self.total_duration_ns.load(Ordering::Relaxed) / ops
-                }
-            },
+            // No operations recorded means "no average", reported as 0 rather
+            // than dividing by zero.
+            average_duration_ns: self
+                .total_duration_ns
+                .load(Ordering::Relaxed)
+                .checked_div(self.operations.load(Ordering::Relaxed))
+                .unwrap_or(0),
             active_operations: self.active_operations.load(Ordering::Relaxed),
             circuit_open: self.circuit_open.load(Ordering::Relaxed),
         }

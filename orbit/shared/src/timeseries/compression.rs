@@ -198,10 +198,9 @@ impl<'a> Cursor<'a> {
     const fn capacity_for(&self, count: usize, min_bytes: usize) -> usize {
         // `min_bytes` is a per-format constant, but dividing by a parameter that
         // could be zero is a panic waiting for the next caller.
-        let affordable = if min_bytes == 0 {
-            count
-        } else {
-            self.remaining() / min_bytes
+        let affordable = match self.remaining().checked_div(min_bytes) {
+            Some(affordable) => affordable,
+            None => count,
         };
         if count < affordable {
             count
