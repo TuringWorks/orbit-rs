@@ -125,5 +125,10 @@ mod tests {
             api_key: SecretString::new("sk-nested"),
         };
         assert!(!format!("{cfg:?}").contains("sk-nested"));
+        assert_eq!(
+            cfg.api_key.expose(),
+            "sk-nested",
+            "redaction must not damage the value itself"
+        );
     }
 }

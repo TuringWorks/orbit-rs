@@ -21,6 +21,7 @@ use std::fmt;
 #[non_exhaustive]
 pub enum ProviderKind {
     /// OpenAI's own API.
+    #[serde(rename = "openai")]
     OpenAi,
     /// Anthropic's Messages API.
     Anthropic,

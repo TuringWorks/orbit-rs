@@ -193,6 +193,27 @@ impl FinishReason {
             other => FinishReason::Other(other.to_owned()),
         }
     }
+
+    /// The normalized wire value for this reason.
+    ///
+    /// Lives here rather than at each call site because the enum is `#[non_exhaustive]`: an
+    /// external crate matching on it needs a catch-all arm, which would silently absorb a new
+    /// variant instead of failing to compile. Inside the crate the match stays exhaustive.
+    #[must_use]
+    pub fn as_wire(&self) -> &str {
+        match self {
+            FinishReason::Stop => "stop",
+            FinishReason::Length => "length",
+            FinishReason::ContentFilter => "content_filter",
+            FinishReason::Other(other) => other,
+        }
+    }
+}
+
+impl std::fmt::Display for FinishReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_wire())
+    }
 }
 
 /// Token counts for one request.

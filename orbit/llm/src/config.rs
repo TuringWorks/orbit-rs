@@ -65,6 +65,7 @@ impl CompatibleFlavor {
 #[non_exhaustive]
 pub enum ProviderConfig {
     /// OpenAI's own API.
+    #[serde(rename = "openai")]
     OpenAi {
         /// API credential.
         #[serde(default)]
@@ -102,6 +103,22 @@ pub enum ProviderConfig {
     },
 
     /// Any OpenAI-compatible endpoint.
+    ///
+    /// The aliases let a config say what it *is* (`provider = "groq"`) rather than what shape it
+    /// speaks, which is friendlier to read and identical to parse.
+    #[serde(
+        alias = "local",
+        alias = "openai_compatible",
+        alias = "vllm",
+        alias = "groq",
+        alias = "together",
+        alias = "openrouter",
+        alias = "lmstudio",
+        alias = "deepseek",
+        alias = "fireworks",
+        alias = "azure",
+        alias = "azure_openai"
+    )]
     Compatible {
         /// Header and URL convention to use.
         #[serde(default)]
@@ -237,6 +254,82 @@ impl ProviderConfig {
     }
 }
 
+/// Provider settings gathered from an untyped source — a `LLM.REGISTER` command, a form, an
+/// environment map — before they are resolved into a [`ProviderConfig`].
+///
+/// This exists so [`ProviderConfig::from_settings`] can own the `match` over [`ProviderKind`].
+/// The enum is `#[non_exhaustive]`, so a caller outside this crate would need a wildcard arm, and a
+/// wildcard silently absorbs a newly added provider instead of failing to compile. Keeping the
+/// match here means adding a variant breaks the build at the one place that must change.
+#[derive(Debug, Clone, Default)]
+pub struct ProviderSettings {
+    /// Credential, where the provider needs one.
+    pub api_key: Option<SecretString>,
+    /// Endpoint root override.
+    pub base_url: Option<String>,
+    /// `api-version` (Azure) or `anthropic-version`.
+    pub api_version: Option<String>,
+    /// `OpenAI-Organization` header.
+    pub organization: Option<String>,
+    /// `OpenAI-Project` header.
+    pub project: Option<String>,
+    /// Header/URL convention for the compatible shape.
+    pub flavor: Option<CompatibleFlavor>,
+}
+
+impl ProviderConfig {
+    /// Resolve settings into a provider configuration for `kind`.
+    ///
+    /// Well-known defaults fill in for OpenAI, Anthropic, and Ollama. The compatible shape has no
+    /// defensible default endpoint — an OpenAI-compatible server could be anywhere — so a missing
+    /// `base_url` is an error rather than a guess.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlmError::Configuration`] when a required field is absent.
+    pub fn from_settings(kind: ProviderKind, settings: &ProviderSettings) -> LlmResult<Self> {
+        let config = match kind {
+            ProviderKind::OpenAi => ProviderConfig::OpenAi {
+                api_key: settings.api_key.clone().unwrap_or_default(),
+                base_url: settings
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(default_openai_base),
+                organization: settings.organization.clone(),
+                project: settings.project.clone(),
+            },
+            ProviderKind::Anthropic => ProviderConfig::Anthropic {
+                api_key: settings.api_key.clone().unwrap_or_default(),
+                base_url: settings
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(default_anthropic_base),
+                version: settings
+                    .api_version
+                    .clone()
+                    .unwrap_or_else(default_anthropic_version),
+            },
+            ProviderKind::Ollama => ProviderConfig::Ollama {
+                base_url: settings
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(default_ollama_base),
+            },
+            ProviderKind::Compatible => ProviderConfig::Compatible {
+                flavor: settings.flavor.unwrap_or_default(),
+                api_key: settings.api_key.clone(),
+                base_url: settings.base_url.clone().ok_or_else(|| {
+                    LlmError::configuration(
+                        "an OpenAI-compatible provider requires an explicit base_url",
+                    )
+                })?,
+                api_version: settings.api_version.clone(),
+            },
+        };
+        Ok(config)
+    }
+}
+
 /// Per-token prices for a model, in USD per million tokens.
 ///
 /// Only present when an operator configured it. Orbit-RS ships no built-in price table: a table
@@ -276,6 +369,10 @@ impl ModelPricing {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModelProfile {
     /// Profile name, unique within a registry.
+    ///
+    /// Optional in TOML: `[llm.profiles.fast]` names the profile `fast` from the map key, and
+    /// [`LlmConfig::from_toml_str`] backfills it. Repeating it in the body would let the two drift.
+    #[serde(default)]
     pub name: String,
     /// How to reach the provider.
     #[serde(flatten)]
@@ -376,12 +473,14 @@ impl ModelProfile {
         }
         if self.model.trim().is_empty() {
             return Err(LlmError::configuration(format!(
-                "profile '{}' requires a model", self.name
+                "profile '{}' requires a model",
+                self.name
             )));
         }
         if self.fallbacks.iter().any(|f| f == &self.name) {
             return Err(LlmError::configuration(format!(
-                "profile '{}' lists itself as a fallback, which would loop", self.name
+                "profile '{}' lists itself as a fallback, which would loop",
+                self.name
             )));
         }
         self.provider.validate()
@@ -670,7 +769,10 @@ model = "gpt-4o-mini"
             _ => None,
         });
 
-        assert_eq!(cfg.profiles["fast"].provider.base_url(), "http://gpu-box:11434");
+        assert_eq!(
+            cfg.profiles["fast"].provider.base_url(),
+            "http://gpu-box:11434"
+        );
         assert_eq!(cfg.profiles["fast"].model, "qwen3");
         assert_eq!(cfg.default_profile.as_deref(), Some("smart"));
     }

@@ -16,6 +16,7 @@ members = [
     "orbit/operator",
     "orbit/compute",
     "orbit/ml",
+    "orbit/llm",
     "orbit/cli",
 
     # Tests
