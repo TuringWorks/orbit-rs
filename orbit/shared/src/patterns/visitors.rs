@@ -78,12 +78,6 @@ impl Default for SqlGenerator {
     }
 }
 
-impl Default for SqlGenerator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl SqlGenerator {
     pub fn new() -> Self {
         Self { indent_level: 0 }
@@ -153,12 +147,6 @@ impl QueryVisitor for SqlGenerator {
 
 pub struct QueryOptimizer {
     optimizations_applied: usize,
-}
-
-impl Default for QueryOptimizer {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Default for QueryOptimizer {
@@ -252,12 +240,6 @@ impl Default for QueryValidator {
     }
 }
 
-impl Default for QueryValidator {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl QueryValidator {
     pub fn new() -> Self {
         Self { errors: Vec::new() }
@@ -329,12 +311,6 @@ impl QueryVisitor for QueryValidator {
 
 pub struct CostEstimator {
     estimated_cost: f64,
-}
-
-impl Default for CostEstimator {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Default for CostEstimator {
