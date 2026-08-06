@@ -533,6 +533,9 @@ fn main() {
 
     tracing::info!("starting Orbit Desktop");
 
+    // Selects the rustls provider once, before any TLS connection is opened.
+    connections::install_crypto_provider();
+
     let context = tauri::generate_context!();
 
     let storage = match StorageManager::new(context.config()) {

@@ -651,7 +651,7 @@ expected. A dead session is detected by ping and transparently reopened.
 | MySQL | `mysql_async` | Full: real column names and types |
 | Redis | `redis` (multiplexed) | Full: quoted-argument parsing, recursive RESP decoding |
 | CQL | TCP probe only | Reachability only — no binary-protocol client; statements are refused |
-| OrbitQL, Cypher, AQL, FlightSQL, OrbitWire | HTTP | Reaches the REST API (see caveat below) |
+| OrbitQL, Cypher, AQL, FlightSQL, OrbitWire | HTTP | Reaches `/api/v1/sql`, which executes against the shared SQL engine |
 
 #### Cluster Lifecycle
 
@@ -662,17 +662,26 @@ port. It deliberately does **not** read `/api/v1/cluster/*`, whose handlers
 return fixed values rather than measurements. "Running" and "serving" are
 reported separately so a node that is up with dead listeners is visible.
 
+#### Transport Security
+
+`ssl_mode` accepts `disable`, `prefer`, `require`, `verify-ca` and
+`verify-full`. `prefer` is treated as `require`: PostgreSQL's own `prefer`
+falls back to plaintext silently, which downgrades a connection without anyone
+noticing. `require` encrypts without authenticating the peer; `verify-ca` and
+`verify-full` verify against the system root store. An unrecognised value is
+rejected rather than defaulted to plaintext.
+
+PostgreSQL negotiates TLS in-band (`SSLRequest`); Redis selects it by scheme
+(`rediss://`). Both are wired to the same `ssl_mode`.
+
 #### Known Limitations
 
-- **REST API returns canned data.** `orbit-server`'s `/api/v1/sql`, `/tables`,
-  `/schemas`, `/queries/history`, `/stats` and `/cluster/*` handlers return
-  hardcoded example rows regardless of input. The HTTP-backed connection types
-  therefore verify connectivity but do not return database contents; the UI
-  labels these results rather than presenting them as data.
-- **No TLS.** `ssl_mode` values that request encryption are rejected rather than
-  silently downgraded to plaintext.
 - **Model management is not implemented.** Listing and deleting models report
   that plainly instead of returning fabricated models.
+- **CQL is reachability-only.** There is no CQL binary-protocol client here;
+  statements are refused rather than appearing to run.
+- **REST SQL takes no parameters.** Inline the values, or use the PostgreSQL
+  protocol, which binds parameters server-side.
 
 #### Development
 
@@ -795,6 +804,20 @@ Configuration lives in the `[llm]` section of `config/orbit-server.toml`, layere
 environment variables. Credentials belong in the environment, never the file.
 
 ---
+
+### REST SQL and Catalogue Endpoints
+
+`/api/v1/sql` executes through the same `QueryEngine` the PostgreSQL protocol
+uses, over the same RocksDB storage, so a table created via `psql` is visible
+over HTTP and vice versa. `/tables`, `/tables/{schema}/{table}` and `/schemas`
+read the real catalogue; `/stats` reports measured uptime and table count.
+
+Endpoints report what they can observe and omit what they cannot. Fields that
+were previously filled with fixed values — node CPU/memory/disk, actor counts,
+replication factor, on-disk size, query history — are now absent, zero where
+zero is the truth, or reported as unavailable. A number in a response is a
+measurement.
+
 
 ## Storage Architecture
 

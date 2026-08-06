@@ -224,6 +224,20 @@ struct Args {
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
+    // rustls 0.23 requires a process-level crypto provider, and only picks one
+    // automatically when exactly one provider feature is enabled anywhere in
+    // the dependency graph. Something in the tree pulls in a second, so the
+    // choice is made explicitly here. Without this, every TLS listener panics
+    // on its first use — enabling `[server.tls]` took the whole server down at
+    // startup.
+    if rustls::crypto::ring::default_provider()
+        .install_default()
+        .is_err()
+    {
+        // Already installed by another initialiser; that is fine.
+        tracing::debug!("rustls crypto provider was already installed");
+    }
+
     // Initialize logging
     let log_level = if args.dev_mode {
         "debug,orbit_server=trace,orbit_shared=debug,orbit_proto=debug,orbit_protocols=debug"
@@ -794,7 +808,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
     let rest_orbit_client = orbit_client::OrbitClient::new_offline(rest_client_config).await?;
 
-    let rest_server = RestApiServer::new(rest_orbit_client, rest_config);
+    // The REST SQL endpoint must read and write the *same* store as the
+    // PostgreSQL protocol, so this mirrors exactly the choice made for the
+    // PostgreSQL server below. Handing REST its own RocksDB handle while
+    // PostgreSQL used unified storage produced two databases behind one name:
+    // a table created over HTTP was invisible to psql.
+    let rest_sql_storage: Arc<dyn orbit_server::protocols::postgres_wire::persistent_storage::PersistentTableStorage> =
+        match &storage_mode {
+            StorageMode::Unified {
+                postgres_unified, ..
+            } => postgres_unified.clone(),
+            StorageMode::Isolated { .. } => rocksdb_storage.clone(),
+        };
+    let rest_query_engine = Arc::new(QueryEngine::new_with_persistent_storage(rest_sql_storage));
+
+    orbit_server::protocols::rest::handlers::mark_process_start();
+
+    let rest_server =
+        RestApiServer::new(rest_orbit_client, rest_config).with_query_engine(rest_query_engine);
     let rest_handle = tokio::spawn(async move {
         rest_server
             .run()

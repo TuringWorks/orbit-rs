@@ -114,14 +114,45 @@ impl PostgresWireProtocol {
     }
 
     /// Handle a generic connection stream (TCP or TLS)
-    pub async fn handle_connection<S>(&mut self, mut stream: S) -> ProtocolResult<()>
+    pub async fn handle_connection<S>(&mut self, stream: S) -> ProtocolResult<()>
+    where
+        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
+        self.handle_connection_with_buffer(stream, BytesMut::new())
+            .await
+    }
+
+    /// Handle a connection whose first bytes have already been read.
+    ///
+    /// TLS negotiation happens before this point and has to read the client's
+    /// first 8 bytes to know what was asked for. When those turn out to belong
+    /// to the startup message instead, they are passed back in here so the
+    /// message can be parsed whole.
+    pub async fn handle_connection_with_buffer<S>(
+        &mut self,
+        mut stream: S,
+        prefix: BytesMut,
+    ) -> ProtocolResult<()>
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
     {
         info!("New PostgreSQL client connection");
 
         let mut read_buf = BytesMut::with_capacity(8192);
+        read_buf.extend_from_slice(&prefix);
         let mut write_buf = BytesMut::with_capacity(8192);
+
+        // The prefix may already hold a complete startup message.
+        if !read_buf.is_empty() {
+            match self
+                .process_pending_messages(&mut stream, &mut read_buf, &mut write_buf)
+                .await?
+            {
+                ConnectionLoopResult::Continue => {}
+                ConnectionLoopResult::ClientDisconnected
+                | ConnectionLoopResult::ClientTerminated => return Ok(()),
+            }
+        }
 
         loop {
             match self
@@ -1108,8 +1139,13 @@ impl PostgresWireProtocol {
     }
 
     /// Handle SSL request
+    /// Answer an `SSLRequest` that reached the message loop.
+    ///
+    /// TLS is negotiated by the listener before this handler ever runs, so an
+    /// `SSLRequest` arriving here is a second one on an already-established
+    /// session. `N` is the correct answer: whatever transport the connection
+    /// has is already fixed.
     async fn handle_ssl_request(&mut self, buf: &mut BytesMut) -> ProtocolResult<()> {
-        // Reject SSL request - send 'N' to indicate SSL not supported
         buf.put_u8(b'N');
         Ok(())
     }

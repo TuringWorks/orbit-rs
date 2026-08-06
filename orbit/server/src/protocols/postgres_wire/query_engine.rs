@@ -371,6 +371,43 @@ impl QueryEngine {
         out
     }
 
+    /// Names of the tables this engine can see.
+    ///
+    /// `None` when no persistent storage is attached, which is different from
+    /// "there are no tables" and is reported as such rather than as an empty
+    /// catalogue.
+    ///
+    /// # Errors
+    /// Returns an error when the catalogue cannot be read.
+    pub async fn list_tables(&self) -> ProtocolResult<Option<Vec<String>>> {
+        match &self.persistent_storage {
+            Some(storage) => storage.list_tables().await.map(Some),
+            None => Ok(None),
+        }
+    }
+
+    /// Schema of one table, or `None` if it does not exist.
+    ///
+    /// The name is normalised the same way the SQL parser normalises it, so a
+    /// caller passing `users` finds the table that `CREATE TABLE users` stored
+    /// as `USERS`.
+    ///
+    /// # Errors
+    /// Returns an error when the catalogue cannot be read.
+    pub async fn table_schema(
+        &self,
+        table: &str,
+    ) -> ProtocolResult<Option<super::persistent_storage::TableSchema>> {
+        let Some(storage) = &self.persistent_storage else {
+            return Ok(None);
+        };
+
+        if let Some(schema) = storage.get_table_schema(table).await? {
+            return Ok(Some(schema));
+        }
+        storage.get_table_schema(&table.to_uppercase()).await
+    }
+
     /// Infer the type of each `$n` parameter from where it is used.
     ///
     /// Returns one OID per placeholder, in position order. A client that
@@ -1067,22 +1104,29 @@ impl QueryEngine {
     }
 
     /// Parse SQL statement
+    ///
+    /// The statement is dispatched on an uppercased copy but each sub-parser
+    /// receives the text as written. Uppercasing the statement itself — which
+    /// this did, behind a variable named `original_sql` that was in fact a clone
+    /// of the uppercased one — rewrote string literals too, so
+    /// `INSERT ... VALUES ('alpha')` stored `ALPHA`. The sub-parsers already
+    /// match keywords case-insensitively and normalise identifiers themselves.
     fn parse_sql(&self, sql: &str) -> ProtocolResult<Statement> {
-        let sql = sql.trim().to_uppercase();
-        let original_sql = sql.clone();
+        let original_sql = sql.trim();
+        let sql = original_sql.to_uppercase();
 
         if sql.starts_with("SELECT") {
-            self.parse_select(&original_sql)
+            self.parse_select(original_sql)
         } else if sql.starts_with("INSERT") {
-            self.parse_insert(&original_sql)
+            self.parse_insert(original_sql)
         } else if sql.starts_with("UPDATE") {
-            self.parse_update(&original_sql)
+            self.parse_update(original_sql)
         } else if sql.starts_with("DELETE") {
-            self.parse_delete(&original_sql)
+            self.parse_delete(original_sql)
         } else if sql.starts_with("CREATE TABLE") {
-            self.parse_create_table(&original_sql)
+            self.parse_create_table(original_sql)
         } else if sql.starts_with("DROP TABLE") {
-            self.parse_drop_table(&original_sql)
+            self.parse_drop_table(original_sql)
         } else {
             Err(ProtocolError::PostgresError(format!(
                 "Unsupported SQL statement: {sql}"
@@ -2229,5 +2273,55 @@ mod tests {
             assert_eq!(rows.len(), 1);
             println!("✅ CREATE SCHEMA result: {:?}", rows[0][0]);
         }
+    }
+}
+
+#[cfg(test)]
+mod literal_case_tests {
+    use super::*;
+    use crate::protocols::postgres_wire::persistent_storage::RocksDbTableStorage;
+
+    /// String literals must survive a round trip unchanged.
+    ///
+    /// The parser used to uppercase the whole statement before parsing, so
+    /// `VALUES ('alpha')` stored `ALPHA` — silent corruption of every text value
+    /// written through this engine.
+    #[tokio::test]
+    async fn string_literals_keep_their_case_through_insert_and_select() {
+        let dir = std::env::temp_dir().join(format!(
+            "orbit-literal-case-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let storage = Arc::new(
+            RocksDbTableStorage::new(dir.to_str().expect("utf-8 temp path"))
+                .expect("open temporary storage"),
+        );
+        let engine = QueryEngine::new_with_persistent_storage(storage);
+
+        engine
+            .execute_query("CREATE TABLE case_check (id INTEGER, name TEXT)")
+            .await
+            .expect("create table");
+        engine
+            .execute_query("INSERT INTO case_check (id, name) VALUES (1, 'MixedCase Value')")
+            .await
+            .expect("insert");
+
+        let result = engine
+            .execute_query("SELECT name FROM case_check")
+            .await
+            .expect("select");
+
+        let QueryResult::Select { rows, .. } = result else {
+            panic!("SELECT should return a result set");
+        };
+        assert_eq!(
+            rows[0][0].as_deref(),
+            Some("MixedCase Value"),
+            "the stored literal must come back exactly as written"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

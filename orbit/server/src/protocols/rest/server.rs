@@ -111,6 +111,7 @@ impl RestApiServer {
             orbit_client: self.orbit_client.clone(),
             mcp_server: self.mcp_server.clone(),
             query_engine: self.query_engine.clone(),
+            bind_address: self.config.bind_address.clone(),
         };
 
         // API v1 routes

@@ -5,7 +5,7 @@
         pre-commit-full pre-commit-light all \
         dev run cluster cluster-stop cluster-status cluster-lb cluster-lb-stop \
         test-ignored test-include-ignored test-quick test-server test-verbose \
-        redis
+        redis desktop-check desktop-test desktop-build
 
 help:
 	@echo "🚀 Orbit-RS Development Tasks"
@@ -51,13 +51,43 @@ format:
 	cargo fmt --all
 	@echo "✅ Code formatting complete"
 
-check:
+check: desktop-check
 	@echo "🔍 Running cargo check and clippy..."
 	cargo check --workspace
 	cargo clippy --all-targets -- -D warnings -A clippy::unnecessary-sort-by -A clippy::collapsible-match -A clippy::useless-conversion -A clippy::unnecessary-unwrap -A clippy::manual-checked-ops -A clippy::explicit-counter-loop
 	@echo "✅ Code checks complete"
 
-test:
+# orbit/desktop declares its own [workspace], so the root cargo commands above
+# do not reach it. Without these targets it was possible — and did happen — for
+# the desktop app to accumulate compile errors while `make check` stayed green.
+DESKTOP_MANIFEST := orbit/desktop/src-tauri/Cargo.toml
+
+desktop-check:
+	@echo "🔍 Checking orbit-desktop (separate workspace)..."
+	cargo clippy --manifest-path $(DESKTOP_MANIFEST) --all-targets -- -D warnings
+	@if [ -d orbit/desktop/node_modules ]; then \
+		cd orbit/desktop && npm run typecheck; \
+	else \
+		echo "⚠️  orbit/desktop/node_modules missing - run 'cd orbit/desktop && npm install' to typecheck the UI"; \
+	fi
+	@echo "✅ orbit-desktop checks complete"
+
+desktop-test:
+	@echo "🧪 Testing orbit-desktop..."
+	cargo test --manifest-path $(DESKTOP_MANIFEST)
+	@if [ -d orbit/desktop/node_modules ]; then \
+		cd orbit/desktop && npm test; \
+	else \
+		echo "⚠️  orbit/desktop/node_modules missing - skipping UI tests"; \
+	fi
+	@echo "✅ orbit-desktop tests complete"
+
+desktop-build:
+	@echo "🏗️  Building orbit-desktop..."
+	cd orbit/desktop && npm install && npm run build
+	@echo "✅ orbit-desktop build complete"
+
+test: desktop-test
 	@echo "🧪 Running tests..."
 	cargo test --workspace --verbose
 	@echo "✅ Tests complete"

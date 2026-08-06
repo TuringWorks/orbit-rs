@@ -170,6 +170,11 @@ pub struct PoolingConfig {
     pub circuit_breaker: PoolCircuitBreakerConfig,
 
     /// Per-protocol pooling overrides
+    ///
+    /// Absent means "no overrides", which is what the Default impl already
+    /// produces. Requiring the key in TOML made `config/orbit-server.toml` — the
+    /// file the docs tell users to start from — fail to load.
+    #[serde(default)]
     pub protocol_overrides: HashMap<String, ProtocolPoolConfig>,
 }
 
@@ -734,6 +739,7 @@ pub struct SecurityConfig {
     pub authorization: AuthorizationConfig,
 
     /// Encryption configuration
+    #[serde(default)]
     pub encryption: EncryptionConfig,
 }
 
@@ -803,9 +809,11 @@ pub struct AuthorizationConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EncryptionConfig {
     /// Encryption at rest
+    #[serde(default)]
     pub at_rest: Option<EncryptionAtRestConfig>,
 
     /// Encryption in transit
+    #[serde(default)]
     pub in_transit: Option<EncryptionInTransitConfig>,
 }
 
@@ -2649,5 +2657,34 @@ mod tests {
         let toml_str = toml::to_string_pretty(&config).unwrap();
         let deserialized: OrbitServerConfig = toml::from_str(&toml_str).unwrap();
         assert!(deserialized.validate().is_ok());
+    }
+}
+
+#[cfg(test)]
+mod shipped_config_tests {
+    use super::*;
+
+    /// The configuration file the documentation tells users to start from must
+    /// actually load.
+    ///
+    /// It had drifted from this schema in two ways — a `tier` value that is not
+    /// a `PoolTier` variant, and a required `protocol_overrides` key that the
+    /// file never set — so `orbit-server --config ./config/orbit-server.toml`,
+    /// the documented invocation, failed before opening a port. Nothing checked
+    /// the two against each other; this does.
+    #[tokio::test]
+    async fn the_shipped_configuration_file_parses() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../config/orbit-server.toml");
+
+        assert!(
+            path.exists(),
+            "expected the shipped config at {}",
+            path.display()
+        );
+
+        if let Err(e) = OrbitServerConfig::load_from_file(&path).await {
+            panic!("config/orbit-server.toml does not load: {e}");
+        }
     }
 }

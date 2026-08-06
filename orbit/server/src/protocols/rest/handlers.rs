@@ -18,6 +18,26 @@ use utoipa::IntoParams;
 use super::models::*;
 use crate::protocols::mcp::server::McpServer;
 
+/// When this process started, used to report a measured uptime.
+///
+/// Set on first read, so the value is the age of the REST layer rather than an
+/// invented constant.
+static PROCESS_START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+/// Seconds since the process started serving.
+fn uptime_seconds() -> u64 {
+    PROCESS_START
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_secs()
+}
+
+/// Record the process start time. Call once during startup so `/stats` reports
+/// uptime from boot rather than from the first request.
+pub fn mark_process_start() {
+    let _ = PROCESS_START.set(std::time::Instant::now());
+}
+
 /// Shared API state
 #[derive(Clone)]
 pub struct ApiState {
@@ -26,6 +46,8 @@ pub struct ApiState {
     pub mcp_server: Option<Arc<McpServer>>,
     /// SQL engine backing the `/sql` and catalogue endpoints.
     pub query_engine: Option<Arc<crate::protocols::postgres_wire::QueryEngine>>,
+    /// Address this REST listener is bound to, reported as the node's address.
+    pub bind_address: String,
 }
 
 /// Pagination query parameters
@@ -945,7 +967,7 @@ pub async fn execute_batch_sql(
             }
             Err((_, error)) => {
                 failed += 1;
-                let message = error.error.message.clone();
+                let message = error.message.clone();
                 results.push(BatchQueryResult {
                     index,
                     success: false,
@@ -987,31 +1009,59 @@ pub async fn execute_batch_sql(
     tag = "sql"
 )]
 pub async fn list_tables(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     Query(params): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let page = params.page.unwrap_or(0);
     let page_size = params.page_size.unwrap_or(50).min(1000);
 
-    // Mock table list - in full implementation, this would query the catalog
-    let tables = vec![
-        TableInfo {
-            name: "users".to_string(),
-            schema: "public".to_string(),
-            table_type: "TABLE".to_string(),
-            estimated_rows: Some(1000),
-            column_count: 5,
-        },
-        TableInfo {
-            name: "orders".to_string(),
-            schema: "public".to_string(),
-            table_type: "TABLE".to_string(),
-            estimated_rows: Some(5000),
-            column_count: 8,
-        },
-    ];
+    let Some(engine) = &state.query_engine else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse::new(
+                "CATALOGUE_UNAVAILABLE",
+                "This server was started without a SQL engine, so it has no table catalogue.",
+            )),
+        )
+            .into_response();
+    };
 
-    let total = tables.len();
+    let names = match engine.list_tables().await {
+        Ok(Some(names)) => names,
+        Ok(None) => Vec::new(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse::new("CATALOGUE_ERROR", e.to_string())),
+            )
+                .into_response()
+        }
+    };
+
+    let total = names.len();
+
+    // Only the requested page is described, so listing a large catalogue does
+    // not read every schema.
+    let mut tables = Vec::new();
+    for name in names.into_iter().skip(page * page_size).take(page_size) {
+        let column_count = engine
+            .table_schema(&name)
+            .await
+            .ok()
+            .flatten()
+            .map_or(0, |schema| schema.columns.len());
+
+        tables.push(TableInfo {
+            name,
+            schema: "public".to_string(),
+            table_type: "TABLE".to_string(),
+            // Row counts are not tracked, and a number here would be read as
+            // one that was measured.
+            estimated_rows: None,
+            column_count,
+        });
+    }
+
     let response = PagedResponse::new(tables, total, page, page_size);
 
     tracing::debug!(
@@ -1020,7 +1070,7 @@ pub async fn list_tables(
         "Tables listed via REST API"
     );
 
-    (StatusCode::OK, Json(SuccessResponse::new(response)))
+    (StatusCode::OK, Json(SuccessResponse::new(response))).into_response()
 }
 
 /// Get database statistics
@@ -1036,18 +1086,29 @@ pub async fn list_tables(
     tag = "system"
 )]
 pub async fn get_database_stats(State(state): State<ApiState>) -> impl IntoResponse {
-    // Get client stats if available
     let client_stats = state.orbit_client.stats().await.ok();
 
+    let table_count = match &state.query_engine {
+        Some(engine) => engine
+            .list_tables()
+            .await
+            .ok()
+            .flatten()
+            .map_or(0, |tables| tables.len()),
+        None => 0,
+    };
+
     let stats = DatabaseStats {
-        table_count: 10,                     // Mock value
-        index_count: 15,                     // Mock value
-        size_bytes: Some(1024 * 1024 * 100), // 100 MB mock
+        table_count,
+        // Secondary indexes are not implemented, so this is a real zero.
+        index_count: 0,
+        // On-disk size is not tracked; a number here would be invented.
+        size_bytes: None,
         active_connections: client_stats
             .as_ref()
             .map(|s| s.server_connections)
-            .unwrap_or(1),
-        uptime_seconds: 3600, // Mock 1 hour
+            .unwrap_or(0),
+        uptime_seconds: uptime_seconds(),
         version: env!("CARGO_PKG_VERSION").to_string(),
     };
 
@@ -1070,28 +1131,28 @@ pub async fn get_database_stats(State(state): State<ApiState>) -> impl IntoRespo
     ),
     tag = "sql"
 )]
-pub async fn list_schemas(State(_state): State<ApiState>) -> impl IntoResponse {
-    // Mock schema list - in full implementation, this would query the catalog
-    let schemas = vec![
-        SchemaInfo {
-            name: "public".to_string(),
-            owner: "postgres".to_string(),
-            table_count: 10,
-            view_count: 2,
-        },
-        SchemaInfo {
-            name: "pg_catalog".to_string(),
-            owner: "postgres".to_string(),
-            table_count: 50,
-            view_count: 0,
-        },
-        SchemaInfo {
-            name: "information_schema".to_string(),
-            owner: "postgres".to_string(),
-            table_count: 20,
-            view_count: 0,
-        },
-    ];
+pub async fn list_schemas(State(state): State<ApiState>) -> impl IntoResponse {
+    // This engine has a single flat namespace; `pg_catalog` and
+    // `information_schema` were listed with invented table counts but do not
+    // exist here. Only the one real namespace is reported, with its measured
+    // table count.
+    let table_count = match &state.query_engine {
+        Some(engine) => engine
+            .list_tables()
+            .await
+            .ok()
+            .flatten()
+            .map_or(0, |tables| tables.len()),
+        None => 0,
+    };
+
+    let schemas = vec![SchemaInfo {
+        name: "public".to_string(),
+        owner: "orbit".to_string(),
+        table_count,
+        // Views are not implemented, so this is a real zero.
+        view_count: 0,
+    }];
 
     tracing::debug!("Schemas listed via REST API");
 
@@ -1116,55 +1177,86 @@ pub async fn list_schemas(State(_state): State<ApiState>) -> impl IntoResponse {
     tag = "sql"
 )]
 pub async fn describe_table(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     Path((schema, table)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    // Mock table description
+    use crate::protocols::postgres_wire::persistent_storage::ColumnType;
+
+    let Some(engine) = &state.query_engine else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse::new(
+                "CATALOGUE_UNAVAILABLE",
+                "This server was started without a SQL engine, so it has no table catalogue.",
+            )),
+        )
+            .into_response();
+    };
+
+    let table_schema = match engine.table_schema(&table).await {
+        Ok(Some(schema)) => schema,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse::new(
+                    "TABLE_NOT_FOUND",
+                    format!("Table '{table}' does not exist"),
+                )),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse::new("CATALOGUE_ERROR", e.to_string())),
+            )
+                .into_response()
+        }
+    };
+
+    let type_name = |data_type: &ColumnType| match data_type {
+        ColumnType::Serial => "serial".to_string(),
+        ColumnType::Integer => "integer".to_string(),
+        ColumnType::BigInt => "bigint".to_string(),
+        ColumnType::Text => "text".to_string(),
+        ColumnType::Varchar(n) => format!("varchar({n})"),
+        ColumnType::Boolean => "boolean".to_string(),
+        ColumnType::Json => "json".to_string(),
+        ColumnType::Timestamp => "timestamp".to_string(),
+        ColumnType::Double => "double precision".to_string(),
+    };
+
     let description = TableDescription {
-        schema: schema.clone(),
+        schema,
         name: table.clone(),
         table_type: "TABLE".to_string(),
-        columns: vec![
-            TableColumn {
-                name: "id".to_string(),
-                data_type: "integer".to_string(),
-                nullable: false,
-                default_value: Some("nextval('id_seq')".to_string()),
-                is_primary_key: true,
-            },
-            TableColumn {
-                name: "name".to_string(),
-                data_type: "varchar(255)".to_string(),
-                nullable: true,
-                default_value: None,
+        columns: table_schema
+            .columns
+            .iter()
+            .map(|column| TableColumn {
+                name: column.name.clone(),
+                data_type: type_name(&column.data_type),
+                nullable: column.nullable,
+                default_value: column.default_value.as_ref().map(|v| v.to_string()),
+                // Primary keys are not recorded in this schema, so no column is
+                // claimed to be one.
                 is_primary_key: false,
-            },
-            TableColumn {
-                name: "created_at".to_string(),
-                data_type: "timestamp".to_string(),
-                nullable: false,
-                default_value: Some("now()".to_string()),
-                is_primary_key: false,
-            },
-        ],
-        primary_key: Some(vec!["id".to_string()]),
-        indexes: vec![IndexInfo {
-            name: format!("{}_pkey", table),
-            columns: vec!["id".to_string()],
-            unique: true,
-            index_type: "btree".to_string(),
-        }],
-        estimated_rows: Some(1000),
-        size_bytes: Some(1024 * 100),
+            })
+            .collect(),
+        primary_key: None,
+        // Indexes are not tracked by this storage layer.
+        indexes: Vec::new(),
+        estimated_rows: Some(table_schema.row_count.max(0) as u64),
+        // Not measured by this storage layer.
+        size_bytes: None,
     };
 
     tracing::debug!(
-        schema = %schema,
         table = %table,
         "Table described via REST API"
     );
 
-    (StatusCode::OK, Json(SuccessResponse::new(description)))
+    (StatusCode::OK, Json(SuccessResponse::new(description))).into_response()
 }
 
 // ============ Index Management Endpoints ============
@@ -1230,23 +1322,37 @@ pub async fn list_indexes(
     tag = "cluster"
 )]
 pub async fn list_cluster_nodes(State(state): State<ApiState>) -> impl IntoResponse {
+    let client_stats = state.orbit_client.stats().await.ok();
+
     let node_id = state
         .orbit_client
         .node_id()
         .map(|n| n.key.clone())
         .unwrap_or_else(|| "local".to_string());
 
+    // Only the node answering this request can be reported: the REST layer has
+    // no membership view of its peers. Every field below is either observed or
+    // omitted. The resource gauges were previously fixed numbers
+    // (cpu 45.2, memory 62.8, disk 38.5) that no one measured — they are now
+    // absent, which is what "not collected" should look like.
     let nodes = vec![ClusterNodeInfo {
-        node_id: node_id.clone(),
-        address: "127.0.0.1:50051".to_string(),
+        node_id,
+        // Where this node is actually reachable, rather than a repeat of its id.
+        address: state.bind_address.clone(),
+        // True by construction: this node is serving the request.
         status: "healthy".to_string(),
-        role: "leader".to_string(),
-        cpu_usage: Some(45.2),
-        memory_usage: Some(62.8),
-        disk_usage: Some(38.5),
-        uptime_seconds: 86400,
-        actor_count: 150,
-        connection_count: 25,
+        // Raft role is not exposed here; claiming "leader" would be a guess.
+        role: "unknown".to_string(),
+        cpu_usage: None,
+        memory_usage: None,
+        disk_usage: None,
+        uptime_seconds: uptime_seconds(),
+        // Actor enumeration is not available through OrbitClient.
+        actor_count: 0,
+        connection_count: client_stats
+            .as_ref()
+            .map(|s| s.server_connections)
+            .unwrap_or(0),
     }];
 
     tracing::debug!("Cluster nodes listed via REST API");
@@ -1267,17 +1373,24 @@ pub async fn list_cluster_nodes(State(state): State<ApiState>) -> impl IntoRespo
     tag = "cluster"
 )]
 pub async fn get_cluster_status(State(state): State<ApiState>) -> impl IntoResponse {
-    let client_stats = state.orbit_client.stats().await.ok();
+    let node_id = state
+        .orbit_client
+        .node_id()
+        .map(|n| n.key.clone())
+        .unwrap_or_else(|| "local".to_string());
 
+    // Reports this node only, for the reason given on `list_cluster_nodes`.
+    // The replication factor and consistency level were previously stated as 3
+    // and "quorum" without either being configured or checked.
     let status = ClusterStatus {
-        cluster_id: "orbit-cluster-1".to_string(),
+        cluster_id: node_id,
         healthy: true,
         total_nodes: 1,
         healthy_nodes: 1,
         unhealthy_nodes: 0,
-        total_actors: client_stats.as_ref().map(|_| 150).unwrap_or(0),
-        replication_factor: 3,
-        consistency_level: "quorum".to_string(),
+        total_actors: 0,
+        replication_factor: 1,
+        consistency_level: "single-node".to_string(),
     };
 
     tracing::debug!("Cluster status retrieved via REST API");
@@ -1307,32 +1420,15 @@ pub async fn get_query_history(
     let page = params.page.unwrap_or(0);
     let page_size = params.page_size.unwrap_or(50).min(1000);
 
-    // Mock query history
-    let history = vec![
-        QueryHistoryEntry {
-            query_id: uuid::Uuid::new_v4().to_string(),
-            query: "SELECT * FROM users WHERE status = 'active'".to_string(),
-            execution_time_ms: 45,
-            rows_returned: 150,
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            status: "completed".to_string(),
-            user: Some("admin".to_string()),
-        },
-        QueryHistoryEntry {
-            query_id: uuid::Uuid::new_v4().to_string(),
-            query: "INSERT INTO orders (user_id, total) VALUES (1, 99.99)".to_string(),
-            execution_time_ms: 12,
-            rows_returned: 0,
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            status: "completed".to_string(),
-            user: Some("admin".to_string()),
-        },
-    ];
-
+    // Statements are not recorded server-side. This previously returned two
+    // invented entries, complete with timings and row counts, which read as a
+    // real audit trail. An empty history is the truthful answer until recording
+    // exists; clients that need history keep their own (the desktop app does).
+    let history: Vec<QueryHistoryEntry> = Vec::new();
     let total = history.len();
     let response = PagedResponse::new(history, total, page, page_size);
 
-    tracing::debug!("Query history retrieved via REST API");
+    tracing::debug!("Query history requested via REST API (not recorded server-side)");
 
     (StatusCode::OK, Json(SuccessResponse::new(response)))
 }

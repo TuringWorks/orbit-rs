@@ -161,29 +161,173 @@ impl ConnectionInfo {
         format!("{}:{}", self.host, self.port)
     }
 
-    /// Reject a TLS request we cannot honour instead of silently connecting in
-    /// the clear.
+    /// How this connection should treat transport encryption.
     ///
     /// # Errors
-    /// Returns [`ConnectionError::InvalidConfiguration`] when `ssl_mode` asks
-    /// for encryption, which this build does not implement.
-    fn ensure_ssl_mode_supported(&self) -> Result<(), ConnectionError> {
+    /// Returns [`ConnectionError::InvalidConfiguration`] for an `ssl_mode` that
+    /// is not recognised, rather than guessing and possibly connecting in the
+    /// clear when the user asked for encryption.
+    fn ssl_mode(&self) -> Result<SslMode, ConnectionError> {
         let mode = match self.ssl_mode.as_deref().map(str::trim) {
-            None | Some("") => return Ok(()),
+            None | Some("") => return Ok(SslMode::Disable),
             Some(mode) => mode,
         };
 
-        if matches!(
-            mode.to_ascii_lowercase().as_str(),
-            "disable" | "disabled" | "off" | "none" | "prefer" | "allow"
-        ) {
-            return Ok(());
+        match mode.to_ascii_lowercase().as_str() {
+            "disable" | "disabled" | "off" | "none" => Ok(SslMode::Disable),
+            // `prefer` is deliberately treated as `require`. PostgreSQL's own
+            // `prefer` silently falls back to plaintext, which means a
+            // misconfigured server downgrades the connection without anyone
+            // noticing; a client that has TLS available should use it.
+            "prefer" | "allow" | "require" => Ok(SslMode::Require),
+            "verify-ca" | "verify_ca" | "verify-full" | "verify_full" => Ok(SslMode::VerifyFull),
+            other => Err(ConnectionError::InvalidConfiguration(format!(
+                "unknown ssl_mode '{other}'; expected one of disable, prefer, require, \
+                 verify-ca, verify-full"
+            ))),
         }
+    }
+}
 
-        Err(ConnectionError::InvalidConfiguration(format!(
-            "ssl_mode '{mode}' requests an encrypted connection, which this build does not \
-             support. Refusing rather than connecting in plaintext."
-        )))
+/// What transport security to use for a connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SslMode {
+    /// Plain TCP.
+    Disable,
+    /// TLS, without checking the server's certificate chain or hostname.
+    ///
+    /// This encrypts the connection but does not authenticate the peer, so it
+    /// stops passive eavesdropping and not an active attacker. It is what
+    /// PostgreSQL's own `require` means.
+    Require,
+    /// TLS with full chain and hostname verification against the system roots.
+    VerifyFull,
+}
+
+impl SslMode {
+    fn is_encrypted(self) -> bool {
+        !matches!(self, SslMode::Disable)
+    }
+}
+
+/// Certificate verifier that accepts any chain.
+///
+/// Used only for [`SslMode::Require`], where the user asked for encryption
+/// without authentication — typically a development server with a self-signed
+/// certificate. Never reachable from `verify-ca`/`verify-full`.
+#[derive(Debug)]
+struct AcceptAnyCertificate(Arc<rustls::crypto::CryptoProvider>);
+
+impl rustls::client::danger::ServerCertVerifier for AcceptAnyCertificate {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.0.signature_verification_algorithms.supported_schemes()
+    }
+}
+
+/// Install the process-wide rustls crypto provider.
+///
+/// The `redis` crate builds its TLS configuration internally and relies on the
+/// process default, which rustls only picks automatically when exactly one
+/// provider feature is enabled across the whole dependency graph. More than one
+/// is, so without this every `rediss://` connection panics inside rustls.
+///
+/// Idempotent: a second call, or one after another component has installed a
+/// provider, is a no-op.
+pub fn install_crypto_provider() {
+    if rustls::crypto::ring::default_provider()
+        .install_default()
+        .is_err()
+    {
+        tracing::debug!("rustls crypto provider was already installed");
+    }
+}
+
+/// Build the rustls configuration for `mode`.
+fn tls_config(mode: SslMode) -> Result<rustls::ClientConfig, ConnectionError> {
+    // The PostgreSQL path names its provider explicitly, but installing the
+    // process default here too keeps the two paths consistent.
+    install_crypto_provider();
+    let provider = rustls::crypto::ring::default_provider();
+
+    match mode {
+        SslMode::Disable => Err(ConnectionError::InvalidConfiguration(
+            "TLS configuration requested for a plaintext connection".to_string(),
+        )),
+        SslMode::VerifyFull => {
+            let mut roots = rustls::RootCertStore::empty();
+            let native = rustls_native_certs::load_native_certs();
+            for certificate in native.certs {
+                // A single unparseable system certificate should not disable
+                // verification; the rest of the store still applies.
+                let _ = roots.add(certificate);
+            }
+            if roots.is_empty() {
+                roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            }
+            if roots.is_empty() {
+                return Err(ConnectionError::InvalidConfiguration(
+                    "no trusted root certificates are available, so the server's certificate \
+                     cannot be verified"
+                        .to_string(),
+                ));
+            }
+
+            rustls::ClientConfig::builder_with_provider(Arc::new(provider))
+                .with_safe_default_protocol_versions()
+                .map_err(|e| ConnectionError::InvalidConfiguration(e.to_string()))
+                .map(|builder| builder.with_root_certificates(roots).with_no_client_auth())
+        }
+        SslMode::Require => {
+            let provider = Arc::new(provider);
+            rustls::ClientConfig::builder_with_provider(Arc::clone(&provider))
+                .with_safe_default_protocol_versions()
+                .map_err(|e| ConnectionError::InvalidConfiguration(e.to_string()))
+                .map(|builder| {
+                    builder
+                        .dangerous()
+                        .with_custom_certificate_verifier(Arc::new(AcceptAnyCertificate(provider)))
+                        .with_no_client_auth()
+                })
+        }
     }
 }
 
@@ -450,7 +594,8 @@ impl ConnectionManager {
 async fn open_session(
     info: &ConnectionInfo,
 ) -> Result<Box<dyn DatabaseSession>, ConnectionError> {
-    info.ensure_ssl_mode_supported()?;
+    // Validate up front so an unusable ssl_mode fails before any socket work.
+    info.ssl_mode()?;
 
     match info.connection_type {
         ConnectionType::PostgreSQL => Ok(Box::new(PostgresSession::connect(info).await?)),
@@ -523,10 +668,30 @@ impl PostgresSession {
             config.dbname(database);
         }
 
-        let (client, connection) = config
-            .connect(tokio_postgres::NoTls)
-            .await
-            .map_err(|e| ConnectionError::ConnectionFailed(describe(&e)))?;
+        let mode = info.ssl_mode()?;
+
+        // `SslMode::Require` is passed to the driver as `Require` too, so a
+        // server that refuses TLS fails the connection instead of quietly
+        // continuing in plaintext.
+        let (client, connection) = if mode.is_encrypted() {
+            config.ssl_mode(tokio_postgres::config::SslMode::Require);
+            let tls = tokio_postgres_rustls::MakeRustlsConnect::new(tls_config(mode)?);
+            let (client, connection) = config
+                .connect(tls)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(describe(&e)))?;
+            tokio::spawn(async move {
+                if let Err(e) = connection.await {
+                    tracing::debug!("PostgreSQL TLS connection closed: {e}");
+                }
+            });
+            return Ok(client);
+        } else {
+            config
+                .connect(tokio_postgres::NoTls)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(describe(&e)))?
+        };
 
         // The connection future drives the socket; it ends when the client is
         // dropped, which is what closes the session.
@@ -890,10 +1055,26 @@ pub struct RedisSession {
 
 impl RedisSession {
     async fn connect(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
-        let mut url = format!("redis://{}:{}", info.host, info.port);
+        // The redis crate builds its own TLS config from the process-wide
+        // provider, so it has to be installed before the client is opened.
+        if info.ssl_mode()?.is_encrypted() {
+            install_crypto_provider();
+        }
+
+        // Redis encrypts implicitly: the scheme decides, there is no in-band
+        // negotiation. `#insecure` skips certificate verification, matching what
+        // `require` means for PostgreSQL — encrypted but unauthenticated.
+        let mut url = match info.ssl_mode()? {
+            SslMode::Disable => format!("redis://{}:{}", info.host, info.port),
+            SslMode::Require => format!("rediss://{}:{}", info.host, info.port),
+            SslMode::VerifyFull => format!("rediss://{}:{}", info.host, info.port),
+        };
         if let Some(database) = info.database.as_deref().filter(|d| !d.is_empty()) {
             url.push('/');
             url.push_str(database);
+        }
+        if info.ssl_mode()? == SslMode::Require {
+            url.push_str("#insecure");
         }
 
         let client = redis::Client::open(url)
@@ -1346,17 +1527,51 @@ mod tests {
     }
 
     #[test]
-    fn plaintext_ssl_modes_are_accepted() {
-        for mode in [None, Some(""), Some("disable"), Some("prefer"), Some("allow")] {
-            assert!(info_with_ssl(mode).ensure_ssl_mode_supported().is_ok());
+    fn absent_or_disabled_ssl_means_plaintext() {
+        for mode in [None, Some(""), Some("disable"), Some("off"), Some("none")] {
+            assert_eq!(
+                info_with_ssl(mode).ssl_mode().expect("recognised mode"),
+                SslMode::Disable
+            );
+        }
+    }
+
+    /// `prefer` is mapped to `require` on purpose: PostgreSQL's own `prefer`
+    /// falls back to plaintext without telling anyone.
+    #[test]
+    fn prefer_and_require_both_encrypt() {
+        for mode in ["prefer", "allow", "require"] {
+            assert_eq!(
+                info_with_ssl(Some(mode)).ssl_mode().expect("recognised"),
+                SslMode::Require
+            );
         }
     }
 
     #[test]
-    fn encrypting_ssl_modes_are_refused_rather_than_downgraded() {
-        for mode in ["require", "verify-ca", "verify-full"] {
-            assert!(info_with_ssl(Some(mode)).ensure_ssl_mode_supported().is_err());
+    fn verify_modes_request_full_verification() {
+        for mode in ["verify-ca", "verify-full", "verify_full"] {
+            assert_eq!(
+                info_with_ssl(Some(mode)).ssl_mode().expect("recognised"),
+                SslMode::VerifyFull
+            );
         }
+    }
+
+    /// An unrecognised value must not silently become plaintext.
+    #[test]
+    fn an_unknown_ssl_mode_is_rejected() {
+        assert!(info_with_ssl(Some("sort-of")).ssl_mode().is_err());
+    }
+
+    #[test]
+    fn a_tls_config_can_be_built_for_each_encrypted_mode() {
+        assert!(tls_config(SslMode::Require).is_ok());
+        assert!(tls_config(SslMode::VerifyFull).is_ok());
+        assert!(
+            tls_config(SslMode::Disable).is_err(),
+            "asking for TLS config on a plaintext connection is a caller error"
+        );
     }
 
     #[test]
@@ -1564,10 +1779,69 @@ mod live_tests {
         let _ = session.execute(&format!("DROP TABLE IF EXISTS {table}")).await;
     }
 
+    /// A TLS-enabled server must be reachable with `ssl_mode = require`.
+    ///
+    /// Run against a server started with `[server.tls] enabled = true`.
+    #[tokio::test]
+    #[ignore = "requires a TLS-enabled orbit-server on 5432; set ORBIT_TEST_TLS_SERVER=1"]
+    async fn a_tls_session_runs_statements() {
+        // Paired with the downgrade test below: the two need opposite server
+        // configurations, so each is gated rather than one silently failing.
+        if std::env::var("ORBIT_TEST_TLS_SERVER").is_err() {
+            eprintln!("skipped: set ORBIT_TEST_TLS_SERVER=1 with a TLS-enabled server");
+            return;
+        }
+
+        let mut encrypted = info(ConnectionType::PostgreSQL, 5432);
+        encrypted.ssl_mode = Some("require".to_string());
+
+        let mut session = PostgresSession::connect(&encrypted)
+            .await
+            .expect("the server should accept a TLS connection");
+
+        let payload = session
+            .execute("SELECT 1 AS one")
+            .await
+            .expect("statement should run over TLS");
+        assert_eq!(payload.columns.len(), 1);
+    }
+
+    /// Asking for encryption against a server that does not offer it must fail.
+    ///
+    /// This is the property that matters: a silent downgrade would leave
+    /// credentials on the wire in the clear while the UI reported success. Run
+    /// against a server started *without* TLS.
+    #[tokio::test]
+    #[ignore = "requires a plaintext orbit-server on 5432; set ORBIT_TEST_PLAINTEXT_SERVER=1"]
+    async fn requiring_tls_against_a_plaintext_server_fails_rather_than_downgrading() {
+        // Only meaningful against a server that does *not* offer TLS. Gated on
+        // an explicit variable so that running it against a TLS server is a
+        // visible skip rather than a pass that proved nothing.
+        if std::env::var("ORBIT_TEST_PLAINTEXT_SERVER").is_err() {
+            eprintln!("skipped: set ORBIT_TEST_PLAINTEXT_SERVER=1 with a non-TLS server");
+            return;
+        }
+
+        let mut encrypted = info(ConnectionType::PostgreSQL, 5432);
+        encrypted.ssl_mode = Some("require".to_string());
+
+        assert!(
+            PostgresSession::connect(&encrypted).await.is_err(),
+            "a plaintext server must not satisfy ssl_mode=require"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "requires a running orbit-server on 6379"]
     async fn redis_session_runs_commands_and_decodes_replies() {
-        let mut session = RedisSession::connect(&info(ConnectionType::Redis, 6379))
+        // Redis encrypts implicitly, so the client has to be told which the
+        // server is doing. ORBIT_TEST_REDIS_TLS=1 selects the encrypted form.
+        let mut connection = info(ConnectionType::Redis, 6379);
+        if std::env::var("ORBIT_TEST_REDIS_TLS").is_ok() {
+            connection.ssl_mode = Some("require".to_string());
+        }
+
+        let mut session = RedisSession::connect(&connection)
             .await
             .expect("orbit-server should accept a Redis connection");
 
@@ -1617,5 +1891,79 @@ mod live_tests {
 
         let listed = manager.list_connections().await;
         assert_eq!(listed[0].status, ConnectionStatus::Connected);
+    }
+}
+
+/// Cross-protocol tests: the same data through two different front doors.
+#[cfg(test)]
+mod cross_protocol_tests {
+    use super::*;
+
+    /// A table written over REST must be readable over the PostgreSQL wire.
+    ///
+    /// The REST endpoint and the PostgreSQL listener run separate `QueryEngine`
+    /// instances; only sharing one storage handle makes them the same database.
+    /// They were once wired to different handles, so `CREATE TABLE` over HTTP
+    /// produced a table `psql` could not see — two databases behind one name.
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432 and 8080"]
+    async fn a_table_written_over_rest_is_readable_over_postgres() {
+        let table = "cross_protocol_check";
+        let client = reqwest::Client::new();
+
+        let run = |sql: String| {
+            let client = client.clone();
+            async move {
+                client
+                    .post("http://127.0.0.1:8080/api/v1/sql")
+                    .json(&serde_json::json!({ "query": sql }))
+                    .send()
+                    .await
+                    .expect("REST endpoint should answer")
+            }
+        };
+
+        run(format!("DROP TABLE IF EXISTS {table}")).await;
+        let created = run(format!("CREATE TABLE {table} (id INTEGER, note TEXT)")).await;
+        assert!(created.status().is_success(), "CREATE over REST should work");
+        let inserted = run(format!(
+            "INSERT INTO {table} (id, note) VALUES (7, 'written over REST')"
+        ))
+        .await;
+        assert!(inserted.status().is_success(), "INSERT over REST should work");
+
+        let info = ConnectionInfo {
+            name: "cross-protocol".to_string(),
+            connection_type: ConnectionType::PostgreSQL,
+            host: "127.0.0.1".to_string(),
+            port: 5432,
+            database: None,
+            username: Some("orbit".to_string()),
+            password: Some("orbit".to_string()),
+            ssl_mode: None,
+            connection_timeout: Some(5_000),
+            additional_params: HashMap::new(),
+        };
+
+        let mut session = PostgresSession::connect(&info)
+            .await
+            .expect("PostgreSQL connect");
+        let payload = session
+            .execute(&format!("SELECT note FROM {table}"))
+            .await
+            .expect("the REST-written table must be visible here");
+
+        assert_eq!(
+            payload.rows.len(),
+            1,
+            "expected the single row written over REST"
+        );
+        assert_eq!(
+            payload.rows[0].get("NOTE"),
+            Some(&serde_json::json!("written over REST")),
+            "the value must survive the trip between protocols unchanged"
+        );
+
+        run(format!("DROP TABLE IF EXISTS {table}")).await;
     }
 }

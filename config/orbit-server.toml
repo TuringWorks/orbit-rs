@@ -333,7 +333,8 @@ idle_timeout_secs = 300
 max_lifetime_secs = 3600
 health_check_interval_secs = 60
 load_balancing_strategy = "RoundRobin"
-tier = "Standard"
+# Pool tier: "Client", "Application", or "Database" (see PoolTier).
+tier = "Application"
 enable_dynamic_sizing = true
 target_utilization = 0.75
 
