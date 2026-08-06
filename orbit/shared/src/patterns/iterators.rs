@@ -3,7 +3,6 @@
 //! Demonstrates implementing custom iterators, iterator adaptors, and
 //! advanced iteration patterns in Rust.
 
-use crate::error::{OrbitError, OrbitResult};
 use std::collections::VecDeque;
 
 // ===== Window Iterator =====
@@ -39,14 +38,19 @@ impl<'a, T> Iterator for WindowIterator<'a, T> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.data.len().saturating_sub(self.position + self.window_size - 1);
+        let remaining = self
+            .data
+            .len()
+            .saturating_sub(self.position + self.window_size - 1);
         (remaining, Some(remaining))
     }
 }
 
 impl<'a, T> ExactSizeIterator for WindowIterator<'a, T> {
     fn len(&self) -> usize {
-        self.data.len().saturating_sub(self.position + self.window_size - 1)
+        self.data
+            .len()
+            .saturating_sub(self.position + self.window_size - 1)
     }
 }
 
@@ -95,7 +99,7 @@ impl<'a, T> Iterator for ChunkIterator<'a, T> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = (self.data.len() - self.position + self.chunk_size - 1) / self.chunk_size;
+        let remaining = (self.data.len() - self.position).div_ceil(self.chunk_size);
         (remaining, Some(remaining))
     }
 }
@@ -476,7 +480,7 @@ mod tests {
 
     #[test]
     fn test_window_iterator() {
-        let data = vec![1, 2, 3, 4, 5];
+        let data = [1, 2, 3, 4, 5];
         let windows: Vec<_> = data.windows_iter(3).collect();
 
         assert_eq!(windows.len(), 3);

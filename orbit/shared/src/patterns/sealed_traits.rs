@@ -4,8 +4,6 @@
 //! while still allowing the trait to be publicly used. This gives library authors
 //! control over which types can implement a trait.
 
-use crate::error::{OrbitError, OrbitResult};
-
 // ===== Basic Sealed Trait Pattern =====
 
 mod private {
@@ -403,10 +401,7 @@ pub fn get_protocol_info<P: ProtocolVersion>(protocol: &P) -> String {
 }
 
 /// Select storage backend based on requirements
-pub fn select_backend(
-    needs_transactions: bool,
-    max_key_size: usize,
-) -> Box<dyn StorageBackend> {
+pub fn select_backend(needs_transactions: bool, max_key_size: usize) -> Box<dyn StorageBackend> {
     if max_key_size > 8 * 1024 * 1024 {
         Box::new(RedisBackend)
     } else if needs_transactions {

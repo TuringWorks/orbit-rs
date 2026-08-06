@@ -60,7 +60,9 @@ impl DatabaseConnection<Configured> {
     /// Attempt to connect (transitions to Connected state)
     pub fn connect(mut self) -> OrbitResult<DatabaseConnection<Connected>> {
         if self.connection_string.is_empty() {
-            return Err(OrbitError::configuration("Connection string cannot be empty"));
+            return Err(OrbitError::configuration(
+                "Connection string cannot be empty",
+            ));
         }
 
         // Simulate connection
@@ -82,9 +84,10 @@ impl DatabaseConnection<Configured> {
 impl DatabaseConnection<Connected> {
     /// Execute a query (only available in Connected state)
     pub fn execute(&self, query: &str) -> OrbitResult<String> {
-        let handle = self.handle.as_ref().ok_or_else(|| {
-            OrbitError::internal("Connection handle not available")
-        })?;
+        let handle = self
+            .handle
+            .as_ref()
+            .ok_or_else(|| OrbitError::internal("Connection handle not available"))?;
 
         Ok(format!("Executed '{}' on {}", query, handle))
     }
@@ -132,6 +135,12 @@ pub struct ConfigBuilder<S: BuilderState> {
     username: Option<String>,
     password: Option<String>,
     _state: PhantomData<S>,
+}
+
+impl Default for ConfigBuilder<Incomplete> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ConfigBuilder<Incomplete> {

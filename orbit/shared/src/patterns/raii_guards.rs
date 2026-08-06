@@ -5,7 +5,7 @@
 use crate::error::{OrbitError, OrbitResult};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{RwLock, RwLockWriteGuard};
 use tracing::{debug, warn};
 
 /// Metric guard that automatically records operation duration on drop
@@ -229,10 +229,17 @@ impl<'a, T> TimedLockGuard<'a, T> {
         let guard = tokio::time::timeout(timeout, lock.write())
             .await
             .map_err(|_| {
-                OrbitError::timeout(format!("Failed to acquire lock '{}' within {:?}", lock_name, timeout))
+                OrbitError::timeout(format!(
+                    "Failed to acquire lock '{}' within {:?}",
+                    lock_name, timeout
+                ))
             })?;
 
-        debug!(lock = lock_name, timeout_ms = timeout.as_millis(), "Lock acquired");
+        debug!(
+            lock = lock_name,
+            timeout_ms = timeout.as_millis(),
+            "Lock acquired"
+        );
 
         Ok(Self {
             guard: Some(guard),
@@ -278,7 +285,11 @@ impl<T> Drop for TimedLockGuard<'_, T> {
                 "Lock held for significant portion of timeout"
             );
         }
-        debug!(lock = self.lock_name, held_ms = held.as_millis(), "Lock released");
+        debug!(
+            lock = self.lock_name,
+            held_ms = held.as_millis(),
+            "Lock released"
+        );
     }
 }
 
@@ -331,6 +342,7 @@ impl<T> Drop for PooledResource<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     #[tokio::test]
     async fn test_metrics_guard_success() {
@@ -360,34 +372,34 @@ mod tests {
 
     #[test]
     fn test_transaction_guard_commit() {
-        let mut rolled_back = false;
+        // The rollback hook must live as long as the guard, so the flag is shared
+        // rather than borrowed from the stack frame.
+        let rolled_back = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&rolled_back);
 
         {
-            let guard = TransactionGuard::new(
-                "tx-123".to_string(),
-                42,
-                |_| rolled_back = true,
-            );
+            let guard = TransactionGuard::new("tx-123".to_string(), 42, move |_| {
+                flag.store(true, Ordering::SeqCst);
+            });
             let _value = guard.commit();
         }
 
-        assert!(!rolled_back);
+        assert!(!rolled_back.load(Ordering::SeqCst));
     }
 
     #[test]
     fn test_transaction_guard_rollback() {
-        let mut rolled_back = false;
+        let rolled_back = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&rolled_back);
 
         {
-            let _guard = TransactionGuard::new(
-                "tx-123".to_string(),
-                42,
-                |_| rolled_back = true,
-            );
+            let _guard = TransactionGuard::new("tx-123".to_string(), 42, move |_| {
+                flag.store(true, Ordering::SeqCst);
+            });
             // Dropped without commit
         }
 
-        assert!(rolled_back);
+        assert!(rolled_back.load(Ordering::SeqCst));
     }
 
     #[test]
@@ -422,8 +434,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(**guard, 42);
-        **guard = 100;
+        assert_eq!(*guard, 42);
+        *guard = 100;
         assert!(!guard.is_approaching_timeout());
     }
 }

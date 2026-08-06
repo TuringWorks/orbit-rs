@@ -3,10 +3,8 @@
 //! Demonstrates Cell, RefCell, and other interior mutability patterns for
 //! scenarios where mutation is needed through shared references.
 
-use crate::error::{OrbitError, OrbitResult};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -61,6 +59,16 @@ pub struct Cache<K, V> {
     data: RefCell<HashMap<K, V>>,
     hits: Cell<usize>,
     misses: Cell<usize>,
+}
+
+impl<K, V> Default for Cache<K, V>
+where
+    K: std::hash::Hash + Eq + Clone,
+    V: Clone,
+ {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<K, V> Cache<K, V>
@@ -250,6 +258,12 @@ struct ConfigData {
     enabled_features: Vec<String>,
 }
 
+impl Default for SharedConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SharedConfig {
     pub fn new() -> Self {
         Self {
@@ -329,6 +343,12 @@ pub struct Observable {
     observers: RwLock<Vec<Arc<dyn Observer>>>,
 }
 
+impl Default for Observable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Observable {
     pub fn new() -> Self {
         Self {
@@ -355,6 +375,12 @@ impl Observable {
 // Simple observer implementation for testing
 pub struct EventLogger {
     events: Mutex<Vec<String>>,
+}
+
+impl Default for EventLogger {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EventLogger {
