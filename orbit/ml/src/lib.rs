@@ -9,7 +9,9 @@
 //! - **Transformers**: BERT, GPT, Vision Transformers with attention mechanisms
 //! - **Graph Neural Networks**: GCN, GraphSAGE, GAT for graph-based learning
 //! - **Multi-Language Support**: Python, JavaScript, Lua integration
-//! - **Industry Models**: Specialized models for healthcare, fintech, defense, etc.
+//! - **Industry Models**: *Experimental scaffolding, off by default.* The healthcare, fintech,
+//!   defense, logistics, banking, and insurance subtrees are method signatures with unimplemented
+//!   bodies. Build with `--features experimental-industry-models` to compile them.
 //! - **SQL Integration**: Native SQL syntax for all ML operations
 //! - **GPU Acceleration**: CUDA support for training and inference
 //! - **Distributed Training**: Multi-node, multi-GPU capabilities
@@ -70,7 +72,14 @@ pub mod transformers;
 pub mod multi_language;
 
 // Industry-specific models
-/// Pre-built models for various industry verticals
+//
+// EXPERIMENTAL AND OFF BY DEFAULT. This subtree is scaffolding: roughly 470 `// TODO: Implement`
+// method bodies across seven verticals, with no training, no inference, and no tests behind them.
+// Shipping it in a default-on crate advertises capability that does not exist, so it is gated until
+// a vertical is real. Enable with `--features experimental-industry-models` if you are working on
+// it. See `specifications/COMPETITIVE_ANALYSIS.md` §2.5 and `AI_LLM_ROADMAP.md` decision D7.
+/// Pre-built models for various industry verticals (experimental scaffolding).
+#[cfg(feature = "experimental-industry-models")]
 pub mod industry_models;
 
 // SQL extensions
@@ -117,25 +126,34 @@ pub use multi_language::javascript::JavaScriptMLEngine;
 #[cfg(feature = "lua")]
 pub use multi_language::lua::LuaMLEngine;
 
-#[cfg(feature = "industry-healthcare")]
+#[cfg(all(
+    feature = "experimental-industry-models",
+    feature = "industry-healthcare"
+))]
 pub use industry_models::healthcare_pharma_lifesciences as healthcare;
 
-#[cfg(feature = "industry-fintech")]
+#[cfg(all(feature = "experimental-industry-models", feature = "industry-fintech"))]
 pub use industry_models::finance_banking_insurance as fintech;
 
-#[cfg(feature = "industry-adtech")]
+#[cfg(all(feature = "experimental-industry-models", feature = "industry-adtech"))]
 pub use industry_models::arts_design_creative as adtech;
 
-#[cfg(feature = "industry-defense")]
+#[cfg(all(feature = "experimental-industry-models", feature = "industry-defense"))]
 pub use industry_models::government_defense_publicsector as defense;
 
-#[cfg(feature = "industry-logistics")]
+#[cfg(all(
+    feature = "experimental-industry-models",
+    feature = "industry-logistics"
+))]
 pub use industry_models::transportation_logistics_travel as logistics;
 
-#[cfg(feature = "industry-banking")]
+#[cfg(all(feature = "experimental-industry-models", feature = "industry-banking"))]
 pub use industry_models::finance_banking_insurance as banking;
 
-#[cfg(feature = "industry-insurance")]
+#[cfg(all(
+    feature = "experimental-industry-models",
+    feature = "industry-insurance"
+))]
 pub use industry_models::finance_banking_insurance as insurance;
 
 /// Version information
@@ -158,6 +176,7 @@ pub fn has_feature(feature: &str) -> bool {
         "lua" => cfg!(feature = "lua"),
         "gpu" => cfg!(feature = "gpu"),
         "distributed" => cfg!(feature = "distributed"),
+        "experimental-industry-models" => cfg!(feature = "experimental-industry-models"),
         "industry-healthcare" => cfg!(feature = "industry-healthcare"),
         "industry-fintech" => cfg!(feature = "industry-fintech"),
         "industry-adtech" => cfg!(feature = "industry-adtech"),
@@ -184,6 +203,16 @@ mod tests {
         assert!(has_feature("neural-networks"));
         assert!(has_feature("transformers"));
         assert!(has_feature("graph-neural-networks"));
+    }
+
+    #[test]
+    fn industry_scaffolding_is_off_by_default() {
+        // The `industry_models` subtree is unimplemented stubs; a default build must not advertise
+        // it. See specifications/COMPETITIVE_ANALYSIS.md §2.5.
+        #[cfg(not(feature = "experimental-industry-models"))]
+        assert!(!has_feature("experimental-industry-models"));
+        #[cfg(not(feature = "industry-healthcare"))]
+        assert!(!has_feature("industry-healthcare"));
     }
 
     #[tokio::test]
