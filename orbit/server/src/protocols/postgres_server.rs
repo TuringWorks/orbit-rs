@@ -9,6 +9,7 @@ use crate::protocols::postgres_wire::{protocol::PostgresWireProtocol, query_engi
 use crate::protocols::ProtocolError;
 
 use crate::config::TlsConfig;
+use crate::protocols::postgres_wire::notifications::NotificationHub;
 use crate::protocols::tls::OrbitTlsAcceptor;
 
 /// PostgreSQL wire protocol server
@@ -47,6 +48,9 @@ impl PostgresServer {
     /// Start the server
     pub async fn run(&self) -> ProtocolResult<()> {
         let listener = TcpListener::bind(&self.bind_addr).await?;
+        // One registry for the whole server: a NOTIFY on one connection has to
+        // reach a LISTEN on another.
+        let notifications = NotificationHub::new();
         let tls_acceptor = OrbitTlsAcceptor::new(&self.tls_config)
             .map_err(|e| ProtocolError::IoError(e.to_string()))?;
 
@@ -61,13 +65,15 @@ impl PostgresServer {
                     info!("New connection from {}", addr);
                     let query_engine = self.query_engine.clone();
                     let tls_acceptor = tls_acceptor.clone();
+                    let notifications = Arc::clone(&notifications);
 
                     tokio::spawn(async move {
                         let mut protocol = if let Some(engine) = query_engine {
                             PostgresWireProtocol::new_with_query_engine(engine)
                         } else {
                             PostgresWireProtocol::new()
-                        };
+                        }
+                        .with_notification_hub(notifications);
 
                         // PostgreSQL negotiates TLS explicitly: the client sends
                         // an SSLRequest in the clear and the server answers

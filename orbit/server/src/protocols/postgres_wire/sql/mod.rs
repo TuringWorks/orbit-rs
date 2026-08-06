@@ -60,6 +60,7 @@ pub mod plan_cache;
 pub mod query_cache;
 pub mod query_engine;
 pub mod statistics;
+pub mod select_pipeline;
 pub mod types;
 
 #[cfg(feature = "lua-mlua")]

@@ -370,6 +370,14 @@ pub enum AggregateState {
 pub struct ExpressionEvaluator {
     #[allow(dead_code)]
     aggregates: HashMap<String, AggregateState>,
+    /// Session identity reported by `current_database()`, `current_schema()`
+    /// and `current_user`.
+    ///
+    /// Defaults describe a session that has not been told otherwise, rather
+    /// than inventing a name the client never supplied.
+    current_database: String,
+    current_schema: String,
+    current_user: String,
     /// Optional sequence accessor for nextval/currval/setval/lastval functions
     sequence_accessor: Option<Arc<dyn SequenceAccessor>>,
     /// Optional UDF registry for user-defined functions (Lua/JS)
@@ -378,9 +386,40 @@ pub struct ExpressionEvaluator {
 }
 
 impl ExpressionEvaluator {
+    /// The string `version()` returns.
+    ///
+    /// Names this server honestly while declaring the PostgreSQL protocol
+    /// version it speaks, because clients parse the leading `PostgreSQL <n>`
+    /// to decide which features to use. Claiming to be stock PostgreSQL would
+    /// make them enable things this engine does not implement.
+    pub fn server_version_string() -> String {
+        format!(
+            "PostgreSQL 16.0 (Orbit-RS {}) on {}, compiled by rustc",
+            env!("CARGO_PKG_VERSION"),
+            std::env::consts::ARCH
+        )
+    }
+
+    /// Set the session identity these functions report.
+    #[must_use]
+    pub fn with_session(
+        mut self,
+        database: impl Into<String>,
+        schema: impl Into<String>,
+        user: impl Into<String>,
+    ) -> Self {
+        self.current_database = database.into();
+        self.current_schema = schema.into();
+        self.current_user = user.into();
+        self
+    }
+
     pub fn new() -> Self {
         Self {
             aggregates: HashMap::new(),
+            current_database: "orbit".to_string(),
+            current_schema: "public".to_string(),
+            current_user: "orbit".to_string(),
             #[cfg(feature = "lua-mlua")]
             udf_registry: None,
             sequence_accessor: None,
@@ -390,10 +429,8 @@ impl ExpressionEvaluator {
     /// Create an expression evaluator with a sequence accessor
     pub fn with_sequence_accessor(sequence_accessor: Arc<dyn SequenceAccessor>) -> Self {
         Self {
-            aggregates: HashMap::new(),
             sequence_accessor: Some(sequence_accessor),
-            #[cfg(feature = "lua-mlua")]
-            udf_registry: None,
+            ..Self::new()
         }
     }
 
@@ -401,9 +438,8 @@ impl ExpressionEvaluator {
     #[cfg(feature = "lua-mlua")]
     pub fn with_udf_registry(udf_registry: Arc<UdfRegistry>) -> Self {
         Self {
-            aggregates: HashMap::new(),
-            sequence_accessor: None,
             udf_registry: Some(udf_registry),
+            ..Self::new()
         }
     }
 
@@ -699,6 +735,14 @@ impl ExpressionEvaluator {
                 self.text_search_followed_by(&left_val, &right_val)
             }
 
+            // `x IS y` / `x IS NOT y`. PostgreSQL uses these for NULL and
+            // boolean tests, where they differ from `=` by treating NULL as a
+            // value rather than propagating it.
+            BinaryOperator::Is => Ok(SqlValue::Boolean(Self::is_identical(&left_val, &right_val))),
+            BinaryOperator::IsNot => {
+                Ok(SqlValue::Boolean(!Self::is_identical(&left_val, &right_val)))
+            }
+
             // Comparison operators
             BinaryOperator::IsDistinctFrom => self.is_distinct_from(&left_val, &right_val),
             BinaryOperator::IsNotDistinctFrom => self.is_not_distinct_from(&left_val, &right_val),
@@ -897,6 +941,26 @@ impl ExpressionEvaluator {
             "TRUNC" | "TRUNCATE" => self.evaluate_trunc(&args),
 
             // Date functions
+            // Session information functions.
+            //
+            // Drivers and ORMs call these during connection setup — psql runs
+            // `version()` before its first prompt — so a missing one is not a
+            // cosmetic gap: it stops the client before any query is possible.
+            "VERSION" => Ok(SqlValue::Text(Self::server_version_string())),
+            "CURRENT_DATABASE" | "CURRENT_CATALOG" => {
+                Ok(SqlValue::Text(self.current_database.clone()))
+            }
+            "CURRENT_SCHEMA" => Ok(SqlValue::Text(self.current_schema.clone())),
+            "CURRENT_USER" | "SESSION_USER" | "USER" => {
+                Ok(SqlValue::Text(self.current_user.clone()))
+            }
+            "PG_BACKEND_PID" => Ok(SqlValue::Integer(std::process::id() as i32)),
+            // Reported as unknown rather than fabricated: this engine does not
+            // track per-relation on-disk size.
+            "PG_ENCODING_TO_CHAR" => Ok(SqlValue::Text("UTF8".to_string())),
+            "PG_GET_EXPR" | "PG_GET_CONSTRAINTDEF" | "PG_GET_INDEXDEF" => {
+                Ok(SqlValue::Null)
+            }
             "NOW" => self.evaluate_now(&args),
             "CURRENT_DATE" | "CURDATE" => self.evaluate_current_date(&args),
             "CURRENT_TIME" => self.evaluate_current_time(&args),
@@ -1558,9 +1622,60 @@ impl ExpressionEvaluator {
                 .partial_cmp(&(*b as f64))
                 .ok_or_else(|| ProtocolError::PostgresError("Cannot compare values".to_string())),
 
-            _ => Err(ProtocolError::PostgresError(format!(
-                "Cannot compare {left:?} and {right:?}"
-            ))),
+            // Generic coercion. PostgreSQL compares across the numeric types
+            // and across the character types; enumerating pairs missed most
+            // combinations, so `COUNT(*) > 1` failed because count() returns
+            // bigint while the literal parsed as integer.
+            _ => {
+                if let (Some(a), Some(b)) = (Self::as_integer(left), Self::as_integer(right)) {
+                    // Compared as integers so large values keep full precision.
+                    return Ok(a.cmp(&b));
+                }
+                if let (Some(a), Some(b)) = (Self::as_number(left), Self::as_number(right)) {
+                    return a.partial_cmp(&b).ok_or_else(|| {
+                        ProtocolError::PostgresError("Cannot compare NaN".to_string())
+                    });
+                }
+                if let (Some(a), Some(b)) = (Self::as_string(left), Self::as_string(right)) {
+                    return Ok(a.cmp(&b));
+                }
+                Err(ProtocolError::PostgresError(format!(
+                    "Cannot compare {left:?} and {right:?}"
+                )))
+            }
+        }
+    }
+
+    /// Exact integer value, for the integral types only.
+    fn as_integer(value: &SqlValue) -> Option<i128> {
+        match value {
+            SqlValue::SmallInt(n) => Some(i128::from(*n)),
+            SqlValue::Integer(n) => Some(i128::from(*n)),
+            SqlValue::BigInt(n) => Some(i128::from(*n)),
+            _ => None,
+        }
+    }
+
+    /// Numeric value of any number-like type.
+    fn as_number(value: &SqlValue) -> Option<f64> {
+        use rust_decimal::prelude::ToPrimitive;
+
+        match value {
+            SqlValue::Real(n) => Some(f64::from(*n)),
+            SqlValue::DoublePrecision(n) => Some(*n),
+            SqlValue::Decimal(d) => d.to_f64(),
+            other => Self::as_integer(other).map(|n| n as f64),
+        }
+    }
+
+    /// String value of any character-like type.
+    fn as_string(value: &SqlValue) -> Option<String> {
+        match value {
+            SqlValue::Text(s)
+            | SqlValue::Varchar(s)
+            | SqlValue::Char(s)
+            | SqlValue::Name(s) => Some(s.clone()),
+            _ => None,
         }
     }
 
@@ -1589,6 +1704,16 @@ impl ExpressionEvaluator {
             _ => Err(ProtocolError::PostgresError(
                 "OR operator requires boolean operands".to_string(),
             )),
+        }
+    }
+
+    /// Whether two values are the same under `IS`, where NULL equals NULL.
+    fn is_identical(left: &SqlValue, right: &SqlValue) -> bool {
+        match (left, right) {
+            (SqlValue::Null, SqlValue::Null) => true,
+            (SqlValue::Null, _) | (_, SqlValue::Null) => false,
+            (SqlValue::Boolean(a), SqlValue::Boolean(b)) => a == b,
+            _ => left == right,
         }
     }
 
@@ -6574,9 +6699,51 @@ impl ExpressionEvaluator {
 
                 Ok(SqlValue::Real(distance))
             }
-            _ => Err(ProtocolError::PostgresError(
-                "Vector operations require vector operands".to_string(),
-            )),
+            // pgvector spells a vector literal as a string — `'[1,2,3]'` — and
+            // a stored vector may come back as text too, so an operand that
+            // parses as one is accepted rather than rejected.
+            _ => match (Self::coerce_to_vector(left), Self::coerce_to_vector(right)) {
+                (Some(a), Some(b)) => {
+                    self.vector_distance(&SqlValue::Vector(a), &SqlValue::Vector(b), operator)
+                }
+                _ => Err(ProtocolError::PostgresError(
+                    "Vector operations require vector operands".to_string(),
+                )),
+            },
+        }
+    }
+
+    /// Read a vector from a value that already is one, or from its text form.
+    ///
+    /// Returns `None` when the value is not a vector in any spelling, so the
+    /// caller still reports a type error rather than treating nonsense as an
+    /// empty vector.
+    fn coerce_to_vector(value: &SqlValue) -> Option<Vec<f32>> {
+        match value {
+            SqlValue::Vector(v) => Some(v.clone()),
+            SqlValue::Text(text) | SqlValue::Varchar(text) | SqlValue::Char(text) => {
+                let trimmed = text.trim();
+                let inner = trimmed.strip_prefix('[')?.strip_suffix(']')?;
+                if inner.trim().is_empty() {
+                    return Some(Vec::new());
+                }
+                inner
+                    .split(',')
+                    .map(|part| part.trim().parse::<f32>().ok())
+                    .collect()
+            }
+            SqlValue::Array(items) => items
+                .iter()
+                .map(|item| match item {
+                    SqlValue::Real(n) => Some(*n),
+                    SqlValue::DoublePrecision(n) => Some(*n as f32),
+                    SqlValue::Integer(n) => Some(*n as f32),
+                    SqlValue::BigInt(n) => Some(*n as f32),
+                    SqlValue::SmallInt(n) => Some(f32::from(*n)),
+                    _ => None,
+                })
+                .collect(),
+            _ => None,
         }
     }
 

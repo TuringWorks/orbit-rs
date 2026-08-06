@@ -32,6 +32,15 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         Token::Uuid => Some("uuid".to_string()),
         Token::Bytea => Some("bytea".to_string()),
         Token::Vector => Some("vector".to_string()),
+        // Non-reserved keywords that double as function names.
+        //
+        // PostgreSQL classifies these as unreserved, so `SELECT version()` is
+        // legal even though VERSION is also a keyword in the time-travel
+        // syntax. Every driver calls at least one of these while connecting —
+        // psql runs `version()` before its first prompt — so treating them as
+        // reserved stops clients before they can issue a query.
+        Token::Version => Some("version".to_string()),
+        Token::Snapshot => Some("snapshot".to_string()),
         // Other keywords that can be used as identifiers
         Token::Sequence => Some("sequence".to_string()),
         Token::Key => Some("key".to_string()),

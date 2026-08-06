@@ -819,6 +819,65 @@ zero is the truth, or reported as unavailable. A number in a response is a
 measurement.
 
 
+### PostgreSQL Protocol Conformance
+
+Measured, not asserted. `tests/integration/pg_conformance.rs` drives the server
+with `tokio-postgres` — a conforming client — and prints a pass/fail matrix:
+
+```bash
+./target/debug/orbit-server --dev-mode --data-dir /tmp/pgconf --config config/orbit-server.toml &
+cargo test -p orbit-integration-tests --test pg_conformance -- --ignored --nocapture
+```
+
+Current score: **45/48**. By area:
+
+| Area | Score | Notes |
+|------|-------|-------|
+| Connection (SCRAM) | 1/1 | |
+| Simple query | 7/7 | |
+| Extended query | 4/4 | Parse/Bind/Describe/Execute, typed and bound parameters |
+| Portals / cursors | 1/1 | `Execute` row limits, `PortalSuspended` |
+| Data types | 4/4 | Text and binary result formats; NULL distinct from `'NULL'` |
+| Transactions | 2/3 | Status reporting is real; **rollback does not undo writes** |
+| Catalog | 5/5 | `version()`, `current_database()`, `pg_class`, `pg_type`, `information_schema` |
+| COPY | 2/2 | `TO STDOUT` and `FROM STDIN`, text format |
+| LISTEN / NOTIFY | 1/1 | Cross-session, delivered while idle |
+| Error reporting | 3/3 | SQLSTATE present, session survives errors |
+| SQL surface | 15/17 | `WHERE`, `ORDER BY`, `LIMIT`/`OFFSET`, `GROUP BY`, `HAVING`, `DISTINCT`, aggregates, `EXPLAIN` |
+
+#### One source of truth for SELECT
+
+`sql/select_pipeline.rs` applies a statement's clauses — `WHERE` →
+`GROUP BY`/aggregates → `HAVING` → `DISTINCT` → `ORDER BY` → `OFFSET`/`LIMIT` →
+projection — to rows read from **persistent storage**, the same rows a plain
+`SELECT` reads.
+
+Two earlier arrangements were wrong and are worth recording:
+
+1. The executor read every row and projected by column name, dropping those
+   clauses silently. `SELECT ... LIMIT 2` returned the whole table, `ORDER BY`
+   returned rows unordered, `COUNT(*)` returned one empty column per row.
+2. Routing clause-bearing statements to the in-memory engine instead made them
+   read a *different copy* of the table, so `SELECT id FROM t` and
+   `SELECT id FROM t ORDER BY id` disagreed about how many rows existed.
+
+#### Not yet implemented
+
+- **Transaction atomicity.** `BEGIN`/`COMMIT`/`ROLLBACK` parse and the
+  protocol-level status is reported correctly, but storage applies writes
+  immediately and keeps no undo log, so a rollback reverts nothing. Rather than
+  report success for an undo that did not happen, `ROLLBACK` now emits a
+  `NoticeResponse` naming how many writes it could not take back.
+- **`JOIN` and subqueries**, reported as explicit errors.
+- **Binary `COPY`** and **GSSAPI encryption**, both refused explicitly.
+- Protocol 3.2 negotiation, replication, and `FunctionCall`.
+
+Note on scope: 45/48 is 45 of *these 48 checks*. PostgreSQL's real surface —
+the full type system, arrays, `NUMERIC`, domains, triggers, views, window
+functions, `RETURNING`, replication — is far larger. Treat this as a floor that
+moves measurably, not a compatibility claim.
+
+
 ## Storage Architecture
 
 ### Persistence Backends

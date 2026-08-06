@@ -1205,6 +1205,11 @@ mod persistent_storage_impl {
         }
 
         async fn drop_table(&self, table_name: &str) -> ProtocolResult<()> {
+            // The rows have to go before the schema. Removing only the schema
+            // leaves every row in the adapter, so the next `CREATE TABLE` with
+            // the same name resurrects data the client believes it deleted —
+            // a silent wrong answer rather than an error.
+            TableStorage::delete_rows(self, table_name, None, None).await?;
             self.remove_table_schema(table_name, None).await?;
             Ok(())
         }

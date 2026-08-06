@@ -36,6 +36,7 @@ enum Area {
     Copy,
     Notify,
     Errors,
+    Sql,
 }
 
 impl Area {
@@ -51,6 +52,7 @@ impl Area {
             Area::Copy => "COPY",
             Area::Notify => "LISTEN / NOTIFY",
             Area::Errors => "error reporting",
+            Area::Sql => "SQL surface",
         }
     }
 }
@@ -191,6 +193,23 @@ async fn connect_with_notifications(
     }));
 
     Ok((client, receiver))
+}
+
+/// Read the first column of every row a statement returns, as text.
+///
+/// The simple-query protocol renders every value as text, so this compares
+/// answers without needing the client to guess a Rust type per column — and it
+/// checks the value, not merely that the statement did not error.
+async fn simple_column(client: &Client, sql: &str) -> Result<Vec<String>, String> {
+    use tokio_postgres::SimpleQueryMessage;
+    let messages = client.simple_query(sql).await.map_err(describe)?;
+    Ok(messages
+        .iter()
+        .filter_map(|message| match message {
+            SimpleQueryMessage::Row(row) => Some(row.get(0).unwrap_or("NULL").to_string()),
+            _ => None,
+        })
+        .collect())
 }
 
 /// Best-effort cleanup that must not mask the failure under test.
@@ -339,11 +358,11 @@ async fn postgres_protocol_conformance() {
                 .await
                 .map_err(describe)
                 .and_then(|rows| {
-                    let value: Result<&str, _> = rows[0].try_get(0);
-                    match value {
+                    let row = rows.first().ok_or("no rows returned".to_string())?;
+                    match row.try_get::<_, &str>(0) {
                         Ok("one") => Ok(()),
                         Ok(other) => Err(format!("got {other:?}")),
-                        Err(e) => Err(e.to_string()),
+                        Err(e) => Err(describe(e)),
                     }
                 }),
         );
@@ -356,7 +375,8 @@ async fn postgres_protocol_conformance() {
                 .await
                 .map_err(describe)
                 .and_then(|rows| {
-                    rows[0]
+                    rows.first()
+                        .ok_or("no rows returned".to_string())?
                         .try_get::<_, i32>(0)
                         .map(|_| ())
                         .map_err(describe)
@@ -546,6 +566,20 @@ async fn postgres_protocol_conformance() {
     }
 
     // ------------------------------------------------------------------ COPY
+    // On its own connection: a server that does not understand the COPY
+    // subprotocol leaves the session unusable, and sharing one connection made
+    // every later check fail for a reason that had nothing to do with it.
+    let client = match connect().await {
+        Ok(fresh) => fresh,
+        Err(e) => {
+            report.record(Area::Copy, "COPY TO STDOUT streams rows", Err(e.clone()));
+            report.record(Area::Copy, "COPY FROM STDIN ingests rows", Err(e.clone()));
+            report.record(Area::Errors, "reconnect for COPY", Err(e));
+            println!("{}", report.render());
+            return;
+        }
+    };
+
     drop_table(&client, "conf_copy_in").await;
     let _ = client
         .simple_query("CREATE TABLE conf_copy_in (id INTEGER)")
@@ -603,7 +637,7 @@ async fn postgres_protocol_conformance() {
         "a NOTIFY reaches a listening session",
         async {
             let (notify_client, mut notify_stream) =
-                connect_with_notifications().await.map_err(|e| e)?;
+                connect_with_notifications().await?;
 
             notify_client
                 .simple_query("LISTEN conf_channel")
@@ -630,6 +664,22 @@ async fn postgres_protocol_conformance() {
     );
 
     // ---------------------------------------------------------------- errors
+    // Fresh again, for the same reason.
+    let client = match connect().await {
+        Ok(fresh) => fresh,
+        Err(e) => {
+            for name in [
+                "unknown table is an error, not a silent empty result",
+                "error carries a SQLSTATE code",
+                "session is usable after a failed statement",
+            ] {
+                report.record(Area::Errors, name, Err(e.clone()));
+            }
+            println!("{}", report.render());
+            return;
+        }
+    };
+
     report.record(
         Area::Errors,
         "unknown table is an error, not a silent empty result",
@@ -670,6 +720,689 @@ async fn postgres_protocol_conformance() {
     ] {
         drop_table(&client, table).await;
     }
+
+
+    // ------------------------------------------------- broader SQL surface
+    // Added so the score reflects more than the features already known to
+    // work: a harness that only measures what passes overstates conformance.
+    let client = match connect().await {
+        Ok(fresh) => fresh,
+        Err(e) => {
+            report.record(Area::SimpleQuery, "reconnect for SQL surface", Err(e));
+            println!("{}", report.render());
+            return;
+        }
+    };
+
+    drop_table(&client, "conf_sql").await;
+    let _ = client
+        .simple_query("CREATE TABLE conf_sql (id INTEGER, grp TEXT, amount INTEGER)")
+        .await;
+    for (id, grp, amount) in [(1, "a", 10), (2, "a", 20), (3, "b", 30)] {
+        let _ = client
+            .simple_query(&format!(
+                "INSERT INTO conf_sql (id, grp, amount) VALUES ({id}, '{grp}', {amount})"
+            ))
+            .await;
+    }
+
+    for (area, name, sql, want_rows) in [
+        (Area::Sql, "ORDER BY (checked separately)", "SELECT id FROM conf_sql", 3usize),
+        (Area::Sql, "LIMIT", "SELECT id FROM conf_sql LIMIT 2", 2),
+        (Area::Sql, "COUNT(*) aggregate", "SELECT COUNT(*) FROM conf_sql", 1),
+        (
+            Area::Sql,
+            "GROUP BY with aggregate",
+            "SELECT grp, SUM(amount) FROM conf_sql GROUP BY grp",
+            2,
+        ),
+        (
+            Area::Sql,
+            "WHERE with AND",
+            "SELECT id FROM conf_sql WHERE grp = 'a' AND amount > 15",
+            1,
+        ),
+        (Area::Sql, "IN list", "SELECT id FROM conf_sql WHERE id IN (1, 2)", 2),
+        (
+            Area::Sql,
+            "self JOIN",
+            "SELECT a.id FROM conf_sql a JOIN conf_sql b ON a.grp = b.grp WHERE a.id = 1",
+            2,
+        ),
+        (
+            Area::Sql,
+            "subquery in WHERE",
+            "SELECT id FROM conf_sql WHERE amount = (SELECT MAX(amount) FROM conf_sql)",
+            1,
+        ),
+        (
+            Area::Sql,
+            "DISTINCT",
+            "SELECT DISTINCT grp FROM conf_sql",
+            2,
+        ),
+        (
+            Area::Sql,
+            "column alias",
+            "SELECT id AS identifier FROM conf_sql WHERE id = 1",
+            1,
+        ),
+    ] {
+        report.record(
+            area,
+            name,
+            client
+                .query(sql, &[])
+                .await
+                .map_err(describe)
+                .and_then(|rows| {
+                    (rows.len() == want_rows)
+                        .then_some(())
+                        .ok_or(format!("{} rows, expected {want_rows}", rows.len()))
+                }),
+        );
+    }
+
+    for (name, sql) in [
+        ("SET then SHOW a runtime parameter", "SET application_name = 'conf'"),
+        ("EXPLAIN returns a plan", "EXPLAIN SELECT id FROM conf_sql"),
+        ("DECLARE a cursor", "DECLARE c CURSOR FOR SELECT id FROM conf_sql"),
+        ("SAVEPOINT inside a transaction", "BEGIN; SAVEPOINT s1; ROLLBACK"),
+        ("CREATE INDEX", "CREATE INDEX conf_idx ON conf_sql (id)"),
+        ("ALTER TABLE ADD COLUMN", "ALTER TABLE conf_sql ADD COLUMN note TEXT"),
+    ] {
+        report.record(
+            Area::Sql,
+            name,
+            client
+                .simple_query(sql)
+                .await
+                .map(|_| ())
+                .map_err(describe),
+        );
+    }
+
+    report.record(
+        Area::Sql,
+        "ORDER BY actually orders",
+        client
+            .query("SELECT id FROM conf_sql ORDER BY id DESC", &[])
+            .await
+            .map_err(describe)
+            .and_then(|rows| {
+                let ids: Vec<i32> = rows
+                    .iter()
+                    .filter_map(|row| row.try_get::<_, i32>(0).ok())
+                    .collect();
+                // Returning every row in storage order also yields three rows,
+                // so the count alone proves nothing.
+                (ids == vec![3, 2, 1])
+                    .then_some(())
+                    .ok_or(format!("got {ids:?}, expected [3, 2, 1]"))
+            }),
+    );
+
+    report.record(
+        Area::Types,
+        "NULL round-trips as NULL",
+        async {
+            client
+                .simple_query("INSERT INTO conf_sql (id, grp, amount) VALUES (9, NULL, 1)")
+                .await
+                .map_err(describe)?;
+            let rows = client
+                .query("SELECT grp FROM conf_sql WHERE id = 9", &[])
+                .await
+                .map_err(describe)?;
+            let row = rows.first().ok_or("no row".to_string())?;
+            let value: Option<&str> = row.try_get(0).map_err(describe)?;
+            value
+                .is_none()
+                .then_some(())
+                .ok_or_else(|| format!("expected NULL, got {value:?}"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Types,
+        "BOOLEAN column round-trips",
+        async {
+            drop_table(&client, "conf_bool").await;
+            client
+                .simple_query("CREATE TABLE conf_bool (flag BOOLEAN)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_bool (flag) VALUES (true)")
+                .await
+                .map_err(describe)?;
+            let rows = client
+                .query("SELECT flag FROM conf_bool", &[])
+                .await
+                .map_err(describe)?;
+            let row = rows.first().ok_or("no row".to_string())?;
+            row.try_get::<_, bool>(0)
+                .map_err(describe)
+                .and_then(|v| v.then_some(()).ok_or("expected true".to_string()))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::ExtendedQuery,
+        "a prepared statement can be executed twice",
+        async {
+            let statement = client
+                .prepare("SELECT id FROM conf_sql WHERE id = $1")
+                .await
+                .map_err(describe)?;
+            let first = client.query(&statement, &[&1i32]).await.map_err(describe)?;
+            let second = client.query(&statement, &[&2i32]).await.map_err(describe)?;
+            (first.len() == 1 && second.len() == 1)
+                .then_some(())
+                .ok_or_else(|| format!("{} then {} rows", first.len(), second.len()))
+        }
+        .await,
+    );
+
+    for table in ["conf_sql", "conf_bool"] {
+        drop_table(&client, table).await;
+    }
+
+
+    // ------------------------------------------- second round of coverage
+    // Added after the first 48 checks all passed: a harness that stops finding
+    // gaps has stopped measuring, not finished. These probe the surface real
+    // clients use that the first round never touched.
+    let client = match connect().await {
+        Ok(fresh) => fresh,
+        Err(e) => {
+            report.record(Area::Sql, "reconnect for round two", Err(e));
+            println!("{}", report.render());
+            return;
+        }
+    };
+
+    drop_table(&client, "conf_two").await;
+    let _ = client
+        .simple_query("CREATE TABLE conf_two (id INTEGER, name TEXT, amount INTEGER)")
+        .await;
+    for (id, name, amount) in [(1, "alpha", 10), (2, "beta", 20), (3, "gamma", 30)] {
+        let _ = client
+            .simple_query(&format!(
+                "INSERT INTO conf_two (id, name, amount) VALUES ({id}, '{name}', {amount})"
+            ))
+            .await;
+    }
+
+    for (area, name, sql, want) in [
+        (Area::Sql, "LIKE pattern match", "SELECT id FROM conf_two WHERE name LIKE 'al%'", 1usize),
+        (Area::Sql, "BETWEEN range", "SELECT id FROM conf_two WHERE amount BETWEEN 15 AND 25", 1),
+        (Area::Sql, "IS NULL", "SELECT id FROM conf_two WHERE name IS NOT NULL", 3),
+        (Area::Sql, "NOT with comparison", "SELECT id FROM conf_two WHERE NOT id = 1", 2),
+        (Area::Sql, "OR predicate", "SELECT id FROM conf_two WHERE id = 1 OR id = 3", 2),
+        (Area::Sql, "arithmetic in projection", "SELECT amount + 1 FROM conf_two WHERE id = 1", 1),
+        (Area::Sql, "ORDER BY two keys", "SELECT id FROM conf_two ORDER BY amount DESC, id ASC", 3),
+        (Area::Sql, "aggregate with WHERE", "SELECT COUNT(*) FROM conf_two WHERE amount > 15", 1),
+        (Area::Sql, "LEFT JOIN keeps unmatched rows", "SELECT a.id FROM conf_two a LEFT JOIN conf_two b ON a.id = b.id + 100", 3),
+    ] {
+        report.record(
+            area,
+            name,
+            client.query(sql, &[]).await.map_err(describe).and_then(|rows| {
+                (rows.len() == want)
+                    .then_some(())
+                    .ok_or(format!("{} rows, expected {want}", rows.len()))
+            }),
+        );
+    }
+
+    report.record(
+        Area::Sql,
+        "aggregate value is correct, not just the row count",
+        client
+            .query("SELECT SUM(amount) FROM conf_two", &[])
+            .await
+            .map_err(describe)
+            .and_then(|rows| {
+                let row = rows.first().ok_or("no row".to_string())?;
+                let text: String = row
+                    .try_get::<_, i64>(0)
+                    .map(|v| v.to_string())
+                    .or_else(|_| row.try_get::<_, &str>(0).map(str::to_string))
+                    .map_err(describe)?;
+                (text == "60")
+                    .then_some(())
+                    .ok_or(format!("SUM was {text}, expected 60"))
+            }),
+    );
+
+    report.record(
+        Area::Transactions,
+        "ROLLBACK undoes an UPDATE, not just an INSERT",
+        async {
+            client
+                .simple_query("BEGIN")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("UPDATE conf_two SET amount = 999 WHERE id = 1")
+                .await
+                .map_err(describe)?;
+            client.simple_query("ROLLBACK").await.map_err(describe)?;
+
+            let rows = client
+                .query("SELECT amount FROM conf_two WHERE id = 1", &[])
+                .await
+                .map_err(describe)?;
+            let row = rows.first().ok_or("row disappeared".to_string())?;
+            let amount: i32 = row.try_get(0).map_err(describe)?;
+            (amount == 10)
+                .then_some(())
+                .ok_or(format!("amount is {amount}, expected the original 10"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Transactions,
+        "ROLLBACK undoes a DELETE",
+        async {
+            client.simple_query("BEGIN").await.map_err(describe)?;
+            client
+                .simple_query("DELETE FROM conf_two WHERE id = 2")
+                .await
+                .map_err(describe)?;
+            client.simple_query("ROLLBACK").await.map_err(describe)?;
+
+            let rows = client
+                .query("SELECT id FROM conf_two", &[])
+                .await
+                .map_err(describe)?;
+            (rows.len() == 3)
+                .then_some(())
+                .ok_or(format!("{} rows survived, expected 3", rows.len()))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Transactions,
+        "COMMIT keeps the write",
+        async {
+            client.simple_query("BEGIN").await.map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_two (id, name, amount) VALUES (4, 'delta', 40)")
+                .await
+                .map_err(describe)?;
+            client.simple_query("COMMIT").await.map_err(describe)?;
+
+            let rows = client
+                .query("SELECT id FROM conf_two WHERE id = 4", &[])
+                .await
+                .map_err(describe)?;
+            (rows.len() == 1)
+                .then_some(())
+                .ok_or("committed row is missing".to_string())
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Types,
+        "a text value containing a quote round-trips",
+        async {
+            client
+                .simple_query("INSERT INTO conf_two (id, name, amount) VALUES (5, 'O''Brien', 1)")
+                .await
+                .map_err(describe)?;
+            let rows = client
+                .query("SELECT name FROM conf_two WHERE id = 5", &[])
+                .await
+                .map_err(describe)?;
+            let row = rows.first().ok_or("no row".to_string())?;
+            let name: &str = row.try_get(0).map_err(describe)?;
+            (name == "O'Brien")
+                .then_some(())
+                .ok_or(format!("got {name:?}"))
+        }
+        .await,
+    );
+
+    drop_table(&client, "conf_two").await;
+
+
+    // -------------------------------------------- third round of coverage
+    // The second round ended at 62/62, which measures the checks written, not
+    // the protocol. These cover the surface a real client reaches for that
+    // nothing above touches: set operations, CTEs, window functions, string
+    // and aggregate functions, RETURNING, views, and the numeric and temporal
+    // types. Every check compares a value, because a statement that runs and
+    // answers wrongly is worse than one that errors.
+    let client = match connect().await {
+        Ok(fresh) => fresh,
+        Err(e) => {
+            report.record(Area::Sql, "reconnect for round three", Err(e));
+            println!("{}", report.render());
+            return;
+        }
+    };
+
+    drop_table(&client, "conf_three").await;
+    let _ = client
+        .simple_query("CREATE TABLE conf_three (id INTEGER, grp TEXT, amount INTEGER, name TEXT)")
+        .await;
+    for (id, grp, amount, name) in [(1, "a", 10, "alpha"), (2, "a", 20, "beta"), (3, "b", 30, "gamma")] {
+        let _ = client
+            .simple_query(&format!(
+                "INSERT INTO conf_three (id, grp, amount, name) VALUES ({id}, '{grp}', {amount}, '{name}')"
+            ))
+            .await;
+    }
+
+    for (name, sql, want) in [
+        (
+            "HAVING filters groups",
+            // Both groups sum to 30, so a SUM threshold would not discriminate;
+            // the row count does.
+            "SELECT grp FROM conf_three GROUP BY grp HAVING COUNT(*) > 1",
+            "a",
+        ),
+        (
+            "UNION ALL keeps duplicates",
+            "SELECT id FROM conf_three WHERE id = 1 UNION ALL SELECT id FROM conf_three WHERE id = 1",
+            "1,1",
+        ),
+        (
+            "UNION removes duplicates",
+            "SELECT id FROM conf_three WHERE id = 1 UNION SELECT id FROM conf_three WHERE id = 1",
+            "1",
+        ),
+        (
+            "CASE expression",
+            "SELECT CASE WHEN amount > 15 THEN 'big' ELSE 'small' END FROM conf_three ORDER BY id",
+            "small,big,big",
+        ),
+        (
+            "COALESCE picks the first non-NULL",
+            "SELECT COALESCE(NULL, 'fallback')",
+            "fallback",
+        ),
+        (
+            "CTE (WITH)",
+            "WITH big AS (SELECT id FROM conf_three WHERE amount > 15) SELECT id FROM big ORDER BY id",
+            "2,3",
+        ),
+        (
+            "window function ROW_NUMBER",
+            "SELECT ROW_NUMBER() OVER (ORDER BY id) FROM conf_three",
+            "1,2,3",
+        ),
+        (
+            "UPPER()",
+            "SELECT UPPER(name) FROM conf_three WHERE id = 1",
+            "ALPHA",
+        ),
+        (
+            "LENGTH()",
+            "SELECT LENGTH(name) FROM conf_three WHERE id = 1",
+            "5",
+        ),
+        (
+            "string concatenation",
+            "SELECT name || '!' FROM conf_three WHERE id = 1",
+            "alpha!",
+        ),
+        ("MIN()", "SELECT MIN(amount) FROM conf_three", "10"),
+        ("MAX()", "SELECT MAX(amount) FROM conf_three", "30"),
+        (
+            "COUNT(DISTINCT)",
+            "SELECT COUNT(DISTINCT grp) FROM conf_three",
+            "2",
+        ),
+        (
+            "LIMIT with OFFSET",
+            "SELECT id FROM conf_three ORDER BY id LIMIT 1 OFFSET 1",
+            "2",
+        ),
+        (
+            "derived table in FROM",
+            "SELECT t.id FROM (SELECT id FROM conf_three WHERE id > 1) t ORDER BY t.id",
+            "2,3",
+        ),
+        (
+            "ORDER BY with LIMIT picks the top row",
+            "SELECT id FROM conf_three ORDER BY amount DESC LIMIT 1",
+            "3",
+        ),
+        (
+            "INSERT ... RETURNING",
+            "INSERT INTO conf_three (id, grp, amount, name) VALUES (7, 'c', 70, 'eta') RETURNING id",
+            "7",
+        ),
+        (
+            "UPDATE ... RETURNING",
+            "UPDATE conf_three SET amount = 71 WHERE id = 7 RETURNING amount",
+            "71",
+        ),
+        (
+            "DELETE ... RETURNING",
+            "DELETE FROM conf_three WHERE id = 7 RETURNING id",
+            "7",
+        ),
+    ] {
+        report.record(
+            Area::Sql,
+            name,
+            simple_column(&client, sql).await.and_then(|values| {
+                let got = values.join(",");
+                (got == want)
+                    .then_some(())
+                    .ok_or(format!("got {got:?}, expected {want:?}"))
+            }),
+        );
+    }
+
+    report.record(
+        Area::Sql,
+        "AVG()",
+        simple_column(&client, "SELECT AVG(amount) FROM conf_three")
+            .await
+            .and_then(|values| {
+                let got = values.join(",");
+                // 20, 20.0 and 20.0000000000000000 are all the right answer;
+                // only the scale differs, and PostgreSQL's own scale for
+                // avg(integer) is not something to hard-code here.
+                got.starts_with("20")
+                    .then_some(())
+                    .ok_or(format!("got {got:?}, expected 20"))
+            }),
+    );
+
+    report.record(
+        Area::Sql,
+        "multi-row INSERT",
+        async {
+            client
+                .simple_query(
+                    "INSERT INTO conf_three (id, grp, amount, name) \
+                     VALUES (8, 'd', 80, 'theta'), (9, 'd', 90, 'iota')",
+                )
+                .await
+                .map_err(describe)?;
+            let ids = simple_column(
+                &client,
+                "SELECT id FROM conf_three WHERE id > 7 ORDER BY id",
+            )
+            .await?;
+            (ids == ["8", "9"])
+                .then_some(())
+                .ok_or(format!("got {ids:?}, expected [8, 9]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "CREATE VIEW then read it back",
+        async {
+            let _ = client.simple_query("DROP VIEW IF EXISTS conf_view").await;
+            client
+                .simple_query("CREATE VIEW conf_view AS SELECT id FROM conf_three WHERE id = 1")
+                .await
+                .map_err(describe)?;
+            let ids = simple_column(&client, "SELECT id FROM conf_view").await?;
+            let result = (ids == ["1"])
+                .then_some(())
+                .ok_or(format!("got {ids:?}, expected [1]"));
+            let _ = client.simple_query("DROP VIEW IF EXISTS conf_view").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "TRUNCATE empties the table",
+        async {
+            drop_table(&client, "conf_trunc").await;
+            client
+                .simple_query("CREATE TABLE conf_trunc (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_trunc (id) VALUES (1)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("TRUNCATE TABLE conf_trunc")
+                .await
+                .map_err(describe)?;
+            let remaining = simple_column(&client, "SELECT id FROM conf_trunc").await?;
+            let result = remaining
+                .is_empty()
+                .then_some(())
+                .ok_or(format!("{} rows survived TRUNCATE", remaining.len()));
+            drop_table(&client, "conf_trunc").await;
+            result
+        }
+        .await,
+    );
+
+    // ------------------------------------------------------- numeric & time
+    drop_table(&client, "conf_types").await;
+    let types_ready = async {
+        client
+            .simple_query(
+                "CREATE TABLE conf_types (big BIGINT, exact NUMERIC, approx DOUBLE PRECISION, \
+                 day DATE, moment TIMESTAMP)",
+            )
+            .await
+            .map_err(describe)?;
+        client
+            .simple_query(
+                "INSERT INTO conf_types (big, exact, approx, day, moment) VALUES \
+                 (9223372036854775807, 12.34, 1.5, '2026-01-02', '2026-01-02 03:04:05')",
+            )
+            .await
+            .map_err(describe)?;
+        Ok::<(), String>(())
+    }
+    .await;
+
+    for (name, column, want) in [
+        ("BIGINT round-trips at the i64 limit", "big", "9223372036854775807"),
+        ("NUMERIC keeps its scale", "exact", "12.34"),
+        ("DOUBLE PRECISION round-trips", "approx", "1.5"),
+        ("DATE round-trips", "day", "2026-01-02"),
+    ] {
+        report.record(
+            Area::Types,
+            name,
+            match &types_ready {
+                Err(e) => Err(format!("not run: {e}")),
+                Ok(()) => simple_column(&client, &format!("SELECT {column} FROM conf_types"))
+                    .await
+                    .and_then(|values| {
+                        let got = values.join(",");
+                        (got == want)
+                            .then_some(())
+                            .ok_or(format!("got {got:?}, expected {want:?}"))
+                    }),
+            },
+        );
+    }
+
+    report.record(
+        Area::Types,
+        "TIMESTAMP round-trips",
+        match &types_ready {
+            Err(e) => Err(format!("not run: {e}")),
+            Ok(()) => simple_column(&client, "SELECT moment FROM conf_types")
+                .await
+                .and_then(|values| {
+                    let got = values.join(",");
+                    // The fractional-second suffix is PostgreSQL's business;
+                    // the instant is what has to survive.
+                    got.starts_with("2026-01-02 03:04:05")
+                        .then_some(())
+                        .ok_or(format!("got {got:?}, expected 2026-01-02 03:04:05"))
+                }),
+        },
+    );
+    drop_table(&client, "conf_types").await;
+
+    // --------------------------------------------- extended-protocol params
+    report.record(
+        Area::ExtendedQuery,
+        "two parameters of different types",
+        client
+            .query(
+                "SELECT id FROM conf_three WHERE grp = $1 AND amount > $2",
+                &[&"a", &15i32],
+            )
+            .await
+            .map_err(describe)
+            .and_then(|rows| {
+                (rows.len() == 1)
+                    .then_some(())
+                    .ok_or(format!("{} rows, expected 1", rows.len()))
+            }),
+    );
+
+    report.record(
+        Area::ExtendedQuery,
+        "a parameter is bound as a value, not spliced as SQL",
+        // If the parameter were pasted into the statement text, the quote
+        // would end the literal and this would be a syntax error or, worse,
+        // would match everything.
+        client
+            .query("SELECT id FROM conf_three WHERE name = $1", &[&"o'brien"])
+            .await
+            .map_err(describe)
+            .and_then(|rows| {
+                rows.is_empty()
+                    .then_some(())
+                    .ok_or(format!("{} rows matched a name that does not exist", rows.len()))
+            }),
+    );
+
+    report.record(
+        Area::ExtendedQuery,
+        "a parameterised UPDATE reports its row count",
+        client
+            .execute("UPDATE conf_three SET amount = $1 WHERE id = $2", &[&11i32, &1i32])
+            .await
+            .map_err(describe)
+            .and_then(|affected| {
+                (affected == 1)
+                    .then_some(())
+                    .ok_or(format!("reported {affected} rows, expected 1"))
+            }),
+    );
+
+    drop_table(&client, "conf_three").await;
 
     println!("{}", report.render());
 

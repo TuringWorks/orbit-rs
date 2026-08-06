@@ -41,6 +41,7 @@ pub mod messages;
 #[cfg(feature = "storage-rocksdb")]
 pub mod persistent_storage;
 #[cfg(feature = "storage-rocksdb")]
+pub mod notifications;
 pub mod protocol;
 #[cfg(feature = "storage-rocksdb")]
 pub mod query_engine;

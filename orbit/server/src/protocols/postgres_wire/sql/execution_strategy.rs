@@ -293,6 +293,44 @@ pub struct MvccExecutionStrategy {
 }
 
 impl MvccExecutionStrategy {
+    /// One-line description of how a statement will be executed.
+    fn describe_plan(statement: &Statement) -> String {
+        match statement {
+            Statement::Select(select) => {
+                let table = select
+                    .from_clause
+                    .as_ref()
+                    .map(|_| "table")
+                    .unwrap_or("no table");
+                let mut plan = format!("Seq Scan on {table}");
+                if select.where_clause.is_some() {
+                    plan.push_str(" + Filter");
+                }
+                if select.group_by.is_some() {
+                    plan.push_str(" + GroupAggregate");
+                }
+                if select.distinct.is_some() {
+                    plan.push_str(" + Unique");
+                }
+                if select.order_by.is_some() {
+                    plan.push_str(" + Sort");
+                }
+                if select.limit.is_some() || select.offset.is_some() {
+                    plan.push_str(" + Limit");
+                }
+                plan
+            }
+            Statement::Insert(_) => "Insert".to_string(),
+            Statement::Update(_) => "Update".to_string(),
+            Statement::Delete(_) => "Delete".to_string(),
+            other => format!("{other:?}")
+                .split_whitespace()
+                .next()
+                .unwrap_or("Statement")
+                .to_string(),
+        }
+    }
+
     pub fn new(config: SqlEngineConfig) -> Self {
         Self {
             parser: SqlParser::new(),
@@ -585,32 +623,35 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     .mvcc_read(&table_name, transaction_id, None)
                     .await?;
 
-                // Convert MVCC rows to string format for compatibility
-                let mut string_rows = Vec::new();
-
-                // If columns still empty (no schema or empty table), get from first row
+                // If columns are still empty (no schema, or a wildcard over an
+                // empty table) take them from the first row.
                 if columns.is_empty() {
                     if let Some(first_row) = rows.first() {
                         columns = first_row.keys().cloned().collect();
+                        columns.sort();
                     }
                 }
 
-                for row in rows {
-                    let mut string_row = Vec::new();
-                    for col in &columns {
-                        let value = row
-                            .get(col)
-                            .map(|v| v.to_postgres_string())
-                            .or(Some("".to_string()));
-                        string_row.push(value);
-                    }
-                    string_rows.push(string_row);
-                }
+                // Apply the clauses. Reading the table and projecting by name —
+                // which is all this did — silently ignored WHERE, GROUP BY,
+                // HAVING, DISTINCT, ORDER BY, LIMIT/OFFSET and every aggregate,
+                // so `LIMIT 2` returned the whole table and `COUNT(*)` returned
+                // one empty column per row.
+                use crate::protocols::postgres_wire::sql::select_pipeline;
+                let output = select_pipeline::run_select(&select_stmt, rows)?;
 
-                let row_count = string_rows.len();
+                // A wildcard projection is named by the pipeline as `*`; the
+                // real column names are the ones resolved from the schema above.
+                let resolved_columns = if output.columns.iter().any(|name| name == "*") {
+                    columns
+                } else {
+                    output.columns
+                };
+
+                let row_count = output.rows.len();
                 Ok(UnifiedExecutionResult::Select {
-                    columns,
-                    rows: string_rows,
+                    columns: resolved_columns,
+                    rows: output.rows,
                     row_count,
                     transaction_id: Some(transaction_id),
                 })
@@ -852,6 +893,28 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                      See orbit/engine/src/storage/iceberg.rs for implementation details.",
                     undrop_stmt.name.full_name()
                 )))
+            }
+            Statement::Explain(explain) => {
+                // A description of what will run, not a cost estimate: this
+                // engine has no statistics or cost model, and inventing numbers
+                // that look like PostgreSQL's would be worse than saying so.
+                let mut lines = vec![Self::describe_plan(&explain.statement)];
+                if explain.analyze {
+                    lines.push(
+                        "  (ANALYZE requested; per-node timings are not collected)".to_string(),
+                    );
+                }
+                if explain.verbose {
+                    lines.push("  (VERBOSE requested; no extra detail available)".to_string());
+                }
+                lines.push("  Cost estimates are not available: no statistics are kept.".to_string());
+
+                Ok(UnifiedExecutionResult::Select {
+                    columns: vec!["QUERY PLAN".to_string()],
+                    row_count: lines.len(),
+                    rows: lines.into_iter().map(|line| vec![Some(line)]).collect(),
+                    transaction_id: Some(transaction_id),
+                })
             }
             _ => Ok(UnifiedExecutionResult::Other {
                 message: "Command completed successfully".to_string(),

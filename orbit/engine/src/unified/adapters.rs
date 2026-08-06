@@ -1047,15 +1047,24 @@ impl SqlAdapter {
         row: BTreeMap<String, UniversalValue>,
         primary_key: &str,
     ) -> UnifiedStorageResult<()> {
+        // Every scalar can serve as a key. Accepting only strings and integers
+        // rejected a row whose key column was a boolean or a float with
+        // "Missing primary key", which named the wrong problem: the column was
+        // present, its type was simply not handled.
         let key = row
             .get(primary_key)
             .and_then(|v| match v {
                 UniversalValue::String(s) => Some(s.clone()),
                 UniversalValue::Int(i) => Some(i.to_string()),
+                UniversalValue::Bool(b) => Some(b.to_string()),
+                UniversalValue::Float(f) => Some(f.to_string()),
+                // Null and the composite types genuinely cannot key a row.
                 _ => None,
             })
             .ok_or_else(|| {
-                UnifiedStorageError::InvalidData(format!("Missing primary key: {}", primary_key))
+                UnifiedStorageError::InvalidData(format!(
+                    "Cannot use column '{primary_key}' as a row key: it is absent, null, or not a scalar"
+                ))
             })?;
 
         self.base

@@ -12,6 +12,7 @@ use super::messages::{
     type_oids, AuthenticationResponse, BackendMessage, FieldDescription, FrontendMessage,
     TransactionStatus,
 };
+use super::notifications::{NotificationHub, SessionNotifications};
 use super::query_engine::{QueryEngine, QueryResult};
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 
@@ -44,8 +45,39 @@ pub struct PostgresWireProtocol {
     /// parameter before the row description.
     statement_param_types: HashMap<String, Vec<i32>>,
     portals: HashMap<String, (String, Vec<Option<bytes::Bytes>>)>,
+    /// Result format codes requested by `Bind`, per portal.
+    ///
+    /// A client that asked for binary results cannot read text ones: it decodes
+    /// by width and fails with "failed to fill whole buffer". Ignoring these
+    /// codes only appeared to work while every column was advertised as text.
+    portal_result_formats: HashMap<String, Vec<i16>>,
+    /// Column type OIDs most recently described for a statement, so `Execute`
+    /// knows how to encode each value.
+    statement_columns: HashMap<String, Vec<i32>>,
+    /// Whether the COPY being started came from a simple query.
+    copy_in_is_simple: bool,
+    /// The `COPY ... FROM STDIN` currently in progress, if any.
+    ///
+    /// While set, the session is in copy-in mode and the client is streaming
+    /// CopyData messages rather than ordinary queries.
+    copy_in: Option<CopyInState>,
+    /// Shared LISTEN/NOTIFY registry, and this session's end of it.
+    notifications: Arc<NotificationHub>,
+    session_notifications: SessionNotifications,
+    /// Rows of a partially fetched portal, so a second `Execute` resumes rather
+    /// than re-running the statement.
+    portal_rows: HashMap<String, PortalRows>,
     auth_manager: AuthManager,
     scram_auth: Option<ScramAuth>,
+    /// Writes issued inside the current transaction block.
+    writes_in_transaction: u64,
+    /// Contents of each table as it stood when the transaction block first
+    /// wrote to it.
+    ///
+    /// Storage applies writes as they run, so undoing them means putting the
+    /// table back. A snapshot is taken once per table per block, before its
+    /// first write, and discarded on COMMIT.
+    transaction_snapshots: HashMap<String, Vec<super::persistent_storage::TableRow>>,
     /// Whether this session is inside a transaction block, and whether that
     /// block has already failed.
     ///
@@ -53,6 +85,38 @@ pub struct PostgresWireProtocol {
     /// which told drivers no transaction was ever open — so a driver could not
     /// tell a committed statement from one queued in an aborted block.
     transaction: TransactionState,
+}
+
+/// An in-progress `COPY ... FROM STDIN`.
+struct CopyInState {
+    /// Whether the copy was started by a simple query, which owes the client a
+    /// ReadyForQuery when the stream ends.
+    simple_protocol: bool,
+    table: String,
+    /// Column names the data is being loaded into, in order.
+    columns: Vec<String>,
+    /// Whether each column takes an unquoted literal, by position.
+    ///
+    /// A COPY field is text on the wire but must be written into the statement
+    /// the way its column expects: quoting `9` for an integer column makes the
+    /// insert fail, and the failure arrives mid-stream where the client is not
+    /// expecting a message at all.
+    numeric_columns: Vec<bool>,
+    /// Bytes received but not yet terminated by a newline.
+    ///
+    /// CopyData messages are chunks of a byte stream, not rows: a row can be
+    /// split across two of them.
+    partial: Vec<u8>,
+    rows: u64,
+    /// First row failure, reported when the stream ends.
+    failure: Option<String>,
+}
+
+/// A portal's result set and how much of it has been delivered.
+struct PortalRows {
+    columns: Vec<String>,
+    rows: Vec<Vec<Option<String>>>,
+    sent: usize,
 }
 
 /// Transaction state of a session.
@@ -104,9 +168,18 @@ impl PostgresWireProtocol {
             prepared_statements: HashMap::new(),
             statement_param_types: HashMap::new(),
             portals: HashMap::new(),
+            portal_result_formats: HashMap::new(),
+            statement_columns: HashMap::new(),
+            portal_rows: HashMap::new(),
             auth_manager,
             scram_auth: None,
             transaction: TransactionState::Idle,
+            writes_in_transaction: 0,
+            transaction_snapshots: HashMap::new(),
+            copy_in: None,
+            copy_in_is_simple: false,
+            notifications: NotificationHub::new(),
+            session_notifications: SessionNotifications::new(),
         }
     }
 
@@ -128,10 +201,30 @@ impl PostgresWireProtocol {
             prepared_statements: HashMap::new(),
             statement_param_types: HashMap::new(),
             portals: HashMap::new(),
+            portal_result_formats: HashMap::new(),
+            statement_columns: HashMap::new(),
+            portal_rows: HashMap::new(),
             auth_manager,
             scram_auth: None,
             transaction: TransactionState::Idle,
+            writes_in_transaction: 0,
+            transaction_snapshots: HashMap::new(),
+            copy_in: None,
+            copy_in_is_simple: false,
+            notifications: NotificationHub::new(),
+            session_notifications: SessionNotifications::new(),
         }
+    }
+
+    /// Share a notification registry with the other sessions on this server.
+    ///
+    /// Without this each connection gets its own hub, so `NOTIFY` on one
+    /// connection can never reach a `LISTEN` on another — which is the only
+    /// thing the feature is for.
+    #[must_use]
+    pub fn with_notification_hub(mut self, hub: Arc<NotificationHub>) -> Self {
+        self.notifications = hub;
+        self
     }
 
     /// Transaction status to report in `ReadyForQuery`.
@@ -156,10 +249,106 @@ impl PostgresWireProtocol {
             .to_uppercase();
 
         match head.as_str() {
-            "BEGIN" | "START" => self.transaction = TransactionState::Open,
-            "COMMIT" | "END" | "ROLLBACK" | "ABORT" => {
-                self.transaction = TransactionState::Idle
+            "BEGIN" | "START" => {
+                self.transaction = TransactionState::Open;
+                self.writes_in_transaction = 0;
             }
+            "COMMIT" | "END" | "ROLLBACK" | "ABORT" => {
+                self.transaction = TransactionState::Idle;
+                self.writes_in_transaction = 0;
+            }
+            // Writes are counted so a later ROLLBACK can report what it cannot
+            // undo.
+            "INSERT" | "UPDATE" | "DELETE" | "MERGE" | "COPY" | "TRUNCATE"
+                if self.transaction != TransactionState::Idle =>
+            {
+                self.writes_in_transaction += 1;
+            }
+            _ => {}
+        }
+    }
+
+    /// Snapshot the table a statement is about to write, if a transaction
+    /// block is open and this is its first write to that table.
+    ///
+    /// Taken before the statement runs, because afterwards the previous
+    /// contents are gone.
+    async fn snapshot_before_write(&mut self, sql: &str) {
+        if self.transaction == TransactionState::Idle {
+            return;
+        }
+        let Some(table) = QueryEngine::write_target_table(sql) else {
+            return;
+        };
+        if self.transaction_snapshots.contains_key(&table) {
+            return;
+        }
+
+        match self.query_engine.snapshot_table(&table).await {
+            Ok(Some(rows)) => {
+                self.transaction_snapshots.insert(table, rows);
+            }
+            Ok(None) => {}
+            // Recorded but not fatal: the statement still runs, and the
+            // rollback will report that it could not restore this table.
+            Err(e) => tracing::warn!("could not snapshot '{table}' for rollback: {e}"),
+        }
+    }
+
+    /// Put every snapshotted table back, undoing the block's writes.
+    ///
+    /// Returns the tables that could not be restored.
+    async fn restore_snapshots(&mut self) -> Vec<String> {
+        let snapshots = std::mem::take(&mut self.transaction_snapshots);
+        let mut failed = Vec::new();
+
+        for (table, rows) in snapshots {
+            if let Err(e) = self.query_engine.restore_table(&table, rows).await {
+                tracing::error!("rollback could not restore '{table}': {e}");
+                failed.push(table);
+            }
+        }
+        failed
+    }
+
+    /// Apply a transaction-control statement's effect on the undo snapshots.
+    ///
+    /// `ROLLBACK` puts every table the block wrote back to how it stood before
+    /// its first write, which is what makes the block atomic. `COMMIT` simply
+    /// drops the snapshots.
+    ///
+    /// This gives atomicity, not isolation: writes are visible to other
+    /// sessions as they happen, and a concurrent writer's changes to the same
+    /// table would be reverted along with this block's.
+    async fn apply_transaction_control(&mut self, query: &str, buf: &mut BytesMut) {
+        let head: String = query
+            .trim_start()
+            .chars()
+            .take_while(|c| c.is_alphanumeric())
+            .collect::<String>()
+            .to_uppercase();
+
+        match head.as_str() {
+            "ROLLBACK" | "ABORT" => {
+                let failed = self.restore_snapshots().await;
+                if failed.is_empty() {
+                    return;
+                }
+                // Partly undone: saying so beats reporting a clean rollback.
+                let mut fields = HashMap::new();
+                fields.insert(b'S', "WARNING".to_string());
+                fields.insert(b'C', "25000".to_string());
+                fields.insert(
+                    b'M',
+                    format!(
+                        "ROLLBACK could not restore {}: those changes remain applied",
+                        failed.join(", ")
+                    ),
+                );
+                BackendMessage::NoticeResponse { fields }.encode(buf);
+            }
+            // The block's writes stand; nothing to put back.
+            "COMMIT" | "END" => self.transaction_snapshots.clear(),
             _ => {}
         }
     }
@@ -227,10 +416,18 @@ impl PostgresWireProtocol {
                 }
                 ConnectionLoopResult::ClientTerminated => {
                     info!("Client terminated connection");
+                    self.notifications
+                        .disconnect(self.session_notifications.id)
+                        .await;
                     return Ok(());
                 }
             }
         }
+
+        // A session that has gone must not stay in the registry.
+        self.notifications
+            .disconnect(self.session_notifications.id)
+            .await;
 
         Ok(())
     }
@@ -245,7 +442,24 @@ impl PostgresWireProtocol {
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
     {
-        let n = stream.read_buf(read_buf).await?;
+        // Wait for either the client to say something or a notification to
+        // arrive. Reading alone would hold a notification until the client
+        // happened to send a message, which for an idle listener is never —
+        // and an idle listener is the whole point of LISTEN.
+        let n = loop {
+            tokio::select! {
+                read = stream.read_buf(read_buf) => break read?,
+                Some(notification) = self.session_notifications.receiver.recv() => {
+                    BackendMessage::NotificationResponse {
+                        process_id: notification.process_id,
+                        channel: notification.channel,
+                        payload: notification.payload,
+                    }
+                    .encode(write_buf);
+                    self.flush_write_buffer(stream, write_buf).await?;
+                }
+            }
+        };
 
         if n == 0 {
             return Ok(ConnectionLoopResult::ClientDisconnected);
@@ -381,10 +595,18 @@ impl PostgresWireProtocol {
                 self.handle_close(target, &name, buf)?;
             }
             FrontendMessage::Sync => {
-                BackendMessage::ReadyForQuery {
-                    status: TransactionStatus::Idle,
+                // While a copy-in stream is open the backend ignores Sync: the
+                // client sends one straight after Execute and is not expecting
+                // a reply until CopyDone. Answering it here put a
+                // ReadyForQuery into the middle of the stream, which is the
+                // "unexpected message from server" the client then reported.
+                if self.copy_in.is_none() {
+                    self.deliver_pending_notifications(buf);
+                    BackendMessage::ReadyForQuery {
+                        status: self.transaction_status(),
+                    }
+                    .encode(buf);
                 }
-                .encode(buf);
             }
             FrontendMessage::Flush => {
                 // Nothing to do, data is flushed after each message
@@ -405,10 +627,18 @@ impl PostgresWireProtocol {
             FrontendMessage::FunctionCall { .. } => {
                 // Function call support is minimal/stubbed
             }
-            FrontendMessage::CopyData { .. }
-            | FrontendMessage::CopyDone
-            | FrontendMessage::CopyFail { .. } => {
-                // Copy protocol not fully supported by server yet
+            FrontendMessage::CopyData { data } => {
+                self.handle_copy_data(&data, buf).await?;
+            }
+            FrontendMessage::CopyDone => {
+                self.handle_copy_done(buf).await?;
+            }
+            FrontendMessage::CopyFail { message } => {
+                // The client is abandoning the load; nothing already applied is
+                // undone, matching a non-transactional COPY.
+                let simple = self.copy_in.take().is_some_and(|s| s.simple_protocol);
+                self.send_error(buf, &format!("COPY from stdin failed: {message}"));
+                self.finish_copy_statement(simple, buf);
             }
         }
 
@@ -651,10 +881,27 @@ impl PostgresWireProtocol {
     async fn handle_query(&mut self, query: &str, buf: &mut BytesMut) -> ProtocolResult<()> {
         info!("Query: {} (database: {:?})", query, self.database);
 
+        self.copy_in_is_simple = true;
+        if self.handle_copy_statement(query, buf, true).await.is_some() {
+            return Ok(());
+        }
+
+        self.snapshot_before_write(query).await;
+
+        if let Some(tag) = self.handle_notification_statement(query).await {
+            BackendMessage::CommandComplete { tag }.encode(buf);
+            self.deliver_pending_notifications(buf);
+            BackendMessage::ReadyForQuery {
+                status: self.transaction_status(),
+            }
+            .encode(buf);
+            return Ok(());
+        }
+
         if query.trim().is_empty() {
             BackendMessage::EmptyQueryResponse.encode(buf);
             BackendMessage::ReadyForQuery {
-                status: TransactionStatus::Idle,
+                status: self.transaction_status(),
             }
             .encode(buf);
             return Ok(());
@@ -670,15 +917,19 @@ impl PostgresWireProtocol {
                 for result in results {
                     self.send_query_result(&result, buf);
                 }
+                self.apply_transaction_control(query, buf).await;
+                self.note_statement(query);
+                self.deliver_pending_notifications(buf);
                 BackendMessage::ReadyForQuery {
-                    status: TransactionStatus::Idle,
+                    status: self.transaction_status(),
                 }
                 .encode(buf);
             }
             Err(e) => {
                 self.send_error(buf, &e.to_string());
+                self.note_failure();
                 BackendMessage::ReadyForQuery {
-                    status: TransactionStatus::Idle,
+                    status: self.transaction_status(),
                 }
                 .encode(buf);
             }
@@ -721,6 +972,39 @@ impl PostgresWireProtocol {
 
         BackendMessage::ParseComplete.encode(buf);
         Ok(())
+    }
+
+    /// Whether a value of this type is written into SQL without quotes.
+    fn is_unquoted_literal_type(type_oid: i32) -> bool {
+        matches!(
+            type_oid,
+            type_oids::INT2
+                | type_oids::INT4
+                | type_oids::INT8
+                | type_oids::FLOAT4
+                | type_oids::FLOAT8
+                | type_oids::BOOL
+        )
+    }
+
+    /// Whether `text` is safe to splice in unquoted.
+    ///
+    /// Belt and braces: the type says the value should be bare, but the bytes
+    /// come from the client. Anything that is not plainly a number or a boolean
+    /// is quoted instead, so a hostile value cannot become syntax.
+    fn is_safe_bare_literal(text: &str) -> bool {
+        if matches!(
+            text.to_ascii_lowercase().as_str(),
+            "true" | "false" | "t" | "f"
+        ) {
+            return true;
+        }
+
+        !text.is_empty()
+            && text.parse::<f64>().is_ok()
+            && text
+                .chars()
+                .all(|c| c.is_ascii_digit() || matches!(c, '-' | '+' | '.' | 'e' | 'E'))
     }
 
     /// Highest `$n` placeholder appearing in `query`.
@@ -768,10 +1052,12 @@ impl PostgresWireProtocol {
         statement: &str,
         param_formats: Vec<i16>,
         params: Vec<Option<bytes::Bytes>>,
-        _result_formats: Vec<i16>,
+        result_formats: Vec<i16>,
         buf: &mut BytesMut,
     ) -> ProtocolResult<()> {
         debug!("Bind: portal={}, statement={}", portal, statement);
+        self.portal_result_formats
+            .insert(portal.to_string(), result_formats);
 
         // Format codes are per-parameter, or a single code covering all of them,
         // or empty meaning all text.
@@ -812,6 +1098,9 @@ impl PostgresWireProtocol {
             }
         }
 
+        // Re-binding a portal restarts it, so any partially delivered result
+        // from a previous execution is discarded.
+        self.portal_rows.remove(portal);
         self.portals
             .insert(portal.to_string(), (statement.to_string(), decoded));
 
@@ -868,6 +1157,7 @@ impl PostgresWireProtocol {
     fn bind_parameters(
         query: &str,
         params: &[Option<bytes::Bytes>],
+        param_types: &[i32],
     ) -> ProtocolResult<String> {
         let bytes = query.as_bytes();
         let mut out = String::with_capacity(query.len());
@@ -925,10 +1215,26 @@ impl PostgresWireProtocol {
                             "parameter ${position} is not valid UTF-8 text"
                         ))
                     })?;
-                    out.push('\'');
-                    // Doubling is how a single quote is escaped in a SQL literal.
-                    out.push_str(&text.replace('\'', "''"));
-                    out.push('\'');
+
+                    let type_oid = param_types
+                        .get(position - 1)
+                        .copied()
+                        .unwrap_or(type_oids::TEXT);
+
+                    if Self::is_unquoted_literal_type(type_oid)
+                        && Self::is_safe_bare_literal(text)
+                    {
+                        // A numeric or boolean parameter has to be emitted
+                        // bare: quoting it turns `id = $1` into `id = '1'`,
+                        // which compares an integer column against a string
+                        // and silently matches nothing.
+                        out.push_str(text);
+                    } else {
+                        out.push('\'');
+                        // Doubling is how a single quote is escaped in a SQL literal.
+                        out.push_str(&text.replace('\'', "''"));
+                        out.push('\'');
+                    }
                 }
             }
 
@@ -942,10 +1248,18 @@ impl PostgresWireProtocol {
     async fn handle_execute(
         &mut self,
         portal: &str,
-        _max_rows: i32,
+        max_rows: i32,
         buf: &mut BytesMut,
     ) -> ProtocolResult<()> {
-        debug!("Execute: portal={}", portal);
+        debug!("Execute: portal={}, max_rows={}", portal, max_rows);
+
+        // A portal already drained by a previous Execute returns nothing more.
+        if let Some(remaining) = self.portal_rows.get(portal) {
+            let already_sent = remaining.sent;
+            let rows = remaining.rows.clone();
+            let columns = remaining.columns.clone();
+            return Ok(self.send_portal_page(portal, &columns, &rows, already_sent, max_rows, buf));
+        }
 
         let (statement_name, params) = self
             .portals
@@ -959,7 +1273,13 @@ impl PostgresWireProtocol {
                 ProtocolError::PostgresError(format!("Statement not found: {statement_name}"))
             })?;
 
-        let bound = match Self::bind_parameters(query, params) {
+        let param_types = self
+            .statement_param_types
+            .get(statement_name)
+            .cloned()
+            .unwrap_or_default();
+
+        let bound = match Self::bind_parameters(query, params, &param_types) {
             Ok(bound) => bound,
             Err(e) => {
                 self.send_error(buf, &e.to_string());
@@ -967,15 +1287,40 @@ impl PostgresWireProtocol {
             }
         };
 
+        self.copy_in_is_simple = false;
+        if self.handle_copy_statement(&bound, buf, false).await.is_some() {
+            return Ok(());
+        }
+
+        let bound_for_state = bound.clone();
+        let portal_name = portal.to_string();
         match self.query_engine.execute_query(&bound).await {
+            Ok(QueryResult::Select { columns, rows })
+            | Ok(QueryResult::Merge { columns, rows, .. }) => {
+                self.note_statement(&bound_for_state);
+                // Remembered so a later Execute on the same portal continues
+                // where this one stopped, which is how every driver implements
+                // a cursor with a fetch size.
+                self.portal_rows.insert(
+                    portal_name.clone(),
+                    PortalRows {
+                        columns: columns.clone(),
+                        rows: rows.clone(),
+                        sent: 0,
+                    },
+                );
+                self.send_portal_page(&portal_name, &columns, &rows, 0, max_rows, buf);
+            }
             Ok(result) => {
                 // Extended protocol: the row description was already sent in
                 // response to Describe, and repeating it here is a protocol
                 // violation. Only the rows and the command tag belong on Execute.
                 self.send_query_result_without_description(&result, buf);
+                self.note_statement(&bound_for_state);
             }
             Err(e) => {
                 self.send_error(buf, &e.to_string());
+                self.note_failure();
             }
         }
 
@@ -1053,6 +1398,23 @@ impl PostgresWireProtocol {
 
         let description = self.query_engine.describe_statement(&sql).await?;
 
+        if matches!(target, DescribeTarget::Statement) || description.returns_rows() {
+            // Remembered for Execute, which must encode each value in the
+            // format the client asked for and therefore needs its type.
+            let statement_name = match target {
+                DescribeTarget::Statement => name.to_string(),
+                DescribeTarget::Portal => self
+                    .portals
+                    .get(name)
+                    .map(|(statement, _)| statement.clone())
+                    .unwrap_or_default(),
+            };
+            self.statement_columns.insert(
+                statement_name,
+                description.columns.iter().map(|c| c.type_oid).collect(),
+            );
+        }
+
         if description.returns_rows() {
             let fields = description
                 .columns
@@ -1090,6 +1452,8 @@ impl PostgresWireProtocol {
             }
             super::messages::CloseTarget::Portal => {
                 self.portals.remove(name);
+                self.portal_rows.remove(name);
+                self.portal_result_formats.remove(name);
             }
         }
 
@@ -1122,6 +1486,504 @@ impl PostgresWireProtocol {
         }
 
         self.send_query_result_without_description(result, buf);
+    }
+
+    /// Handle `LISTEN`, `UNLISTEN` and `NOTIFY`, returning the command tag.
+    ///
+    /// Returns `None` for anything else, which then runs as an ordinary
+    /// statement. These are handled here rather than in the SQL engine because
+    /// they act on the connection, not on stored data.
+    async fn handle_notification_statement(&mut self, query: &str) -> Option<String> {
+        let trimmed = query.trim().trim_end_matches(';').trim();
+        let (head, rest) = match trimmed.split_once(char::is_whitespace) {
+            Some((head, rest)) => (head.to_ascii_uppercase(), rest.trim()),
+            None => (trimmed.to_ascii_uppercase(), ""),
+        };
+
+        match head.as_str() {
+            "LISTEN" if !rest.is_empty() => {
+                self.notifications
+                    .listen(
+                        rest,
+                        self.session_notifications.id,
+                        self.session_notifications.sender.clone(),
+                    )
+                    .await;
+                Some("LISTEN".to_string())
+            }
+            "UNLISTEN" => {
+                let channel = (rest != "*" && !rest.is_empty()).then_some(rest);
+                self.notifications
+                    .unlisten(channel, self.session_notifications.id)
+                    .await;
+                Some("UNLISTEN".to_string())
+            }
+            "NOTIFY" if !rest.is_empty() => {
+                // `NOTIFY channel` or `NOTIFY channel, 'payload'`.
+                let (channel, payload) = match rest.split_once(',') {
+                    Some((channel, payload)) => (
+                        channel.trim(),
+                        payload.trim().trim_matches('\'').to_string(),
+                    ),
+                    None => (rest, String::new()),
+                };
+                self.notifications
+                    .notify(channel, &payload, self.process_id)
+                    .await;
+                Some("NOTIFY".to_string())
+            }
+            _ => None,
+        }
+    }
+
+    /// Write any notifications waiting for this session.
+    ///
+    /// The protocol allows a NotificationResponse between messages, so they are
+    /// flushed at the points the session is already writing.
+    fn deliver_pending_notifications(&mut self, buf: &mut BytesMut) {
+        while let Ok(notification) = self.session_notifications.receiver.try_recv() {
+            BackendMessage::NotificationResponse {
+                process_id: notification.process_id,
+                channel: notification.channel,
+                payload: notification.payload,
+            }
+            .encode(buf);
+        }
+    }
+
+
+    /// Start a `COPY` statement, or return `None` if this is not one.
+    ///
+    /// Text format only: the binary format needs per-type encoders this engine
+    /// does not have, and accepting it while writing text would corrupt the
+    /// stream rather than fail.
+    async fn handle_copy_statement(
+        &mut self,
+        query: &str,
+        buf: &mut BytesMut,
+        send_ready: bool,
+    ) -> Option<()> {
+        let trimmed = query.trim().trim_end_matches(';').trim();
+        if !trimmed.to_ascii_uppercase().starts_with("COPY ") {
+            return None;
+        }
+
+        let upper = trimmed.to_ascii_uppercase();
+        if upper.contains(" BINARY") || upper.contains("FORMAT BINARY") {
+            self.send_error(buf, "COPY BINARY is not supported; use the text format");
+            self.finish_copy_statement(send_ready, buf);
+            return Some(());
+        }
+
+        // `COPY <table> [(cols)] TO STDOUT` / `FROM STDIN`
+        let body = trimmed[5..].trim();
+        let to_stdout = upper.contains(" TO ");
+        let split_at = if to_stdout {
+            upper.find(" TO ")
+        } else {
+            upper.find(" FROM ")
+        };
+        let Some(split_at) = split_at else {
+            self.send_error(buf, "COPY requires TO STDOUT or FROM STDIN");
+            self.finish_copy_statement(send_ready, buf);
+            return Some(());
+        };
+
+        let target = trimmed[5..split_at].trim();
+        let (table, columns) = match target.split_once('(') {
+            Some((table, cols)) => (
+                table.trim().to_string(),
+                cols.trim_end_matches(')')
+                    .split(',')
+                    .map(|c| c.trim().to_string())
+                    .collect::<Vec<_>>(),
+            ),
+            None => (target.to_string(), Vec::new()),
+        };
+        let _ = body;
+
+        if to_stdout {
+            self.copy_table_to_stdout(&table, &columns, buf).await;
+            self.finish_copy_statement(send_ready, buf);
+        } else {
+            self.begin_copy_from_stdin(&table, columns, buf).await;
+        }
+        Some(())
+    }
+
+    /// Close out a COPY statement on the simple query path.
+    ///
+    /// The extended protocol sends ReadyForQuery in response to Sync instead,
+    /// so sending one here too would leave the client a message ahead.
+    fn finish_copy_statement(&mut self, send_ready: bool, buf: &mut BytesMut) {
+        if send_ready {
+            BackendMessage::ReadyForQuery {
+                status: self.transaction_status(),
+            }
+            .encode(buf);
+        }
+    }
+
+    /// Stream a table to the client as `COPY ... TO STDOUT` text.
+    async fn copy_table_to_stdout(
+        &mut self,
+        table: &str,
+        columns: &[String],
+        buf: &mut BytesMut,
+    ) {
+        let projection = if columns.is_empty() {
+            "*".to_string()
+        } else {
+            columns.join(", ")
+        };
+
+        let result = self
+            .query_engine
+            .execute_query(&format!("SELECT {projection} FROM {table}"))
+            .await;
+
+        let (column_count, rows) = match result {
+            Ok(QueryResult::Select { columns, rows }) => (columns.len(), rows),
+            Ok(_) => (0, Vec::new()),
+            Err(e) => {
+                self.send_error(buf, &e.to_string());
+                return;
+            }
+        };
+
+        BackendMessage::CopyOutResponse {
+            format: 0,
+            column_formats: vec![0; column_count],
+        }
+        .encode(buf);
+
+        for row in &rows {
+            let line = row
+                .iter()
+                .map(|value| match value {
+                    // `\N` is how the text format spells NULL, and is why a
+                    // literal backslash has to be escaped.
+                    None => "\\N".to_string(),
+                    Some(text) => text
+                        .replace('\\', "\\\\")
+                        .replace('\t', "\\t")
+                        .replace('\n', "\\n")
+                        .replace('\r', "\\r"),
+                })
+                .collect::<Vec<_>>()
+                .join("\t");
+            BackendMessage::CopyData {
+                data: bytes::Bytes::from(format!("{line}\n")),
+            }
+            .encode(buf);
+        }
+
+        BackendMessage::CopyDone.encode(buf);
+        BackendMessage::CommandComplete {
+            tag: format!("COPY {}", rows.len()),
+        }
+        .encode(buf);
+    }
+
+    /// Put the session into copy-in mode and invite the client to stream.
+    async fn begin_copy_from_stdin(
+        &mut self,
+        table: &str,
+        columns: Vec<String>,
+        buf: &mut BytesMut,
+    ) {
+        // Column order has to be known before the first row arrives; when the
+        // statement did not name any, the table's own order is used.
+        let schema = match self.query_engine.table_schema(table).await {
+            Ok(schema) => schema,
+            Err(e) => {
+                self.send_error(buf, &e.to_string());
+                return;
+            }
+        };
+
+        let columns = if columns.is_empty() {
+            match &schema {
+                Some(schema) => schema.columns.iter().map(|c| c.name.clone()).collect(),
+                None => {
+                    self.send_error(buf, &format!("Table '{table}' does not exist"));
+                    return;
+                }
+            }
+        } else {
+            columns
+        };
+
+        use crate::protocols::postgres_wire::persistent_storage::ColumnType;
+        let numeric_columns: Vec<bool> = columns
+            .iter()
+            .map(|name| {
+                schema.as_ref().is_some_and(|schema| {
+                    schema
+                        .columns
+                        .iter()
+                        .find(|c| c.name.eq_ignore_ascii_case(name))
+                        .is_some_and(|c| {
+                            matches!(
+                                c.data_type,
+                                ColumnType::Serial
+                                    | ColumnType::Integer
+                                    | ColumnType::BigInt
+                                    | ColumnType::Double
+                                    | ColumnType::Boolean
+                            )
+                        })
+                })
+            })
+            .collect();
+
+        BackendMessage::CopyInResponse {
+            format: 0,
+            column_formats: vec![0; columns.len()],
+        }
+        .encode(buf);
+
+        self.copy_in = Some(CopyInState {
+            simple_protocol: self.copy_in_is_simple,
+            table: table.to_string(),
+            numeric_columns,
+            columns,
+            partial: Vec::new(),
+            rows: 0,
+            failure: None,
+        });
+    }
+
+    /// Consume one chunk of copy-in data.
+    async fn handle_copy_data(
+        &mut self,
+        data: &[u8],
+        buf: &mut BytesMut,
+    ) -> ProtocolResult<()> {
+        if self.copy_in.is_none() {
+            self.send_error(buf, "CopyData received while not in copy-in mode");
+            return Ok(());
+        }
+
+        // Chunks split rows arbitrarily, so only whole lines are consumed and
+        // the remainder is carried to the next message.
+        let mut pending = {
+            let state = self.copy_in.as_mut().expect("checked above");
+            state.partial.extend_from_slice(data);
+            std::mem::take(&mut state.partial)
+        };
+
+        let mut consumed = 0usize;
+        while let Some(newline) = pending[consumed..].iter().position(|b| *b == b'\n') {
+            let line_end = consumed + newline;
+            let line = String::from_utf8_lossy(&pending[consumed..line_end]).into_owned();
+            consumed = line_end + 1;
+            self.insert_copy_line(line.trim_end_matches('\r')).await?;
+        }
+
+        pending.drain(..consumed);
+        if let Some(state) = self.copy_in.as_mut() {
+            state.partial = pending;
+        }
+        Ok(())
+    }
+
+    /// Insert one text-format COPY line.
+    async fn insert_copy_line(&mut self, line: &str) -> ProtocolResult<()> {
+        // The end-of-data marker is a line containing only `\.`.
+        if line.is_empty() || line == "\\." {
+            return Ok(());
+        }
+
+        let Some(state) = self.copy_in.as_ref() else {
+            return Ok(());
+        };
+
+        let values: Vec<String> = line
+            .split('\t')
+            .enumerate()
+            .map(|(index, field)| {
+                if field == "\\N" {
+                    return "NULL".to_string();
+                }
+                let unescaped = field
+                    .replace("\\t", "\t")
+                    .replace("\\n", "\n")
+                    .replace("\\r", "\r")
+                    .replace("\\\\", "\\");
+
+                // Bare only where the column takes a bare literal *and* the
+                // value really is one; anything else is quoted so a stray field
+                // cannot become syntax.
+                let numeric = state.numeric_columns.get(index).copied().unwrap_or(false);
+                if numeric && Self::is_safe_bare_literal(&unescaped) {
+                    unescaped
+                } else {
+                    format!("'{}'", unescaped.replace('\'', "''"))
+                }
+            })
+            .collect();
+
+        let statement = format!(
+            "INSERT INTO {} ({}) VALUES ({})",
+            state.table,
+            state.columns.join(", "),
+            values.join(", ")
+        );
+
+        match self.query_engine.execute_query(&statement).await {
+            Ok(_) => {
+                if let Some(state) = self.copy_in.as_mut() {
+                    state.rows += 1;
+                }
+                Ok(())
+            }
+            // Recorded rather than returned: an error raised here would be
+            // written to a client that is streaming data and expecting no
+            // messages at all, which desynchronises the connection. It is
+            // reported when the stream ends.
+            Err(e) => {
+                if let Some(state) = self.copy_in.as_mut() {
+                    if state.failure.is_none() {
+                        state.failure = Some(e.to_string());
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// Finish a copy-in stream.
+    async fn handle_copy_done(&mut self, buf: &mut BytesMut) -> ProtocolResult<()> {
+        let Some(state) = self.copy_in.take() else {
+            self.send_error(buf, "CopyDone received while not in copy-in mode");
+            return Ok(());
+        };
+
+        match &state.failure {
+            Some(failure) => self.send_error(buf, failure),
+            None => BackendMessage::CommandComplete {
+                tag: format!("COPY {}", state.rows),
+            }
+            .encode(buf),
+        }
+        self.finish_copy_statement(state.simple_protocol, buf);
+        Ok(())
+    }
+
+    /// Send at most `max_rows` rows of a portal, starting at `already_sent`.
+    ///
+    /// `max_rows == 0` means "no limit", per the protocol. When rows remain
+    /// after the limit is reached the reply is `PortalSuspended` rather than
+    /// `CommandComplete`: that is what tells the client to ask for the next
+    /// page instead of concluding the result set ended.
+    fn send_portal_page(
+        &mut self,
+        portal: &str,
+        columns: &[String],
+        rows: &[Vec<Option<String>>],
+        already_sent: usize,
+        max_rows: i32,
+        buf: &mut BytesMut,
+    ) {
+        let _ = columns;
+        let limit = if max_rows <= 0 {
+            rows.len().saturating_sub(already_sent)
+        } else {
+            (max_rows as usize).min(rows.len().saturating_sub(already_sent))
+        };
+
+        let formats = self
+            .portal_result_formats
+            .get(portal)
+            .cloned()
+            .unwrap_or_default();
+        let column_types = self
+            .portals
+            .get(portal)
+            .and_then(|(statement, _)| self.statement_columns.get(statement))
+            .cloned()
+            .unwrap_or_default();
+
+        for row in rows.iter().skip(already_sent).take(limit) {
+            let values: Vec<Option<bytes::Bytes>> = row
+                .iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    let text = value.as_ref()?;
+                    let binary = match formats.len() {
+                        0 => false,
+                        1 => formats[0] == 1,
+                        _ => formats.get(index).is_some_and(|f| *f == 1),
+                    };
+                    if !binary {
+                        return Some(bytes::Bytes::from(text.clone()));
+                    }
+                    let type_oid = column_types.get(index).copied().unwrap_or(type_oids::TEXT);
+                    Some(Self::encode_binary_value(text, type_oid))
+                })
+                .collect();
+            BackendMessage::DataRow { values }.encode(buf);
+        }
+
+        let sent = already_sent + limit;
+        if sent < rows.len() {
+            if let Some(state) = self.portal_rows.get_mut(portal) {
+                state.sent = sent;
+            }
+            BackendMessage::PortalSuspended.encode(buf);
+        } else {
+            self.portal_rows.remove(portal);
+            BackendMessage::CommandComplete {
+                tag: format!("SELECT {sent}"),
+            }
+            .encode(buf);
+        }
+    }
+
+    /// Encode one value in PostgreSQL's binary format for `type_oid`.
+    ///
+    /// The engine holds every value as text, so this parses and re-encodes.
+    /// A value that will not parse as its declared type is sent as its text
+    /// bytes: that is what the value actually is, and it keeps a type
+    /// mismatch in the catalogue from corrupting unrelated columns in the row.
+    fn encode_binary_value(text: &str, type_oid: i32) -> bytes::Bytes {
+        fn bytes_of(vector: Vec<u8>) -> bytes::Bytes {
+            bytes::Bytes::from(vector)
+        }
+
+        match type_oid {
+            type_oids::BOOL => {
+                let value = matches!(
+                    text.to_ascii_lowercase().as_str(),
+                    "t" | "true" | "1" | "yes" | "on"
+                );
+                bytes_of(vec![u8::from(value)])
+            }
+            type_oids::INT2 => text
+                .parse::<i16>()
+                .map(|n| bytes_of(n.to_be_bytes().to_vec()))
+                .unwrap_or_else(|_| bytes::Bytes::from(text.to_string())),
+            type_oids::INT4 => text
+                .parse::<i32>()
+                .map(|n| bytes_of(n.to_be_bytes().to_vec()))
+                .unwrap_or_else(|_| bytes::Bytes::from(text.to_string())),
+            type_oids::INT8 => text
+                .parse::<i64>()
+                .map(|n| bytes_of(n.to_be_bytes().to_vec()))
+                .unwrap_or_else(|_| bytes::Bytes::from(text.to_string())),
+            type_oids::FLOAT4 => text
+                .parse::<f32>()
+                .map(|n| bytes_of(n.to_be_bytes().to_vec()))
+                .unwrap_or_else(|_| bytes::Bytes::from(text.to_string())),
+            type_oids::FLOAT8 => text
+                .parse::<f64>()
+                .map(|n| bytes_of(n.to_be_bytes().to_vec()))
+                .unwrap_or_else(|_| bytes::Bytes::from(text.to_string())),
+            // text, json, uuid and anything unrecognised are the same bytes in
+            // both formats.
+            _ => bytes::Bytes::from(text.to_string()),
+        }
     }
 
     /// Send rows and the command tag, without a row description.
@@ -1288,6 +2150,7 @@ mod extended_protocol_tests {
         let bound = PostgresWireProtocol::bind_parameters(
             "SELECT * FROM t WHERE a = $1 AND b = $2",
             &[param("one"), param("two")],
+            &[],
         )
         .expect("both parameters are bound");
         assert_eq!(bound, "SELECT * FROM t WHERE a = 'one' AND b = 'two'");
@@ -1296,13 +2159,13 @@ mod extended_protocol_tests {
     #[test]
     fn a_repeated_placeholder_uses_the_same_value_each_time() {
         let bound =
-            PostgresWireProtocol::bind_parameters("SELECT $1, $1", &[param("x")]).expect("bound");
+            PostgresWireProtocol::bind_parameters("SELECT $1, $1", &[param("x")], &[]).expect("bound");
         assert_eq!(bound, "SELECT 'x', 'x'");
     }
 
     #[test]
     fn a_null_parameter_becomes_sql_null_not_an_empty_string() {
-        let bound = PostgresWireProtocol::bind_parameters("SELECT $1", &[None]).expect("bound");
+        let bound = PostgresWireProtocol::bind_parameters("SELECT $1", &[None], &[]).expect("bound");
         assert_eq!(bound, "SELECT NULL");
     }
 
@@ -1313,6 +2176,7 @@ mod extended_protocol_tests {
         let bound = PostgresWireProtocol::bind_parameters(
             "SELECT * FROM t WHERE name = $1",
             &[param("O'Brien")],
+            &[],
         )
         .expect("bound");
         assert_eq!(bound, "SELECT * FROM t WHERE name = 'O''Brien'");
@@ -1323,6 +2187,7 @@ mod extended_protocol_tests {
         let bound = PostgresWireProtocol::bind_parameters(
             "SELECT * FROM t WHERE name = $1",
             &[param("x'; DROP TABLE users; --")],
+            &[],
         )
         .expect("bound");
         assert_eq!(
@@ -1337,7 +2202,7 @@ mod extended_protocol_tests {
     #[test]
     fn a_placeholder_inside_a_literal_is_left_untouched() {
         let bound =
-            PostgresWireProtocol::bind_parameters("SELECT '$1', $1", &[param("v")]).expect("bound");
+            PostgresWireProtocol::bind_parameters("SELECT '$1', $1", &[param("v")], &[]).expect("bound");
         assert_eq!(bound, "SELECT '$1', 'v'");
     }
 
@@ -1345,7 +2210,7 @@ mod extended_protocol_tests {
     /// the wrong rows, so an unbound reference must fail loudly.
     #[test]
     fn referencing_an_unbound_parameter_is_an_error() {
-        let error = PostgresWireProtocol::bind_parameters("SELECT $2", &[param("only-one")])
+        let error = PostgresWireProtocol::bind_parameters("SELECT $2", &[param("only-one")], &[])
             .expect_err("only one parameter was bound");
         assert!(
             error.to_string().contains("$2"),
@@ -1356,7 +2221,7 @@ mod extended_protocol_tests {
     #[test]
     fn a_statement_without_placeholders_is_unchanged() {
         let bound =
-            PostgresWireProtocol::bind_parameters("SELECT 1 FROM t", &[]).expect("bound");
+            PostgresWireProtocol::bind_parameters("SELECT 1 FROM t", &[], &[]).expect("bound");
         assert_eq!(bound, "SELECT 1 FROM t");
     }
 
@@ -1425,5 +2290,87 @@ mod extended_protocol_tests {
         use crate::protocols::postgres_wire::query_engine::QueryEngine;
 
         assert!(QueryEngine::placeholder_comparisons_for_test("SELECT $1").is_empty());
+    }
+
+    #[test]
+    fn numeric_parameters_are_spliced_without_quotes() {
+        let bound = PostgresWireProtocol::bind_parameters(
+            "SELECT * FROM t WHERE id = $1",
+            &[param("42")],
+            &[type_oids::INT4],
+        )
+        .expect("bound");
+        // Quoting this would compare an integer column against a string and
+        // match nothing.
+        assert_eq!(bound, "SELECT * FROM t WHERE id = 42");
+    }
+
+    #[test]
+    fn boolean_parameters_are_spliced_without_quotes() {
+        let bound =
+            PostgresWireProtocol::bind_parameters("SELECT $1", &[param("true")], &[type_oids::BOOL])
+                .expect("bound");
+        assert_eq!(bound, "SELECT true");
+    }
+
+    #[test]
+    fn text_parameters_stay_quoted_even_when_they_look_numeric() {
+        let bound = PostgresWireProtocol::bind_parameters(
+            "SELECT $1",
+            &[param("42")],
+            &[type_oids::TEXT],
+        )
+        .expect("bound");
+        assert_eq!(bound, "SELECT '42'");
+    }
+
+    /// A value claiming to be numeric but carrying SQL must never be spliced
+    /// bare, whatever the declared type says.
+    #[test]
+    fn a_non_numeric_value_declared_numeric_is_still_quoted() {
+        let bound = PostgresWireProtocol::bind_parameters(
+            "SELECT * FROM t WHERE id = $1",
+            &[param("1; DROP TABLE users")],
+            &[type_oids::INT4],
+        )
+        .expect("bound");
+        assert_eq!(bound, "SELECT * FROM t WHERE id = '1; DROP TABLE users'");
+    }
+
+    #[test]
+    fn binary_encoding_matches_postgres_wire_widths() {
+        use super::super::messages::type_oids;
+
+        let encode = PostgresWireProtocol::encode_binary_value;
+        assert_eq!(encode("5", type_oids::INT4).as_ref(), &5i32.to_be_bytes());
+        assert_eq!(encode("-7", type_oids::INT8).as_ref(), &(-7i64).to_be_bytes());
+        assert_eq!(encode("300", type_oids::INT2).as_ref(), &300i16.to_be_bytes());
+        assert_eq!(encode("1.5", type_oids::FLOAT8).as_ref(), &1.5f64.to_be_bytes());
+        assert_eq!(encode("true", type_oids::BOOL).as_ref(), &[1u8]);
+        assert_eq!(encode("f", type_oids::BOOL).as_ref(), &[0u8]);
+    }
+
+    /// Text is identical in both formats, so it must not be transformed.
+    #[test]
+    fn text_is_unchanged_by_binary_encoding() {
+        use super::super::messages::type_oids;
+
+        assert_eq!(
+            PostgresWireProtocol::encode_binary_value("hello", type_oids::TEXT).as_ref(),
+            b"hello"
+        );
+    }
+
+    /// A value that does not parse as its declared type falls back to its own
+    /// bytes rather than emitting a wrong-width field that would desynchronise
+    /// the client's read of the rest of the row.
+    #[test]
+    fn an_unparseable_value_falls_back_to_its_text_bytes() {
+        use super::super::messages::type_oids;
+
+        assert_eq!(
+            PostgresWireProtocol::encode_binary_value("not-a-number", type_oids::INT4).as_ref(),
+            b"not-a-number"
+        );
     }
 }

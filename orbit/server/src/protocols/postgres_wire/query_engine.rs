@@ -80,6 +80,13 @@ impl StatementDescription {
     }
 }
 
+/// OID reported for the `public` namespace in `pg_namespace`.
+const PUBLIC_NAMESPACE_OID: i64 = 2200;
+/// First OID handed out to user tables in `pg_class`.
+///
+/// PostgreSQL reserves everything below 16384 for built-in objects.
+const FIRST_USER_OID: i64 = 16_384;
+
 /// Fold a SQL identifier the way PostgreSQL does.
 ///
 /// An unquoted identifier folds to lower case; a double-quoted one keeps the
@@ -171,6 +178,9 @@ enum Statement {
     DropTable {
         table: String,
         if_exists: bool,
+    },
+    Truncate {
+        table: String,
     },
 }
 
@@ -343,7 +353,8 @@ impl QueryEngine {
             | Statement::Update { .. }
             | Statement::Delete { .. }
             | Statement::CreateTable { .. }
-            | Statement::DropTable { .. } => Ok(StatementDescription::no_data()),
+            | Statement::DropTable { .. }
+            | Statement::Truncate { .. } => Ok(StatementDescription::no_data()),
         }
     }
 
@@ -388,6 +399,259 @@ impl QueryEngine {
         }
 
         out
+    }
+
+    /// Column names a SELECT's projection asks for, or `["*"]` for all.
+    fn projection_names(
+        select: &crate::protocols::postgres_wire::sql::ast::SelectStatement,
+    ) -> Vec<String> {
+        use crate::protocols::postgres_wire::sql::ast::{Expression, SelectItem};
+
+        let mut names = Vec::new();
+        for item in &select.select_list {
+            match item {
+                SelectItem::Wildcard | SelectItem::QualifiedWildcard { .. } => {
+                    return vec!["*".to_string()]
+                }
+                SelectItem::Expression { expr, alias } => {
+                    let name = match (alias, expr) {
+                        (Some(alias), _) => alias.clone(),
+                        (None, Expression::Column(column)) => column.name.clone(),
+                        // Anything that is not a plain column cannot be
+                        // projected from a synthesised catalogue row.
+                        (None, _) => return vec!["*".to_string()],
+                    };
+                    names.push(name);
+                }
+            }
+        }
+
+        if names.is_empty() {
+            vec!["*".to_string()]
+        } else {
+            names
+        }
+    }
+
+    /// Serve a query against a system catalogue relation.
+    ///
+    /// Returns `None` when `table` is not one, so ordinary tables fall through.
+    ///
+    /// Only relations this server can answer truthfully are provided, and each
+    /// row describes something that actually exists here — the tables really
+    /// present, the types really advertised on the wire. Clients read these to
+    /// decide what the server supports, so inventing entries would make them
+    /// use features that are not implemented.
+    ///
+    /// # Errors
+    /// Returns an error when the catalogue cannot be read.
+    async fn select_system_catalog(
+        &self,
+        table: &str,
+        columns: &[String],
+    ) -> ProtocolResult<Option<QueryResult>> {
+        use super::messages::type_oids;
+
+        // `pg_class` and `pg_catalog.pg_class` name the same relation.
+        let relation = table
+            .rsplit('.')
+            .next()
+            .unwrap_or(table)
+            .to_ascii_lowercase();
+        let qualifier = table.rsplit_once('.').map(|(schema, _)| schema.to_ascii_lowercase());
+        let is_information_schema = qualifier.as_deref() == Some("information_schema");
+
+        // Only answer for the catalogue schemas, so a user table called
+        // `pg_class` in the default schema is still their table.
+        if !matches!(qualifier.as_deref(), Some("pg_catalog") | Some("information_schema") | None) {
+            return Ok(None);
+        }
+        if qualifier.is_none() && !relation.starts_with("pg_") {
+            return Ok(None);
+        }
+
+        let tables = self.list_tables().await?.unwrap_or_default();
+
+        let (all_columns, rows): (Vec<&str>, Vec<Vec<Option<String>>>) =
+            match (is_information_schema, relation.as_str()) {
+                (false, "pg_class") => (
+                    vec!["oid", "relname", "relnamespace", "relkind"],
+                    tables
+                        .iter()
+                        .enumerate()
+                        .map(|(index, name)| {
+                            vec![
+                                Some((FIRST_USER_OID + index as i64).to_string()),
+                                Some(name.clone()),
+                                Some(PUBLIC_NAMESPACE_OID.to_string()),
+                                // Only ordinary tables exist here; no views,
+                                // indexes or sequences are reported because
+                                // none are implemented.
+                                Some("r".to_string()),
+                            ]
+                        })
+                        .collect(),
+                ),
+                (false, "pg_namespace") => (
+                    vec!["oid", "nspname"],
+                    vec![
+                        vec![
+                            Some(PUBLIC_NAMESPACE_OID.to_string()),
+                            Some("public".to_string()),
+                        ],
+                        vec![Some("11".to_string()), Some("pg_catalog".to_string())],
+                    ],
+                ),
+                (false, "pg_type") => (
+                    vec!["oid", "typname", "typtype", "typelem", "typbasetype", "typrelid"],
+                    [
+                        (type_oids::BOOL, "bool"),
+                        (type_oids::BYTEA, "bytea"),
+                        (type_oids::INT8, "int8"),
+                        (type_oids::INT2, "int2"),
+                        (type_oids::INT4, "int4"),
+                        (type_oids::TEXT, "text"),
+                        (type_oids::JSON, "json"),
+                        (type_oids::FLOAT4, "float4"),
+                        (type_oids::FLOAT8, "float8"),
+                        (type_oids::VARCHAR, "varchar"),
+                        (type_oids::TIMESTAMP, "timestamp"),
+                        (type_oids::TIMESTAMPTZ, "timestamptz"),
+                        (type_oids::UUID, "uuid"),
+                        (type_oids::JSONB, "jsonb"),
+                    ]
+                    .into_iter()
+                    .map(|(oid, name)| {
+                        vec![
+                            Some(oid.to_string()),
+                            Some(name.to_string()),
+                            // Base type, no element, no composite relation.
+                            Some("b".to_string()),
+                            Some("0".to_string()),
+                            Some("0".to_string()),
+                            Some("0".to_string()),
+                        ]
+                    })
+                    .collect(),
+                ),
+                (true, "tables") => (
+                    vec!["table_catalog", "table_schema", "table_name", "table_type"],
+                    tables
+                        .iter()
+                        .map(|name| {
+                            vec![
+                                Some("orbit".to_string()),
+                                Some("public".to_string()),
+                                Some(name.clone()),
+                                Some("BASE TABLE".to_string()),
+                            ]
+                        })
+                        .collect(),
+                ),
+                (true, "schemata") => (
+                    vec!["catalog_name", "schema_name"],
+                    vec![vec![Some("orbit".to_string()), Some("public".to_string())]],
+                ),
+                _ => return Ok(None),
+            };
+
+        let all_columns: Vec<String> = all_columns.into_iter().map(str::to_string).collect();
+
+        // Honour an explicit select list by projecting; `*` keeps every column.
+        let selects_everything = columns.len() == 1 && columns[0] == "*";
+        if selects_everything {
+            return Ok(Some(QueryResult::Select {
+                columns: all_columns,
+                rows,
+            }));
+        }
+
+        let wanted: Vec<String> = columns.iter().map(|c| fold_identifier(c)).collect();
+        let indices: Vec<Option<usize>> = wanted
+            .iter()
+            .map(|want| all_columns.iter().position(|have| have == want))
+            .collect();
+
+        let projected = rows
+            .into_iter()
+            .map(|row| {
+                indices
+                    .iter()
+                    .map(|index| index.and_then(|i| row.get(i).cloned().flatten()))
+                    .collect()
+            })
+            .collect();
+
+        Ok(Some(QueryResult::Select {
+            columns: wanted,
+            rows: projected,
+        }))
+    }
+
+    /// Copy a table's current contents, for restoring on rollback.
+    ///
+    /// # Errors
+    /// Returns an error when the table cannot be read.
+    pub async fn snapshot_table(&self, table: &str) -> ProtocolResult<Option<Vec<TableRow>>> {
+        let Some(storage) = &self.persistent_storage else {
+            return Ok(None);
+        };
+        let table = fold_identifier(table);
+        if !storage.table_exists(&table).await? {
+            return Ok(None);
+        }
+        storage
+            .select_rows(&table, Vec::new(), Vec::new(), None)
+            .await
+            .map(Some)
+    }
+
+    /// Put a table back to a previously taken snapshot.
+    ///
+    /// Every row is removed and the snapshot re-inserted, so the table matches
+    /// the moment the snapshot was taken.
+    ///
+    /// # Errors
+    /// Returns an error when the table cannot be written.
+    pub async fn restore_table(&self, table: &str, rows: Vec<TableRow>) -> ProtocolResult<()> {
+        let Some(storage) = &self.persistent_storage else {
+            return Ok(());
+        };
+        let table = fold_identifier(table);
+
+        // An empty condition list matches every row.
+        storage.delete_rows(&table, Vec::new()).await?;
+        for row in rows {
+            storage.insert_row(&table, row).await?;
+        }
+        Ok(())
+    }
+
+    /// The table a write statement targets, if it names one.
+    ///
+    /// Used to decide what to snapshot when a transaction block opens a write.
+    pub fn write_target_table(sql: &str) -> Option<String> {
+        let trimmed = sql.trim();
+        let upper = trimmed.to_uppercase();
+
+        let after = if let Some(rest) = upper.strip_prefix("INSERT INTO ") {
+            &trimmed[trimmed.len() - rest.len()..]
+        } else if let Some(rest) = upper.strip_prefix("UPDATE ") {
+            &trimmed[trimmed.len() - rest.len()..]
+        } else if let Some(rest) = upper.strip_prefix("DELETE FROM ") {
+            &trimmed[trimmed.len() - rest.len()..]
+        } else if let Some(rest) = upper.strip_prefix("TRUNCATE TABLE ") {
+            &trimmed[trimmed.len() - rest.len()..]
+        } else if let Some(rest) = upper.strip_prefix("COPY ") {
+            &trimmed[trimmed.len() - rest.len()..]
+        } else {
+            return None;
+        };
+
+        after
+            .split(|c: char| c.is_whitespace() || c == '(')
+            .find(|token| !token.is_empty())
+            .map(fold_identifier)
     }
 
     /// Names of the tables this engine can see.
@@ -464,7 +728,9 @@ impl QueryEngine {
             | Statement::Update { table, .. }
             | Statement::Delete { table, .. } => (table.clone(), None),
             Statement::Insert { table, columns, .. } => (table.clone(), Some(columns.clone())),
-            Statement::CreateTable { .. } | Statement::DropTable { .. } => return Ok(types),
+            Statement::CreateTable { .. }
+            | Statement::DropTable { .. }
+            | Statement::Truncate { .. } => return Ok(types),
         };
 
         let Some(storage) = &self.persistent_storage else {
@@ -654,46 +920,117 @@ impl QueryEngine {
         Ok(StatementDescription::returning(described_columns))
     }
 
-    /// Statements whose shape cannot be derived from the catalogue.
+    /// Describe a statement the simple parser cannot, without running it.
     ///
-    /// `Execute` never sends a `RowDescription` — only `Describe` does — so
-    /// answering `NoData` for a statement that does return rows makes the client
-    /// discard them. For a read-only statement the shape is therefore learned by
-    /// running it here and keeping only the column names; the rows are thrown
-    /// away and fetched again by `Execute`, which costs a second execution but
-    /// cannot report a result set that does not match what arrives.
-    ///
-    /// Anything not recognisably read-only is described as returning no rows
-    /// rather than being run: `Describe` must not have side effects.
+    /// This used to *execute* read-only statements to learn their shape, which
+    /// meant every extended-protocol query ran twice — once for `Describe` and
+    /// once for `Execute` — with all the work that implies. It also made
+    /// `Describe` a side-effecting operation. The full parser can name the
+    /// output columns directly, so nothing needs to run.
     async fn describe_by_probing(
         &self,
         sql: &str,
         sql_upper: &str,
     ) -> ProtocolResult<StatementDescription> {
-        const READ_ONLY_PREFIXES: [&str; 6] =
+        use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
+        use crate::protocols::postgres_wire::sql::parser::SqlParser;
+        use crate::protocols::postgres_wire::sql::select_pipeline;
+
+        const ROW_RETURNING_PREFIXES: [&str; 6] =
             ["SELECT", "SHOW", "WITH", "EXPLAIN", "VALUES", "TABLE"];
 
-        if !READ_ONLY_PREFIXES
+        if !ROW_RETURNING_PREFIXES
             .iter()
             .any(|keyword| sql_upper.starts_with(keyword))
         {
             return Ok(StatementDescription::no_data());
         }
 
-        match self.execute_query(sql).await {
-            Ok(QueryResult::Select { columns, .. })
-            | Ok(QueryResult::Merge { columns, .. }) => {
-                Ok(StatementDescription::returning_text(columns))
+        let Ok(statement) = SqlParser::new().parse(sql) else {
+            return Ok(StatementDescription::no_data());
+        };
+
+        let AstStatement::Select(select) = statement else {
+            return Ok(StatementDescription::no_data());
+        };
+
+        let names = select_pipeline::output_column_names(&select);
+
+        // A wildcard is expanded from the table's schema, so the description
+        // matches the row that `Execute` will send.
+        if names.iter().any(|name| name == "*") {
+            let table = select
+                .from_clause
+                .as_ref()
+                .and_then(Self::from_clause_table_name);
+
+            if let (Some(table), Some(storage)) = (table, &self.persistent_storage) {
+                if let Some(schema) = storage.get_table_schema(&fold_identifier(&table)).await? {
+                    return Ok(StatementDescription::returning(
+                        schema
+                            .columns
+                            .iter()
+                            .map(|column| ColumnDescription {
+                                name: fold_identifier(&column.name),
+                                type_oid: column_type_oid(&column.data_type),
+                            })
+                            .collect(),
+                    ));
+                }
             }
-            Ok(_) => Ok(StatementDescription::no_data()),
-            // A statement that fails here will fail the same way at `Execute`,
-            // which is where the client should see the error.
-            Err(e) => {
-                tracing::debug!("describe probe failed, reporting no rows: {e}");
-                Ok(StatementDescription::no_data())
+            return Ok(StatementDescription::no_data());
+        }
+
+        // A plain column takes its declared type, so a client that asks for
+        // binary results decodes it correctly. Reporting everything as text
+        // made an integer column arrive as digits, which drivers reject when
+        // asked for an i32.
+        let table = select
+            .from_clause
+            .as_ref()
+            .and_then(Self::from_clause_table_name);
+
+        let schema = match (&table, &self.persistent_storage) {
+            (Some(table), Some(storage)) => {
+                storage.get_table_schema(&fold_identifier(table)).await?
             }
+            _ => None,
+        };
+
+        let described = names
+            .into_iter()
+            .map(|name| {
+                let type_oid = schema
+                    .as_ref()
+                    .and_then(|schema| {
+                        schema
+                            .columns
+                            .iter()
+                            .find(|column| column.name.eq_ignore_ascii_case(&name))
+                    })
+                    .map_or(super::messages::type_oids::TEXT, |column| {
+                        column_type_oid(&column.data_type)
+                    });
+                ColumnDescription { name, type_oid }
+            })
+            .collect();
+
+        Ok(StatementDescription::returning(described))
+    }
+
+    /// Table named by a simple FROM clause, if it is one.
+    fn from_clause_table_name(
+        from: &crate::protocols::postgres_wire::sql::ast::FromClause,
+    ) -> Option<String> {
+        use crate::protocols::postgres_wire::sql::ast::FromClause;
+
+        match from {
+            FromClause::Table { name, .. } => Some(name.full_name()),
+            _ => None,
         }
     }
+
+
 
     /// Execute a SQL query and return results
     pub async fn execute_query(&self, sql: &str) -> ProtocolResult<QueryResult> {
@@ -717,13 +1054,26 @@ impl QueryEngine {
             }
         }
 
-        // Try to parse and execute with the simple parser first
+        // Try to parse and execute with the simple parser
         // For unsupported statements, fall back to the comprehensive SQL engine
         let statement = match self.parse_sql(sql) {
             Ok(stmt) => stmt,
             Err(_) => {
+                // Clause-bearing SELECTs are executed over the rows in
+                // persistent storage — the same rows a plain SELECT reads.
+                // Sending them to the comprehensive engine instead meant the
+                // two answered from different copies of the table, so
+                // `SELECT id FROM t` and `SELECT id FROM t ORDER BY id`
+                // disagreed about how many rows existed.
+                if let Some(result) = self.select_over_storage(sql).await? {
+                    return Ok(result);
+                }
+
                 // Fall back to comprehensive SQL engine for unsupported statements
-                return self.execute_with_comprehensive_engine(sql).await;
+                return match self.execute_with_comprehensive_engine(sql).await {
+                    Ok(result) => Ok(result),
+                    Err(e) => Err(self.explain_unsupported_query(sql, e).await),
+                };
             }
         };
 
@@ -734,6 +1084,9 @@ impl QueryEngine {
                 table,
                 where_clause,
             } => {
+                if let Some(result) = self.select_system_catalog(&table, &columns).await? {
+                    return Ok(result);
+                }
                 if table.to_uppercase() == "ACTORS" {
                     self.execute_actor_select(columns, &table, where_clause)
                         .await
@@ -807,6 +1160,12 @@ impl QueryEngine {
                     ))
                 }
             }
+            Statement::Truncate { table } => match self.persistent_storage {
+                Some(ref storage) => self.execute_truncate(storage, &table).await,
+                None => Err(ProtocolError::PostgresError(
+                    "Persistent storage not enabled".to_string(),
+                )),
+            },
             Statement::DropTable { table, if_exists } => {
                 println!(
                     "DEBUG: Executing DropTable. Storage present: {}",
@@ -850,6 +1209,22 @@ impl QueryEngine {
     ) -> ProtocolResult<QueryResult> {
         use crate::protocols::postgres_wire::persistent_storage::ColumnType;
         use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
+
+        // Catalogue relations are answered before storage is consulted, so
+        // both query paths — the simple parser and this AST one — serve them.
+        // psql and every ORM read these during connection setup.
+        if let AstStatement::Select(select) = &stmt {
+            if let Some(from_clause) = &select.from_clause {
+                if let Some(table_name) = self.extract_table_name_from_from_clause(from_clause) {
+                    let projection = Self::projection_names(select);
+                    if let Some(result) =
+                        self.select_system_catalog(&table_name, &projection).await?
+                    {
+                        return Ok(result);
+                    }
+                }
+            }
+        }
 
         // Check if we can execute this persistently
         if let Some(ref storage) = self.persistent_storage {
@@ -940,7 +1315,12 @@ impl QueryEngine {
                                 let mut evaluator = ExpressionEvaluator::new();
                                 let context = EvaluationContext::empty();
                                 let val = evaluator.evaluate(expr, &context)?;
-                                row_values.push(val.to_postgres_string());
+                                // Rendered as a SQL literal, not as display
+                                // text: `to_postgres_string` turns NULL into an
+                                // empty string and a boolean into "t"/"f",
+                                // which then stored as text rather than as the
+                                // values they are.
+                                row_values.push(Self::sql_value_to_literal(&val));
                             }
                             values_list.push(row_values);
                         }
@@ -1146,6 +1526,8 @@ impl QueryEngine {
             self.parse_create_table(original_sql)
         } else if sql.starts_with("DROP TABLE") {
             self.parse_drop_table(original_sql)
+        } else if sql.starts_with("TRUNCATE") {
+            Self::parse_truncate(original_sql)
         } else {
             Err(ProtocolError::PostgresError(format!(
                 "Unsupported SQL statement: {sql}"
@@ -1153,8 +1535,466 @@ impl QueryEngine {
         }
     }
 
+    /// Run a `SELECT` over the rows held in persistent storage.
+    ///
+    /// Returns `None` when the statement is not a single-table SELECT of a
+    /// stored table, leaving it to the engine that can handle it.
+    ///
+    /// # Errors
+    /// Returns an error when storage cannot be read or an expression cannot be
+    /// evaluated.
+    async fn select_over_storage(&self, sql: &str) -> ProtocolResult<Option<QueryResult>> {
+        use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
+        use crate::protocols::postgres_wire::sql::parser::SqlParser;
+        use crate::protocols::postgres_wire::sql::select_pipeline;
+
+        if self.persistent_storage.is_none() {
+            return Ok(None);
+        }
+
+        let Ok(statement) = SqlParser::new().parse(sql) else {
+            return Ok(None);
+        };
+        let AstStatement::Select(select) = statement else {
+            return Ok(None);
+        };
+
+        // Set operations combine two result sets, which this path does not do.
+        if select.set_operation.is_some() {
+            return Ok(None);
+        }
+
+        let Some(from) = select.from_clause.as_ref() else {
+            return Ok(None);
+        };
+
+        let Some((rows, column_order)) = self.rows_from_clause(from).await? else {
+            return Ok(None);
+        };
+
+        // Subqueries are executed here and replaced by the values they yield,
+        // so the expression evaluator — which has no access to storage — never
+        // has to run one.
+        let mut select = *select;
+        if let Some(predicate) = select.where_clause.take() {
+            select.where_clause = Some(self.resolve_subqueries(predicate).await?);
+        }
+        if let Some(having) = select.having.take() {
+            select.having = Some(self.resolve_subqueries(having).await?);
+        }
+
+        let output = select_pipeline::run_select(&select, rows)?;
+
+        // A wildcard is named by the pipeline as `*`; the real names come from
+        // the tables involved, in declaration order.
+        let columns = if output.columns.iter().any(|name| name == "*") {
+            column_order
+        } else {
+            output.columns
+        };
+
+        Ok(Some(QueryResult::Select {
+            columns,
+            rows: output.rows,
+        }))
+    }
+
+    /// Replace subqueries in an expression with the values they produce.
+    ///
+    /// A scalar subquery becomes its single value, `IN (SELECT ...)` becomes an
+    /// explicit list, and `EXISTS (SELECT ...)` becomes a boolean. Correlated
+    /// subqueries — those referring to the outer row — are left in place and
+    /// reported by the evaluator, because they cannot be reduced to a constant
+    /// before the outer row is known.
+    fn resolve_subqueries<'a>(
+        &'a self,
+        expr: crate::protocols::postgres_wire::sql::ast::Expression,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = ProtocolResult<crate::protocols::postgres_wire::sql::ast::Expression>,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            use crate::protocols::postgres_wire::sql::ast::{Expression, InList};
+            use crate::protocols::postgres_wire::sql::types::SqlValue;
+
+            Ok(match expr {
+                Expression::Subquery(select) => {
+                    let values = self.run_subquery(&select).await?;
+                    // A scalar subquery with no rows is NULL in SQL.
+                    Expression::Literal(values.into_iter().next().unwrap_or(SqlValue::Null))
+                }
+                Expression::Exists(select) => {
+                    let values = self.run_subquery(&select).await?;
+                    Expression::Literal(SqlValue::Boolean(!values.is_empty()))
+                }
+                Expression::In {
+                    expr,
+                    list: InList::Subquery(select),
+                    negated,
+                } => {
+                    let values = self.run_subquery(&select).await?;
+                    Expression::In {
+                        expr: Box::new(self.resolve_subqueries(*expr).await?),
+                        list: InList::Expressions(
+                            values.into_iter().map(Expression::Literal).collect(),
+                        ),
+                        negated,
+                    }
+                }
+                Expression::Binary {
+                    left,
+                    operator,
+                    right,
+                } => Expression::Binary {
+                    left: Box::new(self.resolve_subqueries(*left).await?),
+                    operator,
+                    right: Box::new(self.resolve_subqueries(*right).await?),
+                },
+                other => other,
+            })
+        })
+    }
+
+    /// Run a subquery and return its first column, one value per row.
+    ///
+    /// # Errors
+    /// Returns an error when the subquery cannot be executed over storage.
+    async fn run_subquery(
+        &self,
+        select: &crate::protocols::postgres_wire::sql::ast::SelectStatement,
+    ) -> ProtocolResult<Vec<crate::protocols::postgres_wire::sql::types::SqlValue>> {
+        use crate::protocols::postgres_wire::sql::types::SqlValue;
+
+        // Rendered back to SQL would lose fidelity, so the statement is
+        // executed directly through the same storage path.
+        let Some(from) = select.from_clause.as_ref() else {
+            return Err(ProtocolError::PostgresError(
+                "subquery without a FROM clause is not supported here".to_string(),
+            ));
+        };
+
+        let Some((rows, _)) = self.rows_from_clause(from).await? else {
+            return Err(ProtocolError::PostgresError(
+                "subquery reads a source this engine cannot assemble".to_string(),
+            ));
+        };
+
+        let output =
+            crate::protocols::postgres_wire::sql::select_pipeline::run_select(select, rows)?;
+
+        // Typed the way an untyped SQL literal is: a value that reads as a
+        // number is a number. Returning everything as text made
+        // `WHERE amount = (SELECT MAX(amount) ...)` compare an integer against
+        // the string "30" and fail.
+        Ok(output
+            .rows
+            .into_iter()
+            .map(|row| match row.into_iter().next() {
+                Some(Some(text)) => Self::text_to_sql_value(&text),
+                _ => SqlValue::Null,
+            })
+            .collect())
+    }
+
+    /// Interpret text the way an untyped SQL literal is interpreted.
+    fn text_to_sql_value(text: &str) -> crate::protocols::postgres_wire::sql::types::SqlValue {
+        use crate::protocols::postgres_wire::sql::types::SqlValue;
+
+        if let Ok(n) = text.parse::<i32>() {
+            return SqlValue::Integer(n);
+        }
+        if let Ok(n) = text.parse::<i64>() {
+            return SqlValue::BigInt(n);
+        }
+        if let Ok(n) = text.parse::<f64>() {
+            return SqlValue::DoublePrecision(n);
+        }
+        match text {
+            "t" | "true" => SqlValue::Boolean(true),
+            "f" | "false" => SqlValue::Boolean(false),
+            other => SqlValue::Text(other.to_string()),
+        }
+    }
+
+    /// Build the row set a FROM clause denotes, plus its column order.
+    ///
+    /// Handles a single table and joins of tables. Returns `None` for anything
+    /// else, so the statement falls through to an engine that may handle it.
+    ///
+    /// Joins are evaluated as a nested loop over the two sides. That is
+    /// quadratic and there is no index selection: acceptable for the table
+    /// sizes this engine holds, and the honest starting point — a plan that
+    /// claims to use an index it does not have would be worse.
+    fn rows_from_clause<'a>(
+        &'a self,
+        from: &'a crate::protocols::postgres_wire::sql::ast::FromClause,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = ProtocolResult<
+                        Option<(Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>, Vec<String>)>,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            use crate::protocols::postgres_wire::sql::ast::{FromClause, JoinCondition, JoinType};
+            use crate::protocols::postgres_wire::sql::expression_evaluator::{
+                EvaluationContext, ExpressionEvaluator,
+            };
+            use crate::protocols::postgres_wire::sql::select_pipeline::Row;
+            use crate::protocols::postgres_wire::sql::types::SqlValue;
+
+            let Some(storage) = &self.persistent_storage else {
+                return Ok(None);
+            };
+
+            match from {
+                FromClause::Table { name, alias, .. } => {
+                    let table = fold_identifier(&name.full_name());
+                    let Some(schema) = storage.get_table_schema(&table).await? else {
+                        return Ok(None);
+                    };
+
+                    // Rows carry both the bare column name and its qualified
+                    // form, so `a.id` and `id` both resolve after a join.
+                    let qualifier = alias
+                        .as_ref()
+                        .map(|a| fold_identifier(&a.name))
+                        .unwrap_or_else(|| table.clone());
+
+                    let stored = storage
+                        .select_rows(&table, Vec::new(), Vec::new(), None)
+                        .await?;
+
+                    let rows: Vec<Row> = stored
+                        .into_iter()
+                        .map(|row| {
+                            let mut out = Row::new();
+                            for column in &schema.columns {
+                                let value = row
+                                    .values
+                                    .get(&column.name)
+                                    .or_else(|| {
+                                        row.values.iter().find_map(|(key, value)| {
+                                            key.eq_ignore_ascii_case(&column.name)
+                                                .then_some(value)
+                                        })
+                                    })
+                                    .cloned()
+                                    .unwrap_or(JsonValue::Null);
+                                let value = Self::json_to_sql_value(&value, &column.data_type);
+                                let name = fold_identifier(&column.name);
+                                out.insert(format!("{qualifier}.{name}"), value.clone());
+                                out.insert(name, value);
+                            }
+                            out
+                        })
+                        .collect();
+
+                    let order = schema
+                        .columns
+                        .iter()
+                        .map(|column| fold_identifier(&column.name))
+                        .collect();
+
+                    Ok(Some((rows, order)))
+                }
+
+                FromClause::Join {
+                    left,
+                    join_type,
+                    right,
+                    condition,
+                } => {
+                    let Some((left_rows, mut order)) = self.rows_from_clause(left).await? else {
+                        return Ok(None);
+                    };
+                    let Some((right_rows, right_order)) = self.rows_from_clause(right).await?
+                    else {
+                        return Ok(None);
+                    };
+                    order.extend(right_order);
+
+                    let mut evaluator = ExpressionEvaluator::new();
+                    let mut joined = Vec::new();
+
+                    for left_row in &left_rows {
+                        let mut matched = false;
+                        for right_row in &right_rows {
+                            let mut combined = left_row.clone();
+                            for (key, value) in right_row {
+                                // A bare name present on both sides keeps the
+                                // left one; the qualified names stay distinct.
+                                combined.entry(key.clone()).or_insert_with(|| value.clone());
+                                if key.contains('.') {
+                                    combined.insert(key.clone(), value.clone());
+                                }
+                            }
+
+                            let keep = match condition {
+                                JoinCondition::On(predicate) => {
+                                    let context = EvaluationContext::with_row(combined.clone());
+                                    matches!(
+                                        evaluator.evaluate(predicate, &context)?,
+                                        SqlValue::Boolean(true)
+                                    )
+                                }
+                                JoinCondition::Using(columns) => columns.iter().all(|column| {
+                                    let column = fold_identifier(column);
+                                    left_row.get(&column) == right_row.get(&column)
+                                }),
+                                // Without shared column information a natural
+                                // join cannot be resolved here.
+                                JoinCondition::Natural => return Ok(None),
+                            };
+
+                            if keep || matches!(join_type, JoinType::Cross) {
+                                matched = true;
+                                joined.push(combined);
+                            }
+                        }
+
+                        // A left outer join keeps an unmatched left row with
+                        // NULLs for the right side.
+                        if !matched && matches!(join_type, JoinType::LeftOuter) {
+                            joined.push(left_row.clone());
+                        }
+                    }
+
+                    Ok(Some((joined, order)))
+                }
+
+                _ => Ok(None),
+            }
+        })
+    }
+
+    /// Convert a stored value into the typed value the evaluator works with.
+    fn json_to_sql_value(
+        value: &JsonValue,
+        column_type: &ColumnType,
+    ) -> crate::protocols::postgres_wire::sql::types::SqlValue {
+        use crate::protocols::postgres_wire::sql::types::SqlValue;
+
+        match value {
+            JsonValue::Null => SqlValue::Null,
+            JsonValue::Bool(b) => SqlValue::Boolean(*b),
+            JsonValue::Number(n) => match column_type {
+                ColumnType::BigInt => n.as_i64().map_or(SqlValue::Null, SqlValue::BigInt),
+                ColumnType::Double => n.as_f64().map_or(SqlValue::Null, SqlValue::DoublePrecision),
+                ColumnType::Serial | ColumnType::Integer => n
+                    .as_i64()
+                    .and_then(|v| i32::try_from(v).ok())
+                    .map_or_else(
+                        || n.as_i64().map_or(SqlValue::Null, SqlValue::BigInt),
+                        SqlValue::Integer,
+                    ),
+                // The column is not declared numeric, so keep the number's own
+                // width rather than forcing it into the declared type.
+                _ => n
+                    .as_i64()
+                    .map(SqlValue::BigInt)
+                    .or_else(|| n.as_f64().map(SqlValue::DoublePrecision))
+                    .unwrap_or(SqlValue::Null),
+            },
+            JsonValue::String(s) => match column_type {
+                ColumnType::Timestamp => SqlValue::Text(s.clone()),
+                _ => SqlValue::Text(s.clone()),
+            },
+            other => SqlValue::Json(other.clone()),
+        }
+    }
+
+    /// Turn a comprehensive-engine failure into an accurate message.
+    ///
+    /// That engine keeps its own tables and cannot see persistent storage, so
+    /// it reports "table does not exist" for a table that plainly does. Saying
+    /// which feature is missing is the truthful answer, and the actionable one.
+    async fn explain_unsupported_query(&self, sql: &str, error: ProtocolError) -> ProtocolError {
+        let text = error.to_string();
+        if !text.contains("does not exist") {
+            return error;
+        }
+
+        let Some(storage) = &self.persistent_storage else {
+            return error;
+        };
+
+        // Which table the statement names, if the simple parser can tell.
+        let upper = sql.to_uppercase();
+        let Some(from) = upper.find(" FROM ") else {
+            return error;
+        };
+        let table = sql[from + 6..]
+            .split_whitespace()
+            .next()
+            .map(fold_identifier)
+            .unwrap_or_default();
+
+        match storage.table_exists(&table).await {
+            Ok(true) => ProtocolError::PostgresError(format!(
+                "Table '{table}' exists, but this query uses SQL features that are not yet                  supported over stored tables (aggregates, GROUP BY, ORDER BY, LIMIT, JOIN,                  DISTINCT and subqueries are executed only by the in-memory engine). The                  statement was refused rather than run without those clauses."
+            )),
+            _ => error,
+        }
+    }
+
+    /// Clauses this parser does not implement.
+    ///
+    /// It parses the statement around them and then ignores them, so
+    /// `SELECT ... LIMIT 2` returned every row and `GROUP BY` returned the
+    /// ungrouped rows — wrong answers reported as success. Refusing here sends
+    /// the statement to the comprehensive engine instead, and if that cannot
+    /// run it either the client gets an error rather than bad data.
+    const UNSUPPORTED_SELECT_CLAUSES: [&'static str; 19] = [
+        " LIMIT ", " OFFSET ", " GROUP BY ", " HAVING ", " DISTINCT ", " JOIN ", " UNION ",
+        " INTERSECT ", " EXCEPT ", " ORDER BY ",
+        // The storage matcher implements LIKE as a case-insensitive `contains`
+        // after deleting every `%`, so `'al%'` matched anywhere in the value
+        // instead of anchoring at the start — and `BETWEEN`/`IS` it does not
+        // implement at all. The expression evaluator handles all of them.
+        " LIKE ", " ILIKE ", " BETWEEN ", " IS NULL", " IS NOT ",
+        // This parser reads a WHERE clause as a single `column op value`, so a
+        // second condition was swallowed into the value: `WHERE a = 'x' AND b
+        // > 1` compared `a` against the text "'x' AND b > 1" and matched
+        // nothing.
+        " AND ", " OR ", " NOT ", " IN ",
+    ];
+
+    /// Whether the simple parser would silently ignore part of `sql`.
+    fn has_unsupported_select_clause(sql: &str) -> bool {
+        // Padded so the check sees clause keywords at the end too.
+        let padded = format!(" {} ", sql.trim().trim_end_matches(';'));
+        let upper = padded.to_uppercase();
+
+        if Self::UNSUPPORTED_SELECT_CLAUSES
+            .iter()
+            .any(|clause| upper.contains(clause))
+        {
+            return true;
+        }
+
+        // Any call in the select list — `COUNT(*)`, `SUM(x)`, a subquery. This
+        // parser treats the projection as bare column names, so it returned a
+        // NULL column named `COUNT(*)` for every row instead of a count.
+        let projection_end = upper.find(" FROM ").unwrap_or(upper.len());
+        upper[..projection_end].contains('(') || upper.contains("(SELECT ")
+    }
+
     /// Parse SELECT statement
     fn parse_select(&self, sql: &str) -> ProtocolResult<Statement> {
+        if Self::has_unsupported_select_clause(sql) {
+            return Err(ProtocolError::PostgresError(
+                "statement uses a clause this parser does not implement".to_string(),
+            ));
+        }
+
         // Simple parser: SELECT columns FROM table [WHERE condition]
         let parts: Vec<&str> = sql.split_whitespace().collect();
 
@@ -1468,14 +2308,10 @@ impl QueryEngine {
                     current_value.push(ch);
                 }
                 ',' if !in_quotes && brace_depth == 0 => {
-                    // Found a separator - add the current value
-                    values.push(
-                        current_value
-                            .trim()
-                            .trim_matches('\'')
-                            .trim_matches('"')
-                            .to_string(),
-                    );
+                    // Quotes are kept; `literal_to_json` strips them. Stripping
+                    // here made the NULL keyword indistinguishable from the text
+                    // 'NULL', and stored '123' as the number 123.
+                    values.push(current_value.trim().to_string());
                     current_value.clear();
                 }
                 _ => {
@@ -1486,17 +2322,68 @@ impl QueryEngine {
         }
 
         // Add the last value
-        if !current_value.is_empty() {
-            values.push(
-                current_value
-                    .trim()
-                    .trim_matches('\'')
-                    .trim_matches('"')
-                    .to_string(),
-            );
+        if !current_value.trim().is_empty() {
+            values.push(current_value.trim().to_string());
         }
 
         values
+    }
+
+    /// Render a value as the SQL literal that denotes it.
+    ///
+    /// The inverse of [`QueryEngine::literal_to_json`], so a value that goes
+    /// out through one and back through the other is unchanged.
+    pub fn sql_value_to_literal(
+        value: &crate::protocols::postgres_wire::sql::types::SqlValue,
+    ) -> String {
+        use crate::protocols::postgres_wire::sql::types::SqlValue;
+
+        match value {
+            SqlValue::Null => "NULL".to_string(),
+            SqlValue::Boolean(b) => b.to_string(),
+            SqlValue::SmallInt(n) => n.to_string(),
+            SqlValue::Integer(n) => n.to_string(),
+            SqlValue::BigInt(n) => n.to_string(),
+            SqlValue::Real(n) => n.to_string(),
+            SqlValue::DoublePrecision(n) => n.to_string(),
+            SqlValue::Decimal(d) => d.to_string(),
+            // Everything else is text on the way in; quoting keeps it text.
+            other => format!("'{}'", other.to_postgres_string().replace('\'', "''")),
+        }
+    }
+
+    /// Convert a SQL literal as written into the value to store.
+    ///
+    /// Quoting carries meaning: `NULL` is the null value while `'NULL'` is the
+    /// three-letter string, and `123` is a number while `'123'` is text.
+    pub fn literal_to_json(literal: &str) -> JsonValue {
+        let trimmed = literal.trim();
+
+        let quoted = trimmed
+            .strip_prefix('\'')
+            .and_then(|rest| rest.strip_suffix('\''))
+            .or_else(|| {
+                trimmed
+                    .strip_prefix('"')
+                    .and_then(|rest| rest.strip_suffix('"'))
+            });
+
+        if let Some(inner) = quoted {
+            // `''` is how a quote is escaped inside a SQL string literal.
+            return JsonValue::String(inner.replace("''", "'"));
+        }
+
+        if trimmed.eq_ignore_ascii_case("NULL") {
+            return JsonValue::Null;
+        }
+        if trimmed.eq_ignore_ascii_case("TRUE") {
+            return JsonValue::Bool(true);
+        }
+        if trimmed.eq_ignore_ascii_case("FALSE") {
+            return JsonValue::Bool(false);
+        }
+
+        serde_json::from_str(trimmed).unwrap_or_else(|_| JsonValue::String(trimmed.to_string()))
     }
 
     /// Parse WHERE clause
@@ -1512,11 +2399,9 @@ impl QueryEngine {
         let operator = parts[1].to_string();
         // Parse the value more carefully - it might span multiple parts if it contains spaces
         let value_part = parts[2..].join(" ");
-        let value = value_part
-            .trim_end_matches(';') // Remove trailing semicolon first
-            .trim_matches('\'')
-            .trim_matches('"')
-            .to_string();
+        // Quotes are kept and interpreted by `literal_to_json`, so `WHERE x =
+        // NULL` and `WHERE x = 'NULL'` stay distinguishable.
+        let value = value_part.trim_end_matches(';').trim().to_string();
 
         Ok(WhereClause {
             conditions: vec![Condition {
@@ -1848,10 +2733,7 @@ impl QueryEngine {
                 .map(|c| QueryCondition {
                     column: fold_identifier(&c.column),
                     operator: c.operator,
-                    value: match serde_json::from_str(&c.value) {
-                        Ok(json_val) => json_val,
-                        Err(_) => JsonValue::String(c.value),
-                    },
+                    value: Self::literal_to_json(&c.value),
                 })
                 .collect()
         } else {
@@ -1898,13 +2780,23 @@ impl QueryEngine {
                         let value = row
                             .values
                             .get(col)
-                            .or_else(|| row.values.get(&col.to_uppercase()));
-                        value.map(|v| match v {
-                            JsonValue::String(s) => s.clone(),
-                            JsonValue::Number(n) => n.to_string(),
-                            JsonValue::Bool(b) => b.to_string(),
-                            JsonValue::Null => "NULL".to_string(),
-                            _ => v.to_string(),
+                            .or_else(|| row.values.get(&col.to_uppercase()))
+                            .or_else(|| {
+                                // Rows written before identifiers were folded
+                                // consistently may carry either case.
+                                row.values.iter().find_map(|(key, value)| {
+                                    key.eq_ignore_ascii_case(col).then_some(value)
+                                })
+                            });
+                        // `None` is SQL NULL on the wire. Rendering it as the
+                        // text "NULL" made a null indistinguishable from a row
+                        // whose value is the three-letter string.
+                        value.and_then(|v| match v {
+                            JsonValue::Null => None,
+                            JsonValue::String(s) => Some(s.clone()),
+                            JsonValue::Number(n) => Some(n.to_string()),
+                            JsonValue::Bool(b) => Some(b.to_string()),
+                            other => Some(other.to_string()),
                         })
                     })
                     .collect()
@@ -1966,13 +2858,13 @@ impl QueryEngine {
             }
 
             for (col, val) in columns.iter().zip(values.iter()) {
-                let col_upper = col.to_uppercase();
+                let col_upper = fold_identifier(col);
 
                 // Find column in schema to get correct casing
                 let schema_col = schema
                     .columns
                     .iter()
-                    .find(|c| c.name.to_uppercase() == col_upper);
+                    .find(|c| fold_identifier(&c.name) == col_upper);
 
                 if let Some(column_def) = schema_col {
                     // Skip SERIAL columns as they're auto-generated
@@ -1980,24 +2872,13 @@ impl QueryEngine {
                         continue;
                     }
 
-                    // Try to parse as JSON, fall back to string
-                    let json_val = match serde_json::from_str(val) {
-                        Ok(json) => json,
-                        Err(_) => JsonValue::String(val.clone()),
-                    };
-
-                    // Use schema column name
-                    row_values.insert(column_def.name.clone(), json_val);
+                    row_values.insert(column_def.name.clone(), Self::literal_to_json(val));
                 } else {
                     // Column not found in schema, skip or insert with uppercase?
                     // For now, insert with uppercase as fallback, but this might be wrong if schema is strict
                     // But if we are here, it means we are inserting a column that doesn't exist in schema?
                     // Postgres would error. For now, let's just use uppercase as before.
-                    let json_val = match serde_json::from_str(val) {
-                        Ok(json) => json,
-                        Err(_) => JsonValue::String(val.clone()),
-                    };
-                    row_values.insert(col_upper, json_val);
+                    row_values.insert(col_upper, Self::literal_to_json(val));
                 }
             }
 
@@ -2034,11 +2915,7 @@ impl QueryEngine {
         // Convert SET clauses to HashMap
         let mut set_values = std::collections::HashMap::new();
         for (col, val) in set_clauses {
-            let json_val = match serde_json::from_str(&val) {
-                Ok(json) => json,
-                Err(_) => JsonValue::String(val),
-            };
-            set_values.insert(col.to_uppercase(), json_val); // Normalize to uppercase
+            set_values.insert(fold_identifier(&col), Self::literal_to_json(&val));
         }
 
         // Convert WHERE clause to QueryConditions
@@ -2048,10 +2925,7 @@ impl QueryEngine {
                 .map(|c| QueryCondition {
                     column: fold_identifier(&c.column),
                     operator: c.operator,
-                    value: match serde_json::from_str(&c.value) {
-                        Ok(json_val) => json_val,
-                        Err(_) => JsonValue::String(c.value),
-                    },
+                    value: Self::literal_to_json(&c.value),
                 })
                 .collect()
         } else {
@@ -2088,10 +2962,7 @@ impl QueryEngine {
                 .map(|c| QueryCondition {
                     column: fold_identifier(&c.column),
                     operator: c.operator,
-                    value: match serde_json::from_str(&c.value) {
-                        Ok(json_val) => json_val,
-                        Err(_) => JsonValue::String(c.value),
-                    },
+                    value: Self::literal_to_json(&c.value),
                 })
                 .collect()
         } else {
@@ -2165,7 +3036,11 @@ impl QueryEngine {
                 .any(|c| c.to_uppercase() == "NOT" || c.to_uppercase().contains("NULL"));
 
             column_defs.push(ColumnDefinition {
-                name: col.name.to_uppercase(), // Normalize to uppercase for consistency
+                // Folded like every other identifier, so the keys a row is
+                // written with are the keys a query looks it up by. Storing
+                // these uppercase while queries folded to lower made
+                // `SELECT <col>` return NULL for a column that was present.
+                name: fold_identifier(&col.name),
                 data_type: column_type,
                 nullable,
                 default_value: None, // TODO: Parse DEFAULT values
@@ -2183,6 +3058,50 @@ impl QueryEngine {
         storage.create_table(schema).await?;
 
         Ok(QueryResult::Update { count: 0 })
+    }
+
+    /// Parse `TRUNCATE [TABLE] name [CASCADE|RESTRICT]`.
+    fn parse_truncate(sql: &str) -> ProtocolResult<Statement> {
+        let rest = sql
+            .trim()
+            .trim_end_matches(';')
+            .split_whitespace()
+            .skip(1)
+            .skip_while(|word| word.eq_ignore_ascii_case("TABLE"))
+            .find(|word| {
+                !word.eq_ignore_ascii_case("ONLY")
+                    && !word.eq_ignore_ascii_case("CASCADE")
+                    && !word.eq_ignore_ascii_case("RESTRICT")
+            })
+            .ok_or_else(|| {
+                ProtocolError::PostgresError("TRUNCATE requires a table name".to_string())
+            })?;
+
+        Ok(Statement::Truncate {
+            table: fold_identifier(rest.trim_end_matches(',')),
+        })
+    }
+
+    /// Execute TRUNCATE on persistent storage.
+    ///
+    /// Routed here rather than to the SQL engine because that engine truncates
+    /// its own table state; against a stored table it reported success while
+    /// every row survived.
+    async fn execute_truncate(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+    ) -> ProtocolResult<QueryResult> {
+        if !storage.table_exists(table).await? {
+            return Err(ProtocolError::PostgresError(format!(
+                "Table '{table}' does not exist"
+            )));
+        }
+
+        let count = storage.delete_rows(table, vec![]).await?;
+        Ok(QueryResult::Delete {
+            count: count as usize,
+        })
     }
 
     /// Execute DROP TABLE on persistent storage
@@ -2341,5 +3260,97 @@ mod literal_case_tests {
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod literal_tests {
+    use super::*;
+
+    /// The NULL keyword and the string 'NULL' are different values. Stripping
+    /// quotes before conversion collapsed them.
+    #[test]
+    fn the_null_keyword_is_null_but_quoted_null_is_text() {
+        assert_eq!(QueryEngine::literal_to_json("NULL"), JsonValue::Null);
+        assert_eq!(QueryEngine::literal_to_json("null"), JsonValue::Null);
+        assert_eq!(
+            QueryEngine::literal_to_json("'NULL'"),
+            JsonValue::String("NULL".to_string())
+        );
+    }
+
+    /// A quoted number is text. Storing it as a number loses leading zeros and
+    /// changes how it compares.
+    #[test]
+    fn a_quoted_number_stays_text() {
+        assert_eq!(
+            QueryEngine::literal_to_json("'0123'"),
+            JsonValue::String("0123".to_string())
+        );
+        assert_eq!(
+            QueryEngine::literal_to_json("123"),
+            JsonValue::Number(123.into())
+        );
+    }
+
+    #[test]
+    fn booleans_are_recognised_unquoted_only() {
+        assert_eq!(QueryEngine::literal_to_json("true"), JsonValue::Bool(true));
+        assert_eq!(QueryEngine::literal_to_json("FALSE"), JsonValue::Bool(false));
+        assert_eq!(
+            QueryEngine::literal_to_json("'true'"),
+            JsonValue::String("true".to_string())
+        );
+    }
+
+    #[test]
+    fn an_escaped_quote_inside_a_literal_is_unescaped_once() {
+        assert_eq!(
+            QueryEngine::literal_to_json("'O''Brien'"),
+            JsonValue::String("O'Brien".to_string())
+        );
+    }
+
+    #[test]
+    fn an_unquoted_word_is_kept_as_text() {
+        assert_eq!(
+            QueryEngine::literal_to_json("hello"),
+            JsonValue::String("hello".to_string())
+        );
+    }
+
+    /// A value rendered as a literal and read back must be unchanged.
+    #[test]
+    fn values_round_trip_through_their_literal_form() {
+        use crate::protocols::postgres_wire::sql::types::SqlValue;
+
+        let cases = [
+            (SqlValue::Null, JsonValue::Null),
+            (SqlValue::Integer(42), JsonValue::Number(42.into())),
+            (SqlValue::BigInt(-7), JsonValue::Number((-7).into())),
+            (SqlValue::Boolean(true), JsonValue::Bool(true)),
+            (
+                SqlValue::Text("hello".to_string()),
+                JsonValue::String("hello".to_string()),
+            ),
+            // The three-letter string, not the null value.
+            (
+                SqlValue::Text("NULL".to_string()),
+                JsonValue::String("NULL".to_string()),
+            ),
+            (
+                SqlValue::Text("O'Brien".to_string()),
+                JsonValue::String("O'Brien".to_string()),
+            ),
+        ];
+
+        for (value, expected) in cases {
+            let literal = QueryEngine::sql_value_to_literal(&value);
+            assert_eq!(
+                QueryEngine::literal_to_json(&literal),
+                expected,
+                "round trip failed for {value:?} via {literal:?}"
+            );
+        }
     }
 }
