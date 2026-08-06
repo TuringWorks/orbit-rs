@@ -822,7 +822,7 @@ impl Default for PostgresWireProtocol {
 }
 
 // Add rand dependency for secret_key generation
-use rand::Rng;
+use rand::RngExt;
 impl PostgresWireProtocol {
     /// Generate a random cancel key
     /// PostgreSQL 18 (protocol 3.2): Supports 4-256 bytes

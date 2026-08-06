@@ -5,7 +5,7 @@
 //! - Multi-Head Attention
 //! - Sparse Attention
 //! - Cross Attention
-use rand::Rng;
+use rand::RngExt;
 
 use ndarray::{Array2, Array3, Array4};
 use serde::{Deserialize, Serialize};

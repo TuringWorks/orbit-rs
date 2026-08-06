@@ -718,15 +718,15 @@ impl WindowsSystemMonitor {
         // In a real implementation, this would query performance counters
         // For now, we'll simulate realistic values with some variation
 
-        use rand::Rng;
+        use rand::RngExt;
         let mut rng = rand::rng();
 
         Ok(SystemConditions {
-            cpu_temperature_c: Some(45.0 + rng.gen::<f32>() * 10.0),
-            gpu_temperature_c: Some(55.0 + rng.gen::<f32>() * 15.0),
-            cpu_utilization: 20.0 + rng.gen::<f32>() * 30.0,
-            gpu_utilization: 10.0 + rng.gen::<f32>() * 20.0,
-            memory_utilization: 60.0 + rng.gen::<f32>() * 20.0,
+            cpu_temperature_c: Some(45.0 + rng.random::<f32>() * 10.0),
+            gpu_temperature_c: Some(55.0 + rng.random::<f32>() * 15.0),
+            cpu_utilization: 20.0 + rng.random::<f32>() * 30.0,
+            gpu_utilization: 10.0 + rng.random::<f32>() * 20.0,
+            memory_utilization: 60.0 + rng.random::<f32>() * 20.0,
             power_state: PowerState::Balanced,
             thermal_throttling: false,
             concurrent_workloads: rng.random_range(0..4),

@@ -10,7 +10,7 @@ use orbit_compute::vector_similarity::{
 
 /// Generate random vectors for testing
 fn generate_random_vectors(count: usize, dimension: usize) -> Vec<Vec<f32>> {
-    use rand::Rng;
+    use rand::RngExt;
     let mut rng = rand::rng();
     (0..count)
         .map(|_| {
@@ -23,7 +23,7 @@ fn generate_random_vectors(count: usize, dimension: usize) -> Vec<Vec<f32>> {
 
 /// Generate a random query vector
 fn generate_query_vector(dimension: usize) -> Vec<f32> {
-    use rand::Rng;
+    use rand::RngExt;
     let mut rng = rand::rng();
     (0..dimension)
         .map(|_| rng.random_range(-1.0..1.0))

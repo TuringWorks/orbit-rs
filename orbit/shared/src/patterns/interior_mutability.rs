@@ -3,10 +3,8 @@
 //! Demonstrates Cell, RefCell, and other interior mutability patterns for
 //! scenarios where mutation is needed through shared references.
 
-use crate::error::{OrbitError, OrbitResult};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -61,6 +59,16 @@ pub struct Cache<K, V> {
     data: RefCell<HashMap<K, V>>,
     hits: Cell<usize>,
     misses: Cell<usize>,
+}
+
+impl<K, V> Default for Cache<K, V>
+where
+    K: std::hash::Hash + Eq + Clone,
+    V: Clone,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<K, V> Cache<K, V>
@@ -178,14 +186,13 @@ impl AtomicMetrics {
         MetricsSnapshot {
             total_operations: self.operations.load(Ordering::Relaxed),
             total_errors: self.errors.load(Ordering::Relaxed),
-            average_duration_ns: {
-                let ops = self.operations.load(Ordering::Relaxed);
-                if ops == 0 {
-                    0
-                } else {
-                    self.total_duration_ns.load(Ordering::Relaxed) / ops
-                }
-            },
+            // No operations recorded means "no average", reported as 0 rather
+            // than dividing by zero.
+            average_duration_ns: self
+                .total_duration_ns
+                .load(Ordering::Relaxed)
+                .checked_div(self.operations.load(Ordering::Relaxed))
+                .unwrap_or(0),
             active_operations: self.active_operations.load(Ordering::Relaxed),
             circuit_open: self.circuit_open.load(Ordering::Relaxed),
         }
@@ -248,6 +255,12 @@ struct ConfigData {
     timeout_ms: u64,
     retry_attempts: u32,
     enabled_features: Vec<String>,
+}
+
+impl Default for SharedConfig {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SharedConfig {
@@ -329,6 +342,18 @@ pub struct Observable {
     observers: RwLock<Vec<Arc<dyn Observer>>>,
 }
 
+impl Default for Observable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for Observable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Observable {
     pub fn new() -> Self {
         Self {
@@ -355,6 +380,18 @@ impl Observable {
 // Simple observer implementation for testing
 pub struct EventLogger {
     events: Mutex<Vec<String>>,
+}
+
+impl Default for EventLogger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for EventLogger {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EventLogger {

@@ -339,33 +339,50 @@ impl SecurityAuditLogger {
 
 /// Attack detection patterns
 pub struct AttackDetector {
-    suspicious_patterns: Vec<regex::Regex>,
+    /// Each suspicious pattern paired with the attack type and confidence it
+    /// indicates, so classification does not depend on the vector's ordering.
+    suspicious_patterns: Vec<(&'static str, f32, regex::Regex)>,
     rate_limiter: RateLimiter,
 }
 
 impl AttackDetector {
     pub fn new() -> Result<Self, OrbitError> {
-        let patterns = vec![
-            // SQL injection patterns
-            r"(?i)(union|select|insert|delete|drop|alter|create|exec|execute)",
-            // XSS patterns
-            r"(?i)(<script|javascript:|vbscript:|onload=|onerror=)",
-            // Command injection patterns
-            r"(?i)(;|\||&|`|\$\(|\$\{|eval\()",
-            // Path traversal patterns
-            r"(\.\./|\.\.\\|%2e%2e%2f|%2e%2e%5c)",
+        // (attack_type, confidence, regex source) — the classification data lives
+        // next to each pattern rather than being derived from its index.
+        let patterns = [
+            (
+                "sql_injection",
+                0.80_f32,
+                r"(?i)(union|select|insert|delete|drop|alter|create|exec|execute)",
+            ),
+            (
+                "xss_attempt",
+                0.85,
+                r"(?i)(<script|javascript:|vbscript:|onload=|onerror=)",
+            ),
+            (
+                "command_injection",
+                0.90,
+                r"(?i)(;|\||&|`|\$\(|\$\{|eval\()",
+            ),
+            (
+                "path_traversal",
+                0.95,
+                r"(\.\./|\.\.\\|%2e%2e%2f|%2e%2e%5c)",
+            ),
         ];
 
-        let mut compiled_patterns = Vec::new();
-        for pattern in patterns {
-            compiled_patterns.push(
+        let suspicious_patterns = patterns
+            .into_iter()
+            .map(|(attack_type, confidence, pattern)| {
                 regex::Regex::new(pattern)
-                    .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {e}")))?,
-            );
-        }
+                    .map(|regex| (attack_type, confidence, regex))
+                    .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {e}")))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self {
-            suspicious_patterns: compiled_patterns,
+            suspicious_patterns,
             rate_limiter: RateLimiter::new(100, Duration::from_secs(60)), // 100 requests per minute
         })
     }
@@ -386,24 +403,18 @@ impl AttackDetector {
             });
         }
 
-        // Check for suspicious patterns
-        for (i, pattern) in self.suspicious_patterns.iter().enumerate() {
-            if pattern.is_match(input) {
-                let attack_type = match i {
-                    0 => "sql_injection",
-                    1 => "xss_attempt",
-                    2 => "command_injection",
-                    3 => "path_traversal",
-                    _ => "unknown",
-                };
-
-                return Ok(AttackDetectionResult {
-                    is_attack: true,
-                    attack_type: attack_type.to_string(),
-                    confidence: 0.8 + (i as f32 * 0.05), // Varying confidence levels
-                    details: format!("Suspicious pattern detected: {}", pattern.as_str()),
-                });
-            }
+        // Return the first pattern that matches, with its paired attack type.
+        if let Some((attack_type, confidence, pattern)) = self
+            .suspicious_patterns
+            .iter()
+            .find(|(_, _, pattern)| pattern.is_match(input))
+        {
+            return Ok(AttackDetectionResult {
+                is_attack: true,
+                attack_type: (*attack_type).to_string(),
+                confidence: *confidence,
+                details: format!("Suspicious pattern detected: {}", pattern.as_str()),
+            });
         }
 
         Ok(AttackDetectionResult {
@@ -509,6 +520,20 @@ mod tests {
             .await
             .unwrap();
         assert!(!result.is_attack);
+    }
+
+    #[tokio::test]
+    async fn test_attack_detector_classifies_each_type() {
+        let detector = AttackDetector::new().unwrap();
+        let cases = [
+            ("<script>alert(1)</script>", "xss_attempt"),
+            ("../../etc/passwd", "path_traversal"),
+        ];
+        for (input, expected) in cases {
+            let result = detector.detect_attack(input, "client").await.unwrap();
+            assert!(result.is_attack, "expected an attack for {input:?}");
+            assert_eq!(result.attack_type, expected, "wrong type for {input:?}");
+        }
     }
 
     #[test]

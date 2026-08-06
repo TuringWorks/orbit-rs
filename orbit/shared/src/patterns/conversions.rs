@@ -3,7 +3,7 @@
 //! Demonstrates type conversions, Cow (Clone-on-Write), and other
 //! zero-cost abstraction patterns in Rust.
 
-use crate::error::{OrbitError, OrbitResult};
+use crate::error::OrbitError;
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -32,9 +32,9 @@ impl From<std::num::ParseIntError> for QueryError {
 impl From<QueryError> for OrbitError {
     fn from(err: QueryError) -> Self {
         match err {
-            QueryError::ParseError(msg) => OrbitError::query(msg),
-            QueryError::ValidationError(msg) => OrbitError::validation(msg),
-            QueryError::ExecutionError(msg) => OrbitError::internal(msg),
+            QueryError::ParseError(msg) => OrbitError::parse(msg),
+            QueryError::ValidationError(msg) => OrbitError::configuration(msg),
+            QueryError::ExecutionError(msg) => OrbitError::execution(msg),
         }
     }
 }
@@ -155,11 +155,10 @@ impl SharedResource {
     }
 }
 
-impl From<SharedResource> for Arc<SharedResource> {
-    fn from(resource: SharedResource) -> Self {
-        Arc::new(resource)
-    }
-}
+// No `impl From<SharedResource> for Arc<SharedResource>` here: the standard
+// library already provides `impl<T> From<T> for Arc<T>`, so `resource.into()`
+// works out of the box and a local impl would collide with it. Reach for the
+// blanket impl before writing a conversion by hand.
 
 // ===== AsRef/AsMut Pattern =====
 
@@ -210,7 +209,9 @@ impl From<Buffer> for Vec<u8> {
 pub fn hash_data<T: AsRef<[u8]>>(data: T) -> u64 {
     let bytes = data.as_ref();
     // Simple hash for demonstration
-    bytes.iter().fold(0u64, |acc, &b| acc.wrapping_mul(31).wrapping_add(b as u64))
+    bytes
+        .iter()
+        .fold(0u64, |acc, &b| acc.wrapping_mul(31).wrapping_add(b as u64))
 }
 
 // ===== TryFrom/TryInto Pattern =====
@@ -246,7 +247,10 @@ impl TryFrom<f64> for Percentage {
 
     fn try_from(value: f64) -> Result<Self, Self::Error> {
         if !(0.0..=100.0).contains(&value) {
-            Err(format!("Percentage must be between 0 and 100, got {}", value))
+            Err(format!(
+                "Percentage must be between 0 and 100, got {}",
+                value
+            ))
         } else {
             Ok(Percentage(value))
         }
@@ -390,9 +394,9 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
         let query_err: QueryError = io_err.into();
 
-        match query_err {
+        match &query_err {
             QueryError::ExecutionError(msg) => assert!(msg.contains("IO error")),
-            _ => panic!("Wrong error type"),
+            other => panic!("Wrong error type: {other:?}"),
         }
 
         let orbit_err: OrbitError = query_err.into();
@@ -444,7 +448,7 @@ mod tests {
         assert_eq!(shared.id, "res1");
         assert_eq!(Arc::strong_count(&shared), 1);
 
-        let cloned = Arc::clone(&shared);
+        let _cloned = Arc::clone(&shared);
         assert_eq!(Arc::strong_count(&shared), 2);
     }
 

@@ -49,7 +49,11 @@ impl RetryStrategy for ExponentialBackoff {
     }
 
     fn should_retry(&self, attempt: u32, error: &OrbitError) -> bool {
-        attempt < self.max_retries && matches!(error, OrbitError::NetworkError(_) | OrbitError::Timeout { .. })
+        attempt < self.max_retries
+            && matches!(
+                error,
+                OrbitError::NetworkError(_) | OrbitError::Timeout { .. }
+            )
     }
 
     fn max_retries(&self) -> u32 {
@@ -133,55 +137,62 @@ where
 
 // ===== Serialization Strategy =====
 
-/// Trait for serialization strategies
-pub trait SerializationStrategy: Send + Sync {
-    /// Serialize data to bytes
-    fn serialize<T: serde::Serialize>(&self, data: &T) -> OrbitResult<Vec<u8>>;
-
-    /// Deserialize bytes to data
-    fn deserialize<T: serde::de::DeserializeOwned>(&self, bytes: &[u8]) -> OrbitResult<T>;
-
-    /// Get content type
-    fn content_type(&self) -> &str;
+/// Serialization formats, as a closed set.
+///
+/// A strategy whose operations are generic (`serialize<T>`) cannot be a trait
+/// object: there is no vtable slot for a method that is monomorphized per type.
+/// Rust's answer is a sum type. Dispatch is still chosen at runtime, the methods
+/// stay generic, and adding a format turns every `match` into a compile error
+/// instead of a silently missing case.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Serialization {
+    /// Self-describing and human-readable.
+    Json,
+    /// Compact binary. Not self-describing — decoding requires the target type,
+    /// which is precisely why an erased `serde_json::Value` cannot stand in for
+    /// `T` here.
+    Bincode,
 }
 
-/// JSON serialization
-pub struct JsonSerialization;
-
-impl SerializationStrategy for JsonSerialization {
-    fn serialize<T: serde::Serialize>(&self, data: &T) -> OrbitResult<Vec<u8>> {
-        serde_json::to_vec(data).map_err(|e| OrbitError::internal(format!("JSON serialization failed: {}", e)))
+impl Serialization {
+    /// Serialize a value in this format.
+    ///
+    /// # Errors
+    /// Returns an error if the value cannot be encoded in this format.
+    pub fn serialize<T: serde::Serialize>(self, data: &T) -> OrbitResult<Vec<u8>> {
+        match self {
+            Self::Json => serde_json::to_vec(data)
+                .map_err(|e| OrbitError::internal(format!("JSON serialization failed: {e}"))),
+            Self::Bincode => bincode::serialize(data)
+                .map_err(|e| OrbitError::internal(format!("Bincode serialization failed: {e}"))),
+        }
     }
 
-    fn deserialize<T: serde::de::DeserializeOwned>(&self, bytes: &[u8]) -> OrbitResult<T> {
-        serde_json::from_slice(bytes).map_err(|e| OrbitError::internal(format!("JSON deserialization failed: {}", e)))
+    /// Deserialize a value from this format.
+    ///
+    /// # Errors
+    /// Returns an error if the bytes are malformed or do not match `T`.
+    pub fn deserialize<T: serde::de::DeserializeOwned>(self, bytes: &[u8]) -> OrbitResult<T> {
+        match self {
+            Self::Json => serde_json::from_slice(bytes)
+                .map_err(|e| OrbitError::internal(format!("JSON deserialization failed: {e}"))),
+            Self::Bincode => bincode::deserialize(bytes)
+                .map_err(|e| OrbitError::internal(format!("Bincode deserialization failed: {e}"))),
+        }
     }
 
-    fn content_type(&self) -> &str {
-        "application/json"
-    }
-}
-
-/// Bincode serialization (more efficient)
-pub struct BincodeSerialization;
-
-impl SerializationStrategy for BincodeSerialization {
-    fn serialize<T: serde::Serialize>(&self, data: &T) -> OrbitResult<Vec<u8>> {
-        bincode::serialize(data).map_err(|e| OrbitError::internal(format!("Bincode serialization failed: {}", e)))
-    }
-
-    fn deserialize<T: serde::de::DeserializeOwned>(&self, bytes: &[u8]) -> OrbitResult<T> {
-        bincode::deserialize(bytes).map_err(|e| OrbitError::internal(format!("Bincode deserialization failed: {}", e)))
-    }
-
-    fn content_type(&self) -> &str {
-        "application/octet-stream"
+    /// MIME type produced by this format.
+    #[must_use]
+    pub const fn content_type(self) -> &'static str {
+        match self {
+            Self::Json => "application/json",
+            Self::Bincode => "application/octet-stream",
+        }
     }
 }
 
 // ===== Compression Strategy =====
-
-use std::io::{Read, Write};
 
 /// Trait for compression strategies
 pub trait CompressionStrategy: Send + Sync {
@@ -212,54 +223,62 @@ impl CompressionStrategy for NoCompression {
     }
 }
 
-/// Gzip compression
-pub struct GzipCompression {
-    pub level: u32,
-}
+/// Run-length compression: `(count, byte)` pairs, counts capped at 255.
+///
+/// Named for what it does. A second strategy is needed to show the context
+/// swapping algorithms at runtime, and run-length encoding earns that role
+/// without pulling a compression crate into the dependency graph — real
+/// deployments should reach for the codecs in `timeseries::compression` or a
+/// dedicated crate instead.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RunLengthCompression;
 
-impl Default for GzipCompression {
-    fn default() -> Self {
-        Self { level: 6 }
-    }
-}
-
-impl CompressionStrategy for GzipCompression {
+impl CompressionStrategy for RunLengthCompression {
     fn compress(&self, data: &[u8]) -> OrbitResult<Vec<u8>> {
-        use flate2::write::GzEncoder;
-        use flate2::Compression;
+        let runs = data.iter().fold(Vec::<(u8, u8)>::new(), |mut runs, &byte| {
+            match runs.last_mut() {
+                Some((value, count)) if *value == byte && *count < u8::MAX => *count += 1,
+                _ => runs.push((byte, 1)),
+            }
+            runs
+        });
 
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::new(self.level));
-        encoder.write_all(data).map_err(|e| OrbitError::internal(format!("Gzip compression failed: {}", e)))?;
-        encoder.finish().map_err(|e| OrbitError::internal(format!("Gzip finalization failed: {}", e)))
+        Ok(runs
+            .into_iter()
+            .flat_map(|(value, count)| [count, value])
+            .collect())
     }
 
     fn decompress(&self, data: &[u8]) -> OrbitResult<Vec<u8>> {
-        use flate2::read::GzDecoder;
+        if !data.len().is_multiple_of(2) {
+            return Err(OrbitError::internal(format!(
+                "Run-length payload must be (count, byte) pairs, got {} bytes",
+                data.len()
+            )));
+        }
 
-        let mut decoder = GzDecoder::new(data);
-        let mut decompressed = Vec::new();
-        decoder.read_to_end(&mut decompressed).map_err(|e| OrbitError::internal(format!("Gzip decompression failed: {}", e)))?;
-        Ok(decompressed)
+        Ok(data
+            .chunks_exact(2)
+            .flat_map(|pair| std::iter::repeat_n(pair[1], usize::from(pair[0])))
+            .collect())
     }
 
     fn algorithm(&self) -> &str {
-        "gzip"
+        "run-length"
     }
 }
 
 // ===== Strategy Context =====
 
-/// Context that uses strategies
+/// Context that combines both dispatch styles: a sum type where the operations
+/// are generic, and a trait object where they are not.
 pub struct DataProcessor {
-    serialization: Arc<dyn SerializationStrategy>,
+    serialization: Serialization,
     compression: Arc<dyn CompressionStrategy>,
 }
 
 impl DataProcessor {
-    pub fn new(
-        serialization: Arc<dyn SerializationStrategy>,
-        compression: Arc<dyn CompressionStrategy>,
-    ) -> Self {
+    pub fn new(serialization: Serialization, compression: Arc<dyn CompressionStrategy>) -> Self {
         Self {
             serialization,
             compression,
@@ -279,7 +298,7 @@ impl DataProcessor {
     }
 
     /// Change strategies at runtime
-    pub fn set_serialization(&mut self, strategy: Arc<dyn SerializationStrategy>) {
+    pub fn set_serialization(&mut self, strategy: Serialization) {
         self.serialization = strategy;
     }
 
@@ -291,6 +310,7 @@ impl DataProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     #[tokio::test]
     async fn test_exponential_backoff() {
@@ -308,20 +328,26 @@ mod tests {
     #[tokio::test]
     async fn test_with_retry_success() {
         let strategy = Arc::new(ExponentialBackoff::default());
-        let mut attempts = 0;
+        // The operation returns a future that outlives each closure call, so the
+        // attempt counter is shared rather than mutably borrowed by the closure.
+        let attempts = Arc::new(AtomicU32::new(0));
+        let counter = Arc::clone(&attempts);
 
-        let result = with_retry(strategy, || async {
-            attempts += 1;
-            if attempts < 3 {
-                Err(OrbitError::network("temporary error"))
-            } else {
-                Ok(42)
+        let result = with_retry(strategy, move || {
+            let counter = Arc::clone(&counter);
+            async move {
+                let attempt = counter.fetch_add(1, Ordering::SeqCst) + 1;
+                if attempt < 3 {
+                    Err(OrbitError::network("temporary error"))
+                } else {
+                    Ok(42)
+                }
             }
         })
         .await;
 
         assert_eq!(result.unwrap(), 42);
-        assert_eq!(attempts, 3);
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 
     #[test]
@@ -339,17 +365,19 @@ mod tests {
             value: 42,
         };
 
-        // JSON
-        let json_strategy = JsonSerialization;
-        let serialized = json_strategy.serialize(&data).unwrap();
-        let deserialized: TestData = json_strategy.deserialize(&serialized).unwrap();
-        assert_eq!(data, deserialized);
+        // Every format round-trips, and each reports its own content type.
+        for format in [Serialization::Json, Serialization::Bincode] {
+            let serialized = format.serialize(&data).unwrap();
+            let deserialized: TestData = format.deserialize(&serialized).unwrap();
+            assert_eq!(data, deserialized, "{format:?} did not round-trip");
+            assert!(!format.content_type().is_empty());
+        }
 
-        // Bincode
-        let bincode_strategy = BincodeSerialization;
-        let serialized = bincode_strategy.serialize(&data).unwrap();
-        let deserialized: TestData = bincode_strategy.deserialize(&serialized).unwrap();
-        assert_eq!(data, deserialized);
+        // Bincode is the more compact of the two for this payload.
+        assert!(
+            Serialization::Bincode.serialize(&data).unwrap().len()
+                < Serialization::Json.serialize(&data).unwrap().len()
+        );
     }
 
     #[test]
@@ -361,12 +389,18 @@ mod tests {
         let compressed = no_compression.compress(data).unwrap();
         assert_eq!(compressed, data);
 
-        // Gzip
-        let gzip = GzipCompression::default();
-        let compressed = gzip.compress(data).unwrap();
-        assert!(compressed.len() < data.len()); // Should be smaller
-        let decompressed = gzip.decompress(&compressed).unwrap();
+        // Run-length: round-trips, and shrinks input that actually has runs.
+        let rle = RunLengthCompression;
+        let decompressed = rle.decompress(&rle.compress(data).unwrap()).unwrap();
         assert_eq!(decompressed, data);
+
+        let runs = vec![b'a'; 300];
+        let compressed = rle.compress(&runs).unwrap();
+        assert!(compressed.len() < runs.len());
+        assert_eq!(rle.decompress(&compressed).unwrap(), runs);
+
+        // A truncated payload is rejected, not silently half-decoded.
+        assert!(rle.decompress(&[3]).is_err());
     }
 
     #[test]
@@ -382,14 +416,17 @@ mod tests {
             value: "test data".to_string(),
         };
 
-        let processor = DataProcessor::new(
-            Arc::new(JsonSerialization),
-            Arc::new(NoCompression),
-        );
+        let mut processor = DataProcessor::new(Serialization::Json, Arc::new(NoCompression));
 
         let processed = processor.process(&data).unwrap();
         let unprocessed: TestData = processor.unprocess(&processed).unwrap();
+        assert_eq!(data, unprocessed);
 
+        // Both strategies are swappable at runtime.
+        processor.set_serialization(Serialization::Bincode);
+        processor.set_compression(Arc::new(RunLengthCompression));
+        let processed = processor.process(&data).unwrap();
+        let unprocessed: TestData = processor.unprocess(&processed).unwrap();
         assert_eq!(data, unprocessed);
     }
 }

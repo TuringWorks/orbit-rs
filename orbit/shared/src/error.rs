@@ -130,7 +130,7 @@ impl OrbitError {
     }
 
     /// Create a configuration error with key
-    pub fn configuration_with_key<S: Into<String>>(msg: S, key: S) -> Self {
+    pub fn configuration_with_key<M: Into<String>, K: Into<String>>(msg: M, key: K) -> Self {
         OrbitError::ConfigurationError {
             message: msg.into(),
             key: Some(key.into()),
@@ -151,7 +151,7 @@ impl OrbitError {
     }
 
     /// Create an internal error with context
-    pub fn internal_with_context<S: Into<String>>(msg: S, context: S) -> Self {
+    pub fn internal_with_context<M: Into<String>, C: Into<String>>(msg: M, context: C) -> Self {
         OrbitError::Internal {
             message: msg.into(),
             context: Some(context.into()),
@@ -167,7 +167,7 @@ impl OrbitError {
     }
 
     /// Create an IO error with source
-    pub fn io_with_source<S: Into<String>>(msg: S, source: S) -> Self {
+    pub fn io_with_source<M: Into<String>, S: Into<String>>(msg: M, source: S) -> Self {
         OrbitError::IoError {
             message: msg.into(),
             source_info: Some(source.into()),
@@ -184,7 +184,7 @@ impl OrbitError {
     }
 
     /// Create a parse error with input
-    pub fn parse_with_input<S: Into<String>>(msg: S, input: S) -> Self {
+    pub fn parse_with_input<M: Into<String>, I: Into<String>>(msg: M, input: I) -> Self {
         OrbitError::ParseError {
             message: msg.into(),
             input: Some(input.into()),
@@ -193,7 +193,11 @@ impl OrbitError {
     }
 
     /// Create a parse error with input and position
-    pub fn parse_with_position<S: Into<String>>(msg: S, input: S, position: usize) -> Self {
+    pub fn parse_with_position<M: Into<String>, I: Into<String>>(
+        msg: M,
+        input: I,
+        position: usize,
+    ) -> Self {
         OrbitError::ParseError {
             message: msg.into(),
             input: Some(input.into()),
@@ -210,7 +214,7 @@ impl OrbitError {
     }
 
     /// Create a storage error with operation
-    pub fn storage_with_operation<S: Into<String>>(msg: S, operation: S) -> Self {
+    pub fn storage_with_operation<M: Into<String>, O: Into<String>>(msg: M, operation: O) -> Self {
         OrbitError::StorageError {
             message: msg.into(),
             operation: Some(operation.into()),
@@ -226,7 +230,7 @@ impl OrbitError {
     }
 
     /// Create an authentication error with user
-    pub fn auth_with_user<S: Into<String>>(msg: S, user: S) -> Self {
+    pub fn auth_with_user<M: Into<String>, U: Into<String>>(msg: M, user: U) -> Self {
         OrbitError::AuthError {
             message: msg.into(),
             user: Some(user.into()),
@@ -376,103 +380,121 @@ impl<T> ErrorLog<T> for OrbitResult<T> {
 
 // ===== Security Validation Traits =====
 
-/// Security-focused input validation traits
+/// SQL keywords and comment/terminator sequences treated as potentially dangerous
+/// when they appear in untrusted input. Compared case-insensitively.
+const DANGEROUS_SQL_PATTERNS: [&str; 12] = [
+    "DROP", "DELETE", "INSERT", "UPDATE", "UNION", "SELECT", "--", "/*", "*/", ";", "xp_", "sp_",
+];
+
+/// Markup and script sequences treated as potentially dangerous (XSS) when they
+/// appear in untrusted input. Compared case-insensitively.
+const DANGEROUS_XSS_PATTERNS: [&str; 8] = [
+    "<script",
+    "</script>",
+    "javascript:",
+    "vbscript:",
+    "onload=",
+    "onerror=",
+    "onclick=",
+    "onmouseover=",
+];
+
+/// Reject `haystack` if it contains any of `patterns`, naming the first match in the
+/// error. `haystack` must already be normalised to the case the patterns are written
+/// in. Pure helper shared by every [`SecurityValidator`] implementation.
+fn reject_if_contains(haystack: &str, patterns: &[&str], kind: &str) -> OrbitResult<()> {
+    patterns
+        .iter()
+        .find(|pattern| haystack.contains(**pattern))
+        .map_or(Ok(()), |pattern| {
+            Err(OrbitError::internal(format!(
+                "Input contains potentially dangerous {kind} pattern: {pattern}"
+            )))
+        })
+}
+
+fn validate_sql_safe_str(input: &str) -> OrbitResult<()> {
+    reject_if_contains(&input.to_uppercase(), &DANGEROUS_SQL_PATTERNS, "SQL")
+}
+
+fn validate_xss_safe_str(input: &str) -> OrbitResult<()> {
+    reject_if_contains(&input.to_lowercase(), &DANGEROUS_XSS_PATTERNS, "XSS")
+}
+
+fn validate_length_str(input: &str, max_len: usize) -> OrbitResult<()> {
+    if input.len() <= max_len {
+        Ok(())
+    } else {
+        Err(OrbitError::internal(format!(
+            "Input length {} exceeds maximum allowed length {}",
+            input.len(),
+            max_len
+        )))
+    }
+}
+
+fn validate_allowed_chars_str(input: &str, allowed_pattern: &str) -> OrbitResult<()> {
+    let regex = regex::Regex::new(allowed_pattern)
+        .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {e}")))?;
+    if regex.is_match(input) {
+        Ok(())
+    } else {
+        Err(OrbitError::internal(format!(
+            "Input contains invalid characters. Allowed pattern: {allowed_pattern}"
+        )))
+    }
+}
+
+/// Security-focused input validation, implemented for the common owned and borrowed
+/// string types so a check reads the same whether the caller holds a `String` or a
+/// `&str`. All implementations delegate to the same pure functions above.
 pub trait SecurityValidator {
-    /// Validate input for SQL injection patterns
+    /// Reject input containing SQL keywords or comment/terminator sequences.
     fn validate_sql_safe(&self) -> OrbitResult<()>;
 
-    /// Validate input for XSS patterns
+    /// Reject input containing markup/script (XSS) sequences.
     fn validate_xss_safe(&self) -> OrbitResult<()>;
 
-    /// Validate input length constraints
+    /// Reject input longer than `max_len` bytes.
     fn validate_length(&self, max_len: usize) -> OrbitResult<()>;
 
-    /// Validate input against allowed characters
+    /// Reject input that does not fully match `allowed_pattern` (a regex).
     fn validate_allowed_chars(&self, allowed_pattern: &str) -> OrbitResult<()>;
 }
 
 impl SecurityValidator for String {
     fn validate_sql_safe(&self) -> OrbitResult<()> {
-        let dangerous_patterns = [
-            "DROP", "DELETE", "INSERT", "UPDATE", "UNION", "SELECT", "--", "/*", "*/", ";", "xp_",
-            "sp_",
-        ];
-
-        let upper_self = self.to_uppercase();
-        for pattern in &dangerous_patterns {
-            if upper_self.contains(pattern) {
-                return Err(OrbitError::internal(format!(
-                    "Input contains potentially dangerous SQL pattern: {pattern}"
-                )));
-            }
-        }
-        Ok(())
+        validate_sql_safe_str(self)
     }
 
     fn validate_xss_safe(&self) -> OrbitResult<()> {
-        let dangerous_patterns = [
-            "<script",
-            "</script>",
-            "javascript:",
-            "vbscript:",
-            "onload=",
-            "onerror=",
-            "onclick=",
-            "onmouseover=",
-        ];
-
-        let lower_self = self.to_lowercase();
-        for pattern in &dangerous_patterns {
-            if lower_self.contains(pattern) {
-                return Err(OrbitError::internal(format!(
-                    "Input contains potentially dangerous XSS pattern: {pattern}"
-                )));
-            }
-        }
-        Ok(())
+        validate_xss_safe_str(self)
     }
 
     fn validate_length(&self, max_len: usize) -> OrbitResult<()> {
-        if self.len() > max_len {
-            return Err(OrbitError::internal(format!(
-                "Input length {} exceeds maximum allowed length {}",
-                self.len(),
-                max_len
-            )));
-        }
-        Ok(())
+        validate_length_str(self, max_len)
     }
 
     fn validate_allowed_chars(&self, allowed_pattern: &str) -> OrbitResult<()> {
-        use regex::Regex;
-
-        let regex = Regex::new(allowed_pattern)
-            .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {e}")))?;
-
-        if !regex.is_match(self) {
-            return Err(OrbitError::internal(format!(
-                "Input contains invalid characters. Allowed pattern: {allowed_pattern}"
-            )));
-        }
-        Ok(())
+        validate_allowed_chars_str(self, allowed_pattern)
     }
 }
 
 impl SecurityValidator for &str {
     fn validate_sql_safe(&self) -> OrbitResult<()> {
-        self.to_string().validate_sql_safe()
+        validate_sql_safe_str(self)
     }
 
     fn validate_xss_safe(&self) -> OrbitResult<()> {
-        self.to_string().validate_xss_safe()
+        validate_xss_safe_str(self)
     }
 
     fn validate_length(&self, max_len: usize) -> OrbitResult<()> {
-        self.to_string().validate_length(max_len)
+        validate_length_str(self, max_len)
     }
 
     fn validate_allowed_chars(&self, allowed_pattern: &str) -> OrbitResult<()> {
-        self.to_string().validate_allowed_chars(allowed_pattern)
+        validate_allowed_chars_str(self, allowed_pattern)
     }
 }
 
@@ -673,5 +695,77 @@ mod tests {
     fn test_error_size() {
         let size = std::mem::size_of::<OrbitError>();
         assert!(size <= 256, "OrbitError is too large: {} bytes", size);
+    }
+
+    #[test]
+    fn test_paired_constructors_accept_mixed_string_types() {
+        // Independent generic params: the message and the second argument need not
+        // be the same string type, so callers can freely mix &str and String.
+        let a = OrbitError::configuration_with_key("missing", String::from("db.url"));
+        assert!(matches!(
+            a,
+            OrbitError::ConfigurationError { key: Some(_), .. }
+        ));
+
+        let b = OrbitError::io_with_source(String::from("read failed"), "disk");
+        assert!(matches!(
+            b,
+            OrbitError::IoError {
+                source_info: Some(_),
+                ..
+            }
+        ));
+
+        let c = OrbitError::parse_with_position("bad token", String::from("SELECT"), 3);
+        assert!(matches!(
+            c,
+            OrbitError::ParseError {
+                position: Some(3),
+                ..
+            }
+        ));
+
+        let d = OrbitError::auth_with_user("denied", String::from("alice"));
+        assert!(d.to_string().contains("alice"));
+    }
+
+    #[test]
+    fn test_security_validator_works_on_str_slices() {
+        // The &str impl now shares the String logic without an intermediate alloc.
+        assert!("user_name".validate_sql_safe().is_ok());
+        assert!("'; DROP TABLE users; --".validate_sql_safe().is_err());
+        assert!("<script>x</script>".validate_xss_safe().is_err());
+        assert!("safe".validate_length(10).is_ok());
+    }
+
+    #[test]
+    fn test_validator_error_names_the_matched_pattern() {
+        let err = "value UNION select".validate_sql_safe().unwrap_err();
+        assert!(err.to_string().contains("UNION"));
+    }
+
+    #[test]
+    fn test_validator_edge_cases() {
+        // Empty input is trivially safe; length check is inclusive at the boundary.
+        assert!("".validate_sql_safe().is_ok());
+        assert!("".validate_xss_safe().is_ok());
+        assert!("abcd".validate_length(4).is_ok());
+        assert!("abcde".validate_length(4).is_err());
+    }
+
+    #[test]
+    fn test_str_and_string_validators_agree() {
+        for case in ["clean", "DROP", "onload=", ""] {
+            assert_eq!(
+                case.validate_sql_safe().is_ok(),
+                case.to_string().validate_sql_safe().is_ok(),
+                "SQL verdict differs for {case:?}"
+            );
+            assert_eq!(
+                case.validate_xss_safe().is_ok(),
+                case.to_string().validate_xss_safe().is_ok(),
+                "XSS verdict differs for {case:?}"
+            );
+        }
     }
 }

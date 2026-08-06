@@ -3,7 +3,6 @@
 //! Separates algorithms from the objects they operate on, allowing new
 //! operations without modifying existing structures.
 
-use crate::error::{OrbitError, OrbitResult};
 use serde::{Deserialize, Serialize};
 
 // ===== Query AST for demonstration =====
@@ -43,7 +42,8 @@ pub trait QueryVisitor {
     fn visit_table(&mut self, name: &str) -> Self::Output;
     fn visit_filter(&mut self, source: &QueryNode, condition: &str) -> Self::Output;
     fn visit_join(&mut self, left: &QueryNode, right: &QueryNode, condition: &str) -> Self::Output;
-    fn visit_aggregate(&mut self, source: &QueryNode, function: &str, column: &str) -> Self::Output;
+    fn visit_aggregate(&mut self, source: &QueryNode, function: &str, column: &str)
+        -> Self::Output;
 }
 
 impl QueryNode {
@@ -52,8 +52,16 @@ impl QueryNode {
             QueryNode::Select { columns, from } => visitor.visit_select(columns, from),
             QueryNode::Table { name } => visitor.visit_table(name),
             QueryNode::Filter { source, condition } => visitor.visit_filter(source, condition),
-            QueryNode::Join { left, right, condition } => visitor.visit_join(left, right, condition),
-            QueryNode::Aggregate { source, function, column } => visitor.visit_aggregate(source, function, column),
+            QueryNode::Join {
+                left,
+                right,
+                condition,
+            } => visitor.visit_join(left, right, condition),
+            QueryNode::Aggregate {
+                source,
+                function,
+                column,
+            } => visitor.visit_aggregate(source, function, column),
         }
     }
 }
@@ -62,6 +70,18 @@ impl QueryNode {
 
 pub struct SqlGenerator {
     indent_level: usize,
+}
+
+impl Default for SqlGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for SqlGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SqlGenerator {
@@ -104,7 +124,14 @@ impl QueryVisitor for SqlGenerator {
         let right_sql = right.accept(self);
         self.indent_level -= 1;
 
-        format!("{}\n{}JOIN {}\n{}ON {}", left_sql, self.indent(), right_sql, self.indent(), condition)
+        format!(
+            "{}\n{}JOIN {}\n{}ON {}",
+            left_sql,
+            self.indent(),
+            right_sql,
+            self.indent(),
+            condition
+        )
     }
 
     fn visit_aggregate(&mut self, source: &QueryNode, function: &str, column: &str) -> String {
@@ -112,7 +139,13 @@ impl QueryVisitor for SqlGenerator {
         let source_sql = source.accept(self);
         self.indent_level -= 1;
 
-        format!("SELECT {}({})\n{}FROM {}", function, column, self.indent(), source_sql)
+        format!(
+            "SELECT {}({})\n{}FROM {}",
+            function,
+            column,
+            self.indent(),
+            source_sql
+        )
     }
 }
 
@@ -120,6 +153,18 @@ impl QueryVisitor for SqlGenerator {
 
 pub struct QueryOptimizer {
     optimizations_applied: usize,
+}
+
+impl Default for QueryOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for QueryOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl QueryOptimizer {
@@ -201,6 +246,18 @@ pub struct QueryValidator {
     errors: Vec<String>,
 }
 
+impl Default for QueryValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for QueryValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QueryValidator {
     pub fn new() -> Self {
         Self { errors: Vec::new() }
@@ -220,7 +277,8 @@ impl QueryVisitor for QueryValidator {
 
     fn visit_select(&mut self, columns: &[String], from: &QueryNode) {
         if columns.is_empty() {
-            self.errors.push("SELECT must have at least one column".to_string());
+            self.errors
+                .push("SELECT must have at least one column".to_string());
         }
 
         from.accept(self);
@@ -234,7 +292,8 @@ impl QueryVisitor for QueryValidator {
 
     fn visit_filter(&mut self, source: &QueryNode, condition: &str) {
         if condition.is_empty() {
-            self.errors.push("Filter condition cannot be empty".to_string());
+            self.errors
+                .push("Filter condition cannot be empty".to_string());
         }
 
         source.accept(self);
@@ -242,7 +301,8 @@ impl QueryVisitor for QueryValidator {
 
     fn visit_join(&mut self, left: &QueryNode, right: &QueryNode, condition: &str) {
         if condition.is_empty() {
-            self.errors.push("Join condition cannot be empty".to_string());
+            self.errors
+                .push("Join condition cannot be empty".to_string());
         }
 
         left.accept(self);
@@ -252,11 +312,13 @@ impl QueryVisitor for QueryValidator {
     fn visit_aggregate(&mut self, source: &QueryNode, function: &str, column: &str) {
         let valid_functions = ["COUNT", "SUM", "AVG", "MIN", "MAX"];
         if !valid_functions.contains(&function.to_uppercase().as_str()) {
-            self.errors.push(format!("Invalid aggregate function: {}", function));
+            self.errors
+                .push(format!("Invalid aggregate function: {}", function));
         }
 
         if column.is_empty() {
-            self.errors.push("Aggregate column cannot be empty".to_string());
+            self.errors
+                .push("Aggregate column cannot be empty".to_string());
         }
 
         source.accept(self);
@@ -267,6 +329,18 @@ impl QueryVisitor for QueryValidator {
 
 pub struct CostEstimator {
     estimated_cost: f64,
+}
+
+impl Default for CostEstimator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for CostEstimator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CostEstimator {
@@ -448,7 +522,7 @@ mod tests {
         invalid_query.accept(&mut validator);
 
         assert!(!validator.is_valid());
-        assert!(validator.errors().len() > 0);
+        assert!(!validator.errors().is_empty());
     }
 
     #[test]
@@ -472,8 +546,14 @@ mod tests {
     #[test]
     fn test_shape_visitors() {
         let circle = Circle { radius: 5.0 };
-        let rectangle = Rectangle { width: 4.0, height: 6.0 };
-        let triangle = Triangle { base: 3.0, height: 4.0 };
+        let rectangle = Rectangle {
+            width: 4.0,
+            height: 6.0,
+        };
+        let triangle = Triangle {
+            base: 3.0,
+            height: 4.0,
+        };
 
         let mut area_calc = AreaCalculator;
         assert!((circle.accept(&mut area_calc) - 78.539).abs() < 0.01);

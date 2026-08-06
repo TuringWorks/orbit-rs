@@ -12,7 +12,7 @@ use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
 /// dependencies through gating mechanisms (forget, input, output gates).
 use ndarray::{Array1, Axis};
 use rand::distr::Uniform;
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 

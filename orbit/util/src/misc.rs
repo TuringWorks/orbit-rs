@@ -1,4 +1,4 @@
-use rand::{distr::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, RngExt};
 
 /// Utility functions for random generation, equivalent to Kotlin's RNGUtils
 pub struct RngUtils;

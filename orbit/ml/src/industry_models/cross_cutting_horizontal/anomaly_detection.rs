@@ -232,7 +232,7 @@ impl IndustryModel for IsolationForestDetector {
         for _ in 0..self.num_trees {
             // Subsample
             let subsample: Vec<Vec<f64>> = samples
-                .choose_multiple(&mut rng, self.training_samples)
+                .sample(&mut rng, self.training_samples)
                 .cloned()
                 .collect();
 

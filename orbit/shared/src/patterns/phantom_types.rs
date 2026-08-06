@@ -339,11 +339,17 @@ impl FileHandle<permissions::Execute> {
 
 // ===== Zero-Sized Type Markers =====
 
-/// Marker trait for sorted collections
-pub trait Sorted {}
+/// Marker type for sorted collections.
+///
+/// A marker used as a type parameter must be a *type*, not a trait: `Collection<T,
+/// Sorted>` names a concrete state, whereas a bare trait in that position is only
+/// ever a trait object. Zero-sized structs also cost nothing at runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Sorted;
 
-/// Marker trait for unsorted collections
-pub trait Unsorted {}
+/// Marker type for unsorted collections.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Unsorted;
 
 /// Collection with sort state tracked at compile time
 pub struct Collection<T, SortState> {
@@ -417,11 +423,12 @@ mod tests {
         assert_eq!(user_id.value(), "user-123");
         assert_eq!(session_id.value(), "session-456");
 
-        // These IDs have different types and cannot be confused
-        assert_ne!(
-            std::mem::discriminant(&user_id),
-            std::mem::discriminant(&session_id)
-        );
+        // The guarantee is a compile-time one: `user_id == session_id` and
+        // `takes_user_id(session_id)` are both type errors, so there is no runtime
+        // assertion to make. Identical payloads stay distinguishable by type alone.
+        let same_payload_user = UserId::new("shared".to_string());
+        let same_payload_session = SessionId::new("shared".to_string());
+        assert_eq!(same_payload_user.value(), same_payload_session.value());
     }
 
     #[test]

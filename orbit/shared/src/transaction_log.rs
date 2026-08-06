@@ -395,12 +395,9 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         .await
         .map_err(|e| OrbitError::internal(format!("Failed to query transaction log: {e}")))?;
 
-        let mut entries = Vec::new();
-        for row in rows {
-            entries.push(self.row_to_persistent_entry(row)?);
-        }
-
-        Ok(entries)
+        rows.into_iter()
+            .map(|row| self.row_to_persistent_entry(row))
+            .collect()
     }
 
     async fn get_entries_by_time_range(
@@ -417,12 +414,9 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         .await
         .map_err(|e| OrbitError::internal(format!("Failed to query time range: {e}")))?;
 
-        let mut entries = Vec::new();
-        for row in rows {
-            entries.push(self.row_to_persistent_entry(row)?);
-        }
-
-        Ok(entries)
+        rows.into_iter()
+            .map(|row| self.row_to_persistent_entry(row))
+            .collect()
     }
 
     async fn archive_old_entries(&self, before_timestamp: i64) -> OrbitResult<u64> {

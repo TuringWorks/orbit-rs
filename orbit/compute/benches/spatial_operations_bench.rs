@@ -7,7 +7,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use orbit_compute::spatial_operations::{
     GPUPoint, GPUPolygon, GPUSpatialOperations, SpatialOperationsConfig,
 };
-use rand::Rng;
+use rand::RngExt;
 
 /// Generate random points for testing
 fn generate_random_points(count: usize) -> Vec<GPUPoint> {

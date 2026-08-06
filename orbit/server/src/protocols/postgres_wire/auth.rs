@@ -8,7 +8,7 @@
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use md5;
-use rand::Rng;
+use rand::RngExt;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::Arc;

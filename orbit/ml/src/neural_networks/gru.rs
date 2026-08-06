@@ -5,7 +5,7 @@ use crate::neural_networks::{NetworkArchitecture, NeuralNetwork, Optimizer};
 use async_trait::async_trait;
 use ndarray::{Array1, Array2, Axis};
 use rand::distr::Uniform;
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 

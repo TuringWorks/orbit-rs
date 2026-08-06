@@ -26,6 +26,7 @@ pub mod k8s_election;
 pub mod mesh;
 pub mod net;
 pub mod orbitql;
+pub mod patterns;
 pub mod persistence;
 pub mod pooling;
 pub mod raft_transport;

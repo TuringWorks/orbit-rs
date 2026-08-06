@@ -65,7 +65,7 @@ repository = "https://github.com/TuringWorks/orbit-rs"
 cognitive-complexity-threshold = 15
 
 [workspace.dependencies]
-pyo3 = "0.24.1"
+pyo3 = "0.29"
 # Kubernetes operator dependencies  
 kube = "0.99"
 k8s-openapi = "0.24"
@@ -94,7 +94,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Time and UUID
 chrono = { version = "0.4", features = ["serde"] }
@@ -118,11 +118,11 @@ paste = "1.0"
 exponential-backoff = "2.0"  # Replaces unmaintained backoff
 
 # Testing
-mockall = "0.13"
-cucumber = "0.21"
+mockall = "0.15"
+cucumber = "0.23"
 proptest = "1.4"
 tokio-test = "0.4"
-rand = "0.9"
+rand = "0.10"
 
 # Security patches
 # Note: tikv-client has been removed from dependencies due to unresolved protobuf vulnerabilities

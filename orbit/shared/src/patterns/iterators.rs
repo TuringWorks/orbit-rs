@@ -3,7 +3,6 @@
 //! Demonstrates implementing custom iterators, iterator adaptors, and
 //! advanced iteration patterns in Rust.
 
-use crate::error::{OrbitError, OrbitResult};
 use std::collections::VecDeque;
 
 // ===== Window Iterator =====
@@ -39,14 +38,19 @@ impl<'a, T> Iterator for WindowIterator<'a, T> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.data.len().saturating_sub(self.position + self.window_size - 1);
+        let remaining = self
+            .data
+            .len()
+            .saturating_sub(self.position + self.window_size - 1);
         (remaining, Some(remaining))
     }
 }
 
 impl<'a, T> ExactSizeIterator for WindowIterator<'a, T> {
     fn len(&self) -> usize {
-        self.data.len().saturating_sub(self.position + self.window_size - 1)
+        self.data
+            .len()
+            .saturating_sub(self.position + self.window_size - 1)
     }
 }
 
@@ -95,7 +99,7 @@ impl<'a, T> Iterator for ChunkIterator<'a, T> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = (self.data.len() - self.position + self.chunk_size - 1) / self.chunk_size;
+        let remaining = (self.data.len() - self.position).div_ceil(self.chunk_size);
         (remaining, Some(remaining))
     }
 }
@@ -371,13 +375,17 @@ where
 
 // ===== Result Iterator (Fallible) =====
 
+/// Boxed mapping closure used by [`ResultIterator`].
+type FallibleMapper<I, E> =
+    Box<dyn FnMut(<I as Iterator>::Item) -> Result<<I as Iterator>::Item, E>>;
+
 /// Iterator that can fail during iteration
 pub struct ResultIterator<I, E>
 where
     I: Iterator,
 {
     inner: I,
-    mapper: Box<dyn FnMut(I::Item) -> Result<I::Item, E>>,
+    mapper: FallibleMapper<I, E>,
 }
 
 impl<I, E> ResultIterator<I, E>
@@ -476,7 +484,7 @@ mod tests {
 
     #[test]
     fn test_window_iterator() {
-        let data = vec![1, 2, 3, 4, 5];
+        let data = [1, 2, 3, 4, 5];
         let windows: Vec<_> = data.windows_iter(3).collect();
 
         assert_eq!(windows.len(), 3);
@@ -530,7 +538,7 @@ mod tests {
 
     #[test]
     fn test_batch_iterator() {
-        let data = vec![1, 2, 3, 4, 5];
+        let data = [1, 2, 3, 4, 5];
         let batches: Vec<_> = data.into_iter().batched(2).collect();
 
         assert_eq!(batches.len(), 3);
@@ -541,7 +549,7 @@ mod tests {
 
     #[test]
     fn test_peekable_n() {
-        let data = vec![1, 2, 3, 4, 5];
+        let data = [1, 2, 3, 4, 5];
         let mut peekable = PeekableN::new(data.into_iter());
 
         assert_eq!(peekable.peek_nth(0), Some(&1));
