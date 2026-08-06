@@ -296,6 +296,17 @@ orbit/shared/src/
 ├── graphrag.rs                      # GraphRAG types
 ├── mesh.rs                          # Service mesh types
 ├── net.rs                           # Network utilities
+├── patterns/                        # Reusable Rust idiom implementations
+│   ├── mod.rs                       # Pattern exports
+│   ├── conversions.rs               # From/TryFrom, Cow, AsRef boundaries
+│   ├── interior_mutability.rs       # Cell/RefCell/RwLock ownership
+│   ├── iterators.rs                 # Custom iterator adapters
+│   ├── phantom_types.rs             # Units, branded IDs, capability markers
+│   ├── raii_guards.rs               # Drop-based transaction/metric guards
+│   ├── sealed_traits.rs             # Sealed traits for evolvable APIs
+│   ├── strategy.rs                  # Retry/serialization/compression strategies
+│   ├── typestate.rs                 # Compile-time state machines
+│   └── visitors.rs                  # AST visitors (SQL gen, optimize, validate)
 ├── pooling/                         # Connection pooling
 │   ├── mod.rs                       # Pool management
 │   ├── circuit_breaker.rs           # Circuit breaker pattern
