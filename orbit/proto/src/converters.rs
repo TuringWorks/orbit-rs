@@ -1,4 +1,13 @@
-//! Protocol buffer converters between Rust domain objects and protobuf messages
+//! Protocol buffer conversions between Rust domain objects and protobuf messages.
+//!
+//! Conversions are expressed as [`From`]/[`TryFrom`] implementations so they compose
+//! with `?`, `.into()`, and iterator adapters. The `*Converter` structs are thin,
+//! stable wrappers kept for call sites that prefer a named function.
+//!
+//! Fallible directions (`proto -> domain`) return [`OrbitError`] rather than
+//! substituting a default: a protobuf message with a missing `oneof` or an
+//! out-of-range timestamp is malformed input, and inventing a plausible value for
+//! it would hide the corruption instead of reporting it.
 
 use crate::{
     key_proto, AddressableReferenceProto, InvocationReasonProto, KeyProto, NoKeyProto, NodeIdProto,
@@ -10,80 +19,176 @@ use orbit_shared::{
 };
 use prost_types::Timestamp;
 
-/// Convert between Rust Key enum and KeyProto
-pub struct KeyConverter;
-
-impl KeyConverter {
-    pub fn to_proto(key: &Key) -> KeyProto {
+impl From<&Key> for KeyProto {
+    fn from(key: &Key) -> Self {
         let key_oneof = match key {
             Key::StringKey { key } => key_proto::Key::StringKey(key.clone()),
             Key::Int32Key { key } => key_proto::Key::Int32Key(*key),
             Key::Int64Key { key } => key_proto::Key::Int64Key(*key),
             Key::NoKey => key_proto::Key::NoKey(NoKeyProto {}),
         };
-        KeyProto {
+        Self {
             key: Some(key_oneof),
         }
     }
+}
 
-    pub fn from_proto(proto: &KeyProto) -> OrbitResult<Key> {
+impl TryFrom<&KeyProto> for Key {
+    type Error = OrbitError;
+
+    fn try_from(proto: &KeyProto) -> Result<Self, Self::Error> {
         match &proto.key {
-            Some(key_proto::Key::StringKey(k)) => Ok(Key::StringKey { key: k.clone() }),
-            Some(key_proto::Key::Int32Key(k)) => Ok(Key::Int32Key { key: *k }),
-            Some(key_proto::Key::Int64Key(k)) => Ok(Key::Int64Key { key: *k }),
-            Some(key_proto::Key::NoKey(_)) => Ok(Key::NoKey),
+            Some(key_proto::Key::StringKey(k)) => Ok(Self::StringKey { key: k.clone() }),
+            Some(key_proto::Key::Int32Key(k)) => Ok(Self::Int32Key { key: *k }),
+            Some(key_proto::Key::Int64Key(k)) => Ok(Self::Int64Key { key: *k }),
+            Some(key_proto::Key::NoKey(_)) => Ok(Self::NoKey),
             None => Err(OrbitError::internal("Missing key in KeyProto")),
         }
     }
 }
 
-/// Convert between Rust NodeId and NodeIdProto
-pub struct NodeIdConverter;
-
-impl NodeIdConverter {
-    pub fn to_proto(node_id: &NodeId) -> NodeIdProto {
-        NodeIdProto {
+impl From<&NodeId> for NodeIdProto {
+    fn from(node_id: &NodeId) -> Self {
+        Self {
             key: node_id.key.clone(),
             namespace: node_id.namespace.clone(),
         }
     }
+}
 
-    pub fn from_proto(proto: &NodeIdProto) -> NodeId {
-        NodeId {
+impl From<&NodeIdProto> for NodeId {
+    fn from(proto: &NodeIdProto) -> Self {
+        Self {
             key: proto.key.clone(),
             namespace: proto.namespace.clone(),
         }
     }
 }
 
-/// Convert between Rust AddressableReference and AddressableReferenceProto
-pub struct AddressableReferenceConverter;
-
-impl AddressableReferenceConverter {
-    pub fn to_proto(reference: &AddressableReference) -> AddressableReferenceProto {
-        AddressableReferenceProto {
+impl From<&AddressableReference> for AddressableReferenceProto {
+    fn from(reference: &AddressableReference) -> Self {
+        Self {
             addressable_type: reference.addressable_type.clone(),
-            key: Some(KeyConverter::to_proto(&reference.key)),
+            key: Some((&reference.key).into()),
         }
-    }
-
-    pub fn from_proto(proto: &AddressableReferenceProto) -> OrbitResult<AddressableReference> {
-        let key = proto
-            .key
-            .as_ref()
-            .ok_or_else(|| OrbitError::internal("Missing key in AddressableReferenceProto"))?;
-
-        Ok(AddressableReference {
-            addressable_type: proto.addressable_type.clone(),
-            key: KeyConverter::from_proto(key)?,
-        })
     }
 }
 
-/// Convert between Rust `DateTime<Utc>` and protobuf Timestamp
+impl TryFrom<&AddressableReferenceProto> for AddressableReference {
+    type Error = OrbitError;
+
+    fn try_from(proto: &AddressableReferenceProto) -> Result<Self, Self::Error> {
+        proto
+            .key
+            .as_ref()
+            .ok_or_else(|| OrbitError::internal("Missing key in AddressableReferenceProto"))
+            .and_then(Key::try_from)
+            .map(|key| Self {
+                addressable_type: proto.addressable_type.clone(),
+                key,
+            })
+    }
+}
+
+impl From<&InvocationReason> for InvocationReasonProto {
+    fn from(reason: &InvocationReason) -> Self {
+        match reason {
+            InvocationReason::Invocation => Self::Invocation,
+            InvocationReason::Rerouted => Self::Rerouted,
+        }
+    }
+}
+
+impl From<InvocationReasonProto> for InvocationReason {
+    fn from(proto: InvocationReasonProto) -> Self {
+        match proto {
+            InvocationReasonProto::Invocation => Self::Invocation,
+            InvocationReasonProto::Rerouted => Self::Rerouted,
+        }
+    }
+}
+
+impl From<&NodeStatus> for NodeStatusProto {
+    fn from(status: &NodeStatus) -> Self {
+        match status {
+            NodeStatus::Active => Self::Active,
+            NodeStatus::Draining => Self::Draining,
+            NodeStatus::Stopped => Self::Stopped,
+        }
+    }
+}
+
+impl From<NodeStatusProto> for NodeStatus {
+    fn from(proto: NodeStatusProto) -> Self {
+        match proto {
+            NodeStatusProto::Active => Self::Active,
+            NodeStatusProto::Draining => Self::Draining,
+            NodeStatusProto::Stopped => Self::Stopped,
+        }
+    }
+}
+
+/// Convert between Rust [`Key`] and [`KeyProto`].
+pub struct KeyConverter;
+
+impl KeyConverter {
+    /// Encode a domain key as its protobuf representation.
+    #[must_use]
+    pub fn to_proto(key: &Key) -> KeyProto {
+        key.into()
+    }
+
+    /// Decode a protobuf key.
+    ///
+    /// # Errors
+    /// Returns [`OrbitError::Internal`] if the `key` oneof is unset.
+    pub fn from_proto(proto: &KeyProto) -> OrbitResult<Key> {
+        Key::try_from(proto)
+    }
+}
+
+/// Convert between Rust [`NodeId`] and [`NodeIdProto`].
+pub struct NodeIdConverter;
+
+impl NodeIdConverter {
+    /// Encode a node id as its protobuf representation.
+    #[must_use]
+    pub fn to_proto(node_id: &NodeId) -> NodeIdProto {
+        node_id.into()
+    }
+
+    /// Decode a protobuf node id. This conversion is total.
+    #[must_use]
+    pub fn from_proto(proto: &NodeIdProto) -> NodeId {
+        proto.into()
+    }
+}
+
+/// Convert between Rust [`AddressableReference`] and [`AddressableReferenceProto`].
+pub struct AddressableReferenceConverter;
+
+impl AddressableReferenceConverter {
+    /// Encode an addressable reference as its protobuf representation.
+    #[must_use]
+    pub fn to_proto(reference: &AddressableReference) -> AddressableReferenceProto {
+        reference.into()
+    }
+
+    /// Decode a protobuf addressable reference.
+    ///
+    /// # Errors
+    /// Returns [`OrbitError::Internal`] if the nested key is missing or malformed.
+    pub fn from_proto(proto: &AddressableReferenceProto) -> OrbitResult<AddressableReference> {
+        AddressableReference::try_from(proto)
+    }
+}
+
+/// Convert between Rust `DateTime<Utc>` and protobuf [`Timestamp`].
 pub struct TimestampConverter;
 
 impl TimestampConverter {
+    /// Encode a UTC timestamp as its protobuf representation.
+    #[must_use]
     pub fn to_proto(dt: &DateTime<Utc>) -> Timestamp {
         Timestamp {
             seconds: dt.timestamp(),
@@ -91,48 +196,57 @@ impl TimestampConverter {
         }
     }
 
-    pub fn from_proto(timestamp: &Timestamp) -> DateTime<Utc> {
-        DateTime::from_timestamp(timestamp.seconds, timestamp.nanos as u32).unwrap_or_else(Utc::now)
+    /// Decode a protobuf timestamp.
+    ///
+    /// # Errors
+    /// Returns [`OrbitError::Internal`] when the seconds/nanos pair is not a
+    /// representable instant. An unrepresentable timestamp is malformed input; it
+    /// is reported rather than replaced with the current time, which would silently
+    /// restamp the record with its decode time.
+    pub fn from_proto(timestamp: &Timestamp) -> OrbitResult<DateTime<Utc>> {
+        u32::try_from(timestamp.nanos)
+            .ok()
+            .and_then(|nanos| DateTime::from_timestamp(timestamp.seconds, nanos))
+            .ok_or_else(|| {
+                OrbitError::internal(format!(
+                    "Timestamp out of range: seconds={}, nanos={}",
+                    timestamp.seconds, timestamp.nanos
+                ))
+            })
     }
 }
 
-/// Convert between Rust InvocationReason and InvocationReasonProto
+/// Convert between Rust [`InvocationReason`] and [`InvocationReasonProto`].
 pub struct InvocationReasonConverter;
 
 impl InvocationReasonConverter {
+    /// Encode an invocation reason as its protobuf representation.
+    #[must_use]
     pub fn to_proto(reason: &InvocationReason) -> InvocationReasonProto {
-        match reason {
-            InvocationReason::Invocation => InvocationReasonProto::Invocation,
-            InvocationReason::Rerouted => InvocationReasonProto::Rerouted,
-        }
+        reason.into()
     }
 
+    /// Decode a protobuf invocation reason. This conversion is total.
+    #[must_use]
     pub fn from_proto(proto: InvocationReasonProto) -> InvocationReason {
-        match proto {
-            InvocationReasonProto::Invocation => InvocationReason::Invocation,
-            InvocationReasonProto::Rerouted => InvocationReason::Rerouted,
-        }
+        proto.into()
     }
 }
 
-/// Convert between Rust NodeStatus and NodeStatusProto
+/// Convert between Rust [`NodeStatus`] and [`NodeStatusProto`].
 pub struct NodeStatusConverter;
 
 impl NodeStatusConverter {
+    /// Encode a node status as its protobuf representation.
+    #[must_use]
     pub fn to_proto(status: &NodeStatus) -> NodeStatusProto {
-        match status {
-            NodeStatus::Active => NodeStatusProto::Active,
-            NodeStatus::Draining => NodeStatusProto::Draining,
-            NodeStatus::Stopped => NodeStatusProto::Stopped,
-        }
+        status.into()
     }
 
+    /// Decode a protobuf node status. This conversion is total.
+    #[must_use]
     pub fn from_proto(proto: NodeStatusProto) -> NodeStatus {
-        match proto {
-            NodeStatusProto::Active => NodeStatus::Active,
-            NodeStatusProto::Draining => NodeStatus::Draining,
-            NodeStatusProto::Stopped => NodeStatus::Stopped,
-        }
+        proto.into()
     }
 }
 
@@ -315,7 +429,7 @@ mod tests {
         let dt = Utc::now();
 
         let proto = TimestampConverter::to_proto(&dt);
-        let converted_back = TimestampConverter::from_proto(&proto);
+        let converted_back = TimestampConverter::from_proto(&proto).unwrap();
 
         // Allow for small differences due to precision
         let diff = (dt.timestamp_millis() - converted_back.timestamp_millis()).abs();
@@ -330,7 +444,7 @@ mod tests {
             .with_timezone(&Utc);
 
         let proto = TimestampConverter::to_proto(&dt);
-        let converted_back = TimestampConverter::from_proto(&proto);
+        let converted_back = TimestampConverter::from_proto(&proto).unwrap();
 
         assert_eq!(dt.timestamp(), converted_back.timestamp());
         // Check nanoseconds separately due to potential precision differences
@@ -344,22 +458,83 @@ mod tests {
     }
 
     #[test]
-    fn test_timestamp_converter_invalid_timestamp() {
-        // Test with invalid timestamp (should fall back to current time)
-        let invalid_proto = Timestamp {
-            seconds: -1,
-            nanos: -1,
+    fn test_trait_conversions_roundtrip_every_key_variant() {
+        let keys = [
+            Key::StringKey {
+                key: "k".to_string(),
+            },
+            Key::Int32Key { key: -7 },
+            Key::Int64Key { key: i64::MIN },
+            Key::NoKey,
+        ];
+
+        for key in keys {
+            let proto: KeyProto = (&key).into();
+            assert_eq!(key, Key::try_from(&proto).unwrap());
+        }
+    }
+
+    #[test]
+    fn test_trait_conversions_match_converter_structs() {
+        let reference = AddressableReference {
+            addressable_type: "Actor".to_string(),
+            key: Key::Int64Key { key: 42 },
+        };
+        let node_id = NodeId {
+            key: "node".to_string(),
+            namespace: "ns".to_string(),
         };
 
-        let converted = TimestampConverter::from_proto(&invalid_proto);
-
-        // Should not panic and should return a valid datetime
-        let now = Utc::now();
-        let diff = (now.timestamp() - converted.timestamp()).abs();
-        assert!(
-            diff < 10,
-            "Fallback timestamp should be close to current time"
+        let via_trait: AddressableReferenceProto = (&reference).into();
+        assert_eq!(
+            via_trait,
+            AddressableReferenceConverter::to_proto(&reference)
         );
+        assert_eq!(
+            reference,
+            AddressableReference::try_from(&via_trait).unwrap()
+        );
+
+        let node_proto: NodeIdProto = (&node_id).into();
+        assert_eq!(node_proto, NodeIdConverter::to_proto(&node_id));
+        assert_eq!(node_id, NodeId::from(&node_proto));
+
+        assert_eq!(
+            NodeStatusProto::from(&NodeStatus::Draining),
+            NodeStatusConverter::to_proto(&NodeStatus::Draining)
+        );
+        assert_eq!(
+            InvocationReasonProto::from(&InvocationReason::Rerouted),
+            InvocationReasonConverter::to_proto(&InvocationReason::Rerouted)
+        );
+    }
+
+    #[test]
+    fn test_timestamp_converter_rejects_malformed_timestamp() {
+        // Negative nanos are not representable; the decoder must report that rather
+        // than substitute the current time, which would restamp the record.
+        let cases = [
+            Timestamp {
+                seconds: -1,
+                nanos: -1,
+            },
+            Timestamp {
+                seconds: i64::MAX,
+                nanos: 0,
+            },
+        ];
+
+        for invalid_proto in cases {
+            match TimestampConverter::from_proto(&invalid_proto) {
+                Err(OrbitError::Internal { message, .. }) => {
+                    assert!(
+                        message.contains("Timestamp out of range"),
+                        "unexpected message: {message}"
+                    );
+                }
+                other => panic!("Expected an out-of-range error, got {other:?}"),
+            }
+        }
     }
 
     #[test]
@@ -427,7 +602,7 @@ mod tests {
         // Convert back
         let ref_back = AddressableReferenceConverter::from_proto(&ref_proto).unwrap();
         let node_back = NodeIdConverter::from_proto(&node_proto);
-        let dt_back = TimestampConverter::from_proto(&dt_proto);
+        let dt_back = TimestampConverter::from_proto(&dt_proto).unwrap();
         let reason_back = InvocationReasonConverter::from_proto(reason_proto);
         let status_back = NodeStatusConverter::from_proto(status_proto);
 
