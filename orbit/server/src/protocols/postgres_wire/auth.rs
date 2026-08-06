@@ -258,6 +258,15 @@ pub struct ScramAuth {
     server_first_message: String,
 }
 
+/// First code point of the RFC 5802 nonce alphabet (`!`).
+const SCRAM_NONCE_FIRST: u32 = 0x21;
+/// Last code point of the RFC 5802 nonce alphabet (`~`).
+const SCRAM_NONCE_LAST: u32 = 0x7E;
+/// The one excluded code point: `,` separates fields in a SCRAM message.
+const SCRAM_NONCE_COMMA: u32 = b',' as u32;
+/// Size of the alphabet once the comma is removed.
+const SCRAM_NONCE_ALPHABET_LEN: u32 = SCRAM_NONCE_LAST - SCRAM_NONCE_FIRST;
+
 impl ScramAuth {
     /// Create new SCRAM authentication session
     pub fn new(
@@ -268,11 +277,25 @@ impl ScramAuth {
         stored_key: Vec<u8>,
         server_key: Vec<u8>,
     ) -> Self {
-        // Generate server nonce by appending random data to client nonce
+        // Generate server nonce by appending random data to client nonce.
+        //
+        // RFC 5802 defines the nonce alphabet as printable ASCII *excluding*
+        // comma (`%x21-2B / %x2D-7E`). The comma is the field separator in
+        // `r=<nonce>,s=<salt>,i=<iterations>`, so a comma inside the nonce
+        // splits the message into an extra field and the client rejects the
+        // handshake with a parse error such as "expected `s`". At 16 characters
+        // drawn from the full 33..127 range that happened to roughly one login
+        // in six, making PostgreSQL authentication intermittently fail.
         let server_nonce_suffix: String = (0..16)
             .map(|_| {
-                let ch = rand::rng().random_range(33..127) as u8;
-                ch as char
+                let ch = rand::rng().random_range(0..SCRAM_NONCE_ALPHABET_LEN);
+                // Skip the comma by shifting everything at or above it up one.
+                let ch = if ch + SCRAM_NONCE_FIRST >= SCRAM_NONCE_COMMA {
+                    ch + SCRAM_NONCE_FIRST + 1
+                } else {
+                    ch + SCRAM_NONCE_FIRST
+                };
+                ch as u8 as char
             })
             .collect();
         let server_nonce = format!("{}{}", client_nonce, server_nonce_suffix);
@@ -504,5 +527,63 @@ mod tests {
             .verify_password(username, "md5wronghash", Some(&salt))
             .await;
         assert!(!result.unwrap());
+    }
+
+    /// The server nonce must never contain a comma.
+    ///
+    /// `server-first-message` is `r=<nonce>,s=<salt>,i=<iterations>` and the
+    /// client splits it on commas. A comma inside the nonce creates a spurious
+    /// field, and the client fails the handshake with a parse error. Drawing
+    /// from the full printable range made that happen for roughly one login in
+    /// six, so this is checked over enough samples to catch a regression.
+    #[test]
+    fn scram_server_nonce_never_contains_a_comma() {
+        for _ in 0..2_000 {
+            let auth = ScramAuth::new(
+                "user".to_string(),
+                "clientnonce".to_string(),
+                vec![0u8; 16],
+                4096,
+                vec![0u8; 32],
+                vec![0u8; 32],
+            );
+            assert!(
+                !auth.server_nonce.contains(','),
+                "nonce must exclude the field separator: {:?}",
+                auth.server_nonce
+            );
+            assert!(
+                auth.server_nonce
+                    .chars()
+                    .all(|c| ('\x21'..='\x7e').contains(&c)),
+                "nonce must stay in the RFC 5802 printable range: {:?}",
+                auth.server_nonce
+            );
+        }
+    }
+
+    /// A server-first-message must parse into exactly the three fields the
+    /// client expects, in order.
+    #[test]
+    fn scram_server_first_message_has_three_parseable_fields() {
+        for _ in 0..500 {
+            let mut auth = ScramAuth::new(
+                "user".to_string(),
+                "clientnonce".to_string(),
+                vec![1u8; 16],
+                4096,
+                vec![0u8; 32],
+                vec![0u8; 32],
+            );
+            let message = auth
+                .process_client_first("n,,n=user,r=clientnonce")
+                .expect("a well formed client-first-message is accepted");
+
+            let fields: Vec<&str> = message.split(',').collect();
+            assert_eq!(fields.len(), 3, "unexpected field count in {message:?}");
+            assert!(fields[0].starts_with("r="), "{message:?}");
+            assert!(fields[1].starts_with("s="), "{message:?}");
+            assert!(fields[2].starts_with("i="), "{message:?}");
+        }
     }
 }
