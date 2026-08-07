@@ -172,17 +172,15 @@ impl ExpressionParser {
                     high: Box::new(high),
                     negated: between_negated,
                 };
-            } else if matches!(&tokens[*pos], Token::In) {
-                // Handle IN operator specially to support both value lists and subqueries
-                *pos += 1; // consume IN
-
-                // Check for NOT IN
-                let negated = if *pos < tokens.len() && matches!(&tokens[*pos], Token::Not) {
-                    *pos += 1;
-                    true
-                } else {
-                    false
-                };
+            } else if matches!(&tokens[*pos], Token::In)
+                || (matches!(&tokens[*pos], Token::Not)
+                    && *pos + 1 < tokens.len()
+                    && matches!(&tokens[*pos + 1], Token::In))
+            {
+                // `NOT` precedes `IN` — `x NOT IN (...)`. Looking for it after
+                // `IN` never matched, so `NOT IN` failed to parse.
+                let negated = matches!(&tokens[*pos], Token::Not);
+                *pos += if negated { 2 } else { 1 };
 
                 // Parse IN list or subquery
                 if *pos >= tokens.len() {
@@ -942,6 +940,28 @@ impl ExpressionParser {
         // Parse arguments
         if *pos < tokens.len() && !matches!(tokens[*pos], Token::RightParen) {
             loop {
+                // `EXTRACT(field FROM source)` names its field with a bare
+                // word: `EXTRACT(YEAR FROM d)`. It is a field name, not a
+                // column, so it is read as text — otherwise it resolved to a
+                // column that does not exist.
+                let extracts = matches!(func_name.to_uppercase().as_str(), "EXTRACT" | "DATE_PART");
+                if extracts && args.is_empty() {
+                    if let Some(field) = tokens
+                        .get(*pos)
+                        .and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name)
+                    {
+                        if tokens.get(*pos + 1).is_some_and(|next| matches!(next, Token::From)) {
+                            // Consume the field and its `FROM`; the source
+                            // expression is the next argument.
+                            *pos += 2;
+                            args.push(Expression::Literal(
+                                crate::protocols::postgres_wire::sql::types::SqlValue::Text(field),
+                            ));
+                            continue;
+                        }
+                    }
+                }
+
                 // Handle special case for COUNT(*)
                 if func_name.to_uppercase() == "COUNT" && matches!(tokens[*pos], Token::Multiply) {
                     *pos += 1;
@@ -967,7 +987,12 @@ impl ExpressionParser {
                     }
                 }
 
-                if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
+                // `FROM` and `FOR` separate arguments in `EXTRACT(f FROM s)`
+                // and `SUBSTRING(s FROM a FOR b)`, where a comma would be a
+                // syntax error.
+                if *pos < tokens.len() && matches!(tokens[*pos], Token::From | Token::For) {
+                    *pos += 1;
+                } else if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
                     // Lookahead for ORDER or SEPARATOR after comma (invalid but sometimes users type it?)
                     // Actually comma MUST separate args.
                     *pos += 1; // consume ','

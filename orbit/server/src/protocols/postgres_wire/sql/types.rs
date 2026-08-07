@@ -726,6 +726,56 @@ impl SqlValue {
             _ => {}
         }
 
+        // Every type has a text representation in PostgreSQL, and text parses
+        // back to the numeric and boolean types. `can_cast_to` did not allow
+        // either direction, so `amount::text` and `CAST('7' AS INTEGER)` —
+        // both routine in generated SQL — were refused.
+        if matches!(self, SqlValue::Null) {
+            return Ok(SqlValue::Null);
+        }
+        match target_type {
+            SqlType::Text => return Ok(SqlValue::Text(self.to_postgres_string())),
+            SqlType::Varchar(_) => return Ok(SqlValue::Varchar(self.to_postgres_string())),
+            SqlType::Char(_) => return Ok(SqlValue::Char(self.to_postgres_string())),
+            SqlType::SmallInt | SqlType::Integer | SqlType::BigInt => {
+                if let SqlValue::Text(text) | SqlValue::Varchar(text) | SqlValue::Char(text) = self
+                {
+                    let parsed = text
+                        .trim()
+                        .parse::<i64>()
+                        .map_err(|_| format!("invalid input syntax for integer: \"{text}\""))?;
+                    return Ok(match target_type {
+                        SqlType::SmallInt => SqlValue::SmallInt(parsed as i16),
+                        SqlType::Integer => SqlValue::Integer(parsed as i32),
+                        _ => SqlValue::BigInt(parsed),
+                    });
+                }
+            }
+            SqlType::Real | SqlType::DoublePrecision => {
+                if let SqlValue::Text(text) | SqlValue::Varchar(text) | SqlValue::Char(text) = self
+                {
+                    let parsed = text.trim().parse::<f64>().map_err(|_| {
+                        format!("invalid input syntax for double precision: \"{text}\"")
+                    })?;
+                    return Ok(match target_type {
+                        SqlType::Real => SqlValue::Real(parsed as f32),
+                        _ => SqlValue::DoublePrecision(parsed),
+                    });
+                }
+            }
+            SqlType::Boolean => {
+                if let SqlValue::Text(text) | SqlValue::Varchar(text) | SqlValue::Char(text) = self
+                {
+                    return match text.trim().to_ascii_lowercase().as_str() {
+                        "t" | "true" | "yes" | "on" | "1" => Ok(SqlValue::Boolean(true)),
+                        "f" | "false" | "no" | "off" | "0" => Ok(SqlValue::Boolean(false)),
+                        other => Err(format!("invalid input syntax for boolean: \"{other}\"")),
+                    };
+                }
+            }
+            _ => {}
+        }
+
         if self.sql_type().can_cast_to(target_type) {
             match (self, target_type) {
                 (SqlValue::SmallInt(i), SqlType::Integer) => Ok(SqlValue::Integer(*i as i32)),

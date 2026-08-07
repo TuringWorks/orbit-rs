@@ -27,6 +27,18 @@ pub enum ConnectionState {
     Closed,
 }
 
+/// The fixed 11-byte header of a binary `COPY` stream.
+const COPY_BINARY_SIGNATURE: &[u8] = b"PGCOPY\n\xff\r\n\0";
+
+/// A savepoint: how far each undo log had grown when it was taken.
+struct Savepoint {
+    name: String,
+    inserts: HashMap<String, usize>,
+    pre_images: HashMap<String, usize>,
+    /// Whole-table copies for the statements that leave no row-level record.
+    tables: HashMap<String, Vec<super::persistent_storage::TableRow>>,
+}
+
 /// PostgreSQL wire protocol handler
 pub struct PostgresWireProtocol {
     state: ConnectionState,
@@ -78,6 +90,51 @@ pub struct PostgresWireProtocol {
     /// table back. A snapshot is taken once per table per block, before its
     /// first write, and discarded on COMMIT.
     transaction_snapshots: HashMap<String, Vec<super::persistent_storage::TableRow>>,
+    /// Rows this session added in the open block, per table.
+    ///
+    /// Undo removes exactly these rather than restoring a copy of the table,
+    /// which would take another session's committed rows with it.
+    transaction_inserts: HashMap<String, Vec<super::persistent_storage::TableRow>>,
+    /// Rows this session changed or removed, as they stood beforehand.
+    transaction_pre_images: HashMap<String, Vec<super::persistent_storage::TableRow>>,
+    /// The transaction this session has open, if any.
+    ///
+    /// Rows written inside it are stamped with this id and stay invisible to
+    /// other sessions until it ends.
+    transaction_id: Option<super::query_engine::TransactionContext>,
+    /// The isolation level asked for, which decides whether a block reads
+    /// through a snapshot or sees each commit as it lands.
+    snapshot_isolation: bool,
+    /// Whether the block must also fail if what it read moved underneath it.
+    serializable: bool,
+    /// Whether this connection asked for the replication protocol at startup.
+    ///
+    /// A replication connection speaks a small command set instead of SQL,
+    /// which is why the mode has to be known before the first query.
+    replication: bool,
+    /// The slot the current replication stream belongs to, if it named one.
+    replication_slot_name: Option<String>,
+    /// The output plugin that slot was created with, which decides the payload
+    /// format: `pgoutput` is the binary protocol a real subscriber speaks.
+    replication_plugin: String,
+    /// Tables already described to the subscriber, so a `Relation` message is
+    /// sent once rather than before every row.
+    announced_relations: std::collections::HashSet<String>,
+    /// Table ids handed out for this stream.
+    relation_ids: HashMap<String, i32>,
+    /// The change stream a `START_REPLICATION` opened, if any.
+    replication_stream: Option<tokio::sync::broadcast::Receiver<super::query_engine::ChangeRecord>>,
+    /// Whether this session has asked for immediate constraint checking.
+    ///
+    /// `SET CONSTRAINTS ALL IMMEDIATE` makes deferrable keys behave as if they
+    /// were not deferrable for the rest of the transaction, so a later write
+    /// fails at the statement rather than at `COMMIT`.
+    constraints_immediate: bool,
+    /// Open savepoints, innermost last.
+    ///
+    /// Each records how far the undo logs had grown when it was taken, so
+    /// rolling back to it undoes exactly the writes made afterwards.
+    savepoints: Vec<Savepoint>,
     /// Whether this session is inside a transaction block, and whether that
     /// block has already failed.
     ///
@@ -89,12 +146,20 @@ pub struct PostgresWireProtocol {
 
 /// An in-progress `COPY ... FROM STDIN`.
 struct CopyInState {
+    /// Whether the stream is in the binary format rather than text.
+    binary: bool,
+    /// Bytes of a binary stream not yet forming a whole tuple.
+    pending: BytesMut,
+    /// Whether the fixed binary header has been consumed.
+    header_seen: bool,
     /// Whether the copy was started by a simple query, which owes the client a
     /// ReadyForQuery when the stream ends.
     simple_protocol: bool,
     table: String,
     /// Column names the data is being loaded into, in order.
     columns: Vec<String>,
+    /// PostgreSQL type OID of each column, for decoding a binary stream.
+    column_type_oids: Vec<i32>,
     /// Whether each column takes an unquoted literal, by position.
     ///
     /// A COPY field is text on the wire but must be written into the statement
@@ -176,6 +241,19 @@ impl PostgresWireProtocol {
             transaction: TransactionState::Idle,
             writes_in_transaction: 0,
             transaction_snapshots: HashMap::new(),
+            transaction_id: None,
+            snapshot_isolation: false,
+            serializable: false,
+            replication: false,
+            replication_slot_name: None,
+            replication_plugin: "orbit_json".to_string(),
+            announced_relations: std::collections::HashSet::new(),
+            relation_ids: HashMap::new(),
+            replication_stream: None,
+            constraints_immediate: false,
+            transaction_inserts: HashMap::new(),
+            transaction_pre_images: HashMap::new(),
+            savepoints: Vec::new(),
             copy_in: None,
             copy_in_is_simple: false,
             notifications: NotificationHub::new(),
@@ -185,7 +263,7 @@ impl PostgresWireProtocol {
 
     /// Create a new PostgreSQL protocol handler with custom query engine
     pub fn new_with_query_engine(query_engine: Arc<QueryEngine>) -> Self {
-        println!("DEBUG: PostgresWireProtocol initialized with custom QueryEngine");
+        tracing::debug!("wire protocol session created with a custom query engine");
         let user_store = UserStore::new();
         let auth_method = AuthMethod::ScramSha256;
         let auth_manager = AuthManager::new(auth_method, user_store);
@@ -209,6 +287,19 @@ impl PostgresWireProtocol {
             transaction: TransactionState::Idle,
             writes_in_transaction: 0,
             transaction_snapshots: HashMap::new(),
+            transaction_id: None,
+            snapshot_isolation: false,
+            serializable: false,
+            replication: false,
+            replication_slot_name: None,
+            replication_plugin: "orbit_json".to_string(),
+            announced_relations: std::collections::HashSet::new(),
+            relation_ids: HashMap::new(),
+            replication_stream: None,
+            constraints_immediate: false,
+            transaction_inserts: HashMap::new(),
+            transaction_pre_images: HashMap::new(),
+            savepoints: Vec::new(),
             copy_in: None,
             copy_in_is_simple: false,
             notifications: NotificationHub::new(),
@@ -250,12 +341,26 @@ impl PostgresWireProtocol {
 
         match head.as_str() {
             "BEGIN" | "START" => {
+                self.transaction_id = Some(super::query_engine::begin_transaction_at(
+                    self.snapshot_isolation,
+                    self.serializable,
+                ));
                 self.transaction = TransactionState::Open;
                 self.writes_in_transaction = 0;
             }
             "COMMIT" | "END" | "ROLLBACK" | "ABORT" => {
+                // Ending the transaction is what makes its rows visible to
+                // everyone else; a rolled-back block's rows are removed by the
+                // undo log before this point.
+                if let Some(context) = self.transaction_id.take() {
+                    super::query_engine::end_transaction(context.id);
+                }
+                self.snapshot_isolation = false;
+                self.serializable = false;
                 self.transaction = TransactionState::Idle;
                 self.writes_in_transaction = 0;
+                self.savepoints.clear();
+                self.constraints_immediate = false;
             }
             // Writes are counted so a later ROLLBACK can report what it cannot
             // undo.
@@ -280,10 +385,67 @@ impl PostgresWireProtocol {
         let Some(table) = QueryEngine::write_target_table(sql) else {
             return;
         };
-        if self.transaction_snapshots.contains_key(&table) {
+
+        // `COPY ... FROM STDIN` records nothing here: its rows arrive later and
+        // each one is inserted as its own statement, which lands in the undo
+        // log on its own.
+        // The whole-table copy below is the fallback for anything else that
+        // cannot be expressed as a set of rows.
+        let head: String = sql
+            .trim_start()
+            .chars()
+            .take_while(char::is_ascii_alphabetic)
+            .collect::<String>()
+            .to_uppercase();
+
+        if head == "COPY" {
             return;
         }
 
+        if matches!(head.as_str(), "INSERT") {
+            match self.query_engine.rows_an_insert_adds(sql).await {
+                Ok(Some(rows)) => {
+                    self.transaction_inserts
+                        .entry(table)
+                        .or_default()
+                        .extend(rows);
+                    return;
+                }
+                Ok(None) => {}
+                Err(e) => tracing::warn!("could not record inserted rows for rollback: {e}"),
+            }
+        } else if head == "TRUNCATE" {
+            // Everything currently in the table is what TRUNCATE removes, so
+            // every row is its own pre-image. Rolling back re-inserts only
+            // those, leaving rows another session added afterwards alone.
+            match self.query_engine.snapshot_table(&table).await {
+                Ok(Some(rows)) => {
+                    self.transaction_pre_images
+                        .entry(table)
+                        .or_default()
+                        .extend(rows);
+                    return;
+                }
+                Ok(None) => {}
+                Err(e) => tracing::warn!("could not record pre-images for rollback: {e}"),
+            }
+        } else if matches!(head.as_str(), "UPDATE" | "DELETE") {
+            match self.query_engine.rows_a_statement_will_change(sql).await {
+                Ok(Some(rows)) => {
+                    self.transaction_pre_images
+                        .entry(table)
+                        .or_default()
+                        .extend(rows);
+                    return;
+                }
+                Ok(None) => {}
+                Err(e) => tracing::warn!("could not record pre-images for rollback: {e}"),
+            }
+        }
+
+        if self.transaction_snapshots.contains_key(&table) {
+            return;
+        }
         match self.query_engine.snapshot_table(&table).await {
             Ok(Some(rows)) => {
                 self.transaction_snapshots.insert(table, rows);
@@ -299,9 +461,33 @@ impl PostgresWireProtocol {
     ///
     /// Returns the tables that could not be restored.
     async fn restore_snapshots(&mut self) -> Vec<String> {
+        let inserts = std::mem::take(&mut self.transaction_inserts);
+        let pre_images = std::mem::take(&mut self.transaction_pre_images);
         let snapshots = std::mem::take(&mut self.transaction_snapshots);
         let mut failed = Vec::new();
 
+        // Row-scoped undo first: it touches only what this session wrote.
+        let tables: std::collections::BTreeSet<String> =
+            inserts.keys().chain(pre_images.keys()).cloned().collect();
+        for table in tables {
+            let added = inserts.get(&table).map(Vec::as_slice).unwrap_or_default();
+            let before = pre_images
+                .get(&table)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            if let Err(e) = self
+                .query_engine
+                .undo_session_writes(&table, added, before)
+                .await
+            {
+                tracing::error!("rollback could not undo writes to '{table}': {e}");
+                failed.push(table);
+            }
+        }
+
+        // Whole-table restore only for the statements that left no row-level
+        // record; this one can revert a concurrent session's writes, which is
+        // why it is the fallback.
         for (table, rows) in snapshots {
             if let Err(e) = self.query_engine.restore_table(&table, rows).await {
                 tracing::error!("rollback could not restore '{table}': {e}");
@@ -330,6 +516,14 @@ impl PostgresWireProtocol {
 
         match head.as_str() {
             "ROLLBACK" | "ABORT" => {
+                // Rows this block marked deleted are put back by clearing the
+                // mark; the row-level undo handles everything it wrote.
+                if let Some(id) = self.transaction_id.as_ref().map(|c| c.id) {
+                    let tables = self.tables_written();
+                    if let Err(e) = self.query_engine.restore_deleted(id, &tables).await {
+                        tracing::error!("could not restore deletes for transaction {id}: {e}");
+                    }
+                }
                 let failed = self.restore_snapshots().await;
                 if failed.is_empty() {
                     return;
@@ -347,10 +541,566 @@ impl PostgresWireProtocol {
                 );
                 BackendMessage::NoticeResponse { fields }.encode(buf);
             }
-            // The block's writes stand; nothing to put back.
-            "COMMIT" | "END" => self.transaction_snapshots.clear(),
+            // Deferred constraints are checked now, before the block's writes
+            // are allowed to stand. A failure here has to undo them, as
+            // PostgreSQL does when a deferred check fails at COMMIT.
+            "COMMIT" | "END" => {
+                if let Err(e) = self
+                    .query_engine
+                    .check_deferred_constraints(&self.tables_written())
+                    .await
+                {
+                    let failed = self.restore_snapshots().await;
+                    self.send_error(buf, &e.to_string());
+                    if !failed.is_empty() {
+                        tracing::error!("could not undo after a deferred failure: {failed:?}");
+                    }
+                    self.savepoints.clear();
+                    return;
+                }
+            }
             _ => {}
         }
+
+        match head.as_str() {
+            "COMMIT" | "END" => {
+                // A serializable block that read something another transaction
+                // has since written cannot be serialized after it: PostgreSQL
+                // fails it here rather than committing a result no serial
+                // order could produce.
+                if let Some(context) = self.transaction_id.clone() {
+                    if let (Some(snapshot), Some(reads)) =
+                        (context.snapshot.as_ref(), context.reads.as_ref())
+                    {
+                        let tables: Vec<String> = reads
+                            .lock()
+                            .map(|reads| reads.iter().cloned().collect())
+                            .unwrap_or_default();
+                        match self
+                            .query_engine
+                            .serialization_conflict(context.id, snapshot, &tables)
+                            .await
+                        {
+                            Ok(Some(table)) => {
+                                let failed = self.restore_snapshots().await;
+                                if !failed.is_empty() {
+                                    tracing::error!("could not undo after a conflict: {failed:?}");
+                                }
+                                let mut fields = HashMap::new();
+                                fields.insert(b'S', "ERROR".to_string());
+                                fields.insert(b'C', "40001".to_string());
+                                fields.insert(
+                                    b'M',
+                                    format!(
+                                        "could not serialize access due to concurrent update on \"{table}\""
+                                    ),
+                                );
+                                BackendMessage::ErrorResponse { fields }.encode(buf);
+                                self.savepoints.clear();
+                                return;
+                            }
+                            Ok(None) => {}
+                            Err(e) => tracing::error!("serialization check failed: {e}"),
+                        }
+                    }
+                }
+
+                // A committed delete removes its rows for good.
+                if let Some(id) = self.transaction_id.as_ref().map(|c| c.id) {
+                    let tables = self.tables_written();
+                    if let Err(e) = self.query_engine.purge_deleted(id, &tables).await {
+                        tracing::error!("could not purge deletes for transaction {id}: {e}");
+                    }
+                }
+                self.transaction_snapshots.clear();
+                self.transaction_inserts.clear();
+                self.transaction_pre_images.clear();
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle `SET <name> = <value>` and `SHOW <name>`.
+    ///
+    /// Returns `None` when the statement is neither, `Ok(None)` when a value
+    /// was stored, and `Ok(Some(result))` with the row `SHOW` reports.
+    fn handle_session_parameter(
+        &mut self,
+        query: &str,
+    ) -> Option<Result<Option<QueryResult>, String>> {
+        let trimmed = query.trim().trim_end_matches(';').trim();
+        let words: Vec<&str> = trimmed.split_whitespace().collect();
+        let head = words.first()?.to_uppercase();
+
+        if head == "SHOW" {
+            let name = words.get(1)?.to_lowercase();
+            // `SHOW ALL` reports every parameter, one row each, as psql's
+            // `\\set`-style introspection expects.
+            if name == "all" {
+                let mut rows: Vec<Vec<Option<String>>> = self
+                    .parameters
+                    .iter()
+                    .map(|(key, value)| vec![Some(key.clone()), Some(value.clone())])
+                    .collect();
+                rows.sort();
+                return Some(Ok(Some(QueryResult::Select {
+                    columns: vec!["name".to_string(), "setting".to_string()],
+                    rows,
+                })));
+            }
+            let value = self.parameters.get(&name).cloned().unwrap_or_default();
+            return Some(Ok(Some(QueryResult::Select {
+                columns: vec![name],
+                rows: vec![vec![Some(value)]],
+            })));
+        }
+
+        if head != "SET" {
+            return None;
+        }
+        // `SET TRANSACTION ...`, `SET SESSION ...` and friends are not simple
+        // parameter assignments; leave them to the engine.
+        let name = words.get(1)?.to_lowercase();
+        if matches!(
+            name.as_str(),
+            "transaction" | "session" | "local" | "constraints"
+        ) {
+            return None;
+        }
+
+        let rest = trimmed
+            .split_once('=')
+            .map(|(_, value)| value.trim())
+            .or_else(|| {
+                words
+                    .get(2)
+                    .filter(|word| word.eq_ignore_ascii_case("TO"))
+                    .and_then(|_| words.get(3))
+                    .copied()
+            })?;
+
+        // A parameter value is written as a SQL literal; the stored value is
+        // the string it denotes.
+        let value = rest.trim().trim_matches('\'').trim_matches('"').to_string();
+        self.parameters.insert(name, value);
+        Some(Ok(None))
+    }
+
+    /// The tables this transaction block has written.
+    ///
+    /// Taken from the undo logs, which already record exactly that.
+    fn tables_written(&self) -> Vec<String> {
+        self.transaction_inserts
+            .keys()
+            .chain(self.transaction_pre_images.keys())
+            .chain(self.transaction_snapshots.keys())
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
+    /// Handle a walsender command.
+    ///
+    /// Returns `None` when the command is not one, so a replication connection
+    /// can still run ordinary SQL, which `replication=database` allows.
+    async fn handle_replication_command(
+        &mut self,
+        query: &str,
+        buf: &mut BytesMut,
+    ) -> Option<ProtocolResult<()>> {
+        use super::messages::type_oids;
+
+        let trimmed = query.trim().trim_end_matches(';').trim();
+        let upper = trimmed.to_uppercase();
+
+        let finish = |buf: &mut BytesMut, tag: &str, status: super::messages::TransactionStatus| {
+            BackendMessage::CommandComplete {
+                tag: tag.to_string(),
+            }
+            .encode(buf);
+            BackendMessage::ReadyForQuery { status }.encode(buf);
+        };
+
+        if upper == "IDENTIFY_SYSTEM" {
+            let columns = ["systemid", "timeline", "xlogpos", "dbname"];
+            BackendMessage::RowDescription {
+                fields: columns
+                    .iter()
+                    .map(|name| super::messages::FieldDescription {
+                        name: (*name).to_string(),
+                        table_oid: 0,
+                        column_id: 0,
+                        type_oid: type_oids::TEXT,
+                        type_size: -1,
+                        type_modifier: -1,
+                        format: 0,
+                    })
+                    .collect(),
+            }
+            .encode(buf);
+            BackendMessage::DataRow {
+                values: vec![
+                    Some(bytes::Bytes::from(Self::system_identifier())),
+                    Some(bytes::Bytes::from_static(b"1")),
+                    Some(bytes::Bytes::from(Self::current_lsn())),
+                    Some(bytes::Bytes::from(
+                        self.database.clone().unwrap_or_else(|| "orbit".to_string()),
+                    )),
+                ],
+            }
+            .encode(buf);
+            finish(buf, "IDENTIFY_SYSTEM", self.transaction_status());
+            return Some(Ok(()));
+        }
+
+        if upper.starts_with("TIMELINE_HISTORY") {
+            // One timeline, so there is no history file to send. Saying so is
+            // the answer; inventing a file would be worse.
+            self.send_error(
+                buf,
+                "requested timeline is the current one, which has no history file",
+            );
+            BackendMessage::ReadyForQuery {
+                status: self.transaction_status(),
+            }
+            .encode(buf);
+            return Some(Ok(()));
+        }
+
+        if upper.starts_with("CREATE_REPLICATION_SLOT") {
+            let name = trimmed.split_whitespace().nth(1).unwrap_or("slot");
+            let plugin = trimmed.split_whitespace().last().unwrap_or("orbit_json");
+            let stored = name.trim_matches('"').to_string();
+            if let Err(e) = self
+                .query_engine
+                .create_replication_slot(&stored, plugin)
+                .await
+            {
+                self.send_error(buf, &e.to_string());
+                BackendMessage::ReadyForQuery {
+                    status: self.transaction_status(),
+                }
+                .encode(buf);
+                return Some(Ok(()));
+            }
+            BackendMessage::RowDescription {
+                fields: [
+                    "slot_name",
+                    "consistent_point",
+                    "snapshot_name",
+                    "output_plugin",
+                ]
+                .iter()
+                .map(|name| super::messages::FieldDescription {
+                    name: (*name).to_string(),
+                    table_oid: 0,
+                    column_id: 0,
+                    type_oid: type_oids::TEXT,
+                    type_size: -1,
+                    type_modifier: -1,
+                    format: 0,
+                })
+                .collect(),
+            }
+            .encode(buf);
+            BackendMessage::DataRow {
+                values: vec![
+                    Some(bytes::Bytes::from(name.trim_matches('"').to_string())),
+                    Some(bytes::Bytes::from(Self::current_lsn())),
+                    None,
+                    Some(bytes::Bytes::from(plugin.to_string())),
+                ],
+            }
+            .encode(buf);
+            finish(buf, "CREATE_REPLICATION_SLOT", self.transaction_status());
+            return Some(Ok(()));
+        }
+
+        if upper.starts_with("DROP_REPLICATION_SLOT") {
+            if let Some(name) = trimmed.split_whitespace().nth(1) {
+                let _ = self
+                    .query_engine
+                    .drop_replication_slot(name.trim_matches('"'))
+                    .await;
+            }
+            finish(buf, "DROP_REPLICATION_SLOT", self.transaction_status());
+            return Some(Ok(()));
+        }
+
+        if upper.starts_with("START_REPLICATION") {
+            // Physical replication streams raw WAL. This server has no
+            // PostgreSQL WAL to stream, and answering a physical request with
+            // logical frames would be a wrong answer rather than a missing
+            // feature — the standby would parse change JSON as WAL records.
+            if upper.contains("PHYSICAL") {
+                self.send_error(
+                    buf,
+                    "physical replication is not supported; use \
+                     START_REPLICATION SLOT <name> LOGICAL",
+                );
+                BackendMessage::ReadyForQuery {
+                    status: self.transaction_status(),
+                }
+                .encode(buf);
+                return Some(Ok(()));
+            }
+
+            let words: Vec<&str> = trimmed.split_whitespace().collect();
+            let slot = words
+                .iter()
+                .position(|word| word.eq_ignore_ascii_case("SLOT"))
+                .and_then(|at| words.get(at + 1))
+                .map(|name| name.trim_matches('"').to_string());
+
+            // The position the replica asks to resume from, written as an LSN.
+            let requested = words
+                .iter()
+                .find(|word| word.contains('/'))
+                .and_then(|word| {
+                    let (high, low) = word.split_once('/')?;
+                    let high = u64::from_str_radix(high, 16).ok()?;
+                    let low = u64::from_str_radix(low, 16).ok()?;
+                    Some((high << 32) | low)
+                })
+                .filter(|position| *position > 0);
+
+            // A slot's confirmed position is used when the replica names none,
+            // which is what makes the slot worth persisting.
+            let resume = match (requested, slot.as_ref()) {
+                (Some(position), _) => Some(position),
+                (None, Some(name)) => self
+                    .query_engine
+                    .replication_slot(name)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|(_, position)| position),
+                (None, None) => None,
+            };
+
+            // Subscribing before replaying means a change written in between
+            // is queued rather than lost.
+            let live = super::query_engine::subscribe_to_changes();
+
+            // The stream is both directions at once: changes go out, standby
+            // status updates come back.
+            BackendMessage::CopyBothResponse {
+                format: 0,
+                column_formats: Vec::new(),
+            }
+            .encode(buf);
+
+            if let Some(position) = resume {
+                // The in-memory window answers a recent request without a
+                // read; the durable log answers one that reaches further back,
+                // including after a restart when the window is empty.
+                let replayed = match super::query_engine::changes_since(position) {
+                    Some(records) => records,
+                    None => match self.query_engine.logged_changes_since(position).await {
+                        Ok(records) if !records.is_empty() => records,
+                        // Nothing after this position anywhere: the replica is
+                        // already current, so it just starts streaming.
+                        Ok(_) if position >= super::query_engine::latest_change_position() => {
+                            Vec::new()
+                        }
+                        // The position is genuinely behind what is retained.
+                        // Saying so beats a stream with a hole in it.
+                        _ => {
+                            self.send_error(
+                                buf,
+                                "requested WAL position is older than the retained history",
+                            );
+                            return Some(Ok(()));
+                        }
+                    },
+                };
+                for record in replayed {
+                    self.send_change(&record, buf);
+                }
+            }
+
+            if let Some(name) = slot.as_ref() {
+                if let Ok(Some((plugin, _))) = self.query_engine.replication_slot(name).await {
+                    self.replication_plugin = plugin;
+                }
+            }
+            self.replication_slot_name = slot;
+            self.replication_stream = Some(live);
+            return Some(Ok(()));
+        }
+
+        None
+    }
+
+    /// A stable identifier for this server, as `IDENTIFY_SYSTEM` reports it.
+    fn system_identifier() -> String {
+        // Derived from the process, so two servers do not claim to be one.
+        format!("{}", std::process::id() as u64 + 7_000_000_000_000_000_000)
+    }
+
+    /// The write position, rendered the way PostgreSQL writes an LSN.
+    fn current_lsn() -> String {
+        let position = super::query_engine::latest_change_position();
+        format!("{:X}/{:X}", position >> 32, position & 0xFFFF_FFFF)
+    }
+
+    /// Whether a statement ends the current transaction block.
+    fn ends_transaction(query: &str) -> bool {
+        let head: String = query
+            .trim_start()
+            .chars()
+            .take_while(char::is_ascii_alphabetic)
+            .collect::<String>()
+            .to_uppercase();
+        matches!(head.as_str(), "ROLLBACK" | "ABORT" | "COMMIT" | "END")
+    }
+
+    /// Handle `SAVEPOINT`, `ROLLBACK TO SAVEPOINT` and `RELEASE`.
+    ///
+    /// Returns `None` when the statement is none of those. A savepoint is a
+    /// second layer of undo inside the block: without it `ROLLBACK TO` fell
+    /// through to a plain `ROLLBACK` and discarded the whole block.
+    async fn handle_savepoint(&mut self, query: &str) -> Option<Result<String, String>> {
+        let trimmed = query.trim().trim_end_matches(';').trim();
+        let words: Vec<&str> = trimmed.split_whitespace().collect();
+        let upper: Vec<String> = words.iter().map(|w| w.to_uppercase()).collect();
+        let name_after = |index: usize| words.get(index).map(|w| w.to_lowercase());
+
+        // `ROLLBACK TO [SAVEPOINT] name`
+        if upper.first().is_some_and(|w| w == "ROLLBACK") && upper.get(1).is_some_and(|w| w == "TO")
+        {
+            let at = if upper.get(2).is_some_and(|w| w == "SAVEPOINT") {
+                3
+            } else {
+                2
+            };
+            let Some(name) = name_after(at) else {
+                return Some(Err("ROLLBACK TO requires a savepoint name".to_string()));
+            };
+            let Some(index) = self.savepoints.iter().rposition(|s| s.name == name) else {
+                return Some(Err(format!("savepoint \"{name}\" does not exist")));
+            };
+
+            let inserts_at = self.savepoints[index].inserts.clone();
+            let pre_images_at = self.savepoints[index].pre_images.clone();
+            let tables_at = self.savepoints[index].tables.clone();
+            self.savepoints.truncate(index + 1);
+
+            // Undo only what was written after the savepoint: the tail of each
+            // undo log beyond the length it had when the savepoint was taken.
+            let touched: std::collections::BTreeSet<String> = self
+                .transaction_inserts
+                .keys()
+                .chain(self.transaction_pre_images.keys())
+                .cloned()
+                .collect();
+            for table in touched {
+                let kept_inserts = inserts_at.get(&table).copied().unwrap_or(0);
+                let kept_pre_images = pre_images_at.get(&table).copied().unwrap_or(0);
+                let added: Vec<_> = self
+                    .transaction_inserts
+                    .get(&table)
+                    .map(|rows| rows[kept_inserts.min(rows.len())..].to_vec())
+                    .unwrap_or_default();
+                let before: Vec<_> = self
+                    .transaction_pre_images
+                    .get(&table)
+                    .map(|rows| rows[kept_pre_images.min(rows.len())..].to_vec())
+                    .unwrap_or_default();
+
+                if let Err(e) = self
+                    .query_engine
+                    .undo_session_writes(&table, &added, &before)
+                    .await
+                {
+                    return Some(Err(format!(
+                        "could not roll back '{table}' to savepoint: {e}"
+                    )));
+                }
+
+                if let Some(rows) = self.transaction_inserts.get_mut(&table) {
+                    let keep = kept_inserts.min(rows.len());
+                    rows.truncate(keep);
+                }
+                if let Some(rows) = self.transaction_pre_images.get_mut(&table) {
+                    let keep = kept_pre_images.min(rows.len());
+                    rows.truncate(keep);
+                }
+            }
+
+            // A table written by a statement with no row-level record goes back
+            // to the copy taken at the savepoint.
+            for (table, rows) in tables_at {
+                if let Err(e) = self.query_engine.restore_table(&table, rows).await {
+                    return Some(Err(format!(
+                        "could not roll back '{table}' to savepoint: {e}"
+                    )));
+                }
+            }
+
+            // The block continues, and a failure before this point is undone.
+            if self.transaction == TransactionState::Failed {
+                self.transaction = TransactionState::Open;
+            }
+            return Some(Ok("ROLLBACK".to_string()));
+        }
+
+        if upper.first().is_some_and(|w| w == "SAVEPOINT") {
+            let Some(name) = name_after(1) else {
+                return Some(Err("SAVEPOINT requires a name".to_string()));
+            };
+            if self.transaction == TransactionState::Idle {
+                return Some(Err(
+                    "SAVEPOINT can only be used in transaction blocks".to_string()
+                ));
+            }
+
+            let mut tables = HashMap::new();
+            let written: Vec<String> = self.transaction_snapshots.keys().cloned().collect();
+            for table in written {
+                match self.query_engine.snapshot_table(&table).await {
+                    Ok(Some(rows)) => {
+                        tables.insert(table, rows);
+                    }
+                    Ok(None) => {}
+                    Err(e) => return Some(Err(format!("could not record savepoint: {e}"))),
+                }
+            }
+            self.savepoints.push(Savepoint {
+                name,
+                inserts: self
+                    .transaction_inserts
+                    .iter()
+                    .map(|(table, rows)| (table.clone(), rows.len()))
+                    .collect(),
+                pre_images: self
+                    .transaction_pre_images
+                    .iter()
+                    .map(|(table, rows)| (table.clone(), rows.len()))
+                    .collect(),
+                tables,
+            });
+            return Some(Ok("SAVEPOINT".to_string()));
+        }
+
+        if upper.first().is_some_and(|w| w == "RELEASE") {
+            let at = if upper.get(1).is_some_and(|w| w == "SAVEPOINT") {
+                2
+            } else {
+                1
+            };
+            let Some(name) = name_after(at) else {
+                return Some(Err("RELEASE requires a savepoint name".to_string()));
+            };
+            let Some(index) = self.savepoints.iter().rposition(|s| s.name == name) else {
+                return Some(Err(format!("savepoint \"{name}\" does not exist")));
+            };
+            self.savepoints.truncate(index);
+            return Some(Ok("RELEASE".to_string()));
+        }
+
+        None
     }
 
     /// Record that a statement failed.
@@ -447,6 +1197,10 @@ impl PostgresWireProtocol {
         // happened to send a message, which for an idle listener is never —
         // and an idle listener is the whole point of LISTEN.
         let n = loop {
+            // A replication stream, once started, is the same idle problem as
+            // a listener: changes have to reach the standby without waiting
+            // for it to say something.
+            let streaming = self.replication_stream.is_some();
             tokio::select! {
                 read = stream.read_buf(read_buf) => break read?,
                 Some(notification) = self.session_notifications.receiver.recv() => {
@@ -457,6 +1211,17 @@ impl PostgresWireProtocol {
                     }
                     .encode(write_buf);
                     self.flush_write_buffer(stream, write_buf).await?;
+                }
+                change = async {
+                    match self.replication_stream.as_mut() {
+                        Some(stream) => stream.recv().await.ok(),
+                        None => None,
+                    }
+                }, if streaming => {
+                    if let Some(change) = change {
+                        self.send_change(&change, write_buf);
+                        self.flush_write_buffer(stream, write_buf).await?;
+                    }
                 }
             }
         };
@@ -624,11 +1389,31 @@ impl PostgresWireProtocol {
             FrontendMessage::SASLResponse { data } => {
                 self.handle_sasl_response(data, buf).await?;
             }
-            FrontendMessage::FunctionCall { .. } => {
-                // Function call support is minimal/stubbed
+            FrontendMessage::FunctionCall { oid, .. } => {
+                // The legacy fast-path call. Answering nothing left the client
+                // waiting on a reply that never came; an error plus
+                // ReadyForQuery is what an unsupported function warrants and
+                // keeps the connection usable.
+                self.send_error(
+                    buf,
+                    &format!(
+                        "fastpath function call is not supported (function OID {oid}); \
+                         call the function from a query instead"
+                    ),
+                );
+                BackendMessage::ReadyForQuery {
+                    status: self.transaction_status(),
+                }
+                .encode(buf);
             }
             FrontendMessage::CopyData { data } => {
-                self.handle_copy_data(&data, buf).await?;
+                // On a replication stream a CopyData is the standby telling us
+                // how far it has written, flushed and applied.
+                if self.replication_stream.is_some() {
+                    self.handle_standby_status(&data, buf).await;
+                } else {
+                    self.handle_copy_data(&data, buf).await?;
+                }
             }
             FrontendMessage::CopyDone => {
                 self.handle_copy_done(buf).await?;
@@ -692,6 +1477,11 @@ impl PostgresWireProtocol {
             }
             .encode(buf);
         }
+
+        // `replication=true|database` selects the walsender protocol.
+        self.replication = parameters
+            .get("replication")
+            .is_some_and(|value| !value.eq_ignore_ascii_case("false"));
 
         self.username = parameters.get("user").cloned();
         self.database = parameters.get("database").cloned();
@@ -907,15 +1697,155 @@ impl PostgresWireProtocol {
             return Ok(());
         }
 
+        // A replication connection speaks its own commands.
+        if self.replication {
+            if let Some(handled) = self.handle_replication_command(query, buf).await {
+                return handled;
+            }
+        }
+
         // Set the current database context before executing the query
         if let Some(ref db) = self.database {
             self.query_engine.set_current_database(db).await;
         }
 
-        match self.query_engine.execute_multiple_queries(query).await {
+        // PostgreSQL rejects everything but a rollback once a statement in the
+        // block has failed. Answering them instead let a client believe work
+        // done after the failure was part of the committed transaction.
+        if self.transaction == TransactionState::Failed && !Self::ends_transaction(query) {
+            self.send_error(
+                buf,
+                "current transaction is aborted, commands ignored until end of transaction block",
+            );
+            BackendMessage::ReadyForQuery {
+                status: self.transaction_status(),
+            }
+            .encode(buf);
+            return Ok(());
+        }
+
+        // `SET` and `SHOW` share one store, on the session. Routing them
+        // separately meant `SHOW` could not see what `SET` had recorded — and
+        // `SHOW` did not parse at all.
+        if let Some(result) = self.handle_session_parameter(query) {
+            match result {
+                Ok(Some(shown)) => self.send_query_result(&shown, buf),
+                Ok(None) => BackendMessage::CommandComplete {
+                    tag: "SET".to_string(),
+                }
+                .encode(buf),
+                Err(message) => {
+                    self.send_error(buf, &message);
+                    self.note_failure();
+                }
+            }
+            BackendMessage::ReadyForQuery {
+                status: self.transaction_status(),
+            }
+            .encode(buf);
+            return Ok(());
+        }
+
+        // `SET CONSTRAINTS ALL IMMEDIATE` validates the deferrable keys now
+        // rather than waiting for COMMIT, which is what it is for: finding out
+        // whether the block will commit before committing it.
+        // `BEGIN ISOLATION LEVEL ...` and `SET TRANSACTION ISOLATION LEVEL ...`
+        // choose between reading through a snapshot and seeing each commit.
+        let upper_query = query.to_uppercase();
+        if upper_query.contains("ISOLATION LEVEL") {
+            self.serializable = upper_query.contains("SERIALIZABLE");
+            self.snapshot_isolation = self.serializable || upper_query.contains("REPEATABLE READ");
+        }
+
+        if query
+            .trim_start()
+            .get(..15)
+            .is_some_and(|head| head.eq_ignore_ascii_case("SET CONSTRAINTS"))
+        {
+            // `DEFERRED` puts the checks back to COMMIT; `IMMEDIATE` runs them
+            // now and keeps running them per statement for the rest of the
+            // block, which is the difference the two modes are for.
+            self.constraints_immediate = query.to_uppercase().contains("IMMEDIATE");
+            if self.constraints_immediate {
+                if let Err(e) = self
+                    .query_engine
+                    .check_deferred_constraints(&self.tables_written())
+                    .await
+                {
+                    self.send_error(buf, &e.to_string());
+                    self.note_failure();
+                    BackendMessage::ReadyForQuery {
+                        status: self.transaction_status(),
+                    }
+                    .encode(buf);
+                    return Ok(());
+                }
+            }
+            BackendMessage::CommandComplete {
+                tag: "SET CONSTRAINTS".to_string(),
+            }
+            .encode(buf);
+            BackendMessage::ReadyForQuery {
+                status: self.transaction_status(),
+            }
+            .encode(buf);
+            return Ok(());
+        }
+
+        if let Some(handled) = self.handle_savepoint(query).await {
+            match handled {
+                Ok(tag) => BackendMessage::CommandComplete { tag }.encode(buf),
+                Err(message) => {
+                    self.send_error(buf, &message);
+                    self.note_failure();
+                }
+            }
+            BackendMessage::ReadyForQuery {
+                status: self.transaction_status(),
+            }
+            .encode(buf);
+            return Ok(());
+        }
+
+        // Statements run inside the session's transaction so the rows they
+        // write carry its stamp and stay private until it ends.
+        let executed = match self.transaction_id.clone() {
+            Some(context) => {
+                super::query_engine::within_transaction(
+                    context,
+                    self.query_engine.execute_multiple_queries(query),
+                )
+                .await
+            }
+            None => self.query_engine.execute_multiple_queries(query).await,
+        };
+
+        match executed {
             Ok(results) => {
                 for result in results {
                     self.send_query_result(&result, buf);
+                }
+                // With IMMEDIATE in force, a deferrable key is checked after
+                // every statement rather than only at COMMIT. Transaction
+                // control is exempt: failing the check on ROLLBACK would leave
+                // the session unable to leave the block at all.
+                if self.constraints_immediate
+                    && self.transaction == TransactionState::Open
+                    && !Self::ends_transaction(query)
+                {
+                    if let Err(e) = self
+                        .query_engine
+                        .check_deferred_constraints(&self.tables_written())
+                        .await
+                    {
+                        self.send_error(buf, &e.to_string());
+                        self.note_failure();
+                        BackendMessage::ReadyForQuery {
+                            status: self.transaction_status(),
+                        }
+                        .encode(buf);
+                        return Ok(());
+                    }
                 }
                 self.apply_transaction_control(query, buf).await;
                 self.note_statement(query);
@@ -1221,8 +2151,7 @@ impl PostgresWireProtocol {
                         .copied()
                         .unwrap_or(type_oids::TEXT);
 
-                    if Self::is_unquoted_literal_type(type_oid)
-                        && Self::is_safe_bare_literal(text)
+                    if Self::is_unquoted_literal_type(type_oid) && Self::is_safe_bare_literal(text)
                     {
                         // A numeric or boolean parameter has to be emitted
                         // bare: quoting it turns `id = $1` into `id = '1'`,
@@ -1288,13 +2217,29 @@ impl PostgresWireProtocol {
         };
 
         self.copy_in_is_simple = false;
-        if self.handle_copy_statement(&bound, buf, false).await.is_some() {
+        if self
+            .handle_copy_statement(&bound, buf, false)
+            .await
+            .is_some()
+        {
             return Ok(());
         }
 
         let bound_for_state = bound.clone();
         let portal_name = portal.to_string();
-        match self.query_engine.execute_query(&bound).await {
+        // The extended protocol runs inside the session's transaction too.
+        let executed = match self.transaction_id.clone() {
+            Some(context) => {
+                super::query_engine::within_transaction(
+                    context,
+                    self.query_engine.execute_query(&bound),
+                )
+                .await
+            }
+            None => self.query_engine.execute_query(&bound).await,
+        };
+
+        match executed {
             Ok(QueryResult::Select { columns, rows })
             | Ok(QueryResult::Merge { columns, rows, .. }) => {
                 self.note_statement(&bound_for_state);
@@ -1551,6 +2496,179 @@ impl PostgresWireProtocol {
         }
     }
 
+    /// Handle a standby status update, and answer a keepalive that asks for one.
+    ///
+    /// The confirmed position is written to the slot, which is what lets a
+    /// replica reconnect and resume where it left off.
+    async fn handle_standby_status(&mut self, data: &[u8], buf: &mut BytesMut) {
+        match data.first() {
+            // `r`: write, flush and apply positions, then a reply flag.
+            Some(b'r') if data.len() >= 34 => {
+                let flushed = u64::from_be_bytes(data[9..17].try_into().unwrap_or([0; 8]));
+                if let Some(slot) = self.replication_slot_name.clone() {
+                    if let Err(e) = self
+                        .query_engine
+                        .confirm_replication_slot(&slot, flushed)
+                        .await
+                    {
+                        tracing::warn!("could not record replica progress: {e}");
+                    }
+                }
+                // The last byte asks for an immediate reply.
+                if data[33] == 1 {
+                    self.send_keepalive(buf, false);
+                }
+            }
+            // `k`: a keepalive from the other direction.
+            Some(b'k') => {}
+            _ => {}
+        }
+    }
+
+    /// Send a keepalive, optionally asking the standby to answer.
+    fn send_keepalive(&self, buf: &mut BytesMut, reply_requested: bool) {
+        let position = super::query_engine::latest_change_position();
+        let mut message = BytesMut::new();
+        message.put_u8(b'k');
+        message.put_u64(position);
+        message.put_i64(0);
+        message.put_u8(u8::from(reply_requested));
+        BackendMessage::CopyData {
+            data: message.freeze(),
+        }
+        .encode(buf);
+    }
+
+    /// Send one change as an `XLogData` message on a replication stream.
+    ///
+    /// The payload is the change rendered as JSON — an output plugin's job in
+    /// PostgreSQL. The header carries the same three positions PostgreSQL
+    /// sends, so a standby's bookkeeping has somewhere to start.
+    fn send_change(&mut self, change: &super::query_engine::ChangeRecord, buf: &mut BytesMut) {
+        let position = change.position;
+        let payload = if self.replication_plugin.eq_ignore_ascii_case("pgoutput") {
+            self.pgoutput_payload(change)
+        } else {
+            format!(
+                "{{\"action\":\"{}\",\"table\":\"{}\",\"xid\":{},\"row\":{}}}",
+                change.action, change.table, change.transaction, change.row
+            )
+            .into_bytes()
+        };
+
+        let mut message = BytesMut::new();
+        message.put_u8(b'w');
+        message.put_u64(position); // start of this record
+        message.put_u64(position); // current end of WAL
+        message.put_i64(0); // server clock, which this does not track
+        message.extend_from_slice(&payload);
+
+        BackendMessage::CopyData {
+            data: message.freeze(),
+        }
+        .encode(buf);
+    }
+
+    /// Render a change in the `pgoutput` protocol a real subscriber decodes.
+    ///
+    /// Each change is a `Begin`, a `Relation` describing the table the first
+    /// time it appears, the row message itself, and a `Commit` — the shape
+    /// PostgreSQL sends for a single-statement transaction. Values go as text,
+    /// which `pgoutput` allows.
+    fn pgoutput_payload(&mut self, change: &super::query_engine::ChangeRecord) -> Vec<u8> {
+        let row: std::collections::BTreeMap<String, serde_json::Value> =
+            serde_json::from_str(&change.row).unwrap_or_default();
+        let relation = self.relation_id(&change.table);
+        let mut out = BytesMut::new();
+
+        // Begin: final LSN, commit timestamp, transaction id.
+        out.put_u8(b'B');
+        out.put_u64(change.position);
+        out.put_i64(0);
+        out.put_i32(change.transaction as i32);
+
+        // Relation, sent once per table per stream, as the protocol expects.
+        if self.announced_relations.insert(change.table.clone()) {
+            out.put_u8(b'R');
+            out.put_i32(relation);
+            out.extend_from_slice(b"public\0");
+            out.extend_from_slice(change.table.as_bytes());
+            out.put_u8(0);
+            out.put_u8(b'd'); // replica identity: default
+            out.put_i16(row.len() as i16);
+            for name in row.keys() {
+                out.put_u8(0); // not part of the key
+                out.extend_from_slice(name.as_bytes());
+                out.put_u8(0);
+                out.put_i32(super::messages::type_oids::TEXT);
+                out.put_i32(-1);
+            }
+        }
+
+        let tuple = |out: &mut BytesMut, row: &std::collections::BTreeMap<String, serde_json::Value>| {
+            out.put_u8(b'N'); // a new tuple follows
+            out.put_i16(row.len() as i16);
+            for value in row.values() {
+                match value {
+                    serde_json::Value::Null => out.put_u8(b'n'),
+                    other => {
+                        let text = other
+                            .as_str()
+                            .map(str::to_string)
+                            .unwrap_or_else(|| other.to_string());
+                        out.put_u8(b't');
+                        out.put_i32(text.len() as i32);
+                        out.extend_from_slice(text.as_bytes());
+                    }
+                }
+            }
+        };
+
+        match change.action.as_str() {
+            "INSERT" => {
+                out.put_u8(b'I');
+                out.put_i32(relation);
+                tuple(&mut out, &row);
+            }
+            "UPDATE" => {
+                out.put_u8(b'U');
+                out.put_i32(relation);
+                tuple(&mut out, &row);
+            }
+            "DELETE" => {
+                out.put_u8(b'D');
+                out.put_i32(relation);
+                // The old row identifies what went; `K` is the key tuple.
+                out.put_u8(b'K');
+                out.put_i16(row.len() as i16);
+                for value in row.values() {
+                    let text = value
+                        .as_str()
+                        .map(str::to_string)
+                        .unwrap_or_else(|| value.to_string());
+                    out.put_u8(b't');
+                    out.put_i32(text.len() as i32);
+                    out.extend_from_slice(text.as_bytes());
+                }
+            }
+            _ => {}
+        }
+
+        // Commit: flags, commit LSN, end LSN, timestamp.
+        out.put_u8(b'C');
+        out.put_u8(0);
+        out.put_u64(change.position);
+        out.put_u64(change.position);
+        out.put_i64(0);
+
+        out.to_vec()
+    }
+
+    /// A stable id for a table within this stream.
+    fn relation_id(&mut self, table: &str) -> i32 {
+        let next = self.relation_ids.len() as i32 + 16_384;
+        *self.relation_ids.entry(table.to_string()).or_insert(next)
+    }
 
     /// Start a `COPY` statement, or return `None` if this is not one.
     ///
@@ -1569,11 +2687,7 @@ impl PostgresWireProtocol {
         }
 
         let upper = trimmed.to_ascii_uppercase();
-        if upper.contains(" BINARY") || upper.contains("FORMAT BINARY") {
-            self.send_error(buf, "COPY BINARY is not supported; use the text format");
-            self.finish_copy_statement(send_ready, buf);
-            return Some(());
-        }
+        let binary = upper.contains(" BINARY") || upper.contains("FORMAT BINARY");
 
         // `COPY <table> [(cols)] TO STDOUT` / `FROM STDIN`
         let body = trimmed[5..].trim();
@@ -1603,10 +2717,12 @@ impl PostgresWireProtocol {
         let _ = body;
 
         if to_stdout {
-            self.copy_table_to_stdout(&table, &columns, buf).await;
+            self.copy_table_to_stdout(&table, &columns, binary, buf)
+                .await;
             self.finish_copy_statement(send_ready, buf);
         } else {
-            self.begin_copy_from_stdin(&table, columns, buf).await;
+            self.begin_copy_from_stdin(&table, columns, binary, buf)
+                .await;
         }
         Some(())
     }
@@ -1629,6 +2745,7 @@ impl PostgresWireProtocol {
         &mut self,
         table: &str,
         columns: &[String],
+        binary: bool,
         buf: &mut BytesMut,
     ) {
         let projection = if columns.is_empty() {
@@ -1652,10 +2769,66 @@ impl PostgresWireProtocol {
         };
 
         BackendMessage::CopyOutResponse {
-            format: 0,
-            column_formats: vec![0; column_count],
+            format: i8::from(binary),
+            column_formats: vec![i16::from(binary); column_count],
         }
         .encode(buf);
+
+        if binary {
+            // The binary stream opens with a fixed signature, a flags word and
+            // an (empty) header extension, and closes with a field count of
+            // -1. Each tuple is a field count then length-prefixed values.
+            let types = self
+                .query_engine
+                .describe_statement(&format!("SELECT {projection} FROM {table}"))
+                .await
+                .map(|description| {
+                    description
+                        .columns
+                        .iter()
+                        .map(|column| column.type_oid)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            let mut header = BytesMut::new();
+            header.extend_from_slice(COPY_BINARY_SIGNATURE);
+            header.put_i32(0);
+            header.put_i32(0);
+            BackendMessage::CopyData {
+                data: header.freeze(),
+            }
+            .encode(buf);
+
+            for row in &rows {
+                let mut tuple = BytesMut::new();
+                tuple.put_i16(row.len() as i16);
+                for (index, value) in row.iter().enumerate() {
+                    match value {
+                        None => tuple.put_i32(-1),
+                        Some(text) => {
+                            let oid = types.get(index).copied().unwrap_or(type_oids::TEXT);
+                            let encoded = Self::encode_binary_value(text, oid);
+                            tuple.put_i32(encoded.len() as i32);
+                            tuple.extend_from_slice(&encoded);
+                        }
+                    }
+                }
+                BackendMessage::CopyData {
+                    data: tuple.freeze(),
+                }
+                .encode(buf);
+            }
+
+            let mut trailer = BytesMut::new();
+            trailer.put_i16(-1);
+            BackendMessage::CopyData {
+                data: trailer.freeze(),
+            }
+            .encode(buf);
+            BackendMessage::CopyDone.encode(buf);
+            return;
+        }
 
         for row in &rows {
             let line = row
@@ -1690,6 +2863,7 @@ impl PostgresWireProtocol {
         &mut self,
         table: &str,
         columns: Vec<String>,
+        binary: bool,
         buf: &mut BytesMut,
     ) {
         // Column order has to be known before the first row arrives; when the
@@ -1737,15 +2911,37 @@ impl PostgresWireProtocol {
             })
             .collect();
 
+        // Type OIDs are needed per column to decode a binary stream.
+        let column_type_oids: Vec<i32> = columns
+            .iter()
+            .map(|name| {
+                schema
+                    .as_ref()
+                    .and_then(|schema| {
+                        schema
+                            .columns
+                            .iter()
+                            .find(|c| c.name.eq_ignore_ascii_case(name))
+                    })
+                    .map_or(type_oids::TEXT, |column| {
+                        super::query_engine::column_type_oid(&column.data_type)
+                    })
+            })
+            .collect();
+
         BackendMessage::CopyInResponse {
-            format: 0,
-            column_formats: vec![0; columns.len()],
+            format: i8::from(binary),
+            column_formats: vec![i16::from(binary); columns.len()],
         }
         .encode(buf);
 
         self.copy_in = Some(CopyInState {
+            binary,
+            pending: BytesMut::new(),
+            header_seen: false,
             simple_protocol: self.copy_in_is_simple,
             table: table.to_string(),
+            column_type_oids,
             numeric_columns,
             columns,
             partial: Vec::new(),
@@ -1754,15 +2950,140 @@ impl PostgresWireProtocol {
         });
     }
 
-    /// Consume one chunk of copy-in data.
-    async fn handle_copy_data(
+    /// Consume one chunk of a binary copy-in stream.
+    ///
+    /// The stream is a fixed header followed by length-prefixed tuples, so a
+    /// chunk may end anywhere; whatever does not form a whole tuple is kept
+    /// for the next message.
+    async fn handle_binary_copy_data(
         &mut self,
         data: &[u8],
-        buf: &mut BytesMut,
+        _buf: &mut BytesMut,
     ) -> ProtocolResult<()> {
+        {
+            let Some(state) = self.copy_in.as_mut() else {
+                return Ok(());
+            };
+            state.pending.extend_from_slice(data);
+        }
+
+        loop {
+            let Some(state) = self.copy_in.as_mut() else {
+                return Ok(());
+            };
+
+            if !state.header_seen {
+                // Signature, flags and the header extension's length.
+                const HEADER: usize = 11 + 4 + 4;
+                if state.pending.len() < HEADER {
+                    return Ok(());
+                }
+                if &state.pending[..11] != COPY_BINARY_SIGNATURE {
+                    state.failure = Some("COPY binary stream has a bad signature".to_string());
+                    state.pending.clear();
+                    return Ok(());
+                }
+                let extension = i32::from_be_bytes([
+                    state.pending[15],
+                    state.pending[16],
+                    state.pending[17],
+                    state.pending[18],
+                ]) as usize;
+                if state.pending.len() < HEADER + extension {
+                    return Ok(());
+                }
+                let _ = state.pending.split_to(HEADER + extension);
+                state.header_seen = true;
+                continue;
+            }
+
+            if state.pending.len() < 2 {
+                return Ok(());
+            }
+            let fields = i16::from_be_bytes([state.pending[0], state.pending[1]]);
+            if fields < 0 {
+                // The end-of-data trailer.
+                let _ = state.pending.split_to(2);
+                return Ok(());
+            }
+
+            // Measure the whole tuple before consuming any of it, so a chunk
+            // that stops mid-value is simply waited on.
+            let mut offset = 2usize;
+            let mut lengths = Vec::with_capacity(fields as usize);
+            for _ in 0..fields {
+                if state.pending.len() < offset + 4 {
+                    return Ok(());
+                }
+                let length = i32::from_be_bytes([
+                    state.pending[offset],
+                    state.pending[offset + 1],
+                    state.pending[offset + 2],
+                    state.pending[offset + 3],
+                ]);
+                offset += 4;
+                if length >= 0 {
+                    if state.pending.len() < offset + length as usize {
+                        return Ok(());
+                    }
+                    offset += length as usize;
+                }
+                lengths.push(length);
+            }
+
+            let tuple = state.pending.split_to(offset);
+            let oids = state.column_type_oids.clone();
+            let mut values = Vec::with_capacity(lengths.len());
+            let mut cursor = 2usize;
+            for (index, length) in lengths.into_iter().enumerate() {
+                cursor += 4;
+                if length < 0 {
+                    values.push(None);
+                    continue;
+                }
+                let raw = &tuple[cursor..cursor + length as usize];
+                cursor += length as usize;
+                let oid = oids.get(index).copied().unwrap_or(type_oids::TEXT);
+                match Self::decode_binary_parameter(raw, oid) {
+                    Ok(text) => values.push(Some(text)),
+                    Err(e) => {
+                        if let Some(state) = self.copy_in.as_mut() {
+                            if state.failure.is_none() {
+                                state.failure = Some(e);
+                            }
+                        }
+                        values.push(None);
+                    }
+                }
+            }
+
+            // The decoded values are written through the same path a text row
+            // takes, so quoting and constraint checks behave identically.
+            let line = values
+                .into_iter()
+                .map(|value| match value {
+                    None => "\\N".to_string(),
+                    Some(text) => text
+                        .replace('\\', "\\\\")
+                        .replace('\t', "\\t")
+                        .replace('\n', "\\n")
+                        .replace('\r', "\\r"),
+                })
+                .collect::<Vec<_>>()
+                .join("\t");
+            self.insert_copy_line(&line).await?;
+        }
+    }
+
+    /// Consume one chunk of copy-in data.
+    async fn handle_copy_data(&mut self, data: &[u8], buf: &mut BytesMut) -> ProtocolResult<()> {
         if self.copy_in.is_none() {
             self.send_error(buf, "CopyData received while not in copy-in mode");
             return Ok(());
+        }
+
+        if self.copy_in.as_ref().is_some_and(|state| state.binary) {
+            return self.handle_binary_copy_data(data, buf).await;
         }
 
         // Chunks split rows arbitrarily, so only whole lines are consumed and
@@ -1830,6 +3151,12 @@ impl PostgresWireProtocol {
             state.columns.join(", "),
             values.join(", ")
         );
+
+        // Each copied line is an ordinary INSERT, so it records itself in the
+        // undo log the same way. Without this a `COPY` inside a transaction
+        // block fell back to a whole-table copy, whose rollback reverted a
+        // concurrent session's writes to that table.
+        self.snapshot_before_write(&statement).await;
 
         match self.query_engine.execute_query(&statement).await {
             Ok(_) => {
@@ -2158,14 +3485,15 @@ mod extended_protocol_tests {
 
     #[test]
     fn a_repeated_placeholder_uses_the_same_value_each_time() {
-        let bound =
-            PostgresWireProtocol::bind_parameters("SELECT $1, $1", &[param("x")], &[]).expect("bound");
+        let bound = PostgresWireProtocol::bind_parameters("SELECT $1, $1", &[param("x")], &[])
+            .expect("bound");
         assert_eq!(bound, "SELECT 'x', 'x'");
     }
 
     #[test]
     fn a_null_parameter_becomes_sql_null_not_an_empty_string() {
-        let bound = PostgresWireProtocol::bind_parameters("SELECT $1", &[None], &[]).expect("bound");
+        let bound =
+            PostgresWireProtocol::bind_parameters("SELECT $1", &[None], &[]).expect("bound");
         assert_eq!(bound, "SELECT NULL");
     }
 
@@ -2201,8 +3529,8 @@ mod extended_protocol_tests {
 
     #[test]
     fn a_placeholder_inside_a_literal_is_left_untouched() {
-        let bound =
-            PostgresWireProtocol::bind_parameters("SELECT '$1', $1", &[param("v")], &[]).expect("bound");
+        let bound = PostgresWireProtocol::bind_parameters("SELECT '$1', $1", &[param("v")], &[])
+            .expect("bound");
         assert_eq!(bound, "SELECT '$1', 'v'");
     }
 
@@ -2231,8 +3559,14 @@ mod extended_protocol_tests {
 
         let decode = PostgresWireProtocol::decode_binary_parameter;
         assert_eq!(decode(&2i32.to_be_bytes(), type_oids::INT4).unwrap(), "2");
-        assert_eq!(decode(&(-7i64).to_be_bytes(), type_oids::INT8).unwrap(), "-7");
-        assert_eq!(decode(&300i16.to_be_bytes(), type_oids::INT2).unwrap(), "300");
+        assert_eq!(
+            decode(&(-7i64).to_be_bytes(), type_oids::INT8).unwrap(),
+            "-7"
+        );
+        assert_eq!(
+            decode(&300i16.to_be_bytes(), type_oids::INT2).unwrap(),
+            "300"
+        );
         assert_eq!(decode(&[1], type_oids::BOOL).unwrap(), "true");
         assert_eq!(decode(&[0], type_oids::BOOL).unwrap(), "false");
         assert_eq!(decode(b"hello", type_oids::TEXT).unwrap(), "hello");
@@ -2251,7 +3585,10 @@ mod extended_protocol_tests {
         let decode = PostgresWireProtocol::decode_binary_parameter;
         assert!(decode(&[1, 2], type_oids::INT4).is_err(), "wrong width");
         assert!(decode(&[2], type_oids::BOOL).is_err(), "not 0 or 1");
-        assert!(decode(&[0; 8], type_oids::BYTEA).is_err(), "unsupported type");
+        assert!(
+            decode(&[0; 8], type_oids::BYTEA).is_err(),
+            "unsupported type"
+        );
     }
 
     #[test]
@@ -2307,20 +3644,20 @@ mod extended_protocol_tests {
 
     #[test]
     fn boolean_parameters_are_spliced_without_quotes() {
-        let bound =
-            PostgresWireProtocol::bind_parameters("SELECT $1", &[param("true")], &[type_oids::BOOL])
-                .expect("bound");
+        let bound = PostgresWireProtocol::bind_parameters(
+            "SELECT $1",
+            &[param("true")],
+            &[type_oids::BOOL],
+        )
+        .expect("bound");
         assert_eq!(bound, "SELECT true");
     }
 
     #[test]
     fn text_parameters_stay_quoted_even_when_they_look_numeric() {
-        let bound = PostgresWireProtocol::bind_parameters(
-            "SELECT $1",
-            &[param("42")],
-            &[type_oids::TEXT],
-        )
-        .expect("bound");
+        let bound =
+            PostgresWireProtocol::bind_parameters("SELECT $1", &[param("42")], &[type_oids::TEXT])
+                .expect("bound");
         assert_eq!(bound, "SELECT '42'");
     }
 
@@ -2343,9 +3680,18 @@ mod extended_protocol_tests {
 
         let encode = PostgresWireProtocol::encode_binary_value;
         assert_eq!(encode("5", type_oids::INT4).as_ref(), &5i32.to_be_bytes());
-        assert_eq!(encode("-7", type_oids::INT8).as_ref(), &(-7i64).to_be_bytes());
-        assert_eq!(encode("300", type_oids::INT2).as_ref(), &300i16.to_be_bytes());
-        assert_eq!(encode("1.5", type_oids::FLOAT8).as_ref(), &1.5f64.to_be_bytes());
+        assert_eq!(
+            encode("-7", type_oids::INT8).as_ref(),
+            &(-7i64).to_be_bytes()
+        );
+        assert_eq!(
+            encode("300", type_oids::INT2).as_ref(),
+            &300i16.to_be_bytes()
+        );
+        assert_eq!(
+            encode("1.5", type_oids::FLOAT8).as_ref(),
+            &1.5f64.to_be_bytes()
+        );
         assert_eq!(encode("true", type_oids::BOOL).as_ref(), &[1u8]);
         assert_eq!(encode("f", type_oids::BOOL).as_ref(), &[0u8]);
     }

@@ -11,7 +11,7 @@ use crate::protocols::postgres_wire::sql::{
 use crate::unified_storage::UnifiedStorageIntegration;
 use async_trait::async_trait;
 use chrono::Timelike;
-use orbit_engine::unified::{SqlAdapter, UniversalValue};
+use orbit_engine::unified::{FilterExpression, SqlAdapter, UniversalValue};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -166,6 +166,110 @@ impl UnifiedTableStorage {
     /// Get the dialect name
     pub fn dialect(&self) -> &str {
         &self.dialect
+    }
+
+    /// The reserved table holding serialized table schemas.
+    ///
+    /// One row per schema, keyed by `dialect:name` so the SQL protocols do not
+    /// overwrite each other's definitions of a same-named table.
+    const SCHEMA_CATALOG: &'static str = "__orbit_table_schemas";
+
+    fn schema_key(&self, table_name: &str) -> String {
+        format!("{}:{table_name}", self.dialect)
+    }
+
+    /// Write a table's definition where a later process can find it.
+    async fn persist_table_schema(&self, schema: &TableSchema) -> ProtocolResult<()> {
+        let definition = serde_json::to_string(schema).map_err(|e| {
+            ProtocolError::Other(format!(
+                "could not serialize the schema of '{}': {e}",
+                schema.name
+            ))
+        })?;
+
+        let row = BTreeMap::from([
+            (
+                "key".to_string(),
+                UniversalValue::String(self.schema_key(&schema.name)),
+            ),
+            ("definition".to_string(), UniversalValue::String(definition)),
+        ]);
+
+        self.sql_adapter
+            .insert(Self::SCHEMA_CATALOG, row, "key")
+            .await
+            .map_err(|e| ProtocolError::Other(format!("could not store the schema: {e}")))
+    }
+
+    /// Read a table's stored definition, if it has one.
+    async fn load_table_schema(&self, table_name: &str) -> ProtocolResult<Option<TableSchema>> {
+        let rows = self
+            .sql_adapter
+            .select(
+                Self::SCHEMA_CATALOG,
+                None,
+                Some(FilterExpression::Eq(
+                    "key".to_string(),
+                    UniversalValue::String(self.schema_key(table_name)),
+                )),
+                None,
+                Some(1),
+                None,
+            )
+            .await
+            .map_err(|e| ProtocolError::Other(format!("could not read the schema: {e}")))?;
+
+        rows.into_iter()
+            .next()
+            .and_then(|row| match row.get("definition") {
+                Some(UniversalValue::String(text)) => Some(text.clone()),
+                _ => None,
+            })
+            .map(|text| {
+                serde_json::from_str(&text).map_err(|e| {
+                    ProtocolError::Other(format!(
+                        "stored schema for '{table_name}' is unreadable: {e}"
+                    ))
+                })
+            })
+            .transpose()
+    }
+
+    /// Read every stored definition belonging to this dialect.
+    async fn load_all_table_schemas(&self) -> ProtocolResult<Vec<TableSchema>> {
+        let rows = self
+            .sql_adapter
+            .select(Self::SCHEMA_CATALOG, None, None, None, None, None)
+            .await
+            .map_err(|e| ProtocolError::Other(format!("could not list schemas: {e}")))?;
+
+        let prefix = format!("{}:", self.dialect);
+        Ok(rows
+            .into_iter()
+            .filter(|row| match row.get("key") {
+                Some(UniversalValue::String(key)) => key.starts_with(&prefix),
+                _ => false,
+            })
+            .filter_map(|row| match row.get("definition") {
+                Some(UniversalValue::String(text)) => serde_json::from_str(text).ok(),
+                _ => None,
+            })
+            .collect())
+    }
+
+    /// Drop a table's stored definition.
+    async fn forget_table_schema(&self, table_name: &str) -> ProtocolResult<()> {
+        self.sql_adapter
+            .delete(
+                Self::SCHEMA_CATALOG,
+                Some(FilterExpression::Eq(
+                    "key".to_string(),
+                    UniversalValue::String(self.schema_key(table_name)),
+                )),
+            )
+            .await
+            .map_err(|e| ProtocolError::Other(format!("could not remove the schema: {e}")))?;
+        Ok(())
     }
 
     /// Convert SqlValue to UniversalValue
@@ -663,6 +767,10 @@ impl TableStorage for UnifiedTableStorage {
         _tx: Option<&StorageTransaction>,
     ) -> ProtocolResult<()> {
         self.write_ops.fetch_add(1, Ordering::Relaxed);
+        // The map is a cache in front of storage, not the record itself: when
+        // it was the record, a restart came back with the rows still on disk
+        // and no table to read them through.
+        self.persist_table_schema(schema).await?;
         let mut schemas = self.table_schemas.write().await;
         schemas.insert(schema.name.clone(), schema.clone());
         Ok(())
@@ -670,13 +778,32 @@ impl TableStorage for UnifiedTableStorage {
 
     async fn get_table_schema(&self, table_name: &str) -> ProtocolResult<Option<TableSchema>> {
         self.read_ops.fetch_add(1, Ordering::Relaxed);
-        let schemas = self.table_schemas.read().await;
-        Ok(schemas.get(table_name).cloned())
+        {
+            let schemas = self.table_schemas.read().await;
+            if let Some(schema) = schemas.get(table_name) {
+                return Ok(Some(schema.clone()));
+            }
+        }
+
+        let Some(schema) = self.load_table_schema(table_name).await? else {
+            return Ok(None);
+        };
+        self.table_schemas
+            .write()
+            .await
+            .insert(schema.name.clone(), schema.clone());
+        Ok(Some(schema))
     }
 
     async fn list_table_schemas(&self) -> ProtocolResult<Vec<TableSchema>> {
         self.read_ops.fetch_add(1, Ordering::Relaxed);
-        let schemas = self.table_schemas.read().await;
+        // Read through, so a fresh process lists the tables it inherited
+        // rather than only those it has been asked about.
+        let stored = self.load_all_table_schemas().await?;
+        let mut schemas = self.table_schemas.write().await;
+        for schema in stored {
+            schemas.entry(schema.name.clone()).or_insert(schema);
+        }
         Ok(schemas.values().cloned().collect())
     }
 
@@ -686,8 +813,10 @@ impl TableStorage for UnifiedTableStorage {
         _tx: Option<&StorageTransaction>,
     ) -> ProtocolResult<bool> {
         self.delete_ops.fetch_add(1, Ordering::Relaxed);
-        let mut schemas = self.table_schemas.write().await;
-        Ok(schemas.remove(table_name).is_some())
+        let existed = self.get_table_schema(table_name).await?.is_some();
+        self.forget_table_schema(table_name).await?;
+        self.table_schemas.write().await.remove(table_name);
+        Ok(existed)
     }
 
     // Data Operations
@@ -989,6 +1118,82 @@ mod tests {
     use super::*;
     use crate::unified_storage::UnifiedStorageIntegrationConfig;
 
+    /// A table created by one process is there for the next one.
+    ///
+    /// This is the defect the conformance harness could not see: it connects
+    /// to a running server and never restarts it, so a store that kept
+    /// everything in memory passed every check.
+    #[tokio::test]
+    async fn a_table_survives_a_restart() {
+        use crate::protocols::postgres_wire::persistent_storage::{
+            ColumnDefinition, ColumnType, PersistentTableStorage,
+            TableSchema as PersistentTableSchema,
+        };
+        use crate::unified_storage::UnifiedStorageIntegration;
+
+        let dir = std::env::temp_dir().join("orbit-unified-restart-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        let config = || UnifiedStorageIntegrationConfig {
+            data_dir: dir.to_string_lossy().to_string(),
+            enable_ttl_expiration: false,
+            ttl_check_interval_secs: 60,
+            max_scan_limit: 1000,
+            // The point of the test: the persistent backend, not the memory one.
+            use_memory_backend: false,
+        };
+
+        let schema = PersistentTableSchema {
+            name: "survivor".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: ColumnType::Integer,
+                nullable: true,
+                default_value: None,
+                unique: false,
+                check: None,
+                references: None,
+                domain: None,
+            }],
+            created_at: chrono::Utc::now(),
+            row_count: 0,
+            foreign_keys: Vec::new(),
+        };
+
+        {
+            let integration = Arc::new(
+                UnifiedStorageIntegration::with_config(config())
+                    .await
+                    .expect("opens the store"),
+            );
+            let storage = UnifiedTableStorage::postgres(integration);
+            PersistentTableStorage::create_table(&storage, schema)
+                .await
+                .expect("creates the table");
+            assert!(PersistentTableStorage::table_exists(&storage, "survivor")
+                .await
+                .expect("reads back"));
+        }
+
+        // A second instance over the same directory stands in for a restart:
+        // nothing is carried over in memory.
+        {
+            let integration = Arc::new(
+                UnifiedStorageIntegration::with_config(config())
+                    .await
+                    .expect("reopens the store"),
+            );
+            let storage = UnifiedTableStorage::postgres(integration);
+            assert!(
+                PersistentTableStorage::table_exists(&storage, "survivor")
+                    .await
+                    .expect("reads back"),
+                "the table did not survive the restart"
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[tokio::test]
     async fn test_sql_to_universal_conversion() {
         // Test basic types
@@ -1065,11 +1270,62 @@ mod tests {
 mod persistent_storage_impl {
     use super::*;
     use crate::protocols::postgres_wire::persistent_storage::{
-        ColumnDefinition, ColumnType, PersistentTableStorage, QueryCondition, TableRow,
-        TableSchema as PersistentTableSchema,
+        ColumnDefinition, ColumnType, ForeignKey, MatchType, PersistentTableStorage,
+        QueryCondition, ReferentialAction, TableRow, TableSchema as PersistentTableSchema,
     };
+    use crate::protocols::postgres_wire::sql::executor::TableConstraintSchema;
+
+    /// The stored spelling of a referential action.
+    fn action_name(action: ReferentialAction) -> &'static str {
+        match action {
+            ReferentialAction::NoAction => "NO ACTION",
+            ReferentialAction::Restrict => "RESTRICT",
+            ReferentialAction::Cascade => "CASCADE",
+            ReferentialAction::SetNull => "SET NULL",
+            ReferentialAction::SetDefault => "SET DEFAULT",
+        }
+    }
+
+    /// Read a referential action back, defaulting to the standard behaviour.
+    fn parse_action(text: &str) -> ReferentialAction {
+        match text {
+            "RESTRICT" => ReferentialAction::Restrict,
+            "CASCADE" => ReferentialAction::Cascade,
+            "SET NULL" => ReferentialAction::SetNull,
+            "SET DEFAULT" => ReferentialAction::SetDefault,
+            _ => ReferentialAction::NoAction,
+        }
+    }
+
     use crate::protocols::postgres_wire::sql::types::SqlType;
     use serde_json::Value as JsonValue;
+
+    /// Turn WHERE conditions into a storage filter.
+    ///
+    /// Returns `None` for no conditions, which means "every row" — the same
+    /// thing `DELETE FROM t` with no WHERE means. An operator this filter
+    /// cannot express is left out rather than silently treated as true, so an
+    /// unsupported comparison narrows nothing instead of matching everything.
+    fn conditions_to_filter(conditions: &[QueryCondition]) -> Option<FilterExpression> {
+        conditions
+            .iter()
+            .filter_map(|condition| {
+                let value = UnifiedTableStorage::sql_to_universal(
+                    &UnifiedTableStorage::json_to_sql_value(&condition.value),
+                );
+                let column = condition.column.clone();
+                match condition.operator.as_str() {
+                    "=" | "==" => Some(FilterExpression::Eq(column, value)),
+                    "!=" | "<>" => Some(FilterExpression::Ne(column, value)),
+                    "<" => Some(FilterExpression::Lt(column, value)),
+                    "<=" => Some(FilterExpression::Lte(column, value)),
+                    ">" => Some(FilterExpression::Gt(column, value)),
+                    ">=" => Some(FilterExpression::Gte(column, value)),
+                    _ => None,
+                }
+            })
+            .reduce(FilterExpression::and)
+    }
 
     impl UnifiedTableStorage {
         /// Convert from PersistentTableStorage TableSchema to SQL executor TableSchema
@@ -1097,21 +1353,70 @@ mod persistent_storage_impl {
                             with_timezone: false,
                         },
                     };
+                    // Uniqueness and the default have to survive the round
+                    // trip: the schema is stored in this form and read back
+                    // through `sql_schema_to_persistent_schema`, so dropping
+                    // them here silently disarmed `PRIMARY KEY` and `DEFAULT`.
+                    if col.unique {
+                        constraints.push("UNIQUE".to_string());
+                    }
+                    if let Some(check) = &col.check {
+                        constraints.push(format!("CHECK ({check})"));
+                    }
+                    if let Some((table, column)) = &col.references {
+                        constraints.push(format!("REFERENCES {table}({column})"));
+                    }
+                    if let Some(domain) = &col.domain {
+                        constraints.push(format!("DOMAIN {domain}"));
+                    }
+                    let default = col
+                        .default_value
+                        .as_ref()
+                        .map(UnifiedTableStorage::json_to_sql_value);
+
                     ColumnSchema {
                         name: col.name.clone(),
                         data_type,
                         nullable: col.nullable,
-                        default: None,
+                        default,
                         constraints,
                         generated: None,
                     }
                 })
                 .collect();
 
+            // Foreign keys travel as table constraints so a composite key
+            // survives the round trip as one constraint rather than as
+            // several independent per-column ones.
+            let constraints = schema
+                .foreign_keys
+                .iter()
+                .map(|key| TableConstraintSchema {
+                    name: None,
+                    // The referential actions ride in the type string, which
+                    // is the only free-form field this shape has.
+                    constraint_type: format!(
+                        "FOREIGN KEY|{}|{}|{}|{}",
+                        action_name(key.on_delete),
+                        action_name(key.on_update),
+                        key.deferrable,
+                        match key.match_type {
+                            MatchType::Full => "FULL",
+                            MatchType::Partial => "PARTIAL",
+                            MatchType::Simple => "SIMPLE",
+                        }
+                    ),
+                    columns: key.columns.clone(),
+                    referenced_table: Some(key.table.clone()),
+                    referenced_columns: Some(key.referenced.clone()),
+                    without_overlaps: None,
+                })
+                .collect();
+
             TableSchema {
                 name: schema.name.clone(),
                 columns,
-                constraints: Vec::new(),
+                constraints,
                 indexes: Vec::new(),
             }
         }
@@ -1142,7 +1447,60 @@ mod persistent_storage_impl {
                         name: col.name.clone(),
                         data_type,
                         nullable: col.nullable,
-                        default_value: None,
+                        default_value: col
+                            .default
+                            .as_ref()
+                            .map(UnifiedTableStorage::sql_value_to_json),
+                        unique: col.constraints.iter().any(|constraint| {
+                            let constraint = constraint.to_uppercase();
+                            constraint.contains("PRIMARY KEY") || constraint.contains("UNIQUE")
+                        }),
+                        references: col.constraints.iter().find_map(|constraint| {
+                            let text = constraint.trim();
+                            let rest = text.strip_prefix("REFERENCES ")?;
+                            let (table, column) = rest.split_once('(')?;
+                            Some((
+                                table.trim().to_string(),
+                                column.trim_end_matches(')').trim().to_string(),
+                            ))
+                        }),
+                        check: col.constraints.iter().find_map(|constraint| {
+                            let text = constraint.trim();
+                            if !text.to_uppercase().starts_with("CHECK") {
+                                return None;
+                            }
+                            let open = text.find('(')?;
+                            let close = text.rfind(')')?;
+                            (close > open).then(|| text[open + 1..close].trim().to_string())
+                        }),
+                        domain: col.constraints.iter().find_map(|constraint| {
+                            constraint
+                                .trim()
+                                .strip_prefix("DOMAIN ")
+                                .map(|name| name.trim().to_string())
+                        }),
+                    }
+                })
+                .collect();
+
+            let foreign_keys: Vec<ForeignKey> = schema
+                .constraints
+                .iter()
+                .filter(|constraint| constraint.constraint_type.starts_with("FOREIGN KEY"))
+                .map(|constraint| {
+                    let parts: Vec<&str> = constraint.constraint_type.split('|').collect();
+                    ForeignKey {
+                        columns: constraint.columns.clone(),
+                        table: constraint.referenced_table.clone().unwrap_or_default(),
+                        referenced: constraint.referenced_columns.clone().unwrap_or_default(),
+                        on_delete: parse_action(parts.get(1).copied().unwrap_or_default()),
+                        on_update: parse_action(parts.get(2).copied().unwrap_or_default()),
+                        deferrable: parts.get(3).copied() == Some("true"),
+                        match_type: match parts.get(4).copied().unwrap_or_default() {
+                            "FULL" => MatchType::Full,
+                            "PARTIAL" => MatchType::Partial,
+                            _ => MatchType::Simple,
+                        },
                     }
                 })
                 .collect();
@@ -1152,6 +1510,7 @@ mod persistent_storage_impl {
                 columns,
                 created_at: chrono::Utc::now(),
                 row_count: 0,
+                foreign_keys,
             }
         }
 
@@ -1253,36 +1612,25 @@ mod persistent_storage_impl {
             set_values: HashMap<String, JsonValue>,
             conditions: Vec<QueryCondition>,
         ) -> ProtocolResult<i64> {
-            // Convert set_values to SqlValue
-            let updates: HashMap<String, SqlValue> = set_values
+            // The conditions are applied here rather than handed to
+            // `TableStorage::update_rows` as a closure: that method discards
+            // the closure, so `UPDATE ... WHERE` rewrote every row in the
+            // table and reported the whole table as affected.
+            let updates: BTreeMap<String, UniversalValue> = set_values
                 .iter()
-                .map(|(k, v)| (k.clone(), Self::json_to_sql_value(v)))
+                .map(|(name, value)| {
+                    (
+                        name.clone(),
+                        Self::sql_to_universal(&Self::json_to_sql_value(value)),
+                    )
+                })
                 .collect();
 
-            // Create condition filter
-            let condition: Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>> =
-                if conditions.is_empty() {
-                    None
-                } else {
-                    let conds = conditions.clone();
-                    Some(Box::new(move |row: &HashMap<String, SqlValue>| {
-                        conds.iter().all(|cond| {
-                            if let Some(row_value) = row.get(&cond.column) {
-                                let cond_value = Self::json_to_sql_value(&cond.value);
-                                match cond.operator.as_str() {
-                                    "=" | "==" => row_value == &cond_value,
-                                    "!=" | "<>" => row_value != &cond_value,
-                                    _ => true, // Skip complex operators for now
-                                }
-                            } else {
-                                false
-                            }
-                        })
-                    }))
-                };
-
-            let count =
-                TableStorage::update_rows(self, table_name, &updates, condition, None).await?;
+            let count = self
+                .sql_adapter
+                .update(table_name, updates, conditions_to_filter(&conditions))
+                .await
+                .map_err(|e| ProtocolError::Other(format!("Storage error: {e}")))?;
             self.write_ops.fetch_add(1, Ordering::Relaxed);
             Ok(count as i64)
         }
@@ -1292,29 +1640,14 @@ mod persistent_storage_impl {
             table_name: &str,
             conditions: Vec<QueryCondition>,
         ) -> ProtocolResult<i64> {
-            // Create condition filter
-            let condition: Option<Box<dyn Fn(&HashMap<String, SqlValue>) -> bool + Send + Sync>> =
-                if conditions.is_empty() {
-                    None
-                } else {
-                    let conds = conditions.clone();
-                    Some(Box::new(move |row: &HashMap<String, SqlValue>| {
-                        conds.iter().all(|cond| {
-                            if let Some(row_value) = row.get(&cond.column) {
-                                let cond_value = Self::json_to_sql_value(&cond.value);
-                                match cond.operator.as_str() {
-                                    "=" | "==" => row_value == &cond_value,
-                                    "!=" | "<>" => row_value != &cond_value,
-                                    _ => true,
-                                }
-                            } else {
-                                false
-                            }
-                        })
-                    }))
-                };
-
-            let count = TableStorage::delete_rows(self, table_name, condition, None).await?;
+            // As with `update_rows`: the closure form of the condition is
+            // dropped by `TableStorage::delete_rows`, so `DELETE ... WHERE`
+            // emptied the table.
+            let count = self
+                .sql_adapter
+                .delete(table_name, conditions_to_filter(&conditions))
+                .await
+                .map_err(|e| ProtocolError::Other(format!("Storage error: {e}")))?;
             self.delete_ops.fetch_add(1, Ordering::Relaxed);
             Ok(count as i64)
         }

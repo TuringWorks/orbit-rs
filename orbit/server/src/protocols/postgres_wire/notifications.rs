@@ -48,12 +48,7 @@ impl NotificationHub {
     ///
     /// Repeated `LISTEN` on the same channel from the same session is a no-op,
     /// as in PostgreSQL — it must not double-deliver.
-    pub async fn listen(
-        &self,
-        channel: &str,
-        session: u64,
-        sender: UnboundedSender<Notification>,
-    ) {
+    pub async fn listen(&self, channel: &str, session: u64, sender: UnboundedSender<Notification>) {
         let mut listeners = self.listeners.lock().await;
         let subscribers = listeners.entry(fold_channel(channel)).or_default();
         if subscribers.iter().any(|s| s.session == session) {

@@ -227,6 +227,11 @@ pub enum BackendMessage {
         format: i8,
         column_formats: Vec<i16>,
     },
+    /// Both directions at once, which is how replication streams.
+    CopyBothResponse {
+        format: i8,
+        column_formats: Vec<i16>,
+    },
     CopyData {
         data: Bytes,
     },
@@ -798,6 +803,19 @@ impl BackendMessage {
                 }
                 let len = buf.len() - pos;
                 buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
+            }
+            BackendMessage::CopyBothResponse {
+                format,
+                column_formats,
+            } => {
+                buf.put_u8(b'W');
+                let length = 4 + 1 + 2 + column_formats.len() * 2;
+                buf.put_i32(length as i32);
+                buf.put_i8(*format);
+                buf.put_i16(column_formats.len() as i16);
+                for column_format in column_formats {
+                    buf.put_i16(*column_format);
+                }
             }
             BackendMessage::CopyOutResponse {
                 format,

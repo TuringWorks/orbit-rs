@@ -31,10 +31,19 @@ impl PostgresServer {
 
     /// Create a new PostgreSQL server with custom query engine
     pub fn new_with_query_engine(bind_addr: impl Into<String>, query_engine: QueryEngine) -> Self {
-        println!("DEBUG: PostgresServer initialized with custom query engine");
+        Self::new_with_query_engine_arc(bind_addr, Arc::new(query_engine))
+    }
+
+    /// Create a server sharing an engine with something else — the autovacuum
+    /// worker, which has to run against the same storage the sessions use.
+    pub fn new_with_query_engine_arc(
+        bind_addr: impl Into<String>,
+        query_engine: Arc<QueryEngine>,
+    ) -> Self {
+        tracing::debug!("PostgreSQL server created with a custom query engine");
         Self {
             bind_addr: bind_addr.into(),
-            query_engine: Some(Arc::new(query_engine)),
+            query_engine: Some(query_engine),
             tls_config: None,
         }
     }

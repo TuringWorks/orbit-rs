@@ -132,7 +132,7 @@ impl Default for UnifiedStorageConfig {
             data_dir: "./orbit_unified_data".to_string(),
             enable_ttl_expiration: true,
             ttl_check_interval_secs: 60,
-            max_scan_limit: 10000,
+            max_scan_limit: 1_000_000,
             enable_wal: true,
             enable_compression: true,
         }
@@ -755,7 +755,7 @@ impl UnifiedStorage {
         projection: Vec<String>,
     ) -> UnifiedStorageResult<UniversalResult> {
         let prefix = format!("data:{}:", namespace);
-        let max_limit = limit.unwrap_or(self.config.max_scan_limit);
+        let max_limit = limit.unwrap_or(usize::MAX);
 
         // Fetch all records matching prefix
         let entries = self.backend.scan_prefix(&prefix, None).await?;
@@ -812,8 +812,22 @@ impl UnifiedStorage {
             });
         }
 
-        // Apply offset and limit
+        // Apply offset and limit.
+        //
+        // A caller that gave no limit wants every row: capping it silently
+        // made `SELECT COUNT(*)` on a 12,000-row table answer 10,000 and call
+        // it success. The cap is still a guard rail against a runaway scan,
+        // but it now refuses rather than lies — and refusing costs nothing in
+        // memory, because every record has already been read by this point.
         let offset = offset.unwrap_or(0);
+        if limit.is_none() && records.len().saturating_sub(offset) > self.config.max_scan_limit {
+            return Err(UnifiedStorageError::InvalidOperation(format!(
+                "scan of '{namespace}' matched {} rows, over the max_scan_limit of {}; \
+                 raise unified_storage.max_scan_limit or narrow the query",
+                records.len().saturating_sub(offset),
+                self.config.max_scan_limit
+            )));
+        }
         let records: Vec<_> = records.into_iter().skip(offset).take(max_limit).collect();
 
         // Apply projection
@@ -1774,6 +1788,88 @@ impl UnifiedStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Build a store whose scan guard rail trips at `max_scan_limit` rows.
+    fn bounded_storage(max_scan_limit: usize) -> UnifiedStorage {
+        UnifiedStorage::new(
+            Arc::new(MemoryBackend::new()),
+            UnifiedStorageConfig {
+                max_scan_limit,
+                ..Default::default()
+            },
+        )
+    }
+
+    async fn fill(storage: &UnifiedStorage, namespace: &str, count: usize) {
+        for index in 0..count {
+            storage
+                .put(
+                    namespace,
+                    &index.to_string(),
+                    UniversalValue::Int(index as i64),
+                    None,
+                    false,
+                    None,
+                )
+                .await
+                .expect("put");
+        }
+    }
+
+    /// A scan under the guard rail returns every row, not a page of them.
+    #[tokio::test]
+    async fn an_unlimited_scan_returns_every_row() {
+        let storage = bounded_storage(10);
+        storage.initialize().await.expect("init");
+        fill(&storage, "rows", 7).await;
+
+        let result = storage
+            .scan("rows", None, None, None, None, Vec::new())
+            .await
+            .expect("scan");
+        let UniversalResult::Records(records) = result else {
+            panic!("expected records");
+        };
+        assert_eq!(records.len(), 7);
+    }
+
+    /// Over the guard rail the scan refuses. It used to return exactly
+    /// `max_scan_limit` rows and report success, so `COUNT(*)` on a larger
+    /// table answered with the limit.
+    #[tokio::test]
+    async fn a_scan_over_the_limit_refuses_rather_than_truncating() {
+        let storage = bounded_storage(5);
+        storage.initialize().await.expect("init");
+        fill(&storage, "rows", 9).await;
+
+        let error = storage
+            .scan("rows", None, None, None, None, Vec::new())
+            .await
+            .expect_err("the scan should refuse");
+        let message = error.to_string();
+        assert!(
+            message.contains('9'),
+            "should say how many matched: {message}"
+        );
+        assert!(message.contains('5'), "should say the limit: {message}");
+    }
+
+    /// An explicit limit is the caller's decision and is honoured as given.
+    #[tokio::test]
+    async fn an_explicit_limit_is_not_the_guard_rail() {
+        let storage = bounded_storage(5);
+        storage.initialize().await.expect("init");
+        fill(&storage, "rows", 9).await;
+
+        let result = storage
+            .scan("rows", None, Some(9), None, None, Vec::new())
+            .await
+            .expect("an explicit limit is allowed");
+        let UniversalResult::Records(records) = result else {
+            panic!("expected records");
+        };
+        assert_eq!(records.len(), 9);
+    }
 
     #[tokio::test]
     async fn test_basic_crud() {

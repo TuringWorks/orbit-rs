@@ -903,17 +903,17 @@ async fn run_sql(
                 query_plan: None,
             }
         }
-        QueryResult::Insert { count } | QueryResult::Update { count } | QueryResult::Delete { count } => {
-            SqlQueryResponse {
-                columns: Vec::new(),
-                rows: Vec::new(),
-                row_count: 0,
-                rows_affected: Some(count as u64),
-                execution_time_ms: start.elapsed().as_millis() as u64,
-                has_more: false,
-                query_plan: None,
-            }
-        }
+        QueryResult::Insert { count }
+        | QueryResult::Update { count }
+        | QueryResult::Delete { count } => SqlQueryResponse {
+            columns: Vec::new(),
+            rows: Vec::new(),
+            row_count: 0,
+            rows_affected: Some(count as u64),
+            execution_time_ms: start.elapsed().as_millis() as u64,
+            has_more: false,
+            query_plan: None,
+        },
         QueryResult::Set { .. } => SqlQueryResponse {
             columns: Vec::new(),
             rows: Vec::new(),

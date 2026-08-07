@@ -381,7 +381,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             data_dir: data_dir.clone(),
             enable_ttl_expiration: unified_config.ttl.enabled,
             ttl_check_interval_secs: unified_config.ttl.check_interval_secs,
-            max_scan_limit: 10000,
+            max_scan_limit: 1_000_000,
             use_memory_backend: false, // Use persistent backend
         };
 
@@ -813,13 +813,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // PostgreSQL server below. Handing REST its own RocksDB handle while
     // PostgreSQL used unified storage produced two databases behind one name:
     // a table created over HTTP was invisible to psql.
-    let rest_sql_storage: Arc<dyn orbit_server::protocols::postgres_wire::persistent_storage::PersistentTableStorage> =
-        match &storage_mode {
-            StorageMode::Unified {
-                postgres_unified, ..
-            } => postgres_unified.clone(),
-            StorageMode::Isolated { .. } => rocksdb_storage.clone(),
-        };
+    let rest_sql_storage: Arc<
+        dyn orbit_server::protocols::postgres_wire::persistent_storage::PersistentTableStorage,
+    > = match &storage_mode {
+        StorageMode::Unified {
+            postgres_unified, ..
+        } => postgres_unified.clone(),
+        StorageMode::Isolated { .. } => rocksdb_storage.clone(),
+    };
     let rest_query_engine = Arc::new(QueryEngine::new_with_persistent_storage(rest_sql_storage));
 
     orbit_server::protocols::rest::handlers::mark_process_start();
@@ -1348,9 +1349,22 @@ async fn start_postgresql_server(
         QueryEngine::new_with_persistent_storage(rocksdb)
     };
 
+    // Reclaim superseded row versions in the background, so a long-lived
+    // server does not accumulate them until someone runs VACUUM by hand.
+    let query_engine = std::sync::Arc::new(query_engine);
+    // Continue the change stream where the last run left off, so a replica's
+    // recorded position still means what it meant before the restart.
+    match query_engine.resume_change_positions().await {
+        Ok(0) => {}
+        Ok(position) => info!("[PostgreSQL] replication resumes at position {position}"),
+        Err(e) => warn!("[PostgreSQL] could not read the change log: {e}"),
+    }
+    let _autovacuum =
+        QueryEngine::start_autovacuum(query_engine.clone(), std::time::Duration::from_secs(60));
+
     // Create PostgreSQL server with query engine
-    let postgres_server =
-        PostgresServer::new_with_query_engine(bind_addr, query_engine).with_tls_config(tls_config);
+    let postgres_server = PostgresServer::new_with_query_engine_arc(bind_addr, query_engine)
+        .with_tls_config(tls_config);
 
     let handle = tokio::spawn(async move {
         postgres_server

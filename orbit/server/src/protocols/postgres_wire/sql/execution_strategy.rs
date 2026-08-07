@@ -907,7 +907,9 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 if explain.verbose {
                     lines.push("  (VERBOSE requested; no extra detail available)".to_string());
                 }
-                lines.push("  Cost estimates are not available: no statistics are kept.".to_string());
+                lines.push(
+                    "  Cost estimates are not available: no statistics are kept.".to_string(),
+                );
 
                 Ok(UnifiedExecutionResult::Select {
                     columns: vec!["QUERY PLAN".to_string()],

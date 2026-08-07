@@ -829,30 +829,52 @@ with `tokio-postgres` — a conforming client — and prints a pass/fail matrix:
 cargo test -p orbit-integration-tests --test pg_conformance -- --ignored --nocapture
 ```
 
-Current score: **45/48**. By area:
+Current score: **212/212**. By area:
 
 | Area | Score | Notes |
 |------|-------|-------|
 | Connection (SCRAM) | 1/1 | |
-| Simple query | 7/7 | |
-| Extended query | 4/4 | Parse/Bind/Describe/Execute, typed and bound parameters |
+| Simple query | 9/9 | Includes `SET`/`SHOW` and `SHOW ALL` |
+| Extended query | 7/7 | Parse/Bind/Describe/Execute, typed and bound parameters |
 | Portals / cursors | 1/1 | `Execute` row limits, `PortalSuspended` |
-| Data types | 4/4 | Text and binary result formats; NULL distinct from `'NULL'` |
-| Transactions | 2/3 | Status reporting is real; **rollback does not undo writes** |
+| Data types | 15/15 | Text, binary, `SMALLINT`, `BIGINT`, `NUMERIC`, `REAL`, `DOUBLE PRECISION`, `DATE`, `TIMESTAMP`, `JSON`; empty string distinct from NULL |
+| Transactions | 26/26 | Per-row undo for every write path; `SET CONSTRAINTS` switches when deferred keys are checked |
 | Catalog | 5/5 | `version()`, `current_database()`, `pg_class`, `pg_type`, `information_schema` |
-| COPY | 2/2 | `TO STDOUT` and `FROM STDIN`, text format |
+| COPY | 3/3 | `TO STDOUT` and `FROM STDIN`, text and binary formats |
 | LISTEN / NOTIFY | 1/1 | Cross-session, delivered while idle |
-| Error reporting | 3/3 | SQLSTATE present, session survives errors |
-| SQL surface | 15/17 | `WHERE`, `ORDER BY`, `LIMIT`/`OFFSET`, `GROUP BY`, `HAVING`, `DISTINCT`, aggregates, `EXPLAIN` |
+| Error reporting | 7/7 | SQLSTATE, session survives errors, aborted blocks reject work, statements after a failure do not run |
+| SQL surface | 104/104 | See below |
+
+The SQL surface covers `WHERE` (`AND`/`OR`/`NOT`/`LIKE`/`ILIKE`/`BETWEEN`/`IS NULL`/`IN`/`NOT IN`),
+`ORDER BY` (expressions, ordinals, aliases, `NULLS FIRST`/`LAST`), `LIMIT`/`OFFSET`,
+`GROUP BY`, `HAVING`, `DISTINCT`, `DISTINCT ON`, `COUNT(DISTINCT)`, aggregates,
+`STRING_AGG`/`ARRAY_AGG`, `JOIN`/`LEFT JOIN`, scalar, `IN`, `EXISTS` and
+**correlated** subqueries, derived tables, CTEs, set operations, window functions,
+`CASE`, `COALESCE`, `NULLIF`, `GREATEST`/`LEAST`, casts to and from text,
+string, math and date functions (`EXTRACT`), `RETURNING`, `INSERT ... SELECT`,
+multi-row `INSERT`, `ON CONFLICT`, `UPDATE` with expressions, `NOT NULL`,
+`PRIMARY KEY`/`UNIQUE`, `DEFAULT`, `CHECK` and `REFERENCES` enforcement,
+`WITH RECURSIVE`, `LATERAL` joins, comma joins, `NATURAL JOIN`, window frames
+(`ROWS`, `RANGE` and `GROUPS`), `PERCENT_RANK`/`CUME_DIST`, table-level
+`PRIMARY KEY`/`UNIQUE`/`FOREIGN KEY`/`CHECK` clauses, composite foreign keys
+with `ON DELETE`/`ON UPDATE` actions, `MATCH FULL`/`PARTIAL`, `DEFERRABLE` checking with
+`SET CONSTRAINTS`, domains with `ALTER DOMAIN` and `CHECK (VALUE ...)`,
+triggers with `INSTEAD OF` and `NEW`/`OLD`, `ALTER TABLE RENAME`,
+views, materialized views with `REFRESH`,
+`CREATE TABLE AS SELECT`, `ALTER TABLE ADD`/`DROP COLUMN`, `TRUNCATE`,
+schema-qualified and quoted identifiers, FROM-less selects, `EXPLAIN` and
+`CREATE INDEX`.
 
 #### One source of truth for SELECT
 
-`sql/select_pipeline.rs` applies a statement's clauses — `WHERE` →
-`GROUP BY`/aggregates → `HAVING` → `DISTINCT` → `ORDER BY` → `OFFSET`/`LIMIT` →
-projection — to rows read from **persistent storage**, the same rows a plain
-`SELECT` reads.
+`sql/select_pipeline.rs` applies a statement's clauses — `WHERE` → window
+functions → `GROUP BY`/aggregates → `HAVING` → `DISTINCT` → `ORDER BY` →
+`OFFSET`/`LIMIT` → projection — to rows read from **persistent storage**, the
+same rows a plain `SELECT` reads. A select with no `FROM` runs over one empty
+row, so it uses the same path.
 
-Two earlier arrangements were wrong and are worth recording:
+Earlier arrangements that were wrong, and are worth recording because each one
+reported success while answering incorrectly:
 
 1. The executor read every row and projected by column name, dropping those
    clauses silently. `SELECT ... LIMIT 2` returned the whole table, `ORDER BY`
@@ -860,22 +882,213 @@ Two earlier arrangements were wrong and are worth recording:
 2. Routing clause-bearing statements to the in-memory engine instead made them
    read a *different copy* of the table, so `SELECT id FROM t` and
    `SELECT id FROM t ORDER BY id` disagreed about how many rows existed.
+3. **Two routing tables.** The simple-query wire path dispatched over the parsed
+   AST while everything else dispatched over the statement text, so features
+   worked from one and not the other. `execute_multiple_queries` now splits the
+   message into statements and sends each through `execute_query`.
+4. **`WHERE` was dropped by writes.** The condition was built as a closure and
+   handed to a `TableStorage` method that discards it, so
+   `DELETE FROM t WHERE id = 2` emptied the table. Likewise `drop_table`
+   removed only the schema, so the next `CREATE TABLE` resurrected the rows.
+5. **`SET n = n + 1` stored the text `"amount + 1"`** in an integer column.
+6. **`INSERT ... SELECT` inserted nothing** and reported success.
+7. **Constraints were parsed and then dropped** by the schema round trip, so
+   `PRIMARY KEY` accepted duplicates and `DEFAULT` left NULL.
+8. **An unknown column returned NULLs** rather than an error.
+9. **`ORDER BY 1` and `ORDER BY <alias>` were evaluated as expressions**, so the
+   statement returned rows in storage order while appearing to sort.
+10. **A correlated subquery was resolved once** and applied to every row.
+11. **Dead parser branches.** `NULLS FIRST`/`LAST` matched
+    `Token::Identifier("NULLS")` while the lexer emits `Token::Nulls`;
+    `NOT IN` was looked for as `IN NOT`. Neither could ever fire.
+12. **`CREATE TABLE t AS SELECT` panicked the connection's task** —
+    `parse_create_table` unwrapped `find('(')`. Every later statement on that
+    connection failed with "connection closed". The same unwraps were reachable
+    in the `INSERT` and `DROP TABLE` parsers.
+13. **`STRING_AGG(x, sep)` ignored its separator** and always joined on a comma.
+14. **A quoted identifier lost its case on read.** The stored name is already
+    final; folding it again lowercased it, so `SELECT "Id"` could not find a
+    column that `SELECT *` reported as `id`.
+15. **An aborted transaction accepted more statements.** PostgreSQL rejects
+    everything but a rollback once a statement in the block has failed.
+16. **`UPDATE`/`DELETE ... WHERE a = 1 AND b = 2` changed nothing.** The
+    simple parser read the whole predicate as one condition, comparing `a`
+    against the text `1 AND b = 2`, so the statement matched no rows and
+    reported success. Conjuncts are now separate conditions, and an `OR` —
+    which a condition list cannot express — is refused rather than mis-read.
+17. **Most keyword-named columns could not be parsed.** The lexer turns 393
+    words into keyword tokens, and only a handful were accepted as
+    identifiers, so `INSERT INTO t (id, label)` failed to parse — PostgreSQL
+    reserves fewer than 70 of them. The parser now consults the lexer's own
+    keyword table in reverse and accepts any word not on the reserved list,
+    which is the rule PostgreSQL itself applies. This was found through a
+    trigger that silently never fired, because the AST parse it depended on
+    was failing while the statement itself succeeded through another path.
+18. **One session's `ROLLBACK` destroyed another session's committed rows.**
+    Undo restored a copy of the whole table taken before the block's first
+    write, so a row a second session committed while that block was open was
+    wiped by the first session's rollback. That is data loss caused by an
+    unrelated connection, not a visibility anomaly. Undo is now row-scoped:
+    rows this session inserted are matched by value and removed, rows it
+    changed or deleted are put back only if they are no longer there, and
+    nothing else is touched. Savepoints record how far each undo log had
+    grown, so `ROLLBACK TO SAVEPOINT` undoes exactly the writes made after it.
+19. **Every scan was silently truncated at 10,000 rows.** `UnifiedStorage::scan`
+    capped a caller that asked for no limit at `max_scan_limit`, *after*
+    reading every matching record into memory — so the cap saved nothing and
+    corrupted the answer. `SELECT COUNT(*)` on a 12,000-row table returned
+    10,000 and reported success. The cap now refuses the scan, naming the row
+    count and the config key, rather than returning a short answer; an
+    explicit `LIMIT` is the caller's decision and is honoured as given. The
+    default moved from 10,000 to 1,000,000, which is a runaway threshold
+    rather than an ordinary table size.
+20. **Nothing was persisted at all.** `UnifiedStorageIntegration` built a
+    `MemoryBackend` on *both* arms of its `use_memory_backend` branch — the
+    flag documented an intention and selected nothing — while the log said
+    "persistent backend". Every table and row served over the SQL protocols
+    lived only in that process. `UnifiedTableStorage` compounded it by holding
+    schemas in a map that was the record rather than a cache. See
+    **Durability** below.
+
+#### Beyond the wire protocol
+
+Properties the harness cannot reach, verified by hand against a running server:
+
+| Property | How it was checked | Result |
+|----------|--------------------|--------|
+| Durability | Write, stop, restart, read | Rows and schemas survive |
+| Crash safety | Write, `SIGKILL`, restart, read | Survives via the RocksDB WAL |
+| Redis durability | `SET`, restart, `GET` | Survives |
+| MySQL protocol | Raw handshake on 3306 | Server greeting, protocol 10 |
+| CQL protocol | `OPTIONS` frame on 9042 | `SUPPORTED` reply |
+| Write concurrency | 8 workers x 100 inserts | All 800 rows, no errors |
+| Logical replication | Raw walsender session on 5432 | `IDENTIFY_SYSTEM`, `CREATE_REPLICATION_SLOT`, `START_REPLICATION` → `CopyBothResponse`, then an `XLogData` frame carrying a live `INSERT` |
+| Replication replay | Write with nobody streaming, then connect and `START_REPLICATION ... 0/1` | Both missed writes replayed from the requested LSN |
+| Replication feedback | Standby status update with the reply flag set | Keepalive returned; the confirmed position is written to the slot |
+| Slot durability | Create a slot, restart, `START_REPLICATION` on it | Slot survives |
+
+The multi-protocol checks matter because all four protocols share the storage
+backend that was replaced; verifying only PostgreSQL would have left the others
+unmeasured after the change.
+
+#### Scale
+
+The conformance harness works on three-row tables, so nothing in it could reach
+a page boundary. `SELECT COUNT(*)` over a 12,000-row table is now a check
+(`a table larger than one scan page is counted in full`), and the guard-rail
+behaviour has unit tests in `orbit/engine/src/unified/storage.rs`: a scan under
+the limit returns every row, a scan over it errors, and an explicit limit is
+never overridden.
+
+#### Durability
+
+Rows and schemas are held by `RocksDbBackend`
+(`orbit/engine/src/unified/rocksdb_backend.rs`), which implements
+`UnifiedStorageBackend` over a RocksDB database under
+`<unified_storage.data_dir>/unified`. `UnifiedTableStorage` writes each table's
+definition to a reserved `__orbit_table_schemas` relation keyed by
+`dialect:name` and keeps its in-memory map strictly as a read-through cache.
+
+This was found by restarting the server and querying a table written before the
+stop — not by the conformance harness, which connects to an already-running
+server and so cannot see the difference between a durable store and a map. The
+regression test for it is
+`protocols::common::storage::unified::tests::a_table_survives_a_restart`, which
+opens the store twice over one directory; it fails if the backend is switched
+back to memory.
+
+Note that `unified_storage.data_dir` in `config/orbit-server.toml` is a
+separate setting from the `--data-dir` flag, which the unified store does not
+read.
 
 #### Not yet implemented
 
-- **Transaction atomicity.** `BEGIN`/`COMMIT`/`ROLLBACK` parse and the
-  protocol-level status is reported correctly, but storage applies writes
-  immediately and keeps no undo log, so a rollback reverts nothing. Rather than
-  report success for an undo that did not happen, `ROLLBACK` now emits a
-  `NoticeResponse` naming how many writes it could not take back.
-- **`JOIN` and subqueries**, reported as explicit errors.
-- **Binary `COPY`** and **GSSAPI encryption**, both refused explicitly.
-- Protocol 3.2 negotiation, replication, and `FunctionCall`.
+- **Isolation is by write stamping with per-transaction row versions.** Every
+  row carries the id of the transaction that wrote it, and a delete marks the
+  row with the id that removed it. `READ COMMITTED` judges those ids against
+  what is open now; `REPEATABLE READ` and `SERIALIZABLE` judge them against the
+  set of transactions open when the block began, which is what makes a repeated
+  read return the same rows. An `UPDATE` inside a transaction writes a **new
+  row version** rather than overwriting: the previous row is marked deleted by
+  that block and the new values are stored under a key carrying the writing
+  transaction's id, so a reader holding an older snapshot still reads the row
+  as it stood. The storage key had to change for this — keying by the primary
+  key alone made the newer version replace the older, leaving nowhere to keep
+  it. An update outside a transaction still writes in place, since no reader
+  can observe the difference. `SERIALIZABLE` adds a check at commit: a block
+  that read a table another transaction has since written cannot be placed in
+  any serial order after it, so it fails with SQLSTATE `40001` rather than
+  committing. The grain is the **row** for a table with a key: the
+  block records the rows it read and only a write to one of those conflicts.
+  A table with no unique column falls back to whole-table grain, because a
+  keyless row cannot be named across a change — its identity would be its
+  contents, and an update changes those. The predicate a block read is recorded
+  alongside the rows, so a row that *starts* satisfying it — a phantom — is a
+  conflict too, while a row outside it is not. `=`, `!=`, `<`, `<=`, `>`, `>=`, `LIKE`,
+  `ILIKE` and `IN` are understood; an operator this does not know is treated
+  as matching, which widens the watch rather than narrowing it. Every
+  approximation refuses more than a real serializable scheduler would, never
+  fewer.
+- Undo is row-scoped, so a rollback no longer damages another session's rows,
+  and concurrent writers were measured landing every row (8 workers x 100
+  inserts, all 800 present).
+- **Old versions and deleted rows are reclaimed only once no other block is
+  open**, so a snapshot reader cannot lose a row mid-transaction. Until then
+  the mark hides them, which means a long-running block delays reclamation —
+  versions accumulate while one is open. `VACUUM [table]` reclaims them
+  explicitly, and a background worker runs the same reclaim every 60 seconds.
+  A version is reclaimed once the block that removed it has finished *and*
+  finished before the oldest block now running began — so a long-lived
+  transaction holds back only the versions it could still see, not all of them.
+- **An `UPDATE` is versioned even outside a transaction.** Overwriting in place
+  left no trace of the write, so a snapshot reader saw the new value and a
+  serializable block could not tell that what it read had moved.
+- Every write path undoes per row: `TRUNCATE` records each row it removes as a
+  pre-image, `INSERT ... SELECT` predicts the rows it will add by running its
+  select, and `COPY` records each copied line.
+- **GSSAPI encryption** is refused explicitly: it needs a Kerberos KDC to
+  authenticate against, which cannot be exercised here, and an unverified
+  implementation would be worse than its absence.
+- **Replication is logical only.** A connection opened with
+  `replication=database` answers `IDENTIFY_SYSTEM`, `CREATE_REPLICATION_SLOT`,
+  `DROP_REPLICATION_SLOT`, `TIMELINE_HISTORY` and `START_REPLICATION`, then
+  streams each write as an `XLogData` frame whose payload is the change as
+  JSON — an output plugin's job in PostgreSQL. Slots are persisted in the
+  catalog and survive a restart; a standby status update records the confirmed
+  position on the slot and answers a requested keepalive; a stream can replay
+  from a named LSN or from the slot's confirmed position.
+- **What replication still lacks:** physical replication (`START_REPLICATION
+  PHYSICAL` is not distinguished from logical), a real WAL — the replay window
+  is the last 4096 changes held in memory, and a request older than that is
+  refused rather than served with a hole; the JSON payload is one plugin's
+  format rather than `pgoutput`; `TIMELINE_HISTORY` reports that the current
+  timeline has no history file, because there is only ever one.
+- **The fastpath `FunctionCall` message** answers an error naming the OID
+  rather than executing the function. It previously answered nothing at all,
+  leaving the client waiting on a reply that never came.
+- **The deferred pass re-reads every row of the tables the transaction wrote**,
+  not only the rows it changed. Scoped to those tables rather than the whole
+  database, but still proportional to their size.
+- **Triggers run SQL statements, not a procedural function.**
+  `CREATE TRIGGER ... EXECUTE <body>` supports `BEFORE`/`AFTER`/`INSTEAD OF`,
+  `INSERT`/`UPDATE`/`DELETE`, `FOR EACH ROW`/`STATEMENT`, `WHEN (...)`,
+  `NEW`/`OLD` column references, `SET NEW.col = <expr>` on both `BEFORE
+  INSERT` and `BEFORE UPDATE`, a `$$BEGIN ... END$$` body of several
+  statements, and `RAISE` to reject a write. There is still no PL/pgSQL:
+  variables, loops, `IF`, and `RETURN` are not expressible, and a
+  `BEFORE UPDATE` rewrite is applied only when the statement changes exactly
+  one row.
+- A recursive CTE is bounded at 1,000 rounds and fails loudly rather than
+  running forever if it does not settle.
 
-Note on scope: 45/48 is 45 of *these 48 checks*. PostgreSQL's real surface —
-the full type system, arrays, `NUMERIC`, domains, triggers, views, window
-functions, `RETURNING`, replication — is far larger. Treat this as a floor that
-moves measurably, not a compatibility claim.
+Note on scope: 212/212 is 212 of *these 212 checks*. Each widening found real
+defects — 62 checks found none, 93 found fourteen, 130 found fourteen more, 157
+found fifteen including a reachable panic — so the number tracks the harness,
+not the protocol. The two largest defects were invisible to every one of those
+checks: nothing was persisted, because no check restarts the server, and every
+scan was truncated at 10,000 rows, because no check used a table that large.
+Treat the number as a floor that moves measurably, not a compatibility claim,
+and keep asking what the harness cannot see.
 
 
 ## Storage Architecture

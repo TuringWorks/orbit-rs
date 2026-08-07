@@ -14,7 +14,8 @@
 use std::collections::HashMap;
 
 use super::ast::{
-    DistinctClause, Expression, FunctionName, SelectItem, SelectStatement, SortDirection,
+    DistinctClause, Expression, FunctionName, NullsOrder, SelectItem, SelectStatement,
+    SortDirection, WindowFunctionType,
 };
 use super::expression_evaluator::{EvaluationContext, ExpressionEvaluator};
 use super::types::SqlValue;
@@ -35,7 +36,51 @@ pub struct SelectOutput {
 /// Returns an error when an expression cannot be evaluated — an unknown
 /// function, or a comparison between values that do not compare.
 pub fn run_select(select: &SelectStatement, rows: Vec<Row>) -> ProtocolResult<SelectOutput> {
+    let (columns, values) = run_select_values(select, rows)?;
+    Ok(SelectOutput {
+        columns,
+        rows: values
+            .into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .map(|value| match value {
+                        SqlValue::Null => None,
+                        other => Some(other.to_postgres_string()),
+                    })
+                    .collect()
+            })
+            .collect(),
+    })
+}
+
+/// Apply a `SELECT`'s clauses, keeping the results as typed values.
+///
+/// A derived table or a set operation consumes the output of a select as rows
+/// to compute over, not as display text; rendering to strings first would make
+/// `WHERE t.id > 1` a string comparison.
+///
+/// # Errors
+/// Returns an error when an expression cannot be evaluated.
+pub fn run_select_values(
+    select: &SelectStatement,
+    rows: Vec<Row>,
+) -> ProtocolResult<(Vec<String>, Vec<Vec<SqlValue>>)> {
     let mut evaluator = ExpressionEvaluator::new();
+
+    // A column that is not there is an error, not NULL. The evaluator answers
+    // NULL for an unknown name, so `SELECT no_such_column FROM t` returned a
+    // column of NULLs and `WHERE no_such_column = 1` returned no rows — both
+    // reported as success.
+    if let Some(sample) = rows.first() {
+        for item in &select.select_list {
+            if let SelectItem::Expression { expr, .. } = item {
+                check_columns_exist(expr, sample)?;
+            }
+        }
+        if let Some(predicate) = &select.where_clause {
+            check_columns_exist(predicate, sample)?;
+        }
+    }
 
     // WHERE
     let filtered = match &select.where_clause {
@@ -50,6 +95,13 @@ pub fn run_select(select: &SelectStatement, rows: Vec<Row>) -> ProtocolResult<Se
             kept
         }
     };
+
+    // Window functions are computed over the filtered rows, before grouping
+    // and projection: each call's value is attached to its row and the call is
+    // replaced by a reference to it, so the rest of the pipeline sees an
+    // ordinary column.
+    let (windowed_select, filtered) = apply_window_functions(&mut evaluator, select, filtered)?;
+    let select = windowed_select.as_ref().unwrap_or(select);
 
     // GROUP BY / aggregates. A select list containing an aggregate with no
     // GROUP BY is one group over every row, which is what `COUNT(*)` means.
@@ -76,9 +128,9 @@ pub fn run_select(select: &SelectStatement, rows: Vec<Row>) -> ProtocolResult<Se
     };
 
     // DISTINCT, over the projected values so it means what the user sees.
-    let mut deduplicated = match select.distinct {
+    let mut deduplicated = match &select.distinct {
         None => after_having,
-        Some(DistinctClause::Distinct) | Some(DistinctClause::DistinctOn(_)) => {
+        Some(DistinctClause::Distinct) => {
             let mut seen = Vec::new();
             let mut kept = Vec::new();
             for (row, group, output) in after_having {
@@ -89,27 +141,83 @@ pub fn run_select(select: &SelectStatement, rows: Vec<Row>) -> ProtocolResult<Se
             }
             kept
         }
+        // `DISTINCT ON (keys)` keeps the first row per key, not per output
+        // row; treating it as plain DISTINCT kept every row whose projection
+        // differed, which is a different answer.
+        Some(DistinctClause::DistinctOn(keys)) => {
+            let mut seen: Vec<Vec<SqlValue>> = Vec::new();
+            let mut kept = Vec::new();
+            for (row, group, output) in after_having {
+                let mut key = Vec::with_capacity(keys.len());
+                for expression in keys {
+                    key.push(evaluate(&mut evaluator, expression, &row)?);
+                }
+                if !seen.contains(&key) {
+                    seen.push(key);
+                    kept.push((row, group, output));
+                }
+            }
+            kept
+        }
     };
 
     // ORDER BY, on the source row so a sort key need not be selected.
     if let Some(order_by) = &select.order_by {
+        // `ORDER BY 1` and `ORDER BY <alias>` name an output column, not a
+        // value to evaluate. Evaluating them gave the same constant for every
+        // row (an ordinal) or an unknown-column error (an alias), so the
+        // statement silently returned rows in storage order.
+        let output_names = output_column_names(select);
+        let sort_positions: Vec<Option<usize>> = order_by
+            .iter()
+            .map(|item| output_position(&item.expression, &output_names))
+            .collect();
+
         // Keys are computed once per row rather than on each comparison, which
         // would otherwise re-evaluate the expression O(n log n) times.
         let mut keyed = Vec::with_capacity(deduplicated.len());
         for (row, group, output) in deduplicated {
             let mut keys = Vec::with_capacity(order_by.len());
-            for item in order_by {
-                keys.push(evaluate(&mut evaluator, &item.expression, &row)?);
+            for (index, item) in order_by.iter().enumerate() {
+                keys.push(match sort_positions[index].and_then(|at| output.get(at)) {
+                    Some(value) => value.clone(),
+                    None => evaluate(&mut evaluator, &item.expression, &row)?,
+                });
             }
             keyed.push((keys, row, group, output));
         }
 
         keyed.sort_by(|a, b| {
             for (index, item) in order_by.iter().enumerate() {
-                let ordering = compare(&a.0[index], &b.0[index]);
-                let ordering = match item.direction {
-                    Some(SortDirection::Descending) => ordering.reverse(),
-                    _ => ordering,
+                let (left, right) = (&a.0[index], &b.0[index]);
+                let descending = matches!(item.direction, Some(SortDirection::Descending));
+
+                // `NULLS FIRST`/`LAST` overrides where the comparison would
+                // put NULL. PostgreSQL's default is last when ascending and
+                // first when descending; parsing the clause and then ignoring
+                // it left `ORDER BY x NULLS FIRST` sorted the other way.
+                let nulls_first = match item.nulls {
+                    Some(NullsOrder::First) => true,
+                    Some(NullsOrder::Last) => false,
+                    None => descending,
+                };
+                let ordering = match (
+                    matches!(left, SqlValue::Null),
+                    matches!(right, SqlValue::Null),
+                ) {
+                    (true, true) => std::cmp::Ordering::Equal,
+                    (true, false) if nulls_first => std::cmp::Ordering::Less,
+                    (true, false) => std::cmp::Ordering::Greater,
+                    (false, true) if nulls_first => std::cmp::Ordering::Greater,
+                    (false, true) => std::cmp::Ordering::Less,
+                    (false, false) => {
+                        let ordering = compare(left, right);
+                        if descending {
+                            ordering.reverse()
+                        } else {
+                            ordering
+                        }
+                    }
                 };
                 if ordering != std::cmp::Ordering::Equal {
                     return ordering;
@@ -136,33 +244,18 @@ pub fn run_select(select: &SelectStatement, rows: Vec<Row>) -> ProtocolResult<Se
         }
     }
 
-    Ok(SelectOutput {
-        columns: output_column_names(select),
-        rows: windowed
-            .into_iter()
-            .map(|(_, _, output)| {
-                output
-                    .into_iter()
-                    .map(|value| match value {
-                        SqlValue::Null => None,
-                        other => Some(other.to_postgres_string()),
-                    })
-                    .collect()
-            })
-            .collect(),
-    })
+    Ok((
+        output_column_names(select),
+        windowed.into_iter().map(|(_, _, output)| output).collect(),
+    ))
 }
 
 /// Whether the select list or HAVING clause calls an aggregate.
 fn has_aggregate(select: &SelectStatement) -> bool {
-    select
-        .select_list
-        .iter()
-        .any(|item| match item {
-            SelectItem::Expression { expr, .. } => expression_has_aggregate(expr),
-            _ => false,
-        })
-        || select.having.as_ref().is_some_and(expression_has_aggregate)
+    select.select_list.iter().any(|item| match item {
+        SelectItem::Expression { expr, .. } => expression_has_aggregate(expr),
+        _ => false,
+    }) || select.having.as_ref().is_some_and(expression_has_aggregate)
 }
 
 fn expression_has_aggregate(expr: &Expression) -> bool {
@@ -353,13 +446,25 @@ fn evaluate_over_group(
             .into_iter()
             .reduce(|a, b| if compare(&a, &b).is_ge() { a } else { b })
             .unwrap_or(SqlValue::Null),
-        "STRING_AGG" | "ARRAY_AGG" => SqlValue::Text(
-            inputs
-                .iter()
-                .map(SqlValue::to_postgres_string)
-                .collect::<Vec<_>>()
-                .join(","),
-        ),
+        // `STRING_AGG(x, sep)` takes its separator as the second argument;
+        // joining on a comma regardless produced a plausible-looking wrong
+        // answer. `ARRAY_AGG` has no separator and renders as an array.
+        "STRING_AGG" => {
+            let separator = call
+                .args
+                .get(1)
+                .map(|expr| evaluate(evaluator, expr, representative))
+                .transpose()?
+                .map_or_else(|| ",".to_string(), |value| value.to_postgres_string());
+            SqlValue::Text(
+                inputs
+                    .iter()
+                    .map(SqlValue::to_postgres_string)
+                    .collect::<Vec<_>>()
+                    .join(&separator),
+            )
+        }
+        "ARRAY_AGG" => SqlValue::Array(inputs),
         other => {
             return Err(ProtocolError::PostgresError(format!(
                 "aggregate function '{other}' is not implemented"
@@ -380,18 +485,20 @@ fn substitute_aggregates(
     }
 
     Ok(match expr {
-        Expression::Function(_) => Expression::Literal(evaluate_over_group(
-            evaluator,
-            expr,
-            group,
-            representative,
-        )?),
+        Expression::Function(_) => {
+            Expression::Literal(evaluate_over_group(evaluator, expr, group, representative)?)
+        }
         Expression::Binary {
             left,
             operator,
             right,
         } => Expression::Binary {
-            left: Box::new(substitute_aggregates(evaluator, left, group, representative)?),
+            left: Box::new(substitute_aggregates(
+                evaluator,
+                left,
+                group,
+                representative,
+            )?),
             operator: operator.clone(),
             right: Box::new(substitute_aggregates(
                 evaluator,
@@ -502,6 +609,486 @@ fn compare(a: &SqlValue, b: &SqlValue) -> std::cmp::Ordering {
     }
 }
 
+/// Fail if `expr` names a column the row does not have.
+///
+/// Only bare and qualified column references are checked; a function's own
+/// argument names, a literal, or a subquery are not columns of this row.
+fn check_columns_exist(expr: &Expression, row: &Row) -> ProtocolResult<()> {
+    match expr {
+        Expression::Column(column) => {
+            if column.name == "*" {
+                return Ok(());
+            }
+            let qualified = column
+                .table
+                .as_ref()
+                .map(|table| format!("{table}.{}", column.name));
+            let known = row.contains_key(&column.name)
+                || qualified.is_some_and(|key| row.contains_key(&key))
+                || row.keys().any(|key| key.eq_ignore_ascii_case(&column.name));
+            known.then_some(()).ok_or_else(|| {
+                ProtocolError::PostgresError(format!("column \"{}\" does not exist", column.name))
+            })
+        }
+        Expression::Binary { left, right, .. } => {
+            check_columns_exist(left, row)?;
+            check_columns_exist(right, row)
+        }
+        Expression::Unary { operand, .. } => check_columns_exist(operand, row),
+        Expression::Function(call) => call
+            .args
+            .iter()
+            .try_for_each(|arg| check_columns_exist(arg, row)),
+        _ => Ok(()),
+    }
+}
+
+/// The output column an `ORDER BY` item names, if it names one.
+///
+/// A positive integer literal is a 1-based position into the select list; a
+/// bare identifier that matches an output name — usually an alias — is that
+/// column. Anything else is an expression to evaluate against the source row.
+fn output_position(expr: &Expression, output_names: &[String]) -> Option<usize> {
+    match expr {
+        Expression::Literal(value) => {
+            let ordinal = as_i64(value)?;
+            let index = usize::try_from(ordinal - 1).ok()?;
+            (index < output_names.len()).then_some(index)
+        }
+        Expression::Column(column) if column.table.is_none() => output_names
+            .iter()
+            .position(|name| name.eq_ignore_ascii_case(&column.name)),
+        _ => None,
+    }
+}
+
+/// Name under which a window function's value is stored on each row.
+fn window_column(index: usize) -> String {
+    format!("__window_{index}")
+}
+
+/// Replace each window function in the select list with its per-row value.
+///
+/// Returns `None` for the statement when there are no window functions, so the
+/// common case does not pay for a clone of the select list.
+///
+/// # Errors
+/// Returns an error when a window function's arguments cannot be evaluated.
+#[allow(clippy::type_complexity)]
+fn apply_window_functions(
+    evaluator: &mut ExpressionEvaluator,
+    select: &SelectStatement,
+    rows: Vec<Row>,
+) -> ProtocolResult<(Option<SelectStatement>, Vec<Row>)> {
+    let mut calls = Vec::new();
+    let mut rewritten = select.clone();
+    for item in &mut rewritten.select_list {
+        if let SelectItem::Expression { expr, .. } = item {
+            extract_windows(expr, &mut calls);
+        }
+    }
+
+    if calls.is_empty() {
+        return Ok((None, rows));
+    }
+
+    let mut rows = rows;
+    for (index, call) in calls.iter().enumerate() {
+        let values = window_values(evaluator, call, &rows)?;
+        let name = window_column(index);
+        for (row, value) in rows.iter_mut().zip(values) {
+            row.insert(name.clone(), value);
+        }
+    }
+
+    Ok((Some(rewritten), rows))
+}
+
+/// Replace every window call in `expr` with a reference to its computed column,
+/// collecting the calls in evaluation order.
+fn extract_windows(expr: &mut Expression, calls: &mut Vec<Expression>) {
+    match expr {
+        Expression::WindowFunction { .. } => {
+            let name = window_column(calls.len());
+            calls.push(expr.clone());
+            *expr = Expression::Column(super::ast::ColumnRef { table: None, name });
+        }
+        Expression::Binary { left, right, .. } => {
+            extract_windows(left, calls);
+            extract_windows(right, calls);
+        }
+        Expression::Unary { operand, .. } => extract_windows(operand, calls),
+        Expression::Function(call) => {
+            for arg in &mut call.args {
+                extract_windows(arg, calls);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Compute a window function's value for each row, in the rows' own order.
+fn window_values(
+    evaluator: &mut ExpressionEvaluator,
+    call: &Expression,
+    rows: &[Row],
+) -> ProtocolResult<Vec<SqlValue>> {
+    let Expression::WindowFunction {
+        function,
+        partition_by,
+        order_by,
+        frame,
+    } = call
+    else {
+        return Ok(vec![SqlValue::Null; rows.len()]);
+    };
+
+    // Partition, preserving first-seen order so results are stable.
+    let mut keys: Vec<Vec<SqlValue>> = Vec::new();
+    let mut partitions: Vec<Vec<usize>> = Vec::new();
+    for (index, row) in rows.iter().enumerate() {
+        let mut key = Vec::with_capacity(partition_by.len());
+        for expression in partition_by {
+            key.push(evaluate(evaluator, expression, row)?);
+        }
+        match keys.iter().position(|existing| *existing == key) {
+            Some(at) => partitions[at].push(index),
+            None => {
+                keys.push(key);
+                partitions.push(vec![index]);
+            }
+        }
+    }
+
+    let mut out = vec![SqlValue::Null; rows.len()];
+    for partition in &partitions {
+        // Order within the partition. The sort is stable, so rows with equal
+        // keys keep their input order — which is what PostgreSQL leaves
+        // unspecified but every implementation has to pick something for.
+        let mut ordered = partition.clone();
+        if !order_by.is_empty() {
+            let mut sort_keys: HashMap<usize, Vec<SqlValue>> = HashMap::new();
+            for &index in partition {
+                let mut key = Vec::with_capacity(order_by.len());
+                for item in order_by {
+                    key.push(evaluate(evaluator, &item.expression, &rows[index])?);
+                }
+                sort_keys.insert(index, key);
+            }
+            ordered.sort_by(|a, b| {
+                let (left, right) = (&sort_keys[a], &sort_keys[b]);
+                for (position, item) in order_by.iter().enumerate() {
+                    let ordering = compare(&left[position], &right[position]);
+                    let ordering = match item.direction {
+                        Some(SortDirection::Descending) => ordering.reverse(),
+                        _ => ordering,
+                    };
+                    if ordering != std::cmp::Ordering::Equal {
+                        return ordering;
+                    }
+                }
+                std::cmp::Ordering::Equal
+            });
+        }
+
+        let values = window_partition_values(evaluator, function, order_by, frame, &ordered, rows)?;
+        for (&index, value) in ordered.iter().zip(values) {
+            out[index] = value;
+        }
+    }
+
+    Ok(out)
+}
+
+/// Values for one ordered partition, in that partition's order.
+fn window_partition_values(
+    evaluator: &mut ExpressionEvaluator,
+    function: &WindowFunctionType,
+    order_by: &[super::ast::OrderByItem],
+    frame: &Option<super::ast::WindowFrame>,
+    ordered: &[usize],
+    rows: &[Row],
+) -> ProtocolResult<Vec<SqlValue>> {
+    let size = ordered.len();
+    let offset_or = |expr: &Option<Box<Expression>>, evaluator: &mut ExpressionEvaluator| -> i64 {
+        expr.as_ref()
+            .and_then(|e| evaluate(evaluator, e, &Row::new()).ok())
+            .and_then(|v| as_i64(&v))
+            .unwrap_or(1)
+    };
+
+    Ok(match function {
+        WindowFunctionType::RowNumber => (1..=size as i64).map(SqlValue::BigInt).collect(),
+
+        // RANK leaves gaps after ties; DENSE_RANK does not. With no ORDER BY
+        // every row ties, so both are 1 throughout.
+        WindowFunctionType::Rank | WindowFunctionType::DenseRank => {
+            let dense = matches!(function, WindowFunctionType::DenseRank);
+            let mut out = Vec::with_capacity(size);
+            let mut rank: i64 = 1;
+            for position in 0..size {
+                if position > 0 {
+                    let tied = order_keys_equal(
+                        evaluator,
+                        order_by,
+                        &rows[ordered[position - 1]],
+                        &rows[ordered[position]],
+                    )?;
+                    if !tied {
+                        rank = if dense { rank + 1 } else { position as i64 + 1 };
+                    }
+                }
+                out.push(SqlValue::BigInt(rank));
+            }
+            out
+        }
+
+        WindowFunctionType::Lag { expr, offset, .. }
+        | WindowFunctionType::Lead { expr, offset, .. } => {
+            let step = offset_or(offset, evaluator);
+            let backwards = matches!(function, WindowFunctionType::Lag { .. });
+            let mut out = Vec::with_capacity(size);
+            for position in 0..size as i64 {
+                let target = if backwards {
+                    position - step
+                } else {
+                    position + step
+                };
+                out.push(
+                    match usize::try_from(target).ok().and_then(|t| ordered.get(t)) {
+                        Some(&index) => evaluate(evaluator, expr, &rows[index])?,
+                        None => SqlValue::Null,
+                    },
+                );
+            }
+            out
+        }
+
+        WindowFunctionType::FirstValue(expr) | WindowFunctionType::LastValue(expr) => {
+            let at = if matches!(function, WindowFunctionType::FirstValue(_)) {
+                ordered.first()
+            } else {
+                ordered.last()
+            };
+            let value = match at {
+                Some(&index) => evaluate(evaluator, expr, &rows[index])?,
+                None => SqlValue::Null,
+            };
+            vec![value; size]
+        }
+
+        WindowFunctionType::NthValue { expr, n } => {
+            let n = as_i64(&evaluate(evaluator, n, &Row::new())?).unwrap_or(1);
+            let value = match usize::try_from(n - 1).ok().and_then(|at| ordered.get(at)) {
+                Some(&index) => evaluate(evaluator, expr, &rows[index])?,
+                None => SqlValue::Null,
+            };
+            vec![value; size]
+        }
+
+        // An aggregate covers the whole partition unless a frame narrows it;
+        // `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` is what makes a
+        // running total a running total rather than the partition's sum.
+        WindowFunctionType::Aggregate(call) => {
+            // Which rows tie with the one before them, so a RANGE or GROUPS
+            // frame can count peer groups rather than rows.
+            let mut peers = Vec::with_capacity(size);
+            for position in 0..size {
+                peers.push(
+                    position > 0
+                        && order_keys_equal(
+                            evaluator,
+                            order_by,
+                            &rows[ordered[position - 1]],
+                            &rows[ordered[position]],
+                        )?,
+                );
+            }
+
+            let mut out = Vec::with_capacity(size);
+            for position in 0..size {
+                let (from, to) = frame_bounds(evaluator, frame, position, size, &peers)?;
+                let group: Vec<Row> = ordered[from..to]
+                    .iter()
+                    .map(|&index| rows[index].clone())
+                    .collect();
+                let representative = group.first().cloned().unwrap_or_default();
+                out.push(evaluate_over_group(
+                    evaluator,
+                    &Expression::Function(call.clone()),
+                    &group,
+                    &representative,
+                )?);
+            }
+            out
+        }
+
+        WindowFunctionType::Ntile(buckets) => {
+            let buckets = as_i64(&evaluate(evaluator, buckets, &Row::new())?)
+                .unwrap_or(1)
+                .max(1);
+            (0..size)
+                .map(|position| {
+                    let bucket = (position as i64 * buckets) / size.max(1) as i64;
+                    SqlValue::BigInt(bucket + 1)
+                })
+                .collect()
+        }
+
+        // Both are defined in terms of a row's rank within its partition.
+        // `PERCENT_RANK` is (rank - 1) / (rows - 1), and is 0 for a single-row
+        // partition rather than a division by zero. `CUME_DIST` is the share
+        // of rows at or before this one, so ties share the higher value.
+        WindowFunctionType::PercentRank | WindowFunctionType::CumeDist => {
+            let cumulative = matches!(function, WindowFunctionType::CumeDist);
+            let mut ranks = Vec::with_capacity(size);
+            let mut rank: usize = 1;
+            for position in 0..size {
+                if position > 0
+                    && !order_keys_equal(
+                        evaluator,
+                        order_by,
+                        &rows[ordered[position - 1]],
+                        &rows[ordered[position]],
+                    )?
+                {
+                    rank = position + 1;
+                }
+                ranks.push(rank);
+            }
+
+            (0..size)
+                .map(|position| {
+                    if cumulative {
+                        // The number of rows in this row's peer group and all
+                        // earlier ones.
+                        let peers = ranks
+                            .iter()
+                            .filter(|other| **other <= ranks[position])
+                            .count();
+                        SqlValue::DoublePrecision(peers as f64 / size as f64)
+                    } else if size <= 1 {
+                        SqlValue::DoublePrecision(0.0)
+                    } else {
+                        SqlValue::DoublePrecision((ranks[position] - 1) as f64 / (size - 1) as f64)
+                    }
+                })
+                .collect()
+        }
+    })
+}
+
+/// The half-open row range a frame covers for the row at `position`.
+///
+/// With no frame the range is the whole partition, which is what an unframed
+/// window means. Only `ROWS` offsets are counted; `RANGE` and `GROUPS` need
+/// peer-group arithmetic this does not do, and fall back to the partition
+/// rather than quietly counting rows as if they were ranges.
+fn frame_bounds(
+    evaluator: &mut ExpressionEvaluator,
+    frame: &Option<super::ast::WindowFrame>,
+    position: usize,
+    size: usize,
+    peers: &[bool],
+) -> ProtocolResult<(usize, usize)> {
+    use super::ast::{FrameBound, WindowFrameMode};
+
+    let Some(frame) = frame else {
+        return Ok((0, size));
+    };
+
+    let offset = |bound: &FrameBound, evaluator: &mut ExpressionEvaluator| -> usize {
+        match bound {
+            FrameBound::Preceding(expr) | FrameBound::Following(expr) => {
+                evaluate(evaluator, expr, &Row::new())
+                    .ok()
+                    .and_then(|value| as_i64(&value))
+                    .and_then(|n| usize::try_from(n).ok())
+                    .unwrap_or(0)
+            }
+            _ => 0,
+        }
+    };
+
+    // `RANGE` and `GROUPS` count peer groups — runs of rows that tie under the
+    // window's ORDER BY — rather than rows. `CURRENT ROW` in those modes means
+    // the whole peer group, which is why a `RANGE` running total repeats the
+    // same value across a tie where a `ROWS` one does not.
+    let group_starts = match frame.mode {
+        WindowFrameMode::Rows => Vec::new(),
+        WindowFrameMode::Range | WindowFrameMode::Groups => peer_group_starts(peers),
+    };
+    let (position, size) = if group_starts.is_empty() {
+        (position, size)
+    } else {
+        (
+            group_starts
+                .iter()
+                .rposition(|start| *start <= position)
+                .unwrap_or(0),
+            group_starts.len(),
+        )
+    };
+
+    let start = match &frame.start_bound {
+        FrameBound::UnboundedPreceding => 0,
+        FrameBound::Preceding(_) => position.saturating_sub(offset(&frame.start_bound, evaluator)),
+        FrameBound::CurrentRow => position,
+        FrameBound::Following(_) => (position + offset(&frame.start_bound, evaluator)).min(size),
+        FrameBound::UnboundedFollowing => size,
+    };
+
+    // The end is exclusive here, so a bound that names a row includes it.
+    let end = match frame.end_bound.as_ref() {
+        None | Some(FrameBound::CurrentRow) => (position + 1).min(size),
+        Some(FrameBound::UnboundedFollowing) => size,
+        Some(bound @ FrameBound::Following(_)) => {
+            (position + offset(bound, evaluator) + 1).min(size)
+        }
+        Some(bound @ FrameBound::Preceding(_)) => {
+            position.saturating_sub(offset(bound, evaluator)) + 1
+        }
+        Some(FrameBound::UnboundedPreceding) => 0,
+    };
+
+    let (start, end) = (start.min(size), end.max(start).min(size));
+
+    // Translate group indices back to row indices.
+    if group_starts.is_empty() {
+        return Ok((start, end));
+    }
+    let row_start = group_starts.get(start).copied().unwrap_or(peers.len());
+    let row_end = group_starts.get(end).copied().unwrap_or(peers.len());
+    Ok((row_start, row_end.max(row_start)))
+}
+
+/// The row index each peer group starts at.
+///
+/// `peers[i]` is true when row `i` ties with row `i - 1`; a false entry starts
+/// a new group.
+fn peer_group_starts(peers: &[bool]) -> Vec<usize> {
+    (0..peers.len())
+        .filter(|index| *index == 0 || !peers[*index])
+        .collect()
+}
+
+/// Whether two rows tie under the window's ORDER BY.
+fn order_keys_equal(
+    evaluator: &mut ExpressionEvaluator,
+    order_by: &[super::ast::OrderByItem],
+    left: &Row,
+    right: &Row,
+) -> ProtocolResult<bool> {
+    for item in order_by {
+        let a = evaluate(evaluator, &item.expression, left)?;
+        let b = evaluate(evaluator, &item.expression, right)?;
+        if compare(&a, &b) != std::cmp::Ordering::Equal {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -539,7 +1126,10 @@ mod tests {
 
     #[test]
     fn limit_truncates_the_result() {
-        let output = run("SELECT id FROM t LIMIT 2", rows(&[(1, "a"), (2, "a"), (3, "b")]));
+        let output = run(
+            "SELECT id FROM t LIMIT 2",
+            rows(&[(1, "a"), (2, "a"), (3, "b")]),
+        );
         assert_eq!(output.rows.len(), 2, "LIMIT must bound the row count");
     }
 
@@ -624,6 +1214,51 @@ mod tests {
         assert_eq!(
             first_column(&run("SELECT MAX(id) FROM t", data)),
             vec![Some("3".to_string())]
+        );
+    }
+
+    #[test]
+    fn nulls_first_puts_nulls_first() {
+        let mut with_null = rows(&[(1, "a"), (2, "b")]);
+        with_null.push(HashMap::from([
+            ("id".to_string(), SqlValue::Integer(3)),
+            ("grp".to_string(), SqlValue::Null),
+        ]));
+        let output = run("SELECT id FROM t ORDER BY grp NULLS FIRST", with_null);
+        assert_eq!(first_column(&output)[0], Some("3".to_string()));
+    }
+
+    #[test]
+    fn order_by_an_ordinal_sorts_by_that_output_column() {
+        let output = run(
+            "SELECT id FROM t ORDER BY 1 DESC",
+            rows(&[(1, "a"), (2, "a"), (3, "b")]),
+        );
+        assert_eq!(
+            first_column(&output),
+            vec![
+                Some("3".to_string()),
+                Some("2".to_string()),
+                Some("1".to_string())
+            ]
+        );
+    }
+
+    /// An alias is not a column of the source row, so it has to resolve
+    /// against the output.
+    #[test]
+    fn order_by_an_alias_sorts_by_that_output_column() {
+        let output = run(
+            "SELECT id AS ident FROM t ORDER BY ident DESC",
+            rows(&[(1, "a"), (2, "a"), (3, "b")]),
+        );
+        assert_eq!(
+            first_column(&output),
+            vec![
+                Some("3".to_string()),
+                Some("2".to_string()),
+                Some("1".to_string())
+            ]
         );
     }
 

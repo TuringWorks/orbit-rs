@@ -39,8 +39,9 @@
 //! ```
 
 use orbit_engine::unified::{
-    AdapterFactory, CqlAdapter, GraphAdapter, MemoryBackend, Protocol, RedisAdapter, RestAdapter,
-    SchemaRegistry, SqlAdapter, UnifiedStorage, UnifiedStorageBackend, UnifiedStorageConfig,
+    rocksdb_backend::RocksDbBackend, AdapterFactory, CqlAdapter, GraphAdapter, MemoryBackend,
+    Protocol, RedisAdapter, RestAdapter, SchemaRegistry, SqlAdapter, UnifiedStorage,
+    UnifiedStorageBackend, UnifiedStorageConfig,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -67,7 +68,7 @@ impl Default for UnifiedStorageIntegrationConfig {
             data_dir: "./data/unified".to_string(),
             enable_ttl_expiration: true,
             ttl_check_interval_secs: 60,
-            max_scan_limit: 10000,
+            max_scan_limit: 1_000_000,
             use_memory_backend: false,
         }
     }
@@ -105,15 +106,26 @@ impl UnifiedStorageIntegration {
             config.data_dir
         );
 
-        // Create storage backend
+        // Create storage backend.
+        //
+        // Both arms of this used to build a `MemoryBackend`, so the flag named
+        // a choice that was never made: every table and row served over the
+        // SQL protocols was lost on restart while the log said "persistent
+        // backend".
         let backend: Arc<dyn UnifiedStorageBackend> = if config.use_memory_backend {
             info!("[UnifiedStorage] Using in-memory backend");
             Arc::new(MemoryBackend::new())
         } else {
-            // For now, use memory backend. RocksDB backend can be added later.
-            // TODO: Add RocksDB backend option
-            info!("[UnifiedStorage] Using in-memory backend (persistent backend pending)");
-            Arc::new(MemoryBackend::new())
+            let path = Path::new(&config.data_dir).join("unified");
+            info!(
+                "[UnifiedStorage] Using RocksDB backend at {}",
+                path.display()
+            );
+            Arc::new(RocksDbBackend::open(&path).map_err(|e| {
+                UnifiedStorageError::InitializationFailed(format!(
+                    "could not open the unified store: {e}"
+                ))
+            })?)
         };
 
         // Create storage configuration

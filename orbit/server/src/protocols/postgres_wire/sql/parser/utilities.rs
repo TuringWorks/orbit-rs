@@ -9,6 +9,80 @@ use crate::protocols::postgres_wire::sql::{
     types::{SqlType, SqlValue},
 };
 
+/// Keywords PostgreSQL reserves, which cannot name a column unquoted.
+///
+/// Everything else in the lexer's keyword table is unreserved and may be used
+/// as an identifier, which is what PostgreSQL itself allows.
+const RESERVED_KEYWORDS: &[&str] = &[
+    "ALL",
+    "ANALYZE",
+    "AND",
+    "ANY",
+    "ARRAY",
+    "AS",
+    "ASC",
+    "BOTH",
+    "CASE",
+    "CAST",
+    "CHECK",
+    "COLLATE",
+    "COLUMN",
+    "CONSTRAINT",
+    "CREATE",
+    "CURRENT_DATE",
+    "CURRENT_TIME",
+    "CURRENT_TIMESTAMP",
+    "CURRENT_USER",
+    "DEFAULT",
+    "DEFERRABLE",
+    "DESC",
+    "DISTINCT",
+    "DO",
+    "ELSE",
+    "END",
+    "EXCEPT",
+    "FALSE",
+    "FETCH",
+    "FOR",
+    "FOREIGN",
+    "FROM",
+    "GRANT",
+    "GROUP",
+    "HAVING",
+    "IN",
+    "INTERSECT",
+    "INTO",
+    "LATERAL",
+    "LIMIT",
+    "LOCALTIME",
+    "LOCALTIMESTAMP",
+    "NOT",
+    "NULL",
+    "OFFSET",
+    "ON",
+    "ONLY",
+    "OR",
+    "ORDER",
+    "PRIMARY",
+    "REFERENCES",
+    "RETURNING",
+    "SELECT",
+    "SOME",
+    "TABLE",
+    "THEN",
+    "TO",
+    "TRUE",
+    "UNION",
+    "UNIQUE",
+    "USER",
+    "USING",
+    "VARIADIC",
+    "WHEN",
+    "WHERE",
+    "WINDOW",
+    "WITH",
+];
+
 /// Extract identifier string from token (handles both Identifier and keyword tokens used as names)
 pub fn token_to_identifier_name(token: &Token) -> Option<String> {
     match token {
@@ -41,6 +115,9 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         // reserved stops clients before they can issue a query.
         Token::Version => Some("version".to_string()),
         Token::Snapshot => Some("snapshot".to_string()),
+        // `REPLACE` is a keyword in `CREATE OR REPLACE` and a string function
+        // everywhere else; PostgreSQL classifies it as unreserved.
+        Token::Replace => Some("replace".to_string()),
         // Other keywords that can be used as identifiers
         Token::Sequence => Some("sequence".to_string()),
         Token::Key => Some("key".to_string()),
@@ -62,6 +139,10 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         Token::Conversion => Some("conversion".to_string()),
         Token::Statistics => Some("statistics".to_string()),
         Token::Publication => Some("publication".to_string()),
+        // `public` is the default schema's name, so `public.t` is how most
+        // generated SQL spells a table. Treating it as reserved made every
+        // such statement a syntax error.
+        Token::Public => Some("public".to_string()),
         Token::Subscription => Some("subscription".to_string()),
         // Security/Role keywords that can be used as identifiers
         Token::Login => Some("login".to_string()),
@@ -138,7 +219,12 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         Token::Schema => Some("schema".to_string()),
         Token::Database => Some("database".to_string()),
         Token::Level => Some("level".to_string()),
-        _ => None,
+        // Any other keyword PostgreSQL does not reserve is a legal identifier.
+        // The word comes from the lexer's own table, so no punctuation or
+        // literal token can be mistaken for a name.
+        other => crate::protocols::postgres_wire::sql::lexer::Lexer::keyword_text(other)
+            .filter(|word| !RESERVED_KEYWORDS.contains(&word.as_str()))
+            .map(|word| word.to_lowercase()),
     }
 }
 

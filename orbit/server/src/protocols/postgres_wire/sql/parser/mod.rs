@@ -966,3 +966,30 @@ impl Default for SqlParser {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod parse_shape_tests {
+    use super::SqlParser;
+
+    /// Statements the conformance harness found the parser rejecting.
+    #[test]
+    fn parses_the_clauses_a_client_writes() {
+        for sql in [
+            "SELECT id FROM t ORDER BY id NULLS FIRST",
+            "SELECT id FROM t ORDER BY id DESC NULLS LAST",
+            "SELECT id FROM t ORDER BY name NULLS FIRST",
+            "SELECT id FROM t WHERE id NOT IN (1, 2)",
+            "SELECT id FROM t ORDER BY 1 DESC",
+            "SELECT amount AS a FROM t ORDER BY a DESC",
+            "SELECT REPLACE('abc', 'b', 'X')",
+            "SELECT CAST(amount AS TEXT) FROM t",
+            "SELECT NULLIF(1, 1)",
+        ] {
+            assert!(
+                SqlParser::new().parse(sql).is_ok(),
+                "failed to parse: {sql} -> {:?}",
+                SqlParser::new().parse(sql).err()
+            );
+        }
+    }
+}

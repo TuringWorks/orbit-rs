@@ -1058,20 +1058,64 @@ impl SqlAdapter {
                 UniversalValue::Int(i) => Some(i.to_string()),
                 UniversalValue::Bool(b) => Some(b.to_string()),
                 UniversalValue::Float(f) => Some(f.to_string()),
-                // Null and the composite types genuinely cannot key a row.
+                // Null and the composite types cannot key a row themselves.
                 _ => None,
+            })
+            .or_else(|| {
+                // A row whose key column is NULL is still a row: SQL allows a
+                // table with no primary key, and every column of such a row may
+                // be null. Refusing it made a legal INSERT fail with a message
+                // about a key the statement never mentioned. The surrogate is
+                // derived from the row's own contents so the same row keeps the
+                // same key.
+                Self::surrogate_key(&row)
             })
             .ok_or_else(|| {
                 UnifiedStorageError::InvalidData(format!(
-                    "Cannot use column '{primary_key}' as a row key: it is absent, null, or not a scalar"
+                    "Cannot use column '{primary_key}' as a row key and the row is empty"
                 ))
             })?;
+
+        // A row written inside a transaction is a *version* of that row, not a
+        // replacement for it: an older reader must still be able to read the
+        // previous one. Keying both by the primary key alone made the newer
+        // overwrite the older, so there was nowhere to keep it.
+        let key = match row.get(Self::TRANSACTION_STAMP_COLUMN) {
+            Some(UniversalValue::Int(version)) => format!("{key}#{version}"),
+            _ => key,
+        };
 
         self.base
             .storage
             .put(table, &key, UniversalValue::Map(row), None, false, None)
             .await?;
         Ok(())
+    }
+
+    /// The column a row carries the id of the transaction that wrote it in.
+    ///
+    /// Named here as well as in the protocol layer because the key a row is
+    /// stored under has to include it; the two must agree.
+    const TRANSACTION_STAMP_COLUMN: &'static str = "__orbit_txn";
+
+    /// A key derived from a row's own values, for a row with no usable one.
+    ///
+    /// Deterministic, so re-inserting an identical row replaces it rather than
+    /// accumulating duplicates, and prefixed so it cannot collide with a real
+    /// key that happens to be a number.
+    fn surrogate_key(row: &BTreeMap<String, UniversalValue>) -> Option<String> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        if row.is_empty() {
+            return None;
+        }
+        let mut hasher = DefaultHasher::new();
+        for (name, value) in row {
+            name.hash(&mut hasher);
+            format!("{value:?}").hash(&mut hasher);
+        }
+        Some(format!("row:{:016x}", hasher.finish()))
     }
 
     /// Select rows from a table

@@ -710,7 +710,7 @@ impl CqlAdapter {
 
     /// Handle QUERY request
     async fn handle_query(&self, frame: &CqlFrame) -> ProtocolResult<CqlFrame> {
-        println!("DEBUG: handle_query called. Body len: {}", frame.body.len());
+        tracing::debug!(body_len = frame.body.len(), "handling a CQL query frame");
         // Update metrics
         {
             let mut metrics = self.metrics.write().await;
@@ -730,7 +730,7 @@ impl CqlAdapter {
         let query_bytes = body.copy_to_bytes(query_len as usize);
         let query = String::from_utf8(query_bytes.to_vec())
             .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
-        println!("DEBUG: Received query: {}", query);
+        tracing::debug!(%query, "received a CQL query");
 
         // Read query parameters
         let params = QueryParameters::decode(body)?;
@@ -1074,10 +1074,10 @@ impl CqlAdapter {
                 limit,
                 ..
             } => {
-                println!("DEBUG: execute_statement SELECT table={}", table);
+                tracing::debug!(%table, "executing a CQL SELECT");
                 // Handle system tables (required for driver initialization)
                 let table_lower = table.to_lowercase();
-                println!("DEBUG: table_lower={}", table_lower);
+                tracing::debug!(%table_lower, "resolved the CQL table name");
                 if table_lower == "system.local" || table_lower == "local" {
                     return Ok(build_system_local_response(stream));
                 }

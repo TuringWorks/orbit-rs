@@ -13,6 +13,7 @@ use crate::protocols::postgres_wire::graphrag_engine::GraphRAGQueryEngine;
 use crate::protocols::postgres_wire::persistent_storage::{
     ColumnType, PersistentTableStorage, QueryCondition, TableRow,
 };
+use crate::protocols::postgres_wire::sql::types::SqlValue;
 use crate::protocols::postgres_wire::sql::{ConfigurableSqlEngine, UnifiedExecutionResult};
 use crate::protocols::postgres_wire::vector_engine::VectorQueryEngine;
 use orbit_client::OrbitClient;
@@ -106,6 +107,510 @@ pub fn fold_identifier(identifier: &str) -> String {
     }
 }
 
+/// Table holding view definitions.
+///
+/// Prefixed so it cannot collide with a user table named `views`.
+const VIEW_CATALOG: &str = "orbit_catalog_views";
+
+/// Table holding the durable change log a replica replays from.
+const CHANGE_LOG: &str = "orbit_catalog_changes";
+
+/// The name at the end of a `DROP VIEW [IF EXISTS] name` statement.
+fn upper_tail(statement: &str, if_exists: bool) -> &str {
+    let skip = if if_exists { 4 } else { 2 };
+    statement
+        .split_whitespace()
+        .nth(skip)
+        .unwrap_or("")
+        .trim_end_matches(',')
+}
+
+/// Split a simple-query message into its statements.
+///
+/// Semicolons inside string literals, quoted identifiers and dollar-quoted
+/// bodies do not separate statements; splitting on every `;` would cut
+/// `VALUES (\'a;b\')` in half.
+fn split_statements(sql: &str) -> Vec<String> {
+    let mut statements = Vec::new();
+    let mut current = String::new();
+    let mut chars = sql.chars().peekable();
+    let mut quote: Option<char> = None;
+    // Dollar quoting: `$$ ... $$` or `$tag$ ... $tag$`. Everything between the
+    // delimiters is literal text, which is how a body containing semicolons —
+    // a function or a trigger — is written at all.
+    let mut dollar_tag: Option<String> = None;
+
+    while let Some(character) = chars.next() {
+        if let Some(tag) = dollar_tag.clone() {
+            current.push(character);
+            if character == '$' && current.ends_with(&tag) {
+                dollar_tag = None;
+            }
+            continue;
+        }
+        if quote.is_none() && character == '$' {
+            // Read the tag up to the closing `$`.
+            let mut tag = String::from('$');
+            while let Some(next) = chars.peek() {
+                let next = *next;
+                if next == '$' {
+                    tag.push('$');
+                    chars.next();
+                    break;
+                }
+                if !next.is_alphanumeric() && next != '_' {
+                    break;
+                }
+                tag.push(next);
+                chars.next();
+            }
+            current.push_str(&tag);
+            if tag.ends_with('$') && tag.len() >= 2 {
+                dollar_tag = Some(tag);
+            }
+            continue;
+        }
+
+        match quote {
+            Some(open) => {
+                current.push(character);
+                if character == open {
+                    // A doubled quote is an escaped quote, not the end.
+                    if chars.peek() == Some(&open) {
+                        current.push(open);
+                        chars.next();
+                    } else {
+                        quote = None;
+                    }
+                }
+            }
+            None => match character {
+                '\'' | '"' => {
+                    quote = Some(character);
+                    current.push(character);
+                }
+                ';' => {
+                    if !current.trim().is_empty() {
+                        statements.push(current.trim().to_string());
+                    }
+                    current.clear();
+                }
+                other => current.push(other),
+            },
+        }
+    }
+
+    if !current.trim().is_empty() {
+        statements.push(current.trim().to_string());
+    }
+    statements
+}
+
+/// One change published to replication subscribers.
+#[derive(Debug, Clone)]
+pub struct ChangeRecord {
+    /// Where this change sits in the stream, as an LSN.
+    pub position: u64,
+    /// The transaction that made the change.
+    pub transaction: u64,
+    /// `INSERT`, `UPDATE` or `DELETE`.
+    pub action: String,
+    /// The table it touched.
+    pub table: String,
+    /// The row as it stands afterwards, rendered as JSON.
+    pub row: String,
+}
+
+/// Recent changes, kept so a subscriber can replay from a position it names.
+///
+/// Bounded: a replica that asks for a position older than the window is told
+/// the history is gone rather than served a silently incomplete stream.
+static HISTORY: std::sync::OnceLock<std::sync::Mutex<std::collections::VecDeque<ChangeRecord>>> =
+    std::sync::OnceLock::new();
+
+/// How many changes are retained for replay.
+const HISTORY_DEPTH: usize = 4096;
+
+fn history() -> &'static std::sync::Mutex<std::collections::VecDeque<ChangeRecord>> {
+    HISTORY.get_or_init(|| std::sync::Mutex::new(std::collections::VecDeque::new()))
+}
+
+/// Changes recorded at or after `position`, oldest first.
+///
+/// Returns `None` when the window no longer reaches back that far, which the
+/// caller reports rather than papering over.
+#[must_use]
+pub fn changes_since(position: u64) -> Option<Vec<ChangeRecord>> {
+    let history = history().lock().ok()?;
+    let Some(oldest) = history.front().map(|record| record.position) else {
+        return None;
+    };
+    if position < oldest.saturating_sub(1) {
+        return None;
+    }
+    Some(
+        history
+            .iter()
+            .filter(|record| record.position > position)
+            .cloned()
+            .collect(),
+    )
+}
+
+/// Changes published as they are written, for replication to stream.
+///
+/// A broadcast channel rather than a log: a subscriber that cannot keep up
+/// misses records and is told so, which is honest, where an unbounded queue
+/// would grow until the process died.
+static CHANGES: std::sync::OnceLock<tokio::sync::broadcast::Sender<ChangeRecord>> =
+    std::sync::OnceLock::new();
+
+fn changes() -> &'static tokio::sync::broadcast::Sender<ChangeRecord> {
+    CHANGES.get_or_init(|| tokio::sync::broadcast::channel(1024).0)
+}
+
+/// How many changes have been published, standing in for a write position.
+static CHANGE_POSITION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// The current write position, as `IDENTIFY_SYSTEM` reports it.
+#[must_use]
+pub fn latest_change_position() -> u64 {
+    CHANGE_POSITION.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Changes written but not yet flushed to the durable log.
+///
+/// Publishing happens on the write path, which is synchronous; the log write
+/// is async, so records queue here and a flush drains them.
+static PENDING_LOG: std::sync::OnceLock<std::sync::Mutex<Vec<ChangeRecord>>> =
+    std::sync::OnceLock::new();
+
+fn pending_log() -> &'static std::sync::Mutex<Vec<ChangeRecord>> {
+    PENDING_LOG.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+/// Take everything waiting to be logged.
+#[must_use]
+pub fn drain_pending_log() -> Vec<ChangeRecord> {
+    pending_log()
+        .lock()
+        .map(|mut pending| std::mem::take(&mut *pending))
+        .unwrap_or_default()
+}
+
+/// Subscribe to the change stream.
+#[must_use]
+pub fn subscribe_to_changes() -> tokio::sync::broadcast::Receiver<ChangeRecord> {
+    changes().subscribe()
+}
+
+/// Publish a change. Does nothing when nobody is listening.
+pub fn publish_change(
+    action: &str,
+    table: &str,
+    row: &std::collections::HashMap<String, JsonValue>,
+) {
+    // Recorded even with nobody listening: a replica that connects later and
+    // asks to replay from a position needs the history to be complete.
+    let sender = changes();
+    let visible: std::collections::BTreeMap<&String, &JsonValue> = row
+        .iter()
+        .filter(|(name, _)| *name != TRANSACTION_STAMP && *name != DELETED_BY)
+        .collect();
+    let position = CHANGE_POSITION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let record = ChangeRecord {
+        position,
+        transaction: current_transaction_stamp().unwrap_or(0),
+        action: action.to_string(),
+        table: table.to_string(),
+        row: serde_json::to_string(&visible).unwrap_or_else(|_| "{}".to_string()),
+    };
+
+    if let Ok(mut history) = history().lock() {
+        history.push_back(record.clone());
+        while history.len() > HISTORY_DEPTH {
+            history.pop_front();
+        }
+    }
+    if let Ok(mut pending) = pending_log().lock() {
+        pending.push(record.clone());
+    }
+    let _ = sender.send(record);
+}
+
+/// The column each row is stamped with while its writing transaction is open.
+///
+/// Hidden from every projection: it is part of the row's bookkeeping, not of
+/// the table. A row carrying an open transaction's id is invisible to every
+/// other session, which is what stops uncommitted work from being read.
+pub const TRANSACTION_STAMP: &str = "__orbit_txn";
+
+/// The column marking a row deleted by a transaction that has not committed.
+///
+/// A delete inside a block cannot remove the row outright: other sessions must
+/// go on seeing it until the block commits, and a rollback has to put it back.
+pub const DELETED_BY: &str = "__orbit_deleted_by";
+
+/// What the statement now running may see.
+#[derive(Debug, Clone)]
+pub struct TransactionContext {
+    /// The transaction the statement belongs to.
+    pub id: u64,
+    /// Transactions that were open when this one began.
+    ///
+    /// Present only under `REPEATABLE READ` and `SERIALIZABLE`: it is what
+    /// makes a repeated read give the same answer, by judging a row against
+    /// the moment the block started rather than against now.
+    pub snapshot: Option<std::collections::HashSet<u64>>,
+    /// What this transaction has read, recorded only under `SERIALIZABLE`.
+    ///
+    /// Entries are `table` for a whole-table read and `table\u{1}key` for an
+    /// individual row, so a conflict can be judged against the rows a block
+    /// actually looked at rather than against everything in the table.
+    pub reads: Option<Arc<std::sync::Mutex<std::collections::HashSet<String>>>>,
+}
+
+tokio::task_local! {
+    /// The transaction the statement currently running belongs to.
+    ///
+    /// A connection is a task, so this is per session without threading an id
+    /// through every call.
+    static CURRENT_TRANSACTION: TransactionContext;
+}
+
+/// Transaction ids whose writes have not been committed yet.
+static OPEN_TRANSACTIONS: std::sync::OnceLock<std::sync::RwLock<std::collections::HashSet<u64>>> =
+    std::sync::OnceLock::new();
+
+fn open_transactions() -> &'static std::sync::RwLock<std::collections::HashSet<u64>> {
+    OPEN_TRANSACTIONS.get_or_init(|| std::sync::RwLock::new(std::collections::HashSet::new()))
+}
+
+/// Start a transaction and return its id.
+#[must_use]
+pub fn begin_transaction(snapshot_isolation: bool) -> TransactionContext {
+    begin_transaction_at(snapshot_isolation, false)
+}
+
+/// Start a transaction, optionally recording what it reads.
+#[must_use]
+pub fn begin_transaction_at(snapshot_isolation: bool, serializable: bool) -> TransactionContext {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+
+    let id = NEXT.fetch_add(1, Ordering::Relaxed);
+    // The snapshot is taken before this transaction joins the open set, so it
+    // records who was already running.
+    let snapshot = snapshot_isolation.then(|| {
+        open_transactions()
+            .read()
+            .map(|open| open.clone())
+            .unwrap_or_default()
+    });
+    if let Ok(mut open) = open_transactions().write() {
+        open.insert(id);
+    }
+    TransactionContext {
+        id,
+        snapshot,
+        reads: serializable.then(|| Arc::new(std::sync::Mutex::new(Default::default()))),
+    }
+}
+
+/// Mark a transaction finished, making its rows visible to everyone.
+pub fn end_transaction(id: u64) {
+    if let Ok(mut open) = open_transactions().write() {
+        open.remove(&id);
+    }
+}
+
+/// Note that the statement now running read `table`.
+pub fn note_read(table: &str) {
+    note_read_entry(table.to_string());
+}
+
+/// Note that the statement read one particular row.
+///
+/// Recording the row rather than the table is what keeps a serializable block
+/// from failing because something unrelated in the same table moved.
+pub fn note_read_row(table: &str, key: &str) {
+    note_read_entry(format!("{table}\u{1}{key}"));
+}
+
+fn note_read_entry(entry: String) {
+    let _ = CURRENT_TRANSACTION.try_with(|current| {
+        if let Some(reads) = current.reads.as_ref() {
+            if let Ok(mut reads) = reads.lock() {
+                reads.insert(entry);
+            }
+        }
+    });
+}
+
+/// Note the predicate a statement read a table through.
+///
+/// Stored as the conditions themselves so a row can be tested against it later;
+/// an empty predicate means the whole table, which is already recorded as such.
+pub fn note_read_predicate(table: &str, conditions: &[QueryCondition]) {
+    if conditions.is_empty() {
+        note_read(table);
+        return;
+    }
+    let rendered: Vec<String> = conditions
+        .iter()
+        .map(|condition| {
+            format!(
+                "{}\u{2}{}\u{2}{}",
+                condition.column, condition.operator, condition.value
+            )
+        })
+        .collect();
+    note_read_entry(format!("{table}\u{3}{}", rendered.join("\u{4}")));
+}
+
+/// Whether a serializable block is recording what it reads.
+#[must_use]
+pub fn records_reads() -> bool {
+    CURRENT_TRANSACTION
+        .try_with(|current| current.reads.is_some())
+        .unwrap_or(false)
+}
+
+/// The identity of a row for conflict detection: its key columns, or all of
+/// its values when the table has none.
+#[must_use]
+pub fn row_identity(
+    values: &std::collections::HashMap<String, JsonValue>,
+    key_columns: &[String],
+) -> String {
+    key_columns
+        .iter()
+        .map(|column| {
+            values
+                .iter()
+                .find(|(name, _)| fold_identifier(name) == *column)
+                .map_or_else(|| "null".to_string(), |(_, value)| value.to_string())
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// The tables the statement's transaction has read, if it is serializable.
+#[must_use]
+pub fn tables_read() -> Vec<String> {
+    CURRENT_TRANSACTION
+        .try_with(|current| {
+            current
+                .reads
+                .as_ref()
+                .and_then(|reads| {
+                    reads
+                        .lock()
+                        .ok()
+                        .map(|reads| reads.iter().cloned().collect())
+                })
+                .unwrap_or_default()
+        })
+        .unwrap_or_default()
+}
+
+/// The id to stamp a write with, allocating one for a statement that is not
+/// inside a block.
+///
+/// An autocommit statement is its own transaction: without an id of its own its
+/// rows carry no stamp, and a reader holding an older snapshot cannot tell they
+/// arrived after it began.
+#[must_use]
+pub fn stamp_for_write() -> u64 {
+    if let Some(id) = current_transaction_stamp() {
+        return id;
+    }
+    // Allocated and closed at once: the row is visible to everyone from now,
+    // and to no snapshot taken before this moment.
+    let context = begin_transaction(false);
+    end_transaction(context.id);
+    context.id
+}
+
+/// Run a statement as part of `transaction`.
+pub async fn within_transaction<F, T>(transaction: TransactionContext, future: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    CURRENT_TRANSACTION.scope(transaction, future).await
+}
+
+/// Whether a stored row is visible to the statement now running.
+///
+/// A row stamped by a transaction that is still open belongs to that session
+/// alone; everyone else must not see it until it commits.
+#[must_use]
+pub fn row_is_visible(values: &std::collections::HashMap<String, JsonValue>) -> bool {
+    let context = CURRENT_TRANSACTION.try_with(Clone::clone).ok();
+    let mine = |id: u64| context.as_ref().is_some_and(|current| current.id == id);
+
+    // Under a snapshot, "still running" means "was running when I began", so
+    // a transaction that commits mid-flight stays invisible for the rest of
+    // this block. Without one, it means running right now, which is what
+    // read-committed reports.
+    let still_open = |id: u64| match context.as_ref().and_then(|c| c.snapshot.as_ref()) {
+        Some(snapshot) => {
+            snapshot.contains(&id) || context.as_ref().is_some_and(|current| id > current.id)
+        }
+        None => open_transactions()
+            .read()
+            .map(|open| open.contains(&id))
+            .unwrap_or(false),
+    };
+
+    // A row deleted by this session is gone as far as it is concerned; one
+    // deleted by a block that has not committed is still there for everyone
+    // else. Once that block ends, the row is gone for good.
+    if let Some(deleter) = values.get(DELETED_BY).and_then(JsonValue::as_u64) {
+        if mine(deleter) || !still_open(deleter) {
+            return false;
+        }
+    }
+
+    // A row written by a block that has not committed belongs to it alone.
+    let Some(stamp) = values.get(TRANSACTION_STAMP).and_then(JsonValue::as_u64) else {
+        return true;
+    };
+    mine(stamp) || !still_open(stamp)
+}
+
+/// The stamp to write onto a row, if this statement is inside a transaction.
+#[must_use]
+pub fn current_transaction_stamp() -> Option<u64> {
+    CURRENT_TRANSACTION.try_with(|current| current.id).ok()
+}
+
+/// A trigger as it was declared.
+#[derive(Debug, Clone)]
+pub struct TriggerDefinition {
+    /// Whether it fires once per affected row rather than once per statement.
+    pub per_row: bool,
+    /// The `WHEN` predicate, if it has one.
+    pub when: Option<String>,
+    /// The statement it runs.
+    pub action: String,
+}
+
+/// Remove duplicate rows, preserving first-seen order.
+///
+/// `UNION` (without `ALL`) deduplicates; `SqlValue` is not hashable, so this
+/// compares rather than hashes. Result sets combined by a set operation are
+/// small enough that the quadratic scan is not the cost worth optimising.
+fn deduplicate_rows(rows: Vec<Vec<SqlValue>>) -> Vec<Vec<SqlValue>> {
+    let mut seen: Vec<Vec<SqlValue>> = Vec::with_capacity(rows.len());
+    for row in rows {
+        if !seen.contains(&row) {
+            seen.push(row);
+        }
+    }
+    seen
+}
+
 /// Map a declared column type to the PostgreSQL type OID the wire advertises.
 pub fn column_type_oid(column_type: &ColumnType) -> i32 {
     use super::messages::type_oids;
@@ -174,6 +679,9 @@ enum Statement {
         table: String,
         columns: Vec<SimpleColumnDef>,
         if_not_exists: bool,
+        /// Table-level foreign keys, kept whole so a composite key stays one
+        /// constraint rather than becoming several per-column ones.
+        foreign_keys: Vec<crate::protocols::postgres_wire::persistent_storage::ForeignKey>,
     },
     DropTable {
         table: String,
@@ -233,10 +741,7 @@ pub struct QueryEngine {
 impl QueryEngine {
     /// Create a new query engine
     pub fn new() -> Self {
-        println!("DEBUG: QueryEngine::new() called (NO STORAGE)");
-        println!("Backtrace:\n{}", std::backtrace::Backtrace::capture());
-        use std::io::Write;
-        std::io::stdout().flush().unwrap();
+        tracing::debug!("query engine created without persistent storage");
         Self {
             actors: Arc::new(RwLock::new(HashMap::new())),
             persistent_storage: None,
@@ -249,9 +754,7 @@ impl QueryEngine {
 
     /// Create a new query engine with persistent storage
     pub fn new_with_persistent_storage(storage: Arc<dyn PersistentTableStorage>) -> Self {
-        println!("DEBUG: QueryEngine initialized with persistent storage");
-        use std::io::Write;
-        std::io::stdout().flush().unwrap();
+        tracing::debug!("query engine created with persistent storage");
         Self {
             actors: Arc::new(RwLock::new(HashMap::new())),
             persistent_storage: Some(storage),
@@ -345,9 +848,7 @@ impl QueryEngine {
         };
 
         match statement {
-            Statement::Select { columns, table, .. } => {
-                self.describe_select(columns, &table).await
-            }
+            Statement::Select { columns, table, .. } => self.describe_select(columns, &table).await,
             // Everything else completes with a command tag and no result set.
             Statement::Insert { .. }
             | Statement::Update { .. }
@@ -401,38 +902,6 @@ impl QueryEngine {
         out
     }
 
-    /// Column names a SELECT's projection asks for, or `["*"]` for all.
-    fn projection_names(
-        select: &crate::protocols::postgres_wire::sql::ast::SelectStatement,
-    ) -> Vec<String> {
-        use crate::protocols::postgres_wire::sql::ast::{Expression, SelectItem};
-
-        let mut names = Vec::new();
-        for item in &select.select_list {
-            match item {
-                SelectItem::Wildcard | SelectItem::QualifiedWildcard { .. } => {
-                    return vec!["*".to_string()]
-                }
-                SelectItem::Expression { expr, alias } => {
-                    let name = match (alias, expr) {
-                        (Some(alias), _) => alias.clone(),
-                        (None, Expression::Column(column)) => column.name.clone(),
-                        // Anything that is not a plain column cannot be
-                        // projected from a synthesised catalogue row.
-                        (None, _) => return vec!["*".to_string()],
-                    };
-                    names.push(name);
-                }
-            }
-        }
-
-        if names.is_empty() {
-            vec!["*".to_string()]
-        } else {
-            names
-        }
-    }
-
     /// Serve a query against a system catalogue relation.
     ///
     /// Returns `None` when `table` is not one, so ordinary tables fall through.
@@ -458,12 +927,17 @@ impl QueryEngine {
             .next()
             .unwrap_or(table)
             .to_ascii_lowercase();
-        let qualifier = table.rsplit_once('.').map(|(schema, _)| schema.to_ascii_lowercase());
+        let qualifier = table
+            .rsplit_once('.')
+            .map(|(schema, _)| schema.to_ascii_lowercase());
         let is_information_schema = qualifier.as_deref() == Some("information_schema");
 
         // Only answer for the catalogue schemas, so a user table called
         // `pg_class` in the default schema is still their table.
-        if !matches!(qualifier.as_deref(), Some("pg_catalog") | Some("information_schema") | None) {
+        if !matches!(
+            qualifier.as_deref(),
+            Some("pg_catalog") | Some("information_schema") | None
+        ) {
             return Ok(None);
         }
         if qualifier.is_none() && !relation.starts_with("pg_") {
@@ -503,7 +977,14 @@ impl QueryEngine {
                     ],
                 ),
                 (false, "pg_type") => (
-                    vec!["oid", "typname", "typtype", "typelem", "typbasetype", "typrelid"],
+                    vec![
+                        "oid",
+                        "typname",
+                        "typtype",
+                        "typelem",
+                        "typbasetype",
+                        "typrelid",
+                    ],
                     [
                         (type_oids::BOOL, "bool"),
                         (type_oids::BYTEA, "bytea"),
@@ -627,6 +1108,239 @@ impl QueryEngine {
         Ok(())
     }
 
+    /// The rows a write statement is about to change, before it runs.
+    ///
+    /// For `UPDATE` and `DELETE` these are the rows the predicate selects; for
+    /// `INSERT` there are none, because the rows do not exist yet. Undoing a
+    /// transaction from these — rather than from a copy of the whole table —
+    /// is what keeps one session's `ROLLBACK` off another session's rows.
+    ///
+    /// # Errors
+    /// Returns an error when the table cannot be read.
+    pub async fn rows_a_statement_will_change(
+        &self,
+        sql: &str,
+    ) -> ProtocolResult<Option<Vec<TableRow>>> {
+        use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
+        use crate::protocols::postgres_wire::sql::parser::SqlParser;
+
+        let Some(storage) = &self.persistent_storage else {
+            return Ok(None);
+        };
+        let Ok(statement) = SqlParser::new().parse(sql) else {
+            return Ok(None);
+        };
+
+        let (table, where_clause) = match statement {
+            AstStatement::Update(update) => (update.table.full_name(), update.where_clause),
+            AstStatement::Delete(delete) => (delete.table.full_name(), delete.where_clause),
+            // An insert changes no existing row; the rollback deletes what it
+            // added instead, which the caller records from the statement.
+            _ => return Ok(Some(Vec::new())),
+        };
+
+        let table = fold_identifier(&table);
+        if !storage.table_exists(&table).await? {
+            return Ok(None);
+        }
+
+        let all = storage
+            .select_rows(&table, Vec::new(), Vec::new(), None)
+            .await?;
+        let Some(predicate) = where_clause else {
+            return Ok(Some(all));
+        };
+
+        let Some(schema) = storage.get_table_schema(&table).await? else {
+            return Ok(None);
+        };
+        let predicate = self.resolve_subqueries(predicate).await?;
+
+        let mut evaluator =
+            crate::protocols::postgres_wire::sql::expression_evaluator::ExpressionEvaluator::new();
+        let mut matched = Vec::new();
+        for row in all {
+            let values: crate::protocols::postgres_wire::sql::select_pipeline::Row = schema
+                .columns
+                .iter()
+                .map(|column| {
+                    let value = row
+                        .values
+                        .get(&column.name)
+                        .cloned()
+                        .unwrap_or(JsonValue::Null);
+                    (
+                        fold_identifier(&column.name),
+                        Self::json_to_sql_value(&value, &column.data_type),
+                    )
+                })
+                .collect();
+            let context =
+                crate::protocols::postgres_wire::sql::expression_evaluator::EvaluationContext::with_row(values);
+            if matches!(
+                evaluator.evaluate(&predicate, &context)?,
+                SqlValue::Boolean(true)
+            ) {
+                matched.push(row);
+            }
+        }
+        Ok(Some(matched))
+    }
+
+    /// Undo one session's writes without touching anyone else's rows.
+    ///
+    /// `inserted` are rows this session added, matched by value and removed;
+    /// `pre_images` are rows it changed or deleted, put back if they are no
+    /// longer there. Restoring a whole-table snapshot instead destroyed rows
+    /// another session had committed while the block was open.
+    ///
+    /// # Errors
+    /// Returns an error when the table cannot be written.
+    pub async fn undo_session_writes(
+        &self,
+        table: &str,
+        inserted: &[TableRow],
+        pre_images: &[TableRow],
+    ) -> ProtocolResult<()> {
+        let Some(storage) = &self.persistent_storage else {
+            return Ok(());
+        };
+        let table = fold_identifier(table);
+
+        let conditions_for = |row: &TableRow| -> Vec<QueryCondition> {
+            row.values
+                .iter()
+                .filter(|(_, value)| !value.is_null())
+                .map(|(column, value)| QueryCondition {
+                    column: fold_identifier(column),
+                    operator: "=".to_string(),
+                    value: value.clone(),
+                })
+                .collect()
+        };
+
+        // Remove what this session added.
+        for row in inserted {
+            let conditions = conditions_for(row);
+            if conditions.is_empty() {
+                continue;
+            }
+            storage.delete_rows(&table, conditions).await?;
+        }
+
+        // Put back what it changed or removed, unless an identical row is
+        // already there.
+        for row in pre_images {
+            let conditions = conditions_for(row);
+            let present = if conditions.is_empty() {
+                Vec::new()
+            } else {
+                storage
+                    .select_rows(&table, Vec::new(), conditions, Some(1))
+                    .await?
+            };
+            if present.is_empty() {
+                storage.insert_row(&table, row.clone()).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The rows an `INSERT ... VALUES` statement adds, as they will be stored.
+    ///
+    /// # Errors
+    /// Returns an error when a value cannot be evaluated.
+    pub async fn rows_an_insert_adds(&self, sql: &str) -> ProtocolResult<Option<Vec<TableRow>>> {
+        use crate::protocols::postgres_wire::sql::ast::{InsertSource, Statement as AstStatement};
+        use crate::protocols::postgres_wire::sql::expression_evaluator::{
+            EvaluationContext, ExpressionEvaluator,
+        };
+        use crate::protocols::postgres_wire::sql::parser::SqlParser;
+
+        let Some(storage) = &self.persistent_storage else {
+            return Ok(None);
+        };
+        let Ok(AstStatement::Insert(insert)) = SqlParser::new().parse(sql) else {
+            return Ok(None);
+        };
+        let table = fold_identifier(&insert.table.full_name());
+        // A view has no stored schema, and an `INSTEAD OF` trigger still needs
+        // the row the statement names; the statement's own column list answers
+        // that without one.
+        let schema = storage.get_table_schema(&table).await?;
+        let Some(names) = insert.columns.clone().or_else(|| {
+            schema
+                .as_ref()
+                .map(|schema| schema.columns.iter().map(|c| c.name.clone()).collect())
+        }) else {
+            return Ok(None);
+        };
+        let names: Vec<String> = names.iter().map(|name| fold_identifier(name)).collect();
+
+        let stored_name = |name: &String| {
+            schema
+                .as_ref()
+                .and_then(|schema| {
+                    schema
+                        .columns
+                        .iter()
+                        .find(|column| fold_identifier(&column.name) == *name)
+                })
+                .map_or_else(|| name.clone(), |column| column.name.clone())
+        };
+
+        // `INSERT ... SELECT` adds whatever the select yields. Running it here
+        // predicts those rows so the undo log can name them; without that the
+        // statement fell back to a whole-table copy, whose rollback takes a
+        // concurrent session's rows with it.
+        let tuples = match insert.source {
+            InsertSource::Values(tuples) => tuples,
+            InsertSource::Query(query) => {
+                let Some((_, values)) = self.evaluate_select(&query, &HashMap::new()).await? else {
+                    return Ok(None);
+                };
+                let now = chrono::Utc::now();
+                return Ok(Some(
+                    values
+                        .into_iter()
+                        .map(|row| TableRow {
+                            values: names
+                                .iter()
+                                .zip(row)
+                                .map(|(name, value)| {
+                                    (stored_name(name), Self::sql_value_to_json(&value))
+                                })
+                                .collect(),
+                            created_at: now,
+                            updated_at: now,
+                        })
+                        .collect(),
+                ));
+            }
+            InsertSource::DefaultValues => return Ok(None),
+        };
+
+        let mut evaluator = ExpressionEvaluator::new();
+        let context = EvaluationContext::empty();
+        let mut rows = Vec::with_capacity(tuples.len());
+        for tuple in tuples {
+            let now = chrono::Utc::now();
+            let mut values = std::collections::HashMap::new();
+            for (name, expression) in names.iter().zip(&tuple) {
+                values.insert(
+                    stored_name(name),
+                    Self::sql_value_to_json(&evaluator.evaluate(expression, &context)?),
+                );
+            }
+            rows.push(TableRow {
+                values,
+                created_at: now,
+                updated_at: now,
+            });
+        }
+        Ok(Some(rows))
+    }
+
     /// The table a write statement targets, if it names one.
     ///
     /// Used to decide what to snapshot when a transaction block opens a write.
@@ -719,18 +1433,21 @@ impl QueryEngine {
         let mut types = vec![type_oids::TEXT; count];
 
         let neutralised = Self::placeholders_as_null(sql);
-        let Ok(statement) = self.parse_sql(&neutralised) else {
-            return Ok(types);
-        };
-
-        let (table, insert_columns) = match &statement {
-            Statement::Select { table, .. }
-            | Statement::Update { table, .. }
-            | Statement::Delete { table, .. } => (table.clone(), None),
-            Statement::Insert { table, columns, .. } => (table.clone(), Some(columns.clone())),
-            Statement::CreateTable { .. }
-            | Statement::DropTable { .. }
-            | Statement::Truncate { .. } => return Ok(types),
+        let (table, insert_columns) = match self.parse_sql(&neutralised) {
+            Ok(Statement::Select { table, .. })
+            | Ok(Statement::Update { table, .. })
+            | Ok(Statement::Delete { table, .. }) => (table, None),
+            Ok(Statement::Insert { table, columns, .. }) => (table, Some(columns)),
+            Ok(Statement::CreateTable { .. })
+            | Ok(Statement::DropTable { .. })
+            | Ok(Statement::Truncate { .. }) => return Ok(types),
+            // The simple parser rejects any clause it does not implement, so a
+            // `WHERE a = $1 AND b > $2` used to leave every parameter typed as
+            // text and the driver refused to send an integer for one.
+            Err(_) => match Self::table_of(&neutralised) {
+                Some(table) => (table, None),
+                None => return Ok(types),
+            },
         };
 
         let Some(storage) = &self.persistent_storage else {
@@ -854,6 +1571,29 @@ impl QueryEngine {
             .collect()
     }
 
+    /// The table a statement reads or writes, taken from the full parser.
+    ///
+    /// Only single-table statements yield a name; a join has no single table
+    /// to resolve a column against.
+    fn table_of(sql: &str) -> Option<String> {
+        use crate::protocols::postgres_wire::sql::ast::{FromClause, Statement as AstStatement};
+
+        let parsed = crate::protocols::postgres_wire::sql::parser::SqlParser::new()
+            .parse(sql)
+            .ok()?;
+        let name = match parsed {
+            AstStatement::Select(select) => match select.from_clause? {
+                FromClause::Table { name, .. } => name.full_name(),
+                _ => return None,
+            },
+            AstStatement::Update(update) => update.table.full_name(),
+            AstStatement::Delete(delete) => delete.table.full_name(),
+            AstStatement::Insert(insert) => insert.table.full_name(),
+            _ => return None,
+        };
+        Some(fold_identifier(&name))
+    }
+
     /// Test hook for [`QueryEngine::placeholder_comparisons`].
     #[cfg(test)]
     pub fn placeholder_comparisons_for_test(sql: &str) -> Vec<(usize, String)> {
@@ -908,11 +1648,7 @@ impl QueryEngine {
         };
 
         let described_columns = if selects_everything {
-            schema
-                .columns
-                .iter()
-                .map(|c| described(&c.name))
-                .collect()
+            schema.columns.iter().map(|c| described(&c.name)).collect()
         } else {
             columns.iter().map(|c| described(c)).collect()
         };
@@ -1030,8 +1766,6 @@ impl QueryEngine {
         }
     }
 
-
-
     /// Execute a SQL query and return results
     pub async fn execute_query(&self, sql: &str) -> ProtocolResult<QueryResult> {
         let sql_upper = sql.trim().to_uppercase();
@@ -1052,6 +1786,44 @@ impl QueryEngine {
             if self.is_vector_query(&sql_upper) {
                 return vector_engine.execute_vector_query(sql).await;
             }
+        }
+
+        // DDL that changes a stored table's shape is applied here for the same
+        // reason views are: the comprehensive engine alters its own copy of the
+        // schema, so the change was reported and then not there.
+        if let Some(result) = self.execute_table_ddl(sql).await? {
+            return Ok(result);
+        }
+
+        // Views are kept by this engine because the comprehensive engine
+        // registers them in its own state: `CREATE VIEW` reported success and
+        // the view was then not there.
+        if let Some(result) = self.execute_view_statement(sql).await? {
+            return Ok(result);
+        }
+
+        // Triggers fire around the write they watch. They run as ordinary
+        // statements, so a BEFORE trigger that raises an error stops the write.
+        if let Some(result) = self.execute_with_triggers(sql).await? {
+            return Ok(result);
+        }
+
+        self.execute_without_triggers(sql).await
+    }
+
+    /// Execute a statement without firing triggers around it.
+    ///
+    /// The write a trigger wraps goes through here, so the wrapper does not
+    /// find its own triggers again.
+    ///
+    /// # Errors
+    /// Returns an error when the statement cannot be parsed or executed.
+    async fn execute_without_triggers(&self, sql: &str) -> ProtocolResult<QueryResult> {
+        // `RETURNING` is answered here because the simple parser drops the
+        // clause and the write path has no select list: the statement applied
+        // and then reported no rows, which reads as "nothing matched".
+        if let Some(result) = self.execute_with_returning(sql).await? {
+            return Ok(result);
         }
 
         // Try to parse and execute with the simple parser
@@ -1086,6 +1858,14 @@ impl QueryEngine {
             } => {
                 if let Some(result) = self.select_system_catalog(&table, &columns).await? {
                     return Ok(result);
+                }
+                // A view is a query, not stored rows, so it is answered by the
+                // path that can evaluate one. Without this a clause-free
+                // `SELECT ... FROM view` reported that the relation is missing.
+                if self.view_definition(&table).await?.is_some() {
+                    if let Some(result) = self.select_over_storage(sql).await? {
+                        return Ok(result);
+                    }
                 }
                 if table.to_uppercase() == "ACTORS" {
                     self.execute_actor_select(columns, &table, where_clause)
@@ -1150,9 +1930,10 @@ impl QueryEngine {
                 table,
                 columns,
                 if_not_exists,
+                foreign_keys,
             } => {
                 if let Some(ref storage) = self.persistent_storage {
-                    self.execute_create_table(storage, &table, columns, if_not_exists)
+                    self.execute_create_table(storage, &table, columns, if_not_exists, foreign_keys)
                         .await
                 } else {
                     Err(ProtocolError::PostgresError(
@@ -1167,9 +1948,9 @@ impl QueryEngine {
                 )),
             },
             Statement::DropTable { table, if_exists } => {
-                println!(
-                    "DEBUG: Executing DropTable. Storage present: {}",
-                    self.persistent_storage.is_some()
+                tracing::debug!(
+                    storage = self.persistent_storage.is_some(),
+                    "executing DROP TABLE"
                 );
                 if let Some(ref storage) = self.persistent_storage {
                     self.execute_drop_table(storage, &table, if_exists).await
@@ -1183,239 +1964,24 @@ impl QueryEngine {
     }
 
     /// Execute multiple SQL queries (separated by semicolons)
+    /// Execute the statements of a simple-query message, in order.
+    ///
+    /// Each statement goes through [`Self::execute_query`] rather than through
+    /// a second dispatcher over the parsed AST. Two routing tables drifted:
+    /// `RETURNING`, `TRUNCATE`, views, CTEs, derived tables and set operations
+    /// all worked when a statement arrived alone and failed when the same text
+    /// arrived over the wire, because only one of the two routers knew about
+    /// them.
+    ///
+    /// # Errors
+    /// Returns the first statement's error; statements after it do not run,
+    /// as PostgreSQL does within one simple-query message.
     pub async fn execute_multiple_queries(&self, sql: &str) -> ProtocolResult<Vec<QueryResult>> {
-        use crate::protocols::postgres_wire::sql::parser::SqlParser;
-
-        let mut parser = SqlParser::new();
-        let statements = match parser.parse_multiple(sql) {
-            Ok(stmts) => stmts,
-            Err(e) => return Err(e),
-        };
-
         let mut results = Vec::new();
-
-        for stmt in statements {
-            let result = self.execute_ast_statement(stmt).await?;
-            results.push(result);
+        for statement in split_statements(sql) {
+            results.push(self.execute_query(&statement).await?);
         }
-
         Ok(results)
-    }
-
-    /// Execute a single AST statement
-    async fn execute_ast_statement(
-        &self,
-        stmt: crate::protocols::postgres_wire::sql::ast::Statement,
-    ) -> ProtocolResult<QueryResult> {
-        use crate::protocols::postgres_wire::persistent_storage::ColumnType;
-        use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
-
-        // Catalogue relations are answered before storage is consulted, so
-        // both query paths — the simple parser and this AST one — serve them.
-        // psql and every ORM read these during connection setup.
-        if let AstStatement::Select(select) = &stmt {
-            if let Some(from_clause) = &select.from_clause {
-                if let Some(table_name) = self.extract_table_name_from_from_clause(from_clause) {
-                    let projection = Self::projection_names(select);
-                    if let Some(result) =
-                        self.select_system_catalog(&table_name, &projection).await?
-                    {
-                        return Ok(result);
-                    }
-                }
-            }
-        }
-
-        // Check if we can execute this persistently
-        if let Some(ref storage) = self.persistent_storage {
-            match &stmt {
-                AstStatement::CreateTable(create) => {
-                    // Convert AST columns to SimpleColumnDef
-                    let mut simple_columns = Vec::new();
-                    for col in &create.columns {
-                        let data_type = col.data_type.to_string();
-                        let mut constraints = Vec::new();
-                        for constraint in &col.constraints {
-                            // Simplified constraint conversion
-                            match constraint {
-                                crate::protocols::postgres_wire::sql::ast::ColumnConstraint::PrimaryKey => constraints.push("PRIMARY KEY".to_string()),
-                                crate::protocols::postgres_wire::sql::ast::ColumnConstraint::NotNull => constraints.push("NOT NULL".to_string()),
-                                crate::protocols::postgres_wire::sql::ast::ColumnConstraint::Unique => constraints.push("UNIQUE".to_string()),
-                                _ => {}
-                            }
-                        }
-                        simple_columns.push(SimpleColumnDef {
-                            name: col.name.clone(),
-                            data_type,
-                            constraints,
-                        });
-                    }
-
-                    // Execute on persistent storage
-                    let result = self
-                        .execute_create_table(
-                            storage,
-                            &create.name.full_name(),
-                            simple_columns,
-                            create.if_not_exists,
-                        )
-                        .await?;
-
-                    // Also execute on comprehensive engine so it knows about the table
-                    let mut sql_engine = self.sql_engine.lock().await;
-                    let _ = sql_engine.execute_statement(stmt).await; // Ignore errors from comprehensive engine
-
-                    return Ok(result);
-                }
-                AstStatement::DropTable(drop) => {
-                    // Handle first table only for now
-                    if let Some(table) = drop.names.first() {
-                        let result = self
-                            .execute_drop_table(storage, &table.full_name(), drop.if_exists)
-                            .await?;
-
-                        // Also execute on comprehensive engine
-                        let mut sql_engine = self.sql_engine.lock().await;
-                        let _ = sql_engine.execute_statement(stmt).await;
-
-                        return Ok(result);
-                    }
-                }
-                AstStatement::Insert(insert) => {
-                    // Convert AST Insert to persistent insert arguments
-                    let table_name = insert.table.full_name();
-                    let mut columns = insert.columns.clone().unwrap_or_default();
-
-                    // Handle implicit columns (SELECT * FROM table style insert)
-                    if columns.is_empty() {
-                        if let Some(schema) = storage.get_table_schema(&table_name).await? {
-                            columns = schema
-                                .columns
-                                .iter()
-                                .filter(|c| !matches!(c.data_type, ColumnType::Serial))
-                                .map(|c| c.name.clone())
-                                .collect();
-                        }
-                    }
-
-                    // Extract values
-                    let mut values_list = Vec::new();
-                    if let crate::protocols::postgres_wire::sql::ast::InsertSource::Values(rows) =
-                        &insert.source
-                    {
-                        for row in rows {
-                            let mut row_values = Vec::new();
-                            for expr in row {
-                                // Evaluate expression to string
-                                // This is tricky without full evaluator context.
-                                // For now, handle literals and simple functions
-                                use crate::protocols::postgres_wire::sql::expression_evaluator::{
-                                    EvaluationContext, ExpressionEvaluator,
-                                };
-                                let mut evaluator = ExpressionEvaluator::new();
-                                let context = EvaluationContext::empty();
-                                let val = evaluator.evaluate(expr, &context)?;
-                                // Rendered as a SQL literal, not as display
-                                // text: `to_postgres_string` turns NULL into an
-                                // empty string and a boolean into "t"/"f",
-                                // which then stored as text rather than as the
-                                // values they are.
-                                row_values.push(Self::sql_value_to_literal(&val));
-                            }
-                            values_list.push(row_values);
-                        }
-                    }
-
-                    // Execute on persistent storage
-                    let result = self
-                        .execute_persistent_insert(storage, &table_name, columns, values_list)
-                        .await?;
-
-                    // Also execute on comprehensive engine
-                    let mut sql_engine = self.sql_engine.lock().await;
-                    let _ = sql_engine.execute_statement(stmt).await;
-
-                    return Ok(result);
-                }
-                AstStatement::Select(select) => {
-                    // Check if the table exists in persistent storage
-                    // If it does, we need to use persistent storage for the query
-                    // Extract table name from FROM clause
-                    if let Some(ref from_clause) = select.from_clause {
-                        if let Some(table_name) =
-                            self.extract_table_name_from_from_clause(from_clause)
-                        {
-                            // Check if table exists in persistent storage
-                            if storage.table_exists(&table_name).await? {
-                                // Table exists in persistent storage
-                                // For complex queries (GROUP BY, aggregates, etc.), we need to:
-                                // 1. Fetch all data from persistent storage
-                                // 2. Execute the query logic in memory
-
-                                // For now, fetch all rows and let the comprehensive engine handle it
-                                // but inject the data from persistent storage
-
-                                // This is a workaround: we'll fall through to the comprehensive engine
-                                // but first we need to populate it with data from persistent storage
-                                // Since that's complex, let's just handle simple SELECTs here
-
-                                // For complex queries, we'll need to enhance the comprehensive engine
-                                // to support persistent storage as a data source
-                                // For now, fall through to comprehensive engine
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Fallback to comprehensive engine
-        let mut sql_engine = self.sql_engine.lock().await;
-
-        // Before executing, check if this is a SELECT from a persistent table
-        // If so, we need to make sure the comprehensive engine has the data
-        if let AstStatement::Select(select) = &stmt {
-            if let Some(ref storage) = self.persistent_storage {
-                if let Some(ref from_clause) = select.from_clause {
-                    if let Some(table_name) = self.extract_table_name_from_from_clause(from_clause)
-                    {
-                        if storage.table_exists(&table_name).await? {
-                            // Table exists in persistent storage
-                            // We need to ensure the comprehensive engine has this table and data
-                            // This is a workaround until we have full integration
-
-                            // For now, execute the query directly on persistent storage data
-                            // by creating a temporary in-memory representation
-                            // This is not ideal but will work for the test
-
-                            // Actually, let's just execute the statement and let it fail
-                            // The comprehensive engine will report "table does not exist"
-                            // which is the current behavior
-                        }
-                    }
-                }
-            }
-        }
-
-        let unified_result = sql_engine.execute_statement(stmt).await?;
-        Ok(self.convert_sql_result_to_query_result(unified_result))
-    }
-
-    /// Extract table name from FROM clause
-    fn extract_table_name_from_from_clause(
-        &self,
-        from_clause: &crate::protocols::postgres_wire::sql::ast::FromClause,
-    ) -> Option<String> {
-        use crate::protocols::postgres_wire::sql::ast::FromClause;
-        match from_clause {
-            FromClause::Table { name, .. } => Some(name.full_name()),
-            FromClause::Join { left, .. } => {
-                // For joins, extract from the left side
-                self.extract_table_name_from_from_clause(left)
-            }
-            _ => None,
-        }
     }
 
     /// Execute a query using the comprehensive SQL engine
@@ -1535,6 +2101,2024 @@ impl QueryEngine {
         }
     }
 
+    /// `CREATE TABLE ... AS SELECT` and `ALTER TABLE ... DROP COLUMN`.
+    ///
+    /// Returns `None` when the statement is neither.
+    ///
+    /// # Errors
+    /// Returns an error when the table is unknown or the select cannot be run.
+    async fn execute_table_ddl(&self, sql: &str) -> ProtocolResult<Option<QueryResult>> {
+        use crate::protocols::postgres_wire::persistent_storage::{
+            ColumnDefinition, ColumnType, TableSchema,
+        };
+
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(None);
+        };
+        let trimmed = sql.trim().trim_end_matches(';').trim();
+        let upper = trimmed.to_uppercase();
+
+        // `CREATE TABLE <name> AS <select>`: the shape comes from the select.
+        if upper.starts_with("CREATE TABLE") && !trimmed.contains('(') {
+            let Some(as_at) = upper.find(" AS ") else {
+                return Ok(None);
+            };
+            let name = upper[..as_at]
+                .split_whitespace()
+                .last()
+                .map(|_| trimmed[..as_at].split_whitespace().last().unwrap_or(""))
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("CREATE TABLE requires a name".to_string())
+                })?;
+            let table = fold_identifier(name);
+            let query = trimmed[as_at + 4..].trim();
+
+            let QueryResult::Select { columns, rows } =
+                self.select_over_storage(query).await?.ok_or_else(|| {
+                    ProtocolError::PostgresError(
+                        "the source of CREATE TABLE AS uses a shape this engine cannot evaluate"
+                            .to_string(),
+                    )
+                })?
+            else {
+                return Ok(None);
+            };
+
+            // Types are not carried by the projection, so every column is
+            // stored as text unless a value parses as a number. Recording that
+            // here rather than guessing per row keeps the schema stable.
+            let column_defs = columns
+                .iter()
+                .enumerate()
+                .map(|(index, name)| ColumnDefinition {
+                    name: fold_identifier(name),
+                    data_type: if rows.iter().all(|row| {
+                        row.get(index)
+                            .and_then(Option::as_ref)
+                            .is_none_or(|value| value.parse::<i64>().is_ok())
+                    }) {
+                        ColumnType::BigInt
+                    } else {
+                        ColumnType::Text
+                    },
+                    nullable: true,
+                    default_value: None,
+                    unique: false,
+                    check: None,
+                    references: None,
+                    domain: None,
+                })
+                .collect::<Vec<_>>();
+
+            storage
+                .create_table(TableSchema {
+                    name: table.clone(),
+                    columns: column_defs.clone(),
+                    created_at: chrono::Utc::now(),
+                    row_count: 0,
+                    foreign_keys: Vec::new(),
+                })
+                .await?;
+
+            let count = rows.len();
+            for row in rows {
+                let now = chrono::Utc::now();
+                let values = column_defs
+                    .iter()
+                    .zip(&row)
+                    .map(|(column, value)| {
+                        let stored = match value {
+                            None => JsonValue::Null,
+                            Some(text) => Self::literal_to_json(text),
+                        };
+                        (column.name.clone(), stored)
+                    })
+                    .collect();
+                storage
+                    .insert_row(
+                        &table,
+                        TableRow {
+                            values,
+                            created_at: now,
+                            updated_at: now,
+                        },
+                    )
+                    .await?;
+            }
+            return Ok(Some(QueryResult::Insert { count }));
+        }
+
+        // `VACUUM [table]`: reclaim the versions and deleted rows no open
+        // block can still need.
+        if upper.starts_with("VACUUM") {
+            let target = trimmed.split_whitespace().nth(1).filter(|word| {
+                !word.eq_ignore_ascii_case("FULL") && !word.eq_ignore_ascii_case("ANALYZE")
+            });
+            let reclaimed = self.vacuum(target).await?;
+            return Ok(Some(QueryResult::Delete { count: reclaimed }));
+        }
+
+        // `CREATE TRIGGER <name> {BEFORE|AFTER} <events> ON <table>
+        //  [FOR EACH ROW] EXECUTE <statement>`
+        //
+        // The action is a SQL statement rather than a stored function: this
+        // engine has no PL/pgSQL, and running a statement is the part of a
+        // trigger that changes what the database does.
+        if upper.starts_with("CREATE TRIGGER") {
+            let Some(execute_at) = upper.find(" EXECUTE ") else {
+                return Err(ProtocolError::PostgresError(
+                    "CREATE TRIGGER requires EXECUTE followed by a statement".to_string(),
+                ));
+            };
+            let header = &trimmed[..execute_at];
+            let action = trimmed[execute_at + " EXECUTE ".len()..]
+                .trim()
+                .trim_start_matches("FUNCTION ")
+                .trim_start_matches("PROCEDURE ")
+                .trim();
+            let header_upper = header.to_uppercase();
+
+            let name = header
+                .split_whitespace()
+                .nth(2)
+                .map(fold_identifier)
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("CREATE TRIGGER requires a name".to_string())
+                })?;
+            let table = header_upper
+                .rfind(" ON ")
+                .and_then(|at| header[at + 4..].split_whitespace().next())
+                .map(fold_identifier)
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("CREATE TRIGGER requires ON <table>".to_string())
+                })?;
+
+            let timing = if header_upper.contains("INSTEAD OF") {
+                "INSTEAD"
+            } else if header_upper.contains("BEFORE") {
+                "BEFORE"
+            } else {
+                "AFTER"
+            };
+            let events: Vec<&str> = ["INSERT", "UPDATE", "DELETE"]
+                .into_iter()
+                .filter(|event| header_upper.contains(event))
+                .collect();
+            if events.is_empty() {
+                return Err(ProtocolError::PostgresError(
+                    "CREATE TRIGGER requires at least one of INSERT, UPDATE or DELETE".to_string(),
+                ));
+            }
+
+            // `FOR EACH ROW` fires once per affected row and can read that
+            // row through `NEW`/`OLD`; `FOR EACH STATEMENT` — the default —
+            // fires once however many rows the statement touched.
+            let scope = if header_upper.contains("FOR EACH ROW") {
+                "ROW"
+            } else {
+                "STATEMENT"
+            };
+            // `WHEN (...)` gates the firing; it is stored with its brackets
+            // stripped and evaluated per row.
+            let when = header_upper
+                .find("WHEN")
+                .and_then(|at| Self::parenthesised(&header[at..]))
+                .unwrap_or_default()
+                .to_string();
+
+            self.remember_trigger(
+                &name,
+                &format!(
+                    "{table}|{timing}|{}|{scope}|{when}|{action}",
+                    events.join(",")
+                ),
+            )
+            .await?;
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        if upper.starts_with("DROP TRIGGER") {
+            let if_exists = upper.contains("IF EXISTS");
+            let name = fold_identifier(upper_tail(trimmed, if_exists));
+            self.ensure_view_catalog(storage).await?;
+            let removed = storage
+                .delete_rows(
+                    VIEW_CATALOG,
+                    vec![QueryCondition {
+                        column: "name".to_string(),
+                        operator: "=".to_string(),
+                        value: JsonValue::String(format!("trigger:{name}")),
+                    }],
+                )
+                .await?;
+            if removed == 0 && !if_exists {
+                return Err(ProtocolError::PostgresError(format!(
+                    "trigger \"{name}\" does not exist"
+                )));
+            }
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        // `CREATE DOMAIN <name> [AS] <type> [NOT NULL] [CHECK (VALUE ...)]`:
+        // a named type with constraints attached, which columns then use.
+        if upper.starts_with("CREATE DOMAIN") {
+            let rest = trimmed["CREATE DOMAIN".len()..].trim();
+            let (name, definition) = rest.split_once(char::is_whitespace).ok_or_else(|| {
+                ProtocolError::PostgresError("CREATE DOMAIN requires a type".to_string())
+            })?;
+            let definition = definition
+                .trim()
+                .strip_prefix("AS ")
+                .or_else(|| definition.trim().strip_prefix("as "))
+                .unwrap_or(definition.trim());
+            self.remember_domain(&fold_identifier(name), definition.trim())
+                .await?;
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        // `ALTER DOMAIN <name> {SET|DROP} NOT NULL | ADD CHECK (...) | DROP CONSTRAINT`
+        if upper.starts_with("ALTER DOMAIN") {
+            let rest = trimmed["ALTER DOMAIN".len()..].trim();
+            let (name, action) = rest.split_once(char::is_whitespace).ok_or_else(|| {
+                ProtocolError::PostgresError("ALTER DOMAIN requires an action".to_string())
+            })?;
+            let name = fold_identifier(name);
+            let current = self.domain_definition(&name).await?.ok_or_else(|| {
+                ProtocolError::PostgresError(format!("domain \"{name}\" does not exist"))
+            })?;
+            let action_upper = action.trim().to_uppercase();
+
+            let updated = if action_upper.starts_with("SET NOT NULL") {
+                format!("{current} NOT NULL")
+            } else if action_upper.starts_with("DROP NOT NULL") {
+                current.replace(" NOT NULL", "")
+            } else if action_upper.starts_with("ADD") && action_upper.contains("CHECK") {
+                match Self::parenthesised(action) {
+                    Some(predicate) => format!("{current} CHECK ({predicate})"),
+                    None => current.clone(),
+                }
+            } else if action_upper.starts_with("DROP CONSTRAINT") {
+                // Every check on the domain goes; named constraints are not
+                // tracked separately.
+                match current.find(" CHECK (") {
+                    Some(at) => current[..at].to_string(),
+                    None => current.clone(),
+                }
+            } else {
+                return Err(ProtocolError::PostgresError(format!(
+                    "unsupported ALTER DOMAIN action: {}",
+                    action.trim()
+                )));
+            };
+
+            self.remember_domain(&name, updated.trim()).await?;
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        if upper.starts_with("DROP DOMAIN") {
+            let if_exists = upper.contains("IF EXISTS");
+            let name = fold_identifier(upper_tail(trimmed, if_exists));
+            self.ensure_view_catalog(storage).await?;
+            let removed = storage
+                .delete_rows(
+                    VIEW_CATALOG,
+                    vec![QueryCondition {
+                        column: "name".to_string(),
+                        operator: "=".to_string(),
+                        value: JsonValue::String(format!("domain:{name}")),
+                    }],
+                )
+                .await?;
+            if removed == 0 && !if_exists {
+                return Err(ProtocolError::PostgresError(format!(
+                    "domain \"{name}\" does not exist"
+                )));
+            }
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        // `CREATE MATERIALIZED VIEW <name> AS <select>`: unlike a view, the
+        // rows are computed once and stored, and `REFRESH` recomputes them.
+        if upper.starts_with("CREATE MATERIALIZED VIEW") {
+            let Some(as_at) = upper.find(" AS ") else {
+                return Err(ProtocolError::PostgresError(
+                    "CREATE MATERIALIZED VIEW requires AS followed by a query".to_string(),
+                ));
+            };
+            let name = trimmed[..as_at]
+                .split_whitespace()
+                .last()
+                .map(fold_identifier)
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError(
+                        "CREATE MATERIALIZED VIEW requires a name".to_string(),
+                    )
+                })?;
+            let query = trimmed[as_at + 4..].trim();
+            self.remember_materialized(&name, query).await?;
+            return Box::pin(self.execute_table_ddl(&format!("CREATE TABLE {name} AS {query}")))
+                .await;
+        }
+
+        if upper.starts_with("REFRESH MATERIALIZED VIEW") {
+            let name = trimmed
+                .split_whitespace()
+                .last()
+                .map(fold_identifier)
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("REFRESH requires a name".to_string())
+                })?;
+            let query = self.materialized_definition(&name).await?.ok_or_else(|| {
+                ProtocolError::PostgresError(format!("materialized view \"{name}\" does not exist"))
+            })?;
+            storage.drop_table(&name).await?;
+            return Box::pin(self.execute_table_ddl(&format!("CREATE TABLE {name} AS {query}")))
+                .await;
+        }
+
+        // `ALTER TABLE <name> RENAME [COLUMN <old> TO <new>] | [TO <new>]`.
+        if upper.starts_with("ALTER TABLE") && upper.contains(" RENAME") {
+            let words: Vec<&str> = trimmed.split_whitespace().collect();
+            let table = words
+                .get(2)
+                .map(|name| fold_identifier(name))
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("ALTER TABLE requires a name".to_string())
+                })?;
+            let mut schema = storage.get_table_schema(&table).await?.ok_or_else(|| {
+                ProtocolError::PostgresError(format!("Table '{table}' does not exist"))
+            })?;
+            let at = words
+                .iter()
+                .position(|word| word.eq_ignore_ascii_case("RENAME"))
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("RENAME requires a target".to_string())
+                })?;
+            let new_name = words
+                .last()
+                .map(|name| fold_identifier(name))
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("RENAME requires a new name".to_string())
+                })?;
+
+            if words
+                .get(at + 1)
+                .is_some_and(|w| w.eq_ignore_ascii_case("COLUMN"))
+            {
+                let old = words
+                    .get(at + 2)
+                    .map(|name| fold_identifier(name))
+                    .ok_or_else(|| {
+                        ProtocolError::PostgresError("RENAME COLUMN requires a name".to_string())
+                    })?;
+                let column = schema
+                    .columns
+                    .iter_mut()
+                    .find(|column| fold_identifier(&column.name) == old)
+                    .ok_or_else(|| {
+                        ProtocolError::PostgresError(format!(
+                            "column \"{old}\" of relation \"{table}\" does not exist"
+                        ))
+                    })?;
+
+                // The stored rows are keyed by the old name, so they are read
+                // and written back under the new one; renaming only the schema
+                // would make the column read as NULL.
+                let rows = storage
+                    .select_rows(&table, Vec::new(), Vec::new(), None)
+                    .await?;
+                let previous = column.name.clone();
+                column.name = new_name.clone();
+                storage.create_table(schema).await?;
+                storage.delete_rows(&table, Vec::new()).await?;
+                for mut row in rows {
+                    if let Some(value) = row.values.remove(&previous) {
+                        row.values.insert(new_name.clone(), value);
+                    }
+                    storage.insert_row(&table, row).await?;
+                }
+                return Ok(Some(QueryResult::Update { count: 0 }));
+            }
+
+            // `RENAME TO <new>`: the rows move with the table.
+            let rows = storage
+                .select_rows(&table, Vec::new(), Vec::new(), None)
+                .await?;
+            schema.name = new_name.clone();
+            storage.create_table(schema).await?;
+            for row in rows {
+                storage.insert_row(&new_name, row).await?;
+            }
+            storage.drop_table(&table).await?;
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        // `ALTER TABLE <name> DROP COLUMN <column>`.
+        if upper.starts_with("ALTER TABLE") && upper.contains("DROP COLUMN") {
+            let words: Vec<&str> = trimmed.split_whitespace().collect();
+            let table = words
+                .get(2)
+                .map(|name| fold_identifier(name))
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("ALTER TABLE requires a name".to_string())
+                })?;
+            let column = words
+                .iter()
+                .position(|word| word.eq_ignore_ascii_case("COLUMN"))
+                .and_then(|at| words.get(at + 1))
+                .map(|name| fold_identifier(name.trim_end_matches(',')))
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("DROP COLUMN requires a column".to_string())
+                })?;
+
+            let mut schema = storage.get_table_schema(&table).await?.ok_or_else(|| {
+                ProtocolError::PostgresError(format!("Table '{table}' does not exist"))
+            })?;
+            if !schema
+                .columns
+                .iter()
+                .any(|existing| fold_identifier(&existing.name) == column)
+            {
+                return Err(ProtocolError::PostgresError(format!(
+                    "column \"{column}\" of relation \"{table}\" does not exist"
+                )));
+            }
+            schema
+                .columns
+                .retain(|existing| fold_identifier(&existing.name) != column);
+            storage.create_table(schema).await?;
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        Ok(None)
+    }
+
+    /// Run a write with its `BEFORE` and `AFTER` triggers around it.
+    ///
+    /// Returns `None` when the statement is not a write, or when the table it
+    /// writes has no trigger — the common case, which costs one catalog read.
+    ///
+    /// # Errors
+    /// Returns an error when a trigger's own statement fails; a `BEFORE`
+    /// failure stops the write.
+    async fn execute_with_triggers(&self, sql: &str) -> ProtocolResult<Option<QueryResult>> {
+        if self.persistent_storage.is_none() {
+            return Ok(None);
+        }
+        let event = match sql
+            .split_whitespace()
+            .next()
+            .map(str::to_uppercase)
+            .as_deref()
+        {
+            Some("INSERT") => "INSERT",
+            Some("UPDATE") => "UPDATE",
+            Some("DELETE") => "DELETE",
+            _ => return Ok(None),
+        };
+        let Some(table) = Self::write_target_table(sql) else {
+            return Ok(None);
+        };
+
+        let before = self.triggers_for(&table, "BEFORE", event).await?;
+        let after = self.triggers_for(&table, "AFTER", event).await?;
+        let instead = self.triggers_for(&table, "INSTEAD", event).await?;
+        if before.is_empty() && after.is_empty() && instead.is_empty() {
+            return Ok(None);
+        }
+
+        // `OLD` is the row as it stands before the statement; `NEW` is the
+        // row it will become. An INSERT has only NEW, a DELETE only OLD.
+        let old_rows = match event {
+            "UPDATE" | "DELETE" => self
+                .rows_a_statement_will_change(sql)
+                .await?
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        let new_rows = match event {
+            "INSERT" => self.rows_an_insert_adds(sql).await?.unwrap_or_default(),
+            "UPDATE" => self
+                .rows_a_statement_will_change(sql)
+                .await?
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+
+        // A `BEFORE` trigger may rewrite the row on its way in, spelled
+        // `SET NEW.col = <expr>` — the one form a statement-based trigger can
+        // express without a procedural language.
+        let mut new_rows = new_rows;
+        let mut rewritten = None;
+        for trigger in &before {
+            if let Some(assignment) = trigger.action.to_uppercase().strip_prefix("SET NEW.") {
+                let _ = assignment;
+                rewritten = Some(Self::apply_new_assignment(
+                    &trigger.action,
+                    &mut new_rows,
+                    &old_rows,
+                )?);
+                continue;
+            }
+            self.fire_trigger(trigger, &old_rows, &new_rows).await?;
+        }
+
+        // `INSTEAD OF` replaces the write entirely, which is what makes a view
+        // writable.
+        if !instead.is_empty() {
+            for trigger in &instead {
+                self.fire_trigger(trigger, &old_rows, &new_rows).await?;
+            }
+            for trigger in &after {
+                self.fire_trigger(trigger, &old_rows, &new_rows).await?;
+            }
+            return Ok(Some(QueryResult::Update {
+                count: new_rows.len(),
+            }));
+        }
+
+        // The write itself goes through the ordinary path; the recursion is
+        // bounded because that path finds no trigger left to fire for it.
+        let statement = match (rewritten, event) {
+            (Some(()), "INSERT") => Self::rewrite_insert(sql, &table, &new_rows),
+            // A rewritten UPDATE becomes a SET of the values the trigger left
+            // on each row, applied to the rows it already selected.
+            (Some(()), "UPDATE") => Self::rewrite_update(sql, &table, &old_rows, &new_rows)
+                .unwrap_or_else(|| sql.to_string()),
+            _ => sql.to_string(),
+        };
+        let result = Box::pin(self.execute_without_triggers(&statement)).await?;
+        for trigger in &after {
+            self.fire_trigger(trigger, &old_rows, &new_rows).await?;
+        }
+        Ok(Some(result))
+    }
+
+    /// Apply a `SET NEW.col = <expr>` trigger action to the incoming rows.
+    ///
+    /// # Errors
+    /// Returns an error when the assignment cannot be parsed or evaluated.
+    fn apply_new_assignment(
+        action: &str,
+        new_rows: &mut [TableRow],
+        old_rows: &[TableRow],
+    ) -> ProtocolResult<()> {
+        use crate::protocols::postgres_wire::sql::expression_evaluator::{
+            EvaluationContext, ExpressionEvaluator,
+        };
+        use crate::protocols::postgres_wire::sql::parser::SqlParser;
+
+        let body = action.trim().get(4..).unwrap_or_default().trim();
+        let Some((target, expression)) = body.split_once('=') else {
+            return Err(ProtocolError::PostgresError(
+                "a BEFORE trigger's SET requires NEW.<column> = <expression>".to_string(),
+            ));
+        };
+        let column = fold_identifier(
+            target
+                .trim()
+                .trim_start_matches("NEW.")
+                .trim_start_matches("new."),
+        );
+
+        for (index, row) in new_rows.iter_mut().enumerate() {
+            // The expression may itself mention NEW/OLD, so it is substituted
+            // against the row it is about to change.
+            let text = Self::substitute_row_references(
+                expression.trim(),
+                old_rows.get(index),
+                Some(&row.clone()),
+            );
+            let parsed = SqlParser::new().parse(&format!("SELECT {text}"))?;
+            let crate::protocols::postgres_wire::sql::ast::Statement::Select(select) = parsed
+            else {
+                continue;
+            };
+            let Some(crate::protocols::postgres_wire::sql::ast::SelectItem::Expression {
+                expr,
+                ..
+            }) = select.select_list.first()
+            else {
+                continue;
+            };
+
+            let mut evaluator = ExpressionEvaluator::new();
+            let value = evaluator.evaluate(expr, &EvaluationContext::empty())?;
+            let stored = row
+                .values
+                .keys()
+                .find(|name| fold_identifier(name) == column)
+                .cloned()
+                .unwrap_or(column.clone());
+            row.values.insert(stored, Self::sql_value_to_json(&value));
+        }
+        Ok(())
+    }
+
+    /// Rebuild an `INSERT` from the rows a `BEFORE` trigger rewrote.
+    fn rewrite_insert(original: &str, table: &str, rows: &[TableRow]) -> String {
+        let Some(first) = rows.first() else {
+            return original.to_string();
+        };
+        let columns: Vec<String> = first.values.keys().cloned().collect();
+        let tuples: Vec<String> = rows
+            .iter()
+            .map(|row| {
+                let values: Vec<String> = columns
+                    .iter()
+                    .map(|column| match row.values.get(column) {
+                        None | Some(JsonValue::Null) => "NULL".to_string(),
+                        Some(JsonValue::Number(number)) => number.to_string(),
+                        Some(JsonValue::Bool(flag)) => flag.to_string(),
+                        Some(other) => format!(
+                            "'{}'",
+                            other.as_str().unwrap_or_default().replace('\'', "''")
+                        ),
+                    })
+                    .collect();
+                format!("({})", values.join(", "))
+            })
+            .collect();
+
+        format!(
+            "INSERT INTO {table} ({}) VALUES {}",
+            columns.join(", "),
+            tuples.join(", ")
+        )
+    }
+
+    /// Rebuild an `UPDATE` from the rows a `BEFORE` trigger rewrote.
+    ///
+    /// Returns `None` when the rows cannot be told apart, in which case the
+    /// original statement runs unchanged rather than a guess.
+    fn rewrite_update(
+        original: &str,
+        table: &str,
+        old_rows: &[TableRow],
+        new_rows: &[TableRow],
+    ) -> Option<String> {
+        // One row is the case a per-row rewrite can express as a statement;
+        // more than one would need a different SET per row.
+        if new_rows.len() != 1 || old_rows.len() != 1 {
+            return None;
+        }
+        let new = new_rows.first()?;
+        let old = old_rows.first()?;
+
+        let literal = |value: &JsonValue| match value {
+            JsonValue::Null => "NULL".to_string(),
+            JsonValue::Number(number) => number.to_string(),
+            JsonValue::Bool(flag) => flag.to_string(),
+            other => format!(
+                "'{}'",
+                other.as_str().unwrap_or_default().replace('\'', "''")
+            ),
+        };
+
+        let assignments: Vec<String> = new
+            .values
+            .iter()
+            .map(|(column, value)| format!("{column} = {}", literal(value)))
+            .collect();
+        if assignments.is_empty() {
+            return None;
+        }
+        // The original row identifies itself by every column it had.
+        let conditions: Vec<String> = old
+            .values
+            .iter()
+            .filter(|(_, value)| !value.is_null())
+            .map(|(column, value)| format!("{column} = {}", literal(value)))
+            .collect();
+        if conditions.is_empty() {
+            return None;
+        }
+        let _ = original;
+
+        Some(format!(
+            "UPDATE {table} SET {} WHERE {}",
+            assignments.join(", "),
+            conditions.join(" AND ")
+        ))
+    }
+
+    /// Run one trigger, once per row or once per statement.
+    ///
+    /// # Errors
+    /// Returns an error when the trigger's own statement or `WHEN` clause
+    /// fails.
+    async fn fire_trigger(
+        &self,
+        trigger: &TriggerDefinition,
+        old_rows: &[TableRow],
+        new_rows: &[TableRow],
+    ) -> ProtocolResult<()> {
+        if !trigger.per_row {
+            // A statement-level trigger fires once, and has no row to read.
+            if Self::trigger_fires(self, &trigger.when, None, None).await? {
+                self.run_trigger_body(&trigger.action).await?;
+            }
+            return Ok(());
+        }
+
+        let count = old_rows.len().max(new_rows.len());
+        for index in 0..count {
+            let old = old_rows.get(index);
+            let new = new_rows.get(index);
+            if !Self::trigger_fires(self, &trigger.when, old, new).await? {
+                continue;
+            }
+            let action = Self::substitute_row_references(&trigger.action, old, new);
+            self.run_trigger_body(&action).await?;
+        }
+        Ok(())
+    }
+
+    /// Run a trigger's body: one statement, or several between `BEGIN` and
+    /// `END`, with `RAISE` as a way to reject the write.
+    ///
+    /// # Errors
+    /// Returns an error when a statement fails, or when `RAISE` is reached.
+    async fn run_trigger_body(&self, body: &str) -> ProtocolResult<()> {
+        let trimmed = body.trim().trim_end_matches(';').trim();
+        // A dollar-quoted body is unwrapped here; the quoting exists to carry
+        // the semicolons through the statement splitter, not to be executed.
+        let trimmed = match trimmed
+            .strip_prefix("$$")
+            .and_then(|r| r.strip_suffix("$$"))
+        {
+            Some(inner) => inner.trim(),
+            None => trimmed,
+        };
+        let upper = trimmed.to_uppercase();
+
+        // `BEGIN ... END` wraps a sequence; anything else is one statement.
+        let inner = match (upper.starts_with("BEGIN"), upper.ends_with("END")) {
+            (true, true) => trimmed[5..trimmed.len() - 3].trim(),
+            _ => trimmed,
+        };
+
+        for statement in split_statements(inner) {
+            let statement = statement.trim();
+            if statement.is_empty() {
+                continue;
+            }
+            // `RAISE [level] 'message'` stops the trigger, and with it the
+            // write a BEFORE trigger guards.
+            if let Some(rest) = statement
+                .to_uppercase()
+                .strip_prefix("RAISE")
+                .map(|rest| rest.trim().to_string())
+            {
+                let message = statement[statement.len() - rest.len()..]
+                    .trim()
+                    .trim_start_matches(|c: char| c.is_ascii_alphabetic())
+                    .trim()
+                    .trim_matches('\'')
+                    .to_string();
+                return Err(ProtocolError::PostgresError(if message.is_empty() {
+                    "raised by a trigger".to_string()
+                } else {
+                    message
+                }));
+            }
+            Box::pin(self.execute_query(statement)).await?;
+        }
+        Ok(())
+    }
+
+    /// Whether a trigger's `WHEN` clause holds for a row.
+    async fn trigger_fires(
+        &self,
+        when: &Option<String>,
+        old: Option<&TableRow>,
+        new: Option<&TableRow>,
+    ) -> ProtocolResult<bool> {
+        let Some(when) = when else {
+            return Ok(true);
+        };
+        let predicate = Self::substitute_row_references(when, old, new);
+        let rows = Box::pin(self.execute_query(&format!("SELECT 1 WHERE {predicate}"))).await?;
+        Ok(match rows {
+            QueryResult::Select { rows, .. } => !rows.is_empty(),
+            _ => true,
+        })
+    }
+
+    /// Replace `NEW.col` and `OLD.col` with the values they stand for.
+    ///
+    /// Substituting text keeps the trigger's action an ordinary statement,
+    /// which is what makes it runnable without a procedural language.
+    fn substitute_row_references(
+        text: &str,
+        old: Option<&TableRow>,
+        new: Option<&TableRow>,
+    ) -> String {
+        let mut out = text.to_string();
+        for (prefix, row) in [("NEW", new), ("OLD", old)] {
+            let Some(row) = row else {
+                continue;
+            };
+            for (column, value) in &row.values {
+                let literal =
+                    Self::sql_value_to_literal(&Self::json_to_sql_value(value, &ColumnType::Text));
+                // Values are written as SQL literals, so a text column arrives
+                // quoted and a NULL arrives as NULL rather than as the word.
+                let literal = match value {
+                    JsonValue::Null => "NULL".to_string(),
+                    JsonValue::Number(number) => number.to_string(),
+                    JsonValue::Bool(flag) => flag.to_string(),
+                    _ => literal,
+                };
+                for spelling in [
+                    format!("{prefix}.{column}"),
+                    format!("{}.{column}", prefix.to_lowercase()),
+                ] {
+                    out = out.replace(&spelling, &literal);
+                }
+            }
+        }
+        out
+    }
+
+    /// Create or drop a view, recording its definition in storage.
+    ///
+    /// A view is a stored query, so its definition has to outlive the process
+    /// that created it; keeping it in memory would make `CREATE VIEW` a claim
+    /// that stops being true at the next restart.
+    ///
+    /// Returns `None` when the statement is not a view statement.
+    ///
+    /// # Errors
+    /// Returns an error when the catalog cannot be read or written.
+    async fn execute_view_statement(&self, sql: &str) -> ProtocolResult<Option<QueryResult>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(None);
+        };
+
+        let trimmed = sql.trim().trim_end_matches(';').trim();
+        let upper = trimmed.to_uppercase();
+
+        if upper.starts_with("DROP VIEW") {
+            let if_exists = upper.contains("IF EXISTS");
+            let name = fold_identifier(upper_tail(trimmed, if_exists));
+            self.ensure_view_catalog(storage).await?;
+            let removed = storage
+                .delete_rows(
+                    VIEW_CATALOG,
+                    vec![QueryCondition {
+                        column: "name".to_string(),
+                        operator: "=".to_string(),
+                        value: JsonValue::String(name.clone()),
+                    }],
+                )
+                .await?;
+            if removed == 0 && !if_exists {
+                return Err(ProtocolError::PostgresError(format!(
+                    "View '{name}' does not exist"
+                )));
+            }
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        if !upper.starts_with("CREATE VIEW") && !upper.starts_with("CREATE OR REPLACE VIEW") {
+            return Ok(None);
+        }
+
+        let Some(as_at) = upper.find(" AS ") else {
+            return Err(ProtocolError::PostgresError(
+                "CREATE VIEW requires AS followed by a query".to_string(),
+            ));
+        };
+        let header = &trimmed[..as_at];
+        let definition = trimmed[as_at + 4..].trim().to_string();
+        let Some(name) = header.split_whitespace().last() else {
+            return Err(ProtocolError::PostgresError(
+                "CREATE VIEW requires a name".to_string(),
+            ));
+        };
+        let name = fold_identifier(name);
+
+        // The definition has to parse now rather than at first read, so a
+        // typo is an error at CREATE time as it is in PostgreSQL.
+        crate::protocols::postgres_wire::sql::parser::SqlParser::new().parse(&definition)?;
+
+        self.ensure_view_catalog(storage).await?;
+        let replacing = upper.starts_with("CREATE OR REPLACE VIEW");
+        if storage.table_exists(&name).await?
+            || (!replacing && self.view_definition(&name).await?.is_some())
+        {
+            return Err(ProtocolError::PostgresError(format!(
+                "Relation '{name}' already exists"
+            )));
+        }
+        storage
+            .delete_rows(
+                VIEW_CATALOG,
+                vec![QueryCondition {
+                    column: "name".to_string(),
+                    operator: "=".to_string(),
+                    value: JsonValue::String(name.clone()),
+                }],
+            )
+            .await?;
+
+        let now = chrono::Utc::now();
+        storage
+            .insert_row(
+                VIEW_CATALOG,
+                TableRow {
+                    values: HashMap::from([
+                        ("name".to_string(), JsonValue::String(name)),
+                        ("definition".to_string(), JsonValue::String(definition)),
+                    ]),
+                    created_at: now,
+                    updated_at: now,
+                },
+            )
+            .await?;
+
+        Ok(Some(QueryResult::Update { count: 0 }))
+    }
+
+    /// Continue the change stream where the last run left off.
+    ///
+    /// Positions are handed out from a counter that starts at one, so without
+    /// this a restart would reuse LSNs a replica had already seen and its
+    /// bookkeeping would silently skip the new records.
+    ///
+    /// # Errors
+    /// Returns an error when the log cannot be read.
+    pub async fn resume_change_positions(&self) -> ProtocolResult<u64> {
+        let highest = self
+            .logged_changes_since(0)
+            .await?
+            .last()
+            .map_or(0, |record| record.position);
+        if highest > 0 {
+            CHANGE_POSITION.store(highest, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(highest)
+    }
+
+    /// Write everything waiting to the durable log.
+    ///
+    /// Called at the end of each write, so a replica that reconnects after a
+    /// restart finds the change there. Queuing until the background tick would
+    /// have meant losing whatever was written in the last minute.
+    ///
+    /// # Errors
+    /// Returns an error when the log cannot be written.
+    pub async fn flush_change_log(&self) -> ProtocolResult<()> {
+        for record in drain_pending_log() {
+            self.record_change(&record).await?;
+        }
+        Ok(())
+    }
+
+    /// Write a change to the durable log a replica replays from.
+    ///
+    /// The in-memory window is a cache in front of this: it answers the common
+    /// case without a read, and the log answers a replica that reconnects
+    /// after a restart, when the window is empty.
+    async fn record_change(&self, record: &ChangeRecord) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        self.ensure_change_log(storage).await?;
+        let now = chrono::Utc::now();
+        storage
+            .insert_row(
+                CHANGE_LOG,
+                TableRow {
+                    values: HashMap::from([
+                        (
+                            "position".to_string(),
+                            JsonValue::from(record.position),
+                        ),
+                        (
+                            "payload".to_string(),
+                            JsonValue::String(format!(
+                                "{}|{}|{}|{}",
+                                record.transaction, record.action, record.table, record.row
+                            )),
+                        ),
+                    ]),
+                    created_at: now,
+                    updated_at: now,
+                },
+            )
+            .await
+            .map(|_| ())
+    }
+
+    /// Create the change log if it is not there yet.
+    async fn ensure_change_log(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+    ) -> ProtocolResult<()> {
+        use crate::protocols::postgres_wire::persistent_storage::{
+            ColumnDefinition, ColumnType, TableSchema,
+        };
+
+        if storage.table_exists(CHANGE_LOG).await? {
+            return Ok(());
+        }
+        storage
+            .create_table(TableSchema {
+                name: CHANGE_LOG.to_string(),
+                columns: vec![
+                    ColumnDefinition {
+                        name: "position".to_string(),
+                        data_type: ColumnType::BigInt,
+                        nullable: false,
+                        default_value: None,
+                        unique: true,
+                        check: None,
+                        references: None,
+                        domain: None,
+                    },
+                    ColumnDefinition {
+                        name: "payload".to_string(),
+                        data_type: ColumnType::Text,
+                        nullable: false,
+                        default_value: None,
+                        unique: false,
+                        check: None,
+                        references: None,
+                        domain: None,
+                    },
+                ],
+                created_at: chrono::Utc::now(),
+                row_count: 0,
+                foreign_keys: Vec::new(),
+            })
+            .await
+    }
+
+    /// Changes after `position`, read from the durable log.
+    ///
+    /// # Errors
+    /// Returns an error when the log cannot be read.
+    pub async fn logged_changes_since(&self, position: u64) -> ProtocolResult<Vec<ChangeRecord>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(Vec::new());
+        };
+        if !storage.table_exists(CHANGE_LOG).await? {
+            return Ok(Vec::new());
+        }
+
+        let mut records: Vec<ChangeRecord> = storage
+            .select_rows(CHANGE_LOG, Vec::new(), Vec::new(), None)
+            .await?
+            .into_iter()
+            .filter_map(|row| {
+                let at = row.values.get("position")?.as_u64()?;
+                if at <= position {
+                    return None;
+                }
+                let payload = row.values.get("payload")?.as_str()?;
+                let mut parts = payload.splitn(4, '|');
+                Some(ChangeRecord {
+                    position: at,
+                    transaction: parts.next()?.parse().ok()?,
+                    action: parts.next()?.to_string(),
+                    table: parts.next()?.to_string(),
+                    row: parts.next()?.to_string(),
+                })
+            })
+            .collect();
+        records.sort_by_key(|record| record.position);
+        Ok(records)
+    }
+
+    /// Remember a replication slot, so a restart does not forget it.
+    ///
+    /// # Errors
+    /// Returns an error when the catalog cannot be written.
+    pub async fn create_replication_slot(&self, name: &str, plugin: &str) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        self.ensure_view_catalog(storage).await?;
+        let now = chrono::Utc::now();
+        storage
+            .delete_rows(
+                VIEW_CATALOG,
+                vec![QueryCondition {
+                    column: "name".to_string(),
+                    operator: "=".to_string(),
+                    value: JsonValue::String(format!("slot:{name}")),
+                }],
+            )
+            .await?;
+        storage
+            .insert_row(
+                VIEW_CATALOG,
+                TableRow {
+                    values: HashMap::from([
+                        (
+                            "name".to_string(),
+                            JsonValue::String(format!("slot:{name}")),
+                        ),
+                        (
+                            "definition".to_string(),
+                            JsonValue::String(format!("{plugin}|{}", latest_change_position())),
+                        ),
+                    ]),
+                    created_at: now,
+                    updated_at: now,
+                },
+            )
+            .await
+            .map(|_| ())
+    }
+
+    /// A slot's plugin and confirmed position, if it exists.
+    ///
+    /// # Errors
+    /// Returns an error when the catalog cannot be read.
+    pub async fn replication_slot(&self, name: &str) -> ProtocolResult<Option<(String, u64)>> {
+        Ok(self
+            .view_definition(&format!("slot:{name}"))
+            .await?
+            .and_then(|definition| {
+                let (plugin, position) = definition.split_once('|')?;
+                Some((plugin.to_string(), position.parse().ok()?))
+            }))
+    }
+
+    /// Record how far a replica has confirmed, so a restart resumes there.
+    ///
+    /// # Errors
+    /// Returns an error when the catalog cannot be written.
+    pub async fn confirm_replication_slot(&self, name: &str, position: u64) -> ProtocolResult<()> {
+        let Some((plugin, _)) = self.replication_slot(name).await? else {
+            return Ok(());
+        };
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        storage
+            .update_rows(
+                VIEW_CATALOG,
+                HashMap::from([(
+                    "definition".to_string(),
+                    JsonValue::String(format!("{plugin}|{position}")),
+                )]),
+                vec![QueryCondition {
+                    column: "name".to_string(),
+                    operator: "=".to_string(),
+                    value: JsonValue::String(format!("slot:{name}")),
+                }],
+            )
+            .await
+            .map(|_| ())
+    }
+
+    /// Forget a replication slot.
+    ///
+    /// # Errors
+    /// Returns an error when the catalog cannot be written.
+    pub async fn drop_replication_slot(&self, name: &str) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        self.ensure_view_catalog(storage).await?;
+        storage
+            .delete_rows(
+                VIEW_CATALOG,
+                vec![QueryCondition {
+                    column: "name".to_string(),
+                    operator: "=".to_string(),
+                    value: JsonValue::String(format!("slot:{name}")),
+                }],
+            )
+            .await
+            .map(|_| ())
+    }
+
+    /// Record a trigger's table, timing, events and action.
+    async fn remember_trigger(&self, name: &str, definition: &str) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        self.ensure_view_catalog(storage).await?;
+        let now = chrono::Utc::now();
+        storage
+            .insert_row(
+                VIEW_CATALOG,
+                TableRow {
+                    values: HashMap::from([
+                        (
+                            "name".to_string(),
+                            JsonValue::String(format!("trigger:{name}")),
+                        ),
+                        (
+                            "definition".to_string(),
+                            JsonValue::String(definition.to_string()),
+                        ),
+                    ]),
+                    created_at: now,
+                    updated_at: now,
+                },
+            )
+            .await
+            .map(|_| ())
+    }
+
+    /// The actions of every trigger on `table` firing at `timing` for `event`.
+    ///
+    /// # Errors
+    /// Returns an error when the catalog cannot be read.
+    pub async fn triggers_for(
+        &self,
+        table: &str,
+        timing: &str,
+        event: &str,
+    ) -> ProtocolResult<Vec<TriggerDefinition>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(Vec::new());
+        };
+        if !storage.table_exists(VIEW_CATALOG).await? {
+            return Ok(Vec::new());
+        }
+
+        let rows = storage
+            .select_rows(VIEW_CATALOG, Vec::new(), Vec::new(), None)
+            .await?;
+        Ok(rows
+            .into_iter()
+            .filter(|row| {
+                row.values
+                    .get("name")
+                    .and_then(JsonValue::as_str)
+                    .is_some_and(|name| name.starts_with("trigger:"))
+            })
+            .filter_map(|row| {
+                let definition = row.values.get("definition")?.as_str()?.to_string();
+                let mut parts = definition.splitn(6, '|');
+                let on = parts.next()?;
+                let at = parts.next()?;
+                let events = parts.next()?;
+                let scope = parts.next()?;
+                let when = parts.next()?;
+                let action = parts.next()?;
+                (on == fold_identifier(table)
+                    && at == timing
+                    && events.split(',').any(|e| e == event))
+                .then(|| TriggerDefinition {
+                    per_row: scope == "ROW",
+                    when: (!when.is_empty()).then(|| when.to_string()),
+                    action: action.to_string(),
+                })
+            })
+            .collect())
+    }
+
+    /// Record a domain's base type and constraints.
+    async fn remember_domain(&self, name: &str, definition: &str) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        self.ensure_view_catalog(storage).await?;
+        let now = chrono::Utc::now();
+        storage
+            .insert_row(
+                VIEW_CATALOG,
+                TableRow {
+                    values: HashMap::from([
+                        (
+                            "name".to_string(),
+                            JsonValue::String(format!("domain:{name}")),
+                        ),
+                        (
+                            "definition".to_string(),
+                            JsonValue::String(definition.to_string()),
+                        ),
+                    ]),
+                    created_at: now,
+                    updated_at: now,
+                },
+            )
+            .await
+            .map(|_| ())
+    }
+
+    /// A domain's declared type and constraints, if the name is one.
+    pub async fn domain_definition(&self, name: &str) -> ProtocolResult<Option<String>> {
+        self.view_definition(&format!("domain:{name}")).await
+    }
+
+    /// Record a materialized view's defining query so `REFRESH` can re-run it.
+    async fn remember_materialized(&self, name: &str, query: &str) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        self.ensure_view_catalog(storage).await?;
+        let now = chrono::Utc::now();
+        storage
+            .insert_row(
+                VIEW_CATALOG,
+                TableRow {
+                    values: HashMap::from([
+                        ("name".to_string(), JsonValue::String(format!("mat:{name}"))),
+                        (
+                            "definition".to_string(),
+                            JsonValue::String(query.to_string()),
+                        ),
+                    ]),
+                    created_at: now,
+                    updated_at: now,
+                },
+            )
+            .await
+            .map(|_| ())
+    }
+
+    /// The query behind a materialized view, if there is one.
+    async fn materialized_definition(&self, name: &str) -> ProtocolResult<Option<String>> {
+        self.view_definition(&format!("mat:{name}")).await
+    }
+
+    /// Create the view catalog if it is not there yet.
+    async fn ensure_view_catalog(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+    ) -> ProtocolResult<()> {
+        use crate::protocols::postgres_wire::persistent_storage::{
+            ColumnDefinition, ColumnType, TableSchema,
+        };
+
+        if storage.table_exists(VIEW_CATALOG).await? {
+            return Ok(());
+        }
+
+        let column = |name: &str, unique: bool| ColumnDefinition {
+            name: name.to_string(),
+            data_type: ColumnType::Text,
+            nullable: false,
+            default_value: None,
+            unique,
+            check: None,
+            references: None,
+            domain: None,
+        };
+
+        storage
+            .create_table(TableSchema {
+                name: VIEW_CATALOG.to_string(),
+                columns: vec![column("name", true), column("definition", false)],
+                created_at: chrono::Utc::now(),
+                row_count: 0,
+                foreign_keys: Vec::new(),
+            })
+            .await
+    }
+
+    /// The query a view stands for, if `name` names one.
+    async fn view_definition(&self, name: &str) -> ProtocolResult<Option<String>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(None);
+        };
+        if !storage.table_exists(VIEW_CATALOG).await? {
+            return Ok(None);
+        }
+
+        let rows = storage
+            .select_rows(
+                VIEW_CATALOG,
+                Vec::new(),
+                vec![QueryCondition {
+                    column: "name".to_string(),
+                    operator: "=".to_string(),
+                    value: JsonValue::String(name.to_string()),
+                }],
+                None,
+            )
+            .await?;
+
+        Ok(rows.into_iter().next().and_then(|row| {
+            row.values
+                .get("definition")
+                .and_then(JsonValue::as_str)
+                .map(str::to_string)
+        }))
+    }
+
+    /// `INSERT ... ON CONFLICT DO NOTHING | DO UPDATE SET ...`.
+    ///
+    /// The conflict is detected by reading the target columns before writing,
+    /// which is what the uniqueness check does on an ordinary insert.
+    ///
+    /// # Errors
+    /// Returns an error when the table is unknown or a value cannot be
+    /// evaluated.
+    async fn insert_on_conflict(
+        &self,
+        insert: &crate::protocols::postgres_wire::sql::ast::InsertStatement,
+    ) -> ProtocolResult<QueryResult> {
+        use crate::protocols::postgres_wire::sql::ast::{
+            AssignmentTarget, ConflictAction, ConflictTarget, InsertSource,
+        };
+        use crate::protocols::postgres_wire::sql::expression_evaluator::{
+            EvaluationContext, ExpressionEvaluator,
+        };
+
+        let storage = self.persistent_storage.as_ref().ok_or_else(|| {
+            ProtocolError::PostgresError("Persistent storage not enabled".to_string())
+        })?;
+        let table = fold_identifier(&insert.table.full_name());
+        let schema = storage.get_table_schema(&table).await?.ok_or_else(|| {
+            ProtocolError::PostgresError(format!("Table '{table}' does not exist"))
+        })?;
+        let InsertSource::Values(tuples) = &insert.source else {
+            return Err(ProtocolError::PostgresError(
+                "ON CONFLICT is only supported with a VALUES source".to_string(),
+            ));
+        };
+        let clause = insert.on_conflict.as_ref().ok_or_else(|| {
+            ProtocolError::PostgresError("missing ON CONFLICT clause".to_string())
+        })?;
+
+        // Without an explicit target, any unique column is the conflict key.
+        let keys: Vec<String> = match &clause.target {
+            Some(ConflictTarget::Columns(columns)) => {
+                columns.iter().map(|name| fold_identifier(name)).collect()
+            }
+            Some(ConflictTarget::Constraint(_)) | None => schema
+                .columns
+                .iter()
+                .filter(|column| column.unique)
+                .map(|column| fold_identifier(&column.name))
+                .collect(),
+        };
+
+        let names: Vec<String> = insert
+            .columns
+            .clone()
+            .unwrap_or_else(|| {
+                schema
+                    .columns
+                    .iter()
+                    .map(|column| column.name.clone())
+                    .collect()
+            })
+            .iter()
+            .map(|name| fold_identifier(name))
+            .collect();
+
+        let mut evaluator = ExpressionEvaluator::new();
+        let context = EvaluationContext::empty();
+        let mut inserted = 0usize;
+        let mut updated = 0usize;
+
+        for tuple in tuples {
+            let mut row: HashMap<String, SqlValue> = HashMap::new();
+            for (name, expression) in names.iter().zip(tuple) {
+                row.insert(name.clone(), evaluator.evaluate(expression, &context)?);
+            }
+
+            let conditions: Vec<QueryCondition> = keys
+                .iter()
+                .filter_map(|key| {
+                    row.get(key).map(|value| QueryCondition {
+                        column: key.clone(),
+                        operator: "=".to_string(),
+                        value: Self::sql_value_to_json(value),
+                    })
+                })
+                .collect();
+            let conflicting = if conditions.is_empty() {
+                Vec::new()
+            } else {
+                storage
+                    .select_rows(&table, Vec::new(), conditions.clone(), Some(1))
+                    .await?
+            };
+
+            if conflicting.is_empty() {
+                let now = chrono::Utc::now();
+                let mut values: HashMap<String, JsonValue> = row
+                    .iter()
+                    .map(|(name, value)| (name.clone(), Self::sql_value_to_json(value)))
+                    .collect();
+                Self::apply_defaults(&schema, &mut values);
+                Self::check_not_null(&schema, &values)?;
+                storage
+                    .insert_row(
+                        &table,
+                        TableRow {
+                            values,
+                            created_at: now,
+                            updated_at: now,
+                        },
+                    )
+                    .await?;
+                inserted += 1;
+                continue;
+            }
+
+            match &clause.action {
+                ConflictAction::DoNothing => {}
+                ConflictAction::DoUpdate { set, .. } => {
+                    let set_values: HashMap<String, JsonValue> = set
+                        .iter()
+                        .filter_map(|assignment| match &assignment.target {
+                            AssignmentTarget::Column(name) => Some((name, &assignment.value)),
+                            AssignmentTarget::Columns(_) => None,
+                        })
+                        .map(|(name, expression)| {
+                            let context = EvaluationContext::with_row(row.clone());
+                            evaluator.evaluate(expression, &context).map(|value| {
+                                (fold_identifier(name), Self::sql_value_to_json(&value))
+                            })
+                        })
+                        .collect::<ProtocolResult<_>>()?;
+                    updated += storage
+                        .update_rows(&table, set_values, conditions)
+                        .await?
+                        .max(0) as usize;
+                }
+            }
+        }
+
+        Ok(QueryResult::Insert {
+            count: inserted + updated,
+        })
+    }
+
+    /// `INSERT INTO t (...) SELECT ...`.
+    ///
+    /// The rows come from evaluating the select, so the source may be any
+    /// query this engine can answer, including a join or a CTE.
+    ///
+    /// # Errors
+    /// Returns an error when the target table is unknown, the select cannot be
+    /// evaluated, or the column count does not match.
+    async fn insert_from_select(
+        &self,
+        table: &str,
+        columns: Option<&[String]>,
+        query: &crate::protocols::postgres_wire::sql::ast::SelectStatement,
+        returning: Option<&[crate::protocols::postgres_wire::sql::ast::SelectItem]>,
+    ) -> ProtocolResult<QueryResult> {
+        let storage = self.persistent_storage.as_ref().ok_or_else(|| {
+            ProtocolError::PostgresError("Persistent storage not enabled".to_string())
+        })?;
+        let schema = storage.get_table_schema(table).await?.ok_or_else(|| {
+            ProtocolError::PostgresError(format!("Table '{table}' does not exist"))
+        })?;
+
+        let (source_columns, rows) = self
+            .evaluate_select(query, &HashMap::new())
+            .await?
+            .ok_or_else(|| {
+                ProtocolError::PostgresError(
+                    "the source of an INSERT ... SELECT uses a shape this engine cannot evaluate"
+                        .to_string(),
+                )
+            })?;
+
+        // Without an explicit column list the target's own columns are filled
+        // in order, which is what PostgreSQL does.
+        let targets: Vec<String> = match columns {
+            Some(columns) => columns.iter().map(|name| fold_identifier(name)).collect(),
+            None => schema
+                .columns
+                .iter()
+                .map(|column| fold_identifier(&column.name))
+                .collect(),
+        };
+        if !rows.is_empty() && targets.len() != source_columns.len() {
+            return Err(ProtocolError::PostgresError(format!(
+                "INSERT has {} target columns but the query returns {}",
+                targets.len(),
+                source_columns.len()
+            )));
+        }
+
+        let mut inserted = Vec::with_capacity(rows.len());
+        for row in rows {
+            let now = chrono::Utc::now();
+            let values: HashMap<String, JsonValue> = targets
+                .iter()
+                .zip(&row)
+                .map(|(name, value)| {
+                    let stored = schema
+                        .columns
+                        .iter()
+                        .find(|column| fold_identifier(&column.name) == *name)
+                        .map_or_else(|| name.clone(), |column| column.name.clone());
+                    (stored, Self::sql_value_to_json(value))
+                })
+                .collect();
+            storage
+                .insert_row(
+                    table,
+                    TableRow {
+                        values,
+                        created_at: now,
+                        updated_at: now,
+                    },
+                )
+                .await?;
+
+            let mut projected = crate::protocols::postgres_wire::sql::select_pipeline::Row::new();
+            for (name, value) in targets.iter().zip(row) {
+                projected.insert(format!("{table}.{name}"), value.clone());
+                projected.insert(name.clone(), value);
+            }
+            inserted.push(projected);
+        }
+
+        let count = inserted.len();
+        match returning {
+            None => Ok(QueryResult::Insert { count }),
+            Some(items) => self.project_returning(table, items, inserted).await,
+        }
+    }
+
+    /// `UPDATE` whose `SET` reads columns, such as `SET n = n + 1`.
+    ///
+    /// Each matching row is recomputed from its own values and written back
+    /// individually; the storage layer takes one value map per call, which
+    /// cannot express a per-row result.
+    ///
+    /// # Errors
+    /// Returns an error when the table is unknown or an assignment cannot be
+    /// evaluated.
+    async fn update_with_expressions(
+        &self,
+        table: &str,
+        update: &crate::protocols::postgres_wire::sql::ast::UpdateStatement,
+    ) -> ProtocolResult<QueryResult> {
+        use crate::protocols::postgres_wire::sql::ast::{AssignmentTarget, FromClause, TableName};
+
+        let storage = self.persistent_storage.as_ref().ok_or_else(|| {
+            ProtocolError::PostgresError("Persistent storage not enabled".to_string())
+        })?;
+        if !storage.table_exists(table).await? {
+            return Err(ProtocolError::PostgresError(format!(
+                "Table '{table}' does not exist"
+            )));
+        }
+
+        let from = FromClause::Table {
+            name: TableName {
+                schema: None,
+                name: table.to_string(),
+            },
+            alias: None,
+            time_travel: None,
+        };
+        let Some((rows, _)) = self.rows_from_clause(&from, &HashMap::new()).await? else {
+            return Err(ProtocolError::PostgresError(format!(
+                "Table '{table}' does not exist"
+            )));
+        };
+
+        let mut evaluator =
+            crate::protocols::postgres_wire::sql::expression_evaluator::ExpressionEvaluator::new();
+        let assigned: Vec<String> = update
+            .set
+            .iter()
+            .filter_map(|assignment| match &assignment.target {
+                AssignmentTarget::Column(name) => Some(fold_identifier(name)),
+                AssignmentTarget::Columns(_) => None,
+            })
+            .collect();
+
+        // The originals identify the rows to rewrite; the updated copies carry
+        // the new values.
+        let originals =
+            Self::apply_assignments(&mut evaluator, rows, update.where_clause.as_ref(), &[])?;
+        let updated =
+            Self::apply_assignments(&mut evaluator, originals.clone(), None, &update.set)?;
+
+        let mut count = 0usize;
+        for (original, new_row) in originals.iter().zip(&updated) {
+            let set_values: HashMap<String, JsonValue> = assigned
+                .iter()
+                .filter_map(|name| {
+                    new_row
+                        .get(name)
+                        .map(|value| (name.clone(), Self::sql_value_to_json(value)))
+                })
+                .collect();
+
+            // Every column of the original row identifies it. Rows that are
+            // identical in every column compute the same new values, so
+            // matching more than one is not a wrong answer.
+            let conditions: Vec<QueryCondition> = original
+                .iter()
+                .filter(|(name, _)| !name.contains('.'))
+                .map(|(name, value)| QueryCondition {
+                    column: name.clone(),
+                    operator: "=".to_string(),
+                    value: Self::sql_value_to_json(value),
+                })
+                .collect();
+
+            count += storage
+                .update_rows(table, set_values, conditions)
+                .await?
+                .max(0) as usize;
+        }
+
+        match update.returning.as_deref() {
+            None => Ok(QueryResult::Update { count }),
+            Some(items) => self.project_returning(table, items, updated).await,
+        }
+    }
+
+    /// Execute a write statement that carries a `RETURNING` clause.
+    ///
+    /// Returns `None` when the statement has no `RETURNING`, leaving the normal
+    /// write path in charge. The rows are projected from the affected rows —
+    /// read before a `DELETE`, and with the assignments applied for an
+    /// `UPDATE` — so the values reflect the statement, not the table's state
+    /// at some other moment.
+    ///
+    /// # Errors
+    /// Returns an error when storage cannot be read or the write fails.
+    async fn execute_with_returning(&self, sql: &str) -> ProtocolResult<Option<QueryResult>> {
+        use crate::protocols::postgres_wire::sql::ast::{
+            Expression, InsertSource, Statement as AstStatement,
+        };
+        use crate::protocols::postgres_wire::sql::parser::SqlParser;
+
+        if self.persistent_storage.is_none() {
+            return Ok(None);
+        }
+        // A cheap reject before parsing: only writes come through here.
+        let leading = sql.trim_start();
+        if !["INSERT", "UPDATE", "DELETE"].iter().any(|verb| {
+            leading.len() >= verb.len() && leading[..verb.len()].eq_ignore_ascii_case(verb)
+        }) {
+            return Ok(None);
+        }
+
+        let Ok(statement) = SqlParser::new().parse(sql) else {
+            return Ok(None);
+        };
+
+        // `ON CONFLICT` is part of the statement, not of the VALUES list; the
+        // simple parser read it as more values and rejected the statement for
+        // a column-count mismatch.
+        if let AstStatement::Insert(insert) = &statement {
+            if insert.on_conflict.is_some() {
+                return self.insert_on_conflict(insert).await.map(Some);
+            }
+        }
+
+        // `INSERT ... SELECT` inserted nothing and reported success, because
+        // the simple parser reads the source as a VALUES list and finds none.
+        if let AstStatement::Insert(insert) = &statement {
+            if let InsertSource::Query(query) = &insert.source {
+                return self
+                    .insert_from_select(
+                        &fold_identifier(&insert.table.full_name()),
+                        insert.columns.as_deref(),
+                        query,
+                        insert.returning.as_deref(),
+                    )
+                    .await
+                    .map(Some);
+            }
+        }
+
+        // An assignment that is not a literal has to be evaluated per row.
+        // Passing the text through stored `"amount + 1"` into the column.
+        if let AstStatement::Update(update) = &statement {
+            if update
+                .set
+                .iter()
+                .any(|assignment| !matches!(assignment.value, Expression::Literal(_)))
+            {
+                return self
+                    .update_with_expressions(&fold_identifier(&update.table.full_name()), update)
+                    .await
+                    .map(Some);
+            }
+        }
+
+        // Everything else here is only interesting for its RETURNING clause.
+        if !sql.to_uppercase().contains("RETURNING") {
+            return Ok(None);
+        }
+
+        let (table, returning, where_clause, assignments, inserted) = match statement {
+            AstStatement::Insert(insert) => {
+                let Some(returning) = insert.returning else {
+                    return Ok(None);
+                };
+                let InsertSource::Values(tuples) = insert.source else {
+                    return Ok(None);
+                };
+                (
+                    fold_identifier(&insert.table.full_name()),
+                    returning,
+                    None,
+                    Vec::new(),
+                    Some((insert.columns.unwrap_or_default(), tuples)),
+                )
+            }
+            AstStatement::Update(update) => {
+                let Some(returning) = update.returning else {
+                    return Ok(None);
+                };
+                (
+                    fold_identifier(&update.table.full_name()),
+                    returning,
+                    update.where_clause,
+                    update.set,
+                    None,
+                )
+            }
+            AstStatement::Delete(delete) => {
+                let Some(returning) = delete.returning else {
+                    return Ok(None);
+                };
+                (
+                    fold_identifier(&delete.table.full_name()),
+                    returning,
+                    delete.where_clause,
+                    Vec::new(),
+                    None,
+                )
+            }
+            _ => return Ok(None),
+        };
+
+        // Assemble the rows the statement affects, before it runs.
+        let mut evaluator =
+            crate::protocols::postgres_wire::sql::expression_evaluator::ExpressionEvaluator::new();
+        let affected = match &inserted {
+            Some((columns, tuples)) => {
+                let names: Vec<String> = columns.iter().map(|name| fold_identifier(name)).collect();
+                let context = crate::protocols::postgres_wire::sql::expression_evaluator::EvaluationContext::empty();
+                let mut rows = Vec::with_capacity(tuples.len());
+                for tuple in tuples {
+                    let mut row = crate::protocols::postgres_wire::sql::select_pipeline::Row::new();
+                    for (name, expression) in names.iter().zip(tuple) {
+                        let value = evaluator.evaluate(expression, &context)?;
+                        row.insert(format!("{table}.{name}"), value.clone());
+                        row.insert(name.clone(), value);
+                    }
+                    rows.push(row);
+                }
+                rows
+            }
+            None => {
+                let from = crate::protocols::postgres_wire::sql::ast::FromClause::Table {
+                    name: crate::protocols::postgres_wire::sql::ast::TableName {
+                        schema: None,
+                        name: table.clone(),
+                    },
+                    alias: None,
+                    time_travel: None,
+                };
+                let Some((rows, _)) = self.rows_from_clause(&from, &HashMap::new()).await? else {
+                    return Ok(None);
+                };
+                Self::apply_assignments(&mut evaluator, rows, where_clause.as_ref(), &assignments)?
+            }
+        };
+
+        // Run the write itself, with the clause removed. The recursive call is
+        // cheap to reject: the stripped statement has no RETURNING.
+        let without_returning = Self::strip_returning(sql);
+        Box::pin(self.execute_query(&without_returning)).await?;
+
+        self.project_returning(&table, &returning, affected)
+            .await
+            .map(Some)
+    }
+
+    /// Project a `RETURNING` list over the rows a write affected.
+    ///
+    /// # Errors
+    /// Returns an error when an item cannot be evaluated.
+    async fn project_returning(
+        &self,
+        table: &str,
+        returning: &[crate::protocols::postgres_wire::sql::ast::SelectItem],
+        rows: Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>,
+    ) -> ProtocolResult<QueryResult> {
+        use crate::protocols::postgres_wire::sql::ast::{ColumnRef, Expression, SelectItem};
+
+        // A wildcard is expanded from the schema rather than from the row's
+        // keys: a row carries each value twice, bare and table-qualified, so
+        // expanding over the keys would return every column twice and in hash
+        // order.
+        let expands_wildcard = returning
+            .iter()
+            .any(|item| matches!(item, SelectItem::Wildcard));
+        let returning = match (expands_wildcard, self.persistent_storage.as_ref()) {
+            (true, Some(storage)) => match storage.get_table_schema(table).await? {
+                None => returning.to_vec(),
+                Some(schema) => schema
+                    .columns
+                    .iter()
+                    .map(|column| SelectItem::Expression {
+                        expr: Expression::Column(ColumnRef {
+                            table: None,
+                            name: fold_identifier(&column.name),
+                        }),
+                        alias: None,
+                    })
+                    .collect(),
+            },
+            _ => returning.to_vec(),
+        };
+
+        // A select with no FROM over rows already in hand is exactly what the
+        // pipeline's projection does.
+        let projection = crate::protocols::postgres_wire::sql::ast::SelectStatement {
+            with: None,
+            select_list: returning,
+            distinct: None,
+            from_clause: None,
+            where_clause: None,
+            group_by: None,
+            having: None,
+            order_by: None,
+            limit: None,
+            offset: None,
+            for_clause: None,
+            traverse: None,
+            set_operation: None,
+        };
+        let (columns, values) =
+            crate::protocols::postgres_wire::sql::select_pipeline::run_select_values(
+                &projection,
+                rows,
+            )?;
+
+        Ok(QueryResult::Select {
+            columns,
+            rows: values
+                .into_iter()
+                .map(|row| {
+                    row.into_iter()
+                        .map(|value| match value {
+                            SqlValue::Null => None,
+                            other => Some(other.to_postgres_string()),
+                        })
+                        .collect()
+                })
+                .collect(),
+        })
+    }
+
+    /// Keep the rows a predicate selects, with any assignments applied.
+    fn apply_assignments(
+        evaluator: &mut crate::protocols::postgres_wire::sql::expression_evaluator::ExpressionEvaluator,
+        rows: Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>,
+        where_clause: Option<&crate::protocols::postgres_wire::sql::ast::Expression>,
+        assignments: &[crate::protocols::postgres_wire::sql::ast::Assignment],
+    ) -> ProtocolResult<Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>> {
+        use crate::protocols::postgres_wire::sql::ast::AssignmentTarget;
+        use crate::protocols::postgres_wire::sql::expression_evaluator::EvaluationContext;
+
+        let mut kept = Vec::new();
+        for mut row in rows {
+            if let Some(predicate) = where_clause {
+                let context = EvaluationContext::with_row(row.clone());
+                if !matches!(
+                    evaluator.evaluate(predicate, &context)?,
+                    SqlValue::Boolean(true)
+                ) {
+                    continue;
+                }
+            }
+            for assignment in assignments {
+                let AssignmentTarget::Column(name) = &assignment.target else {
+                    continue;
+                };
+                let context = EvaluationContext::with_row(row.clone());
+                let value = evaluator.evaluate(&assignment.value, &context)?;
+                row.insert(fold_identifier(name), value);
+            }
+            kept.push(row);
+        }
+        Ok(kept)
+    }
+
+    /// Remove a trailing `RETURNING ...` clause from a statement.
+    fn strip_returning(sql: &str) -> String {
+        let upper = sql.to_uppercase();
+        match upper.rfind(" RETURNING ") {
+            Some(index) => sql[..index].trim_end().trim_end_matches(';').to_string(),
+            None => sql.to_string(),
+        }
+    }
+
     /// Run a `SELECT` over the rows held in persistent storage.
     ///
     /// Returns `None` when the statement is not a single-table SELECT of a
@@ -1546,7 +4130,6 @@ impl QueryEngine {
     async fn select_over_storage(&self, sql: &str) -> ProtocolResult<Option<QueryResult>> {
         use crate::protocols::postgres_wire::sql::ast::Statement as AstStatement;
         use crate::protocols::postgres_wire::sql::parser::SqlParser;
-        use crate::protocols::postgres_wire::sql::select_pipeline;
 
         if self.persistent_storage.is_none() {
             return Ok(None);
@@ -1559,44 +4142,640 @@ impl QueryEngine {
             return Ok(None);
         };
 
-        // Set operations combine two result sets, which this path does not do.
-        if select.set_operation.is_some() {
+        let Some((columns, rows)) = self.evaluate_select(&select, &HashMap::new()).await? else {
             return Ok(None);
-        }
-
-        let Some(from) = select.from_clause.as_ref() else {
-            return Ok(None);
-        };
-
-        let Some((rows, column_order)) = self.rows_from_clause(from).await? else {
-            return Ok(None);
-        };
-
-        // Subqueries are executed here and replaced by the values they yield,
-        // so the expression evaluator — which has no access to storage — never
-        // has to run one.
-        let mut select = *select;
-        if let Some(predicate) = select.where_clause.take() {
-            select.where_clause = Some(self.resolve_subqueries(predicate).await?);
-        }
-        if let Some(having) = select.having.take() {
-            select.having = Some(self.resolve_subqueries(having).await?);
-        }
-
-        let output = select_pipeline::run_select(&select, rows)?;
-
-        // A wildcard is named by the pipeline as `*`; the real names come from
-        // the tables involved, in declaration order.
-        let columns = if output.columns.iter().any(|name| name == "*") {
-            column_order
-        } else {
-            output.columns
         };
 
         Ok(Some(QueryResult::Select {
             columns,
-            rows: output.rows,
+            rows: rows
+                .into_iter()
+                .map(|row| {
+                    row.into_iter()
+                        .map(|value| match value {
+                            SqlValue::Null => None,
+                            other => Some(other.to_postgres_string()),
+                        })
+                        .collect()
+                })
+                .collect(),
         }))
+    }
+
+    /// Evaluate a `SELECT` against storage, returning typed values.
+    ///
+    /// `ctes` carries the named queries a `WITH` clause introduced, so a
+    /// reference to one resolves to its rows rather than to a table that does
+    /// not exist. Returns `None` when the statement uses a shape this path does
+    /// not handle, leaving it to the engine that can.
+    ///
+    /// # Errors
+    /// Returns an error when storage cannot be read or an expression cannot be
+    /// evaluated.
+    #[allow(clippy::type_complexity)]
+    fn evaluate_select<'a>(
+        &'a self,
+        select: &'a crate::protocols::postgres_wire::sql::ast::SelectStatement,
+        ctes: &'a HashMap<String, crate::protocols::postgres_wire::sql::ast::SelectStatement>,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = ProtocolResult<Option<(Vec<String>, Vec<Vec<SqlValue>>)>>,
+                > + Send
+                + 'a,
+        >,
+    > {
+        use crate::protocols::postgres_wire::sql::ast::SetOperator;
+        use crate::protocols::postgres_wire::sql::select_pipeline;
+
+        Box::pin(async move {
+            // A `WITH` clause adds names visible to this statement and to the
+            // queries nested inside it.
+            let mut scope = ctes.clone();
+            let mut materialised: HashMap<String, (Vec<String>, Vec<Vec<SqlValue>>)> =
+                HashMap::new();
+            if let Some(with) = &select.with {
+                for cte in &with.ctes {
+                    let name = fold_identifier(&cte.name);
+                    let declared: Option<Vec<String>> = cte.columns.as_ref().map(|columns| {
+                        columns
+                            .iter()
+                            .map(|column| fold_identifier(column))
+                            .collect()
+                    });
+
+                    if with.recursive && Self::references_table(&cte.query, &name) {
+                        // A recursive CTE is its non-recursive term plus every
+                        // row the recursive term yields when applied to what is
+                        // known so far, until it yields nothing new.
+                        let rows = self
+                            .evaluate_recursive_cte(&name, &cte.query, &scope, declared.as_deref())
+                            .await?;
+                        match rows {
+                            Some(rows) => {
+                                materialised.insert(name.clone(), rows);
+                            }
+                            None => return Ok(None),
+                        }
+                        continue;
+                    }
+
+                    // `WITH t(a, b) AS (...)` renames the query's output
+                    // columns, so the rows have to be produced now rather than
+                    // re-run later under their original names.
+                    if let Some(columns) = declared {
+                        let Some((_, values)) = self.evaluate_select(&cte.query, &scope).await?
+                        else {
+                            return Ok(None);
+                        };
+                        materialised.insert(name.clone(), (columns, values));
+                        continue;
+                    }
+
+                    scope.insert(name, (*cte.query).clone());
+                }
+            }
+            let scope = scope;
+
+            // A select with no FROM runs over exactly one empty row, which is
+            // what `SELECT 1` means. Sending it elsewhere gave a second
+            // rendering of values, where NULL came back as an empty string.
+            let (rows, column_order) = match select.from_clause.as_ref() {
+                None => (
+                    vec![crate::protocols::postgres_wire::sql::select_pipeline::Row::new()],
+                    Vec::new(),
+                ),
+                // A recursive CTE has already been computed, so the FROM clause
+                // reads its rows rather than re-running a query.
+                Some(crate::protocols::postgres_wire::sql::ast::FromClause::Table {
+                    name,
+                    alias,
+                    ..
+                }) if materialised.contains_key(&fold_identifier(&name.full_name())) => {
+                    let key = fold_identifier(&name.full_name());
+                    let (columns, values) = materialised[&key].clone();
+                    let qualifier = alias
+                        .as_ref()
+                        .map(|a| fold_identifier(&a.name))
+                        .unwrap_or(key);
+                    Self::rows_from_values(&columns, values, &qualifier)
+                }
+                Some(from) => match self.rows_from_clause(from, &scope).await? {
+                    Some(assembled) => assembled,
+                    None => return Ok(None),
+                },
+            };
+
+            // Subqueries are executed here and replaced by the values they
+            // yield, so the expression evaluator — which has no access to
+            // storage — never has to run one.
+            let mut resolved = select.clone();
+
+            // A correlated subquery has a different answer per outer row, so
+            // resolving it once produces one wrong answer applied to every
+            // row. Those rows are filtered here, one at a time, and the
+            // pipeline then runs with the predicate already applied.
+            let rows = match resolved.where_clause.as_ref() {
+                Some(predicate) if Self::is_correlated(predicate) => {
+                    let filtered = self.filter_correlated(predicate, rows).await?;
+                    resolved.where_clause = None;
+                    filtered
+                }
+                _ => {
+                    if let Some(predicate) = resolved.where_clause.take() {
+                        resolved.where_clause = Some(self.resolve_subqueries(predicate).await?);
+                    }
+                    rows
+                }
+            };
+
+            if let Some(having) = resolved.having.take() {
+                resolved.having = Some(self.resolve_subqueries(having).await?);
+            }
+
+            let (names, mut values) = select_pipeline::run_select_values(&resolved, rows)?;
+
+            // A wildcard is named by the pipeline as `*`; the real names come
+            // from the tables involved, in declaration order.
+            let columns = if names.iter().any(|name| name == "*") {
+                column_order
+            } else {
+                names
+            };
+
+            let Some(set_operation) = &select.set_operation else {
+                return Ok(Some((columns, values)));
+            };
+
+            let Some((_, right)) = self.evaluate_select(&set_operation.right, &scope).await? else {
+                return Ok(None);
+            };
+
+            values = match set_operation.operator {
+                SetOperator::UnionAll => {
+                    values.extend(right);
+                    values
+                }
+                SetOperator::Union => {
+                    values.extend(right);
+                    deduplicate_rows(values)
+                }
+                SetOperator::IntersectAll => {
+                    values.retain(|row| right.contains(row));
+                    values
+                }
+                SetOperator::Intersect => {
+                    values.retain(|row| right.contains(row));
+                    deduplicate_rows(values)
+                }
+                SetOperator::ExceptAll => {
+                    values.retain(|row| !right.contains(row));
+                    values
+                }
+                SetOperator::Except => {
+                    values.retain(|row| !right.contains(row));
+                    deduplicate_rows(values)
+                }
+            };
+
+            Ok(Some((columns, values)))
+        })
+    }
+
+    /// Turn a nested select's output into rows the pipeline can read.
+    ///
+    /// Each value is keyed both bare and qualified by `qualifier`, so both
+    /// `id` and `t.id` resolve — the same convention stored tables use.
+    fn rows_from_values(
+        columns: &[String],
+        values: Vec<Vec<SqlValue>>,
+        qualifier: &str,
+    ) -> (
+        Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>,
+        Vec<String>,
+    ) {
+        let names: Vec<String> = columns.iter().map(|name| fold_identifier(name)).collect();
+        let rows = values
+            .into_iter()
+            .map(|value_row| {
+                let mut row = crate::protocols::postgres_wire::sql::select_pipeline::Row::new();
+                for (name, value) in names.iter().zip(value_row) {
+                    row.insert(format!("{qualifier}.{name}"), value.clone());
+                    row.insert(name.clone(), value);
+                }
+                row
+            })
+            .collect();
+        (rows, names)
+    }
+
+    /// Whether a select reads from a table of the given name.
+    ///
+    /// Used to tell a genuinely recursive CTE from one merely declared inside a
+    /// `WITH RECURSIVE`, which PostgreSQL also allows.
+    fn references_table(
+        select: &crate::protocols::postgres_wire::sql::ast::SelectStatement,
+        name: &str,
+    ) -> bool {
+        use crate::protocols::postgres_wire::sql::ast::FromClause;
+
+        fn walk(from: &FromClause, name: &str) -> bool {
+            match from {
+                FromClause::Table { name: table, .. } => {
+                    fold_identifier(&table.full_name()) == name
+                }
+                FromClause::Join { left, right, .. } => walk(left, name) || walk(right, name),
+                FromClause::Subquery { query, .. } => query
+                    .from_clause
+                    .as_ref()
+                    .is_some_and(|from| walk(from, name)),
+                _ => false,
+            }
+        }
+
+        let own = select
+            .from_clause
+            .as_ref()
+            .is_some_and(|from| walk(from, name));
+        own || select
+            .set_operation
+            .as_ref()
+            .is_some_and(|operation| Self::references_table(&operation.right, name))
+    }
+
+    /// Evaluate `WITH RECURSIVE name AS (base UNION [ALL] recursive)`.
+    ///
+    /// The base term runs once; the recursive term then runs repeatedly over
+    /// the rows found so far until a round adds nothing. Returns `None` when
+    /// the statement is not in the shape this can evaluate.
+    ///
+    /// # Errors
+    /// Returns an error when a term cannot be evaluated, or when the recursion
+    /// does not settle within its bound.
+    #[allow(clippy::type_complexity)]
+    async fn evaluate_recursive_cte(
+        &self,
+        name: &str,
+        query: &crate::protocols::postgres_wire::sql::ast::SelectStatement,
+        scope: &HashMap<String, crate::protocols::postgres_wire::sql::ast::SelectStatement>,
+        declared: Option<&[String]>,
+    ) -> ProtocolResult<Option<(Vec<String>, Vec<Vec<SqlValue>>)>> {
+        use crate::protocols::postgres_wire::sql::ast::SetOperator;
+
+        // The shape is `base UNION [ALL] recursive`; anything else is not a
+        // recursion this can run.
+        let Some(operation) = query.set_operation.as_ref() else {
+            return Ok(None);
+        };
+        let distinct = matches!(
+            operation.operator,
+            SetOperator::Union | SetOperator::Intersect | SetOperator::Except
+        );
+
+        let mut base = query.clone();
+        base.with = None;
+        base.set_operation = None;
+        let Some((columns, mut accumulated)) = self.evaluate_select(&base, scope).await? else {
+            return Ok(None);
+        };
+        // `WITH RECURSIVE n(x) AS ...` names the columns; the base term's own
+        // names (`SELECT 1` yields `expr`) are not what the recursive term
+        // refers to.
+        let columns = match declared {
+            Some(declared) if declared.len() == columns.len() => declared.to_vec(),
+            _ => columns,
+        };
+
+        // Each round feeds the rows found so far back in under the CTE's name.
+        // A bound is kept so a recursion that does not settle fails loudly
+        // instead of running until the process is killed.
+        const MAX_ROUNDS: usize = 1_000;
+        let mut frontier = accumulated.clone();
+        for round in 0..MAX_ROUNDS {
+            if frontier.is_empty() {
+                return Ok(Some((columns, accumulated)));
+            }
+
+            let known = Self::rows_from_values(&columns, frontier.clone(), name);
+            let Some(produced) = self
+                .evaluate_recursive_term(&operation.right, scope, name, known.0)
+                .await?
+            else {
+                return Ok(None);
+            };
+
+            let fresh: Vec<Vec<SqlValue>> = produced
+                .into_iter()
+                .filter(|row| !distinct || !accumulated.contains(row))
+                .collect();
+            accumulated.extend(fresh.clone());
+            frontier = fresh;
+
+            if round + 1 == MAX_ROUNDS {
+                return Err(ProtocolError::PostgresError(format!(
+                    "recursive query '{name}' did not settle within {MAX_ROUNDS} rounds"
+                )));
+            }
+        }
+
+        Ok(Some((columns, accumulated)))
+    }
+
+    /// Run one round of a recursive term against the rows found so far.
+    async fn evaluate_recursive_term(
+        &self,
+        term: &crate::protocols::postgres_wire::sql::ast::SelectStatement,
+        scope: &HashMap<String, crate::protocols::postgres_wire::sql::ast::SelectStatement>,
+        name: &str,
+        known: Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>,
+    ) -> ProtocolResult<Option<Vec<Vec<SqlValue>>>> {
+        use crate::protocols::postgres_wire::sql::ast::FromClause;
+        use crate::protocols::postgres_wire::sql::select_pipeline;
+
+        // The term reads the CTE by name; those rows are supplied directly.
+        let reads_only_the_cte = matches!(
+            term.from_clause.as_ref(),
+            Some(FromClause::Table { name: table, .. })
+                if fold_identifier(&table.full_name()) == name
+        );
+        if !reads_only_the_cte {
+            // A join between the CTE and a stored table is assembled here.
+            let Some(from) = term.from_clause.as_ref() else {
+                return Ok(None);
+            };
+            let Some((rows, _)) = self
+                .rows_from_clause_with(from, scope, name, &known)
+                .await?
+            else {
+                return Ok(None);
+            };
+            let mut resolved = term.clone();
+            resolved.set_operation = None;
+            let (_, values) = select_pipeline::run_select_values(&resolved, rows)?;
+            return Ok(Some(values));
+        }
+
+        let mut resolved = term.clone();
+        resolved.set_operation = None;
+        let (_, values) = select_pipeline::run_select_values(&resolved, known)?;
+        Ok(Some(values))
+    }
+
+    /// Assemble a FROM clause where one table name stands for supplied rows.
+    #[allow(clippy::type_complexity)]
+    fn rows_from_clause_with<'a>(
+        &'a self,
+        from: &'a crate::protocols::postgres_wire::sql::ast::FromClause,
+        scope: &'a HashMap<String, crate::protocols::postgres_wire::sql::ast::SelectStatement>,
+        name: &'a str,
+        known: &'a [crate::protocols::postgres_wire::sql::select_pipeline::Row],
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = ProtocolResult<
+                        Option<(
+                            Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>,
+                            Vec<String>,
+                        )>,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        use crate::protocols::postgres_wire::sql::ast::{FromClause, JoinType};
+
+        Box::pin(async move {
+            match from {
+                FromClause::Table { name: table, .. }
+                    if fold_identifier(&table.full_name()) == name =>
+                {
+                    Ok(Some((known.to_vec(), Vec::new())))
+                }
+                FromClause::Join {
+                    left,
+                    join_type,
+                    right,
+                    condition,
+                } => {
+                    let Some((left_rows, _)) =
+                        self.rows_from_clause_with(left, scope, name, known).await?
+                    else {
+                        return Ok(None);
+                    };
+                    let Some((right_rows, _)) = self
+                        .rows_from_clause_with(right, scope, name, known)
+                        .await?
+                    else {
+                        return Ok(None);
+                    };
+                    let Some(joined) =
+                        Self::join_rows(&left_rows, &right_rows, join_type, condition)?
+                    else {
+                        return Ok(None);
+                    };
+                    Ok(Some((joined, Vec::new())))
+                }
+                other => {
+                    let _ = JoinType::Inner;
+                    self.rows_from_clause(other, scope).await
+                }
+            }
+        })
+    }
+
+    /// Whether an expression contains a subquery that reads the outer row.
+    ///
+    /// A qualified column whose qualifier is not one of the subquery's own
+    /// sources can only come from outside it.
+    fn is_correlated(expr: &crate::protocols::postgres_wire::sql::ast::Expression) -> bool {
+        use crate::protocols::postgres_wire::sql::ast::{Expression, InList};
+
+        match expr {
+            Expression::Subquery(select) | Expression::Exists(select) => {
+                Self::reads_outer_columns(select)
+            }
+            Expression::In {
+                list: InList::Subquery(select),
+                ..
+            } => Self::reads_outer_columns(select),
+            Expression::Binary { left, right, .. } => {
+                Self::is_correlated(left) || Self::is_correlated(right)
+            }
+            Expression::Unary { operand, .. } => Self::is_correlated(operand),
+            _ => false,
+        }
+    }
+
+    /// Whether a select's predicate names a table it does not read from.
+    fn reads_outer_columns(
+        select: &crate::protocols::postgres_wire::sql::ast::SelectStatement,
+    ) -> bool {
+        use crate::protocols::postgres_wire::sql::ast::{Expression, FromClause};
+
+        fn sources(from: &FromClause, into: &mut Vec<String>) {
+            match from {
+                FromClause::Table { name, alias, .. } => {
+                    into.push(fold_identifier(&name.full_name()));
+                    if let Some(alias) = alias {
+                        into.push(fold_identifier(&alias.name));
+                    }
+                }
+                FromClause::Join { left, right, .. } => {
+                    sources(left, into);
+                    sources(right, into);
+                }
+                _ => {}
+            }
+        }
+
+        fn qualifiers(expr: &Expression, into: &mut Vec<String>) {
+            match expr {
+                Expression::Column(column) => {
+                    if let Some(table) = &column.table {
+                        into.push(fold_identifier(table));
+                    }
+                }
+                Expression::Binary { left, right, .. } => {
+                    qualifiers(left, into);
+                    qualifiers(right, into);
+                }
+                Expression::Unary { operand, .. } => qualifiers(operand, into),
+                Expression::Function(call) => {
+                    for arg in &call.args {
+                        qualifiers(arg, into);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut own = Vec::new();
+        if let Some(from) = &select.from_clause {
+            sources(from, &mut own);
+        }
+        let mut referenced = Vec::new();
+        if let Some(predicate) = &select.where_clause {
+            qualifiers(predicate, &mut referenced);
+        }
+        referenced.iter().any(|name| !own.contains(name))
+    }
+
+    /// Keep the rows a predicate containing a correlated subquery selects.
+    ///
+    /// The outer row's values are substituted into the subquery before it
+    /// runs, so each row is judged against its own answer.
+    ///
+    /// # Errors
+    /// Returns an error when a subquery cannot be run or the predicate cannot
+    /// be evaluated.
+    async fn filter_correlated(
+        &self,
+        predicate: &crate::protocols::postgres_wire::sql::ast::Expression,
+        rows: Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>,
+    ) -> ProtocolResult<Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>> {
+        use crate::protocols::postgres_wire::sql::expression_evaluator::{
+            EvaluationContext, ExpressionEvaluator,
+        };
+
+        let mut evaluator = ExpressionEvaluator::new();
+        let mut kept = Vec::with_capacity(rows.len());
+        for row in rows {
+            let bound = Self::bind_outer_row(predicate.clone(), &row);
+            let resolved = self.resolve_subqueries(bound).await?;
+            let context = EvaluationContext::with_row(row.clone());
+            if matches!(
+                evaluator.evaluate(&resolved, &context)?,
+                SqlValue::Boolean(true)
+            ) {
+                kept.push(row);
+            }
+        }
+        Ok(kept)
+    }
+
+    /// Replace qualified column references the outer row can answer.
+    ///
+    /// Only qualified names are substituted: a bare name inside a subquery
+    /// belongs to the subquery's own table, which PostgreSQL resolves first.
+    fn bind_outer_row(
+        expr: crate::protocols::postgres_wire::sql::ast::Expression,
+        row: &crate::protocols::postgres_wire::sql::select_pipeline::Row,
+    ) -> crate::protocols::postgres_wire::sql::ast::Expression {
+        use crate::protocols::postgres_wire::sql::ast::{Expression, InList};
+
+        match expr {
+            Expression::Column(ref column) => match &column.table {
+                Some(table) => {
+                    let key = format!(
+                        "{}.{}",
+                        fold_identifier(table),
+                        fold_identifier(&column.name)
+                    );
+                    match row.get(&key) {
+                        Some(value) => Expression::Literal(value.clone()),
+                        None => expr,
+                    }
+                }
+                None => expr,
+            },
+            Expression::Binary {
+                left,
+                operator,
+                right,
+            } => Expression::Binary {
+                left: Box::new(Self::bind_outer_row(*left, row)),
+                operator,
+                right: Box::new(Self::bind_outer_row(*right, row)),
+            },
+            Expression::Unary { operator, operand } => Expression::Unary {
+                operator,
+                operand: Box::new(Self::bind_outer_row(*operand, row)),
+            },
+            Expression::Subquery(select) => {
+                Expression::Subquery(Box::new(Self::bind_outer_select(*select, row)))
+            }
+            Expression::Exists(select) => {
+                Expression::Exists(Box::new(Self::bind_outer_select(*select, row)))
+            }
+            Expression::In {
+                expr: inner,
+                list: InList::Subquery(select),
+                negated,
+            } => Expression::In {
+                expr: Box::new(Self::bind_outer_row(*inner, row)),
+                list: InList::Subquery(Box::new(Self::bind_outer_select(*select, row))),
+                negated,
+            },
+            other => other,
+        }
+    }
+
+    /// Bind the outer row into a subquery.
+    ///
+    /// The select list is bound as well as the predicate: a `LATERAL` subquery
+    /// most often reads the outer row in what it projects, as in
+    /// `LATERAL (SELECT a.amount * 2)`.
+    fn bind_outer_select(
+        mut select: crate::protocols::postgres_wire::sql::ast::SelectStatement,
+        row: &crate::protocols::postgres_wire::sql::select_pipeline::Row,
+    ) -> crate::protocols::postgres_wire::sql::ast::SelectStatement {
+        use crate::protocols::postgres_wire::sql::ast::SelectItem;
+
+        if let Some(predicate) = select.where_clause.take() {
+            select.where_clause = Some(Self::bind_outer_row(predicate, row));
+        }
+        select.select_list = select
+            .select_list
+            .into_iter()
+            .map(|item| match item {
+                SelectItem::Expression { expr, alias } => SelectItem::Expression {
+                    expr: Self::bind_outer_row(expr, row),
+                    alias,
+                },
+                other => other,
+            })
+            .collect();
+        select
     }
 
     /// Replace subqueries in an expression with the values they produce.
@@ -1677,7 +4856,7 @@ impl QueryEngine {
             ));
         };
 
-        let Some((rows, _)) = self.rows_from_clause(from).await? else {
+        let Some((rows, _)) = self.rows_from_clause(from, &HashMap::new()).await? else {
             return Err(ProtocolError::PostgresError(
                 "subquery reads a source this engine cannot assemble".to_string(),
             ));
@@ -1732,21 +4911,22 @@ impl QueryEngine {
     fn rows_from_clause<'a>(
         &'a self,
         from: &'a crate::protocols::postgres_wire::sql::ast::FromClause,
+        ctes: &'a HashMap<String, crate::protocols::postgres_wire::sql::ast::SelectStatement>,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
                     Output = ProtocolResult<
-                        Option<(Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>, Vec<String>)>,
+                        Option<(
+                            Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>,
+                            Vec<String>,
+                        )>,
                     >,
                 > + Send
                 + 'a,
         >,
     > {
         Box::pin(async move {
-            use crate::protocols::postgres_wire::sql::ast::{FromClause, JoinCondition, JoinType};
-            use crate::protocols::postgres_wire::sql::expression_evaluator::{
-                EvaluationContext, ExpressionEvaluator,
-            };
+            use crate::protocols::postgres_wire::sql::ast::FromClause;
             use crate::protocols::postgres_wire::sql::select_pipeline::Row;
             use crate::protocols::postgres_wire::sql::types::SqlValue;
 
@@ -1756,9 +4936,70 @@ impl QueryEngine {
 
             match from {
                 FromClause::Table { name, alias, .. } => {
+                    // Tables live in one namespace here, so an explicit
+                    // `public.` qualifier names the same table as a bare name.
                     let table = fold_identifier(&name.full_name());
+                    let table = table
+                        .strip_prefix("public.")
+                        .map_or(table.clone(), str::to_string);
+
+                    // A `WITH` name shadows storage: it is a query, not a table.
+                    if let Some(cte) = ctes.get(&table) {
+                        let Some((columns, values)) = self.evaluate_select(cte, ctes).await? else {
+                            return Ok(None);
+                        };
+                        let qualifier = alias
+                            .as_ref()
+                            .map(|a| fold_identifier(&a.name))
+                            .unwrap_or_else(|| table.clone());
+                        return Ok(Some(Self::rows_from_values(&columns, values, &qualifier)));
+                    }
+
                     let Some(schema) = storage.get_table_schema(&table).await? else {
-                        return Ok(None);
+                        // A catalogue relation is generated, not stored. It has
+                        // to be reachable from here as well as from the plain
+                        // select path: `SELECT relname FROM pg_class LIMIT 1`
+                        // carries a clause and so arrives here.
+                        if let Some(QueryResult::Select { columns, rows }) = self
+                            .select_system_catalog(&table, &["*".to_string()])
+                            .await?
+                        {
+                            let values = rows
+                                .into_iter()
+                                .map(|row| {
+                                    row.into_iter()
+                                        .map(|value| value.map_or(SqlValue::Null, SqlValue::Text))
+                                        .collect()
+                                })
+                                .collect();
+                            let qualifier = alias
+                                .as_ref()
+                                .map(|a| fold_identifier(&a.name))
+                                .unwrap_or_else(|| table.clone());
+                            return Ok(Some(Self::rows_from_values(&columns, values, &qualifier)));
+                        }
+
+                        // Not a table — it may be a view, which is a stored
+                        // query rather than stored rows.
+                        let Some(definition) = self.view_definition(&table).await? else {
+                            return Ok(None);
+                        };
+                        let parsed = crate::protocols::postgres_wire::sql::parser::SqlParser::new()
+                            .parse(&definition)?;
+                        let crate::protocols::postgres_wire::sql::ast::Statement::Select(view) =
+                            parsed
+                        else {
+                            return Ok(None);
+                        };
+                        let Some((columns, values)) = self.evaluate_select(&view, ctes).await?
+                        else {
+                            return Ok(None);
+                        };
+                        let qualifier = alias
+                            .as_ref()
+                            .map(|a| fold_identifier(&a.name))
+                            .unwrap_or_else(|| table.clone());
+                        return Ok(Some(Self::rows_from_values(&columns, values, &qualifier)));
                     };
 
                     // Rows carry both the bare column name and its qualified
@@ -1768,12 +5009,14 @@ impl QueryEngine {
                         .map(|a| fold_identifier(&a.name))
                         .unwrap_or_else(|| table.clone());
 
+                    note_read(&table);
                     let stored = storage
                         .select_rows(&table, Vec::new(), Vec::new(), None)
                         .await?;
 
                     let rows: Vec<Row> = stored
                         .into_iter()
+                        .filter(|row| row_is_visible(&row.values))
                         .map(|row| {
                             let mut out = Row::new();
                             for column in &schema.columns {
@@ -1782,8 +5025,7 @@ impl QueryEngine {
                                     .get(&column.name)
                                     .or_else(|| {
                                         row.values.iter().find_map(|(key, value)| {
-                                            key.eq_ignore_ascii_case(&column.name)
-                                                .then_some(value)
+                                            key.eq_ignore_ascii_case(&column.name).then_some(value)
                                         })
                                     })
                                     .cloned()
@@ -1806,73 +5048,163 @@ impl QueryEngine {
                     Ok(Some((rows, order)))
                 }
 
+                // A derived table: `FROM (SELECT ...) alias`. Its rows come
+                // from running the inner select, not from a stored table.
+                FromClause::Subquery { query, alias, .. } => {
+                    // A `LATERAL` subquery may read the rows to its left. It is
+                    // handled at the join, where those rows are known; on its
+                    // own it is an ordinary derived table.
+                    let Some((columns, values)) = self.evaluate_select(query, ctes).await? else {
+                        return Ok(None);
+                    };
+                    Ok(Some(Self::rows_from_values(
+                        &columns,
+                        values,
+                        &fold_identifier(&alias.name),
+                    )))
+                }
+
                 FromClause::Join {
                     left,
                     join_type,
                     right,
                     condition,
                 } => {
-                    let Some((left_rows, mut order)) = self.rows_from_clause(left).await? else {
+                    let Some((left_rows, mut order)) = self.rows_from_clause(left, ctes).await?
+                    else {
                         return Ok(None);
                     };
-                    let Some((right_rows, right_order)) = self.rows_from_clause(right).await?
+                    let left_order_len = order.len();
+                    // `LATERAL` re-evaluates its subquery for each row on the
+                    // left, which is the whole point of the keyword: without
+                    // it the subquery cannot refer to those rows.
+                    if let FromClause::Subquery {
+                        query,
+                        alias,
+                        lateral: true,
+                    } = right.as_ref()
+                    {
+                        let qualifier = fold_identifier(&alias.name);
+                        let mut joined = Vec::new();
+                        for left_row in &left_rows {
+                            let bound = Self::bind_outer_select((**query).clone(), left_row);
+                            let Some((columns, values)) =
+                                self.evaluate_select(&bound, ctes).await?
+                            else {
+                                return Ok(None);
+                            };
+                            let (right_rows, right_order) =
+                                Self::rows_from_values(&columns, values, &qualifier);
+                            if order.len() == left_order_len {
+                                order.extend(right_order);
+                            }
+                            match Self::join_rows(
+                                std::slice::from_ref(left_row),
+                                &right_rows,
+                                join_type,
+                                condition,
+                            )? {
+                                Some(rows) => joined.extend(rows),
+                                None => return Ok(None),
+                            }
+                        }
+                        return Ok(Some((joined, order)));
+                    }
+
+                    let Some((right_rows, right_order)) =
+                        self.rows_from_clause(right, ctes).await?
                     else {
                         return Ok(None);
                     };
                     order.extend(right_order);
 
-                    let mut evaluator = ExpressionEvaluator::new();
-                    let mut joined = Vec::new();
-
-                    for left_row in &left_rows {
-                        let mut matched = false;
-                        for right_row in &right_rows {
-                            let mut combined = left_row.clone();
-                            for (key, value) in right_row {
-                                // A bare name present on both sides keeps the
-                                // left one; the qualified names stay distinct.
-                                combined.entry(key.clone()).or_insert_with(|| value.clone());
-                                if key.contains('.') {
-                                    combined.insert(key.clone(), value.clone());
-                                }
-                            }
-
-                            let keep = match condition {
-                                JoinCondition::On(predicate) => {
-                                    let context = EvaluationContext::with_row(combined.clone());
-                                    matches!(
-                                        evaluator.evaluate(predicate, &context)?,
-                                        SqlValue::Boolean(true)
-                                    )
-                                }
-                                JoinCondition::Using(columns) => columns.iter().all(|column| {
-                                    let column = fold_identifier(column);
-                                    left_row.get(&column) == right_row.get(&column)
-                                }),
-                                // Without shared column information a natural
-                                // join cannot be resolved here.
-                                JoinCondition::Natural => return Ok(None),
-                            };
-
-                            if keep || matches!(join_type, JoinType::Cross) {
-                                matched = true;
-                                joined.push(combined);
-                            }
-                        }
-
-                        // A left outer join keeps an unmatched left row with
-                        // NULLs for the right side.
-                        if !matched && matches!(join_type, JoinType::LeftOuter) {
-                            joined.push(left_row.clone());
-                        }
+                    match Self::join_rows(&left_rows, &right_rows, join_type, condition)? {
+                        Some(joined) => Ok(Some((joined, order))),
+                        None => Ok(None),
                     }
-
-                    Ok(Some((joined, order)))
                 }
 
                 _ => Ok(None),
             }
         })
+    }
+
+    /// Combine two row sets under a join condition.
+    ///
+    /// Returns `None` when the condition cannot be resolved.
+    ///
+    /// # Errors
+    /// Returns an error when the join condition cannot be evaluated.
+    #[allow(clippy::type_complexity)]
+    fn join_rows(
+        left_rows: &[crate::protocols::postgres_wire::sql::select_pipeline::Row],
+        right_rows: &[crate::protocols::postgres_wire::sql::select_pipeline::Row],
+        join_type: &crate::protocols::postgres_wire::sql::ast::JoinType,
+        condition: &crate::protocols::postgres_wire::sql::ast::JoinCondition,
+    ) -> ProtocolResult<Option<Vec<crate::protocols::postgres_wire::sql::select_pipeline::Row>>>
+    {
+        use crate::protocols::postgres_wire::sql::ast::{JoinCondition, JoinType};
+        use crate::protocols::postgres_wire::sql::expression_evaluator::{
+            EvaluationContext, ExpressionEvaluator,
+        };
+
+        let mut evaluator = ExpressionEvaluator::new();
+        let mut joined = Vec::new();
+
+        for left_row in left_rows {
+            let mut matched = false;
+            for right_row in right_rows {
+                let mut combined = left_row.clone();
+                for (key, value) in right_row {
+                    // A bare name present on both sides keeps the left one;
+                    // the qualified names stay distinct.
+                    combined.entry(key.clone()).or_insert_with(|| value.clone());
+                    if key.contains('.') {
+                        combined.insert(key.clone(), value.clone());
+                    }
+                }
+
+                let keep = match condition {
+                    JoinCondition::On(predicate) => {
+                        let context = EvaluationContext::with_row(combined.clone());
+                        matches!(
+                            evaluator.evaluate(predicate, &context)?,
+                            SqlValue::Boolean(true)
+                        )
+                    }
+                    JoinCondition::Using(columns) => columns.iter().all(|column| {
+                        let column = fold_identifier(column);
+                        left_row.get(&column) == right_row.get(&column)
+                    }),
+                    // A natural join matches on every column name the two
+                    // sides share. Bare keys only: the qualified duplicates
+                    // each row carries would otherwise never match.
+                    JoinCondition::Natural => {
+                        let shared: Vec<&String> = left_row
+                            .keys()
+                            .filter(|key| !key.contains('.') && right_row.contains_key(*key))
+                            .collect();
+                        !shared.is_empty()
+                            && shared
+                                .iter()
+                                .all(|key| left_row.get(*key) == right_row.get(*key))
+                    }
+                };
+
+                if keep || matches!(join_type, JoinType::Cross) {
+                    matched = true;
+                    joined.push(combined);
+                }
+            }
+
+            // A left outer join keeps an unmatched left row with NULLs for the
+            // right side.
+            if !matched && matches!(join_type, JoinType::LeftOuter) {
+                joined.push(left_row.clone());
+            }
+        }
+
+        Ok(Some(joined))
     }
 
     /// Convert a stored value into the typed value the evaluator works with.
@@ -1888,13 +5220,12 @@ impl QueryEngine {
             JsonValue::Number(n) => match column_type {
                 ColumnType::BigInt => n.as_i64().map_or(SqlValue::Null, SqlValue::BigInt),
                 ColumnType::Double => n.as_f64().map_or(SqlValue::Null, SqlValue::DoublePrecision),
-                ColumnType::Serial | ColumnType::Integer => n
-                    .as_i64()
-                    .and_then(|v| i32::try_from(v).ok())
-                    .map_or_else(
+                ColumnType::Serial | ColumnType::Integer => {
+                    n.as_i64().and_then(|v| i32::try_from(v).ok()).map_or_else(
                         || n.as_i64().map_or(SqlValue::Null, SqlValue::BigInt),
                         SqlValue::Integer,
-                    ),
+                    )
+                }
                 // The column is not declared numeric, so keep the number's own
                 // width rather than forcing it into the declared type.
                 _ => n
@@ -1953,18 +5284,33 @@ impl QueryEngine {
     /// the statement to the comprehensive engine instead, and if that cannot
     /// run it either the client gets an error rather than bad data.
     const UNSUPPORTED_SELECT_CLAUSES: [&'static str; 19] = [
-        " LIMIT ", " OFFSET ", " GROUP BY ", " HAVING ", " DISTINCT ", " JOIN ", " UNION ",
-        " INTERSECT ", " EXCEPT ", " ORDER BY ",
+        " LIMIT ",
+        " OFFSET ",
+        " GROUP BY ",
+        " HAVING ",
+        " DISTINCT ",
+        " JOIN ",
+        " UNION ",
+        " INTERSECT ",
+        " EXCEPT ",
+        " ORDER BY ",
         // The storage matcher implements LIKE as a case-insensitive `contains`
         // after deleting every `%`, so `'al%'` matched anywhere in the value
         // instead of anchoring at the start — and `BETWEEN`/`IS` it does not
         // implement at all. The expression evaluator handles all of them.
-        " LIKE ", " ILIKE ", " BETWEEN ", " IS NULL", " IS NOT ",
+        " LIKE ",
+        " ILIKE ",
+        " BETWEEN ",
+        " IS NULL",
+        " IS NOT ",
         // This parser reads a WHERE clause as a single `column op value`, so a
         // second condition was swallowed into the value: `WHERE a = 'x' AND b
         // > 1` compared `a` against the text "'x' AND b > 1" and matched
         // nothing.
-        " AND ", " OR ", " NOT ", " IN ",
+        " AND ",
+        " OR ",
+        " NOT ",
+        " IN ",
     ];
 
     /// Whether the simple parser would silently ignore part of `sql`.
@@ -1980,11 +5326,34 @@ impl QueryEngine {
             return true;
         }
 
-        // Any call in the select list — `COUNT(*)`, `SUM(x)`, a subquery. This
-        // parser treats the projection as bare column names, so it returned a
-        // NULL column named `COUNT(*)` for every row instead of a count.
+        // Anything in the select list that is not a bare column: a call such
+        // as `COUNT(*)`, an operator such as `name || '!'`, a literal, a
+        // subquery. This parser treats the projection as column names to look
+        // up, so it returned a NULL column named after the expression instead
+        // of evaluating it.
         let projection_end = upper.find(" FROM ").unwrap_or(upper.len());
-        upper[..projection_end].contains('(') || upper.contains("(SELECT ")
+        let projection = upper[..projection_end]
+            .trim()
+            .strip_prefix("SELECT")
+            .unwrap_or_default();
+        !Self::projection_is_plain_columns(projection) || upper.contains("(SELECT ")
+    }
+
+    /// Whether a select list is only column names, `*`, or qualified names.
+    ///
+    /// Anything else has to be evaluated rather than looked up.
+    fn projection_is_plain_columns(projection: &str) -> bool {
+        let projection = projection.trim();
+        !projection.is_empty()
+            && projection.split(',').all(|item| {
+                let item = item.trim();
+                !item.is_empty()
+                    && (item == "*"
+                        || item.chars().all(|character| {
+                            character.is_alphanumeric()
+                                || matches!(character, '_' | '.' | '"' | '*')
+                        }))
+            })
     }
 
     /// Parse SELECT statement
@@ -2050,12 +5419,15 @@ impl QueryEngine {
             ));
         }
 
-        // Find positions using uppercase version
-        let table_start = sql_upper.find("INTO").unwrap() + 4;
-        let table_end = sql_upper[table_start..].find('(').unwrap() + table_start;
+        // Find positions using uppercase version. Each of these was an
+        // `unwrap`: a statement without a column list panicked the connection's
+        // task rather than reporting a syntax error.
+        let invalid = || ProtocolError::PostgresError("Invalid INSERT syntax".to_string());
+        let table_start = sql_upper.find("INTO").ok_or_else(invalid)? + 4;
+        let table_end = sql_upper[table_start..].find('(').ok_or_else(invalid)? + table_start;
         let col_start = table_end + 1;
-        let col_end = sql_upper[col_start..].find(')').unwrap() + col_start;
-        let val_keyword_pos = sql_upper.find("VALUES").unwrap() + 6;
+        let col_end = sql_upper[col_start..].find(')').ok_or_else(invalid)? + col_start;
+        let val_keyword_pos = sql_upper.find("VALUES").ok_or_else(invalid)? + 6;
 
         // Extract data using original SQL to preserve case
         let table = fold_identifier(&sql[table_start..table_end]);
@@ -2333,6 +5705,30 @@ impl QueryEngine {
     ///
     /// The inverse of [`QueryEngine::literal_to_json`], so a value that goes
     /// out through one and back through the other is unchanged.
+    /// Store a value as JSON, keeping its type rather than its rendering.
+    ///
+    /// Going through a SQL literal and back would turn an integer into the
+    /// string `"11"`, which then compares as text.
+    fn sql_value_to_json(
+        value: &crate::protocols::postgres_wire::sql::types::SqlValue,
+    ) -> JsonValue {
+        use crate::protocols::postgres_wire::sql::types::SqlValue;
+
+        match value {
+            SqlValue::Null => JsonValue::Null,
+            SqlValue::Boolean(b) => JsonValue::Bool(*b),
+            SqlValue::SmallInt(i) => JsonValue::Number((*i).into()),
+            SqlValue::Integer(i) => JsonValue::Number((*i).into()),
+            SqlValue::BigInt(i) => JsonValue::Number((*i).into()),
+            SqlValue::Real(f) => serde_json::Number::from_f64(f64::from(*f))
+                .map_or(JsonValue::Null, JsonValue::Number),
+            SqlValue::DoublePrecision(f) => {
+                serde_json::Number::from_f64(*f).map_or(JsonValue::Null, JsonValue::Number)
+            }
+            other => JsonValue::String(other.to_postgres_string()),
+        }
+    }
+
     pub fn sql_value_to_literal(
         value: &crate::protocols::postgres_wire::sql::types::SqlValue,
     ) -> String {
@@ -2388,28 +5784,96 @@ impl QueryEngine {
 
     /// Parse WHERE clause
     fn parse_where_clause(&self, parts: &[&str]) -> ProtocolResult<WhereClause> {
-        // Simple parser: column operator value
         if parts.len() < 3 {
             return Err(ProtocolError::PostgresError(
                 "Invalid WHERE clause".to_string(),
             ));
         }
 
-        let column = parts[0].to_string();
-        let operator = parts[1].to_string();
-        // Parse the value more carefully - it might span multiple parts if it contains spaces
-        let value_part = parts[2..].join(" ");
-        // Quotes are kept and interpreted by `literal_to_json`, so `WHERE x =
-        // NULL` and `WHERE x = 'NULL'` stay distinguishable.
-        let value = value_part.trim_end_matches(';').trim().to_string();
+        // Conjuncts are separate conditions. Reading the whole clause as one
+        // made `WHERE a = 1 AND b = 2` compare `a` against the text
+        // `1 AND b = 2`, which matches nothing — so an `UPDATE` or `DELETE`
+        // with two conditions silently changed no rows and reported success.
+        let text = parts.join(" ");
+        let text = text.trim_end_matches(';').trim();
 
-        Ok(WhereClause {
-            conditions: vec![Condition {
-                column,
-                operator,
-                value,
-            }],
-        })
+        // Conditions are combined with AND; an OR cannot be expressed as a
+        // list of them, so it is refused rather than quietly mis-read.
+        if Self::splits_on_keyword(text, "OR").len() > 1 {
+            return Err(ProtocolError::PostgresError(
+                "statement uses a clause this parser does not implement".to_string(),
+            ));
+        }
+
+        let conditions = Self::splits_on_keyword(text, "AND")
+            .into_iter()
+            .map(|conjunct| {
+                let words: Vec<&str> = conjunct.split_whitespace().collect();
+                if words.len() < 3 {
+                    return Err(ProtocolError::PostgresError(
+                        "Invalid WHERE clause".to_string(),
+                    ));
+                }
+                Ok(Condition {
+                    column: words[0].to_string(),
+                    operator: words[1].to_string(),
+                    // Quotes are kept and interpreted by `literal_to_json`, so
+                    // `x = NULL` and `x = 'NULL'` stay distinguishable.
+                    value: words[2..].join(" "),
+                })
+            })
+            .collect::<ProtocolResult<Vec<_>>>()?;
+
+        Ok(WhereClause { conditions })
+    }
+
+    /// Split a predicate on a keyword that is not inside quotes or brackets.
+    fn splits_on_keyword(text: &str, keyword: &str) -> Vec<String> {
+        let upper = text.to_uppercase();
+        let padded = format!(" {keyword} ");
+        let mut parts = Vec::new();
+        let mut start = 0usize;
+        let mut depth = 0usize;
+        let mut quote: Option<char> = None;
+
+        let bytes: Vec<char> = text.chars().collect();
+        let upper_bytes: Vec<char> = upper.chars().collect();
+        let needle: Vec<char> = padded.chars().collect();
+
+        let mut index = 0usize;
+        while index < bytes.len() {
+            let character = bytes[index];
+            match quote {
+                Some(open) => {
+                    if character == open {
+                        quote = None;
+                    }
+                }
+                None => match character {
+                    '\'' | '"' => quote = Some(character),
+                    '(' => depth += 1,
+                    ')' => depth = depth.saturating_sub(1),
+                    _ => {
+                        if depth == 0
+                            && index + needle.len() <= upper_bytes.len()
+                            && upper_bytes[index..index + needle.len()] == needle[..]
+                        {
+                            parts.push(bytes[start..index].iter().collect::<String>());
+                            index += needle.len();
+                            start = index;
+                            continue;
+                        }
+                    }
+                },
+            }
+            index += 1;
+        }
+        parts.push(bytes[start..].iter().collect::<String>());
+        parts
+            .into_iter()
+            .map(|part| part.trim().to_string())
+            .filter(|part| !part.is_empty())
+            .collect()
     }
 
     /// Parse CREATE TABLE statement
@@ -2420,14 +5884,24 @@ impl QueryEngine {
         // Check for IF NOT EXISTS
         let if_not_exists = sql_upper.contains("IF NOT EXISTS");
 
-        // Find table name
+        // Find table name. These were `unwrap`s: `CREATE TABLE t AS SELECT ...`
+        // has no `(`, so an ordinary statement panicked the connection's task
+        // and every later statement on it failed with "connection closed".
         let table_start = if if_not_exists {
-            sql_upper.find("EXISTS").unwrap() + 6
+            sql_upper.find("EXISTS").map(|at| at + 6)
         } else {
-            sql_upper.find("TABLE").unwrap() + 5
-        };
+            sql_upper.find("TABLE").map(|at| at + 5)
+        }
+        .ok_or_else(|| ProtocolError::PostgresError("Invalid CREATE TABLE syntax".to_string()))?;
 
-        let table_end = sql[table_start..].find('(').unwrap() + table_start;
+        let table_end = sql[table_start..]
+            .find('(')
+            .map(|at| at + table_start)
+            .ok_or_else(|| {
+                ProtocolError::PostgresError(
+                    "Invalid CREATE TABLE syntax: expected a column list".to_string(),
+                )
+            })?;
         let table_name = fold_identifier(&sql[table_start..table_end]);
 
         // Find column definitions between parentheses
@@ -2439,11 +5913,48 @@ impl QueryEngine {
         })?;
 
         let column_defs_str = &sql[col_start..col_end];
-        let mut columns = Vec::new();
+        let mut columns: Vec<SimpleColumnDef> = Vec::new();
 
         // Split by commas and parse each column definition
-        for col_def in column_defs_str.split(',') {
+        // Table-level clauses — `PRIMARY KEY (a)`, `UNIQUE (a)`,
+        // `FOREIGN KEY (a) REFERENCES t(b)`, `CHECK (...)`, optionally named
+        // with `CONSTRAINT` — are collected here and applied to the columns
+        // they name. Splitting on commas alone read them as columns called
+        // `PRIMARY`, so the constraint was silently dropped.
+        let mut table_unique: Vec<String> = Vec::new();
+        let mut foreign_keys: Vec<crate::protocols::postgres_wire::persistent_storage::ForeignKey> =
+            Vec::new();
+        let mut table_checks: Vec<String> = Vec::new();
+
+        for col_def in Self::split_column_definitions(column_defs_str) {
             let col_def = col_def.trim();
+            let without_name = col_def
+                .strip_prefix("CONSTRAINT ")
+                .or_else(|| col_def.strip_prefix("constraint "))
+                .and_then(|rest| rest.split_once(char::is_whitespace).map(|(_, rest)| rest))
+                .unwrap_or(col_def)
+                .trim();
+            let upper = without_name.to_uppercase();
+
+            if upper.starts_with("PRIMARY KEY") || upper.starts_with("UNIQUE") {
+                if let Some(columns) = Self::parenthesised(without_name) {
+                    table_unique.extend(columns.split(',').map(fold_identifier));
+                }
+                continue;
+            }
+            if upper.starts_with("FOREIGN KEY") {
+                if let Some(key) = Self::parse_foreign_key(without_name) {
+                    foreign_keys.push(key);
+                }
+                continue;
+            }
+            if upper.starts_with("CHECK") {
+                if let Some(predicate) = Self::parenthesised(without_name) {
+                    table_checks.push(predicate.to_string());
+                }
+                continue;
+            }
+
             let parts: Vec<&str> = col_def.split_whitespace().collect();
 
             if parts.len() >= 2 {
@@ -2459,11 +5970,156 @@ impl QueryEngine {
             }
         }
 
+        // A table-level clause is written onto the column it names, so the
+        // executor sees one uniform description of each column.
+        for column in &mut columns {
+            let name = fold_identifier(&column.name);
+            if table_unique.contains(&name) {
+                column.constraints.push("PRIMARY".to_string());
+                column.constraints.push("KEY".to_string());
+            }
+        }
+        // A table-level CHECK may name any column, so it goes on the first
+        // one; the evaluator sees the whole row either way.
+        if let (Some(check), Some(column)) = (table_checks.first(), columns.first_mut()) {
+            column.constraints.push("CHECK".to_string());
+            column.constraints.push(format!("({check})"));
+        }
+
         Ok(Statement::CreateTable {
             table: table_name,
             columns,
             if_not_exists,
+            foreign_keys,
         })
+    }
+
+    /// Parse a `FOREIGN KEY (...) REFERENCES t(...) [ON DELETE ...] [ON UPDATE ...]`
+    /// clause, or the column-level `REFERENCES t(c)` form.
+    fn parse_foreign_key(
+        text: &str,
+    ) -> Option<crate::protocols::postgres_wire::persistent_storage::ForeignKey> {
+        use crate::protocols::postgres_wire::persistent_storage::{ForeignKey, ReferentialAction};
+
+        let upper = text.to_uppercase();
+        let references_at = upper.find("REFERENCES")?;
+
+        let columns: Vec<String> = if upper.starts_with("FOREIGN KEY") {
+            Self::parenthesised(&text[..references_at])?
+                .split(',')
+                .map(fold_identifier)
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let target = text[references_at + "REFERENCES".len()..].trim();
+        let (table, referenced) = match target.split_once('(') {
+            Some((table, rest)) => {
+                let close = rest.find(')')?;
+                (
+                    fold_identifier(table),
+                    rest[..close].split(',').map(fold_identifier).collect(),
+                )
+            }
+            None => (
+                fold_identifier(target.split_whitespace().next().unwrap_or(target)),
+                Vec::new(),
+            ),
+        };
+
+        // `ON DELETE`/`ON UPDATE` follow the reference; the default is the
+        // standard NO ACTION.
+        let action_after = |keyword: &str| -> ReferentialAction {
+            let Some(at) = upper.find(keyword) else {
+                return ReferentialAction::NoAction;
+            };
+            let rest = upper[at + keyword.len()..].trim_start();
+            if rest.starts_with("CASCADE") {
+                ReferentialAction::Cascade
+            } else if rest.starts_with("SET NULL") {
+                ReferentialAction::SetNull
+            } else if rest.starts_with("SET DEFAULT") {
+                ReferentialAction::SetDefault
+            } else if rest.starts_with("RESTRICT") {
+                ReferentialAction::Restrict
+            } else {
+                ReferentialAction::NoAction
+            }
+        };
+
+        use crate::protocols::postgres_wire::persistent_storage::MatchType;
+        let match_type = if upper.contains("MATCH FULL") {
+            MatchType::Full
+        } else if upper.contains("MATCH PARTIAL") {
+            MatchType::Partial
+        } else {
+            MatchType::Simple
+        };
+
+        Some(ForeignKey {
+            columns,
+            table,
+            referenced,
+            on_delete: action_after("ON DELETE"),
+            on_update: action_after("ON UPDATE"),
+            deferrable: upper.contains("DEFERRABLE") && !upper.contains("NOT DEFERRABLE"),
+            match_type,
+        })
+    }
+
+    /// Split a column-definition list on commas that are not inside brackets.
+    ///
+    /// `CHECK (a > 0)` and `FOREIGN KEY (a, b)` contain commas of their own; a
+    /// plain split cut them in half.
+    fn split_column_definitions(text: &str) -> Vec<String> {
+        let mut parts = Vec::new();
+        let mut current = String::new();
+        let mut depth = 0usize;
+
+        for character in text.chars() {
+            match character {
+                '(' => {
+                    depth += 1;
+                    current.push(character);
+                }
+                ')' => {
+                    depth = depth.saturating_sub(1);
+                    current.push(character);
+                }
+                ',' if depth == 0 => {
+                    parts.push(std::mem::take(&mut current));
+                }
+                other => current.push(other),
+            }
+        }
+        if !current.trim().is_empty() {
+            parts.push(current);
+        }
+        parts
+    }
+
+    /// The text inside the first bracketed group of `text`.
+    ///
+    /// The closing bracket is the one that matches the opening one, not the
+    /// last in the string: `FOREIGN KEY (a) REFERENCES t(b)` has two groups,
+    /// and taking the last `)` returned `a) REFERENCES t(b`.
+    fn parenthesised(text: &str) -> Option<&str> {
+        let open = text.find('(')?;
+        let mut depth = 0usize;
+        for (offset, character) in text[open..].char_indices() {
+            match character {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(text[open + 1..open + offset].trim());
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     /// Parse DROP TABLE statement
@@ -2476,10 +6132,11 @@ impl QueryEngine {
 
         // Find table name
         let table_start = if if_exists {
-            sql_upper.find("EXISTS").unwrap() + 6
+            sql_upper.find("EXISTS").map(|at| at + 6)
         } else {
-            sql_upper.find("TABLE").unwrap() + 5
-        };
+            sql_upper.find("TABLE").map(|at| at + 5)
+        }
+        .ok_or_else(|| ProtocolError::PostgresError("Invalid DROP TABLE syntax".to_string()))?;
 
         let table_name = fold_identifier(&sql[table_start..]);
 
@@ -2741,32 +6398,98 @@ impl QueryEngine {
         };
 
         // Execute select query - pass normalized column names to storage
-        let storage_columns = if columns.len() == 1 && columns[0] == "*" {
+        let storage_columns: Vec<String> = if columns.len() == 1 && columns[0] == "*" {
             // For SELECT *, pass empty columns to storage (no filtering)
             vec![]
         } else {
-            // Normalize column names to uppercase
             columns.into_iter().map(|c| fold_identifier(&c)).collect()
         };
 
-        let rows = storage
-            .select_rows(table, storage_columns.clone(), conditions, None)
-            .await?;
+        // A column the table does not have is an error. Projecting it produced
+        // a column of NULLs, which reads as "every row has no value there".
+        //
+        // The wanted name is matched against the stored name exactly first, so
+        // a quoted identifier resolves, then case-insensitively, so an
+        // unquoted one still finds a column stored with different case.
+        let storage_columns: Vec<String> = match storage.get_table_schema(table).await? {
+            None => storage_columns,
+            Some(schema) => {
+                let resolve = |wanted: &String| {
+                    schema
+                        .columns
+                        .iter()
+                        .find(|column| column.name == *wanted)
+                        .or_else(|| {
+                            schema
+                                .columns
+                                .iter()
+                                .find(|column| column.name.eq_ignore_ascii_case(wanted))
+                        })
+                        .map(|column| column.name.clone())
+                        .ok_or_else(|| {
+                            ProtocolError::PostgresError(format!(
+                                "column \"{wanted}\" does not exist"
+                            ))
+                        })
+                };
+                storage_columns
+                    .iter()
+                    .map(resolve)
+                    .collect::<ProtocolResult<Vec<_>>>()?
+            }
+        };
+
+        // Every column is fetched even when only some are projected: the row's
+        // transaction stamp decides whether it may be seen at all, and asking
+        // storage for a projection threw it away before that could be judged.
+        let rows: Vec<_> = storage
+            .select_rows(table, Vec::new(), conditions.clone(), None)
+            .await?
+            .into_iter()
+            .filter(|row| row_is_visible(&row.values))
+            .collect();
+
+        // A serializable block records what it saw, so a later write to one of
+        // those rows is a conflict and a write elsewhere is not.
+        if records_reads() {
+            let key_columns = match storage.get_table_schema(table).await? {
+                Some(schema) => schema
+                    .columns
+                    .iter()
+                    .filter(|column| column.unique)
+                    .map(|column| fold_identifier(&column.name))
+                    .collect::<Vec<_>>(),
+                None => Vec::new(),
+            };
+            if key_columns.is_empty() {
+                // Without a key a row cannot be named across a change: its
+                // identity would be its contents, and an update changes those.
+                // The whole table is watched instead — coarser, but it never
+                // misses a conflict.
+                note_read(table);
+            } else {
+                for row in &rows {
+                    note_read_row(table, &row_identity(&row.values, &key_columns));
+                }
+                // The predicate is recorded as well as the rows, so a row that
+                // *starts* matching it counts as a conflict. Watching only the
+                // rows returned cannot see a phantom: it was not there to
+                // record.
+                note_read_predicate(table, &conditions);
+            }
+        }
 
         // Convert TableRows to QueryResult format
         let result_columns = if storage_columns.is_empty() {
-            // For SELECT *, get columns from schema and normalize to uppercase
-            if let Some(schema) = storage.get_table_schema(table).await? {
-                schema
-                    .columns
-                    .into_iter()
-                    .map(|c| fold_identifier(&c.name))
-                    .collect()
-            } else {
-                vec![]
+            // The schema already holds each name in its final form: a quoted
+            // identifier kept its case when the table was created. Folding it
+            // again lowercased it, so `SELECT "Id"` could not find a column
+            // that `SELECT *` reported as `id`, and reading it returned NULL.
+            match storage.get_table_schema(table).await? {
+                Some(schema) => schema.columns.into_iter().map(|c| c.name).collect(),
+                None => vec![],
             }
         } else {
-            // Use the normalized column names
             storage_columns.clone()
         };
 
@@ -2882,6 +6605,20 @@ impl QueryEngine {
                 }
             }
 
+            // Domains are read once per statement rather than per row.
+            let domains = self.domains_for(&schema).await?;
+            Self::apply_defaults(&schema, &mut row_values);
+            row_values.insert(
+                TRANSACTION_STAMP.to_string(),
+                JsonValue::from(stamp_for_write()),
+            );
+            Self::check_not_null(&schema, &row_values)?;
+            Self::check_constraints(&schema, &row_values, &domains)?;
+            self.check_references(storage, &schema, &row_values, false)
+                .await?;
+            self.check_unique(storage, table, &schema, &row_values)
+                .await?;
+
             let row = TableRow {
                 values: row_values,
                 created_at: now,
@@ -2889,11 +6626,987 @@ impl QueryEngine {
             };
 
             // Insert the row
+            publish_change("INSERT", table, &row.values);
             storage.insert_row(table, row).await?;
             count += 1;
         }
 
         Ok(QueryResult::Insert { count })
+    }
+
+    /// Fill omitted columns that declare a `DEFAULT`.
+    fn apply_defaults(
+        schema: &crate::protocols::postgres_wire::persistent_storage::TableSchema,
+        row: &mut std::collections::HashMap<String, JsonValue>,
+    ) {
+        for column in &schema.columns {
+            let Some(default) = column.default_value.as_ref() else {
+                continue;
+            };
+            if !row.contains_key(&column.name) {
+                row.insert(column.name.clone(), default.clone());
+            }
+        }
+    }
+
+    /// Reject a row that leaves a `NOT NULL` column empty or null.
+    ///
+    /// # Errors
+    /// Returns an error naming the column, as PostgreSQL does.
+    fn check_not_null(
+        schema: &crate::protocols::postgres_wire::persistent_storage::TableSchema,
+        row: &std::collections::HashMap<String, JsonValue>,
+    ) -> ProtocolResult<()> {
+        for column in &schema.columns {
+            if column.nullable
+                || matches!(
+                    column.data_type,
+                    crate::protocols::postgres_wire::persistent_storage::ColumnType::Serial
+                )
+            {
+                continue;
+            }
+            if row.get(&column.name).is_none_or(JsonValue::is_null) {
+                return Err(ProtocolError::PostgresError(format!(
+                    "null value in column \"{}\" violates not-null constraint",
+                    column.name
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// The current definition of every domain a table's columns use.
+    async fn domains_for(
+        &self,
+        schema: &crate::protocols::postgres_wire::persistent_storage::TableSchema,
+    ) -> ProtocolResult<HashMap<String, String>> {
+        let mut domains = HashMap::new();
+        for column in &schema.columns {
+            let Some(domain) = column.domain.as_ref() else {
+                continue;
+            };
+            if domains.contains_key(domain) {
+                continue;
+            }
+            if let Some(definition) = self.domain_definition(domain).await? {
+                domains.insert(domain.clone(), definition);
+            }
+        }
+        Ok(domains)
+    }
+
+    /// Reject a row whose `CHECK` predicate does not hold.
+    ///
+    /// PostgreSQL accepts a row whose check evaluates to NULL — only a
+    /// definite false is a violation.
+    ///
+    /// # Errors
+    /// Returns an error naming the column whose check failed.
+    fn check_constraints(
+        schema: &crate::protocols::postgres_wire::persistent_storage::TableSchema,
+        row: &std::collections::HashMap<String, JsonValue>,
+        domains: &HashMap<String, String>,
+    ) -> ProtocolResult<()> {
+        use crate::protocols::postgres_wire::sql::expression_evaluator::{
+            EvaluationContext, ExpressionEvaluator,
+        };
+        use crate::protocols::postgres_wire::sql::parser::SqlParser;
+
+        let mut checked: Vec<(String, String)> = schema
+            .columns
+            .iter()
+            .filter_map(|column| {
+                column
+                    .check
+                    .as_ref()
+                    .map(|check| (column.name.clone(), check.clone()))
+            })
+            .collect();
+
+        // A domain's constraints are read now rather than copied when the
+        // table was created, so an `ALTER DOMAIN` reaches the tables already
+        // using it.
+        for column in &schema.columns {
+            let Some(domain) = column.domain.as_ref() else {
+                continue;
+            };
+            let Some(definition) = domains.get(domain) else {
+                continue;
+            };
+            let mut rest = definition.as_str();
+            while let Some(at) = rest.to_uppercase().find("CHECK") {
+                let tail = &rest[at..];
+                let Some(predicate) = Self::parenthesised(tail) else {
+                    break;
+                };
+                checked.push((
+                    column.name.clone(),
+                    predicate
+                        .replace("VALUE", &column.name)
+                        .replace("value", &column.name),
+                ));
+                rest = &tail[tail.find(')').map_or(tail.len(), |end| end + 1)..];
+            }
+        }
+
+        if checked.is_empty() {
+            return Ok(());
+        }
+
+        // The row is keyed as the evaluator expects a row to be keyed.
+        let values: crate::protocols::postgres_wire::sql::select_pipeline::Row = schema
+            .columns
+            .iter()
+            .map(|column| {
+                let value = row.get(&column.name).map_or(JsonValue::Null, Clone::clone);
+                (
+                    fold_identifier(&column.name),
+                    Self::json_to_sql_value(&value, &column.data_type),
+                )
+            })
+            .collect();
+
+        let mut evaluator = ExpressionEvaluator::new();
+        for (name, predicate) in &checked {
+            // Parsed as the predicate of a select so the expression parser
+            // sees it in the position it was written for.
+            let statement = SqlParser::new().parse(&format!("SELECT 1 WHERE {predicate}"))?;
+            let crate::protocols::postgres_wire::sql::ast::Statement::Select(select) = statement
+            else {
+                continue;
+            };
+            let Some(expression) = select.where_clause else {
+                continue;
+            };
+
+            let context = EvaluationContext::with_row(values.clone());
+            if matches!(
+                evaluator.evaluate(&expression, &context)?,
+                SqlValue::Boolean(false)
+            ) {
+                return Err(ProtocolError::PostgresError(format!(
+                    "new row violates check constraint on column \"{name}\""
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether anything a serializable block read has since been written by a
+    /// transaction it could not see.
+    ///
+    /// This is the check that makes `SERIALIZABLE` more than a label: without
+    /// it the level is `REPEATABLE READ` with a different name.
+    ///
+    /// # Errors
+    /// Returns an error when storage cannot be read.
+    pub async fn serialization_conflict(
+        &self,
+        transaction: u64,
+        snapshot: &std::collections::HashSet<u64>,
+        tables: &[String],
+    ) -> ProtocolResult<Option<String>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(None);
+        };
+
+        // Reads are recorded as `table` or `table\u{1}row-identity`; a bare
+        // table name means the whole table was read.
+        let mut whole_tables = std::collections::HashSet::new();
+        let mut rows_read: std::collections::HashMap<String, std::collections::HashSet<String>> =
+            std::collections::HashMap::new();
+        let mut predicates: HashMap<String, Vec<Vec<QueryCondition>>> = HashMap::new();
+        for entry in tables {
+            if let Some((table, rendered)) = entry.split_once('\u{3}') {
+                let conditions: Vec<QueryCondition> = rendered
+                    .split('\u{4}')
+                    .filter_map(|part| {
+                        let mut fields = part.split('\u{2}');
+                        Some(QueryCondition {
+                            column: fields.next()?.to_string(),
+                            operator: fields.next()?.to_string(),
+                            value: serde_json::from_str(fields.next()?).unwrap_or(JsonValue::Null),
+                        })
+                    })
+                    .collect();
+                predicates
+                    .entry(fold_identifier(table))
+                    .or_default()
+                    .push(conditions);
+                continue;
+            }
+            match entry.split_once('\u{1}') {
+                Some((table, identity)) => {
+                    rows_read
+                        .entry(fold_identifier(table))
+                        .or_default()
+                        .insert(identity.to_string());
+                }
+                None => {
+                    whole_tables.insert(fold_identifier(entry));
+                }
+            }
+        }
+
+        let names: std::collections::HashSet<String> = whole_tables
+            .iter()
+            .chain(rows_read.keys())
+            .chain(predicates.keys())
+            .cloned()
+            .collect();
+
+        for table in names {
+            if !storage.table_exists(&table).await? {
+                continue;
+            }
+            let key_columns = match storage.get_table_schema(&table).await? {
+                Some(schema) => schema
+                    .columns
+                    .iter()
+                    .filter(|column| column.unique)
+                    .map(|column| fold_identifier(&column.name))
+                    .collect::<Vec<_>>(),
+                None => Vec::new(),
+            };
+
+            for row in storage
+                .select_rows(&table, Vec::new(), Vec::new(), None)
+                .await?
+            {
+                // Only a write to a row this block actually read is a
+                // conflict; a write elsewhere in the table is not.
+                let identity = row_identity(&row.values, &key_columns);
+                let watched = whole_tables.contains(&table)
+                    || rows_read
+                        .get(&table)
+                        .is_some_and(|rows| rows.contains(&identity))
+                    // A row that now satisfies a predicate the block read is a
+                    // phantom: it was not among the rows returned, but the
+                    // block's answer would have differed had it been there.
+                    || predicates.get(&table).is_some_and(|sets| {
+                        sets.iter().any(|conditions| {
+                            Self::row_matches_conditions(&row.values, conditions)
+                        })
+                    });
+                if !watched {
+                    continue;
+                }
+
+                for column in [TRANSACTION_STAMP, DELETED_BY] {
+                    let Some(writer) = row.values.get(column).and_then(JsonValue::as_u64) else {
+                        continue;
+                    };
+                    // A writer this block could not see, that is no longer
+                    // running, committed underneath it.
+                    let invisible = writer > transaction || snapshot.contains(&writer);
+                    let finished = open_transactions()
+                        .read()
+                        .map(|open| !open.contains(&writer))
+                        .unwrap_or(true);
+                    if writer != transaction && invisible && finished {
+                        return Ok(Some(table));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Whether a stored row satisfies every one of `conditions`.
+    ///
+    /// Only the comparisons a `WHERE` is reduced to here are understood; an
+    /// operator this does not know matches, so an unrecognised predicate
+    /// widens the watch rather than narrowing it.
+    fn row_matches_conditions(
+        values: &std::collections::HashMap<String, JsonValue>,
+        conditions: &[QueryCondition],
+    ) -> bool {
+        conditions.iter().all(|condition| {
+            let Some(actual) = values
+                .iter()
+                .find(|(name, _)| fold_identifier(name) == fold_identifier(&condition.column))
+                .map(|(_, value)| value)
+            else {
+                return false;
+            };
+            match condition.operator.as_str() {
+                "=" | "==" => *actual == condition.value,
+                "!=" | "<>" => *actual != condition.value,
+                "<" => Self::json_less_than(actual, &condition.value),
+                "<=" => {
+                    *actual == condition.value || Self::json_less_than(actual, &condition.value)
+                }
+                ">" => Self::json_less_than(&condition.value, actual),
+                ">=" => {
+                    *actual == condition.value || Self::json_less_than(&condition.value, actual)
+                }
+                "LIKE" | "ILIKE" => match (actual.as_str(), condition.value.as_str()) {
+                    (Some(text), Some(pattern)) => Self::like_matches(
+                        text,
+                        pattern,
+                        condition.operator.eq_ignore_ascii_case("ILIKE"),
+                    ),
+                    // Not text on both sides: widen rather than narrow.
+                    _ => true,
+                },
+                "IN" => condition
+                    .value
+                    .as_array()
+                    .is_some_and(|values| values.contains(actual)),
+                _ => true,
+            }
+        })
+    }
+
+    /// Whether `text` matches a SQL `LIKE` pattern.
+    ///
+    /// `%` stands for any run of characters and `_` for exactly one, anchored
+    /// at both ends — the anchoring is what a naive `contains` gets wrong.
+    fn like_matches(text: &str, pattern: &str, case_insensitive: bool) -> bool {
+        let (text, pattern) = if case_insensitive {
+            (text.to_lowercase(), pattern.to_lowercase())
+        } else {
+            (text.to_string(), pattern.to_string())
+        };
+        let text: Vec<char> = text.chars().collect();
+        let pattern: Vec<char> = pattern.chars().collect();
+
+        // Two-pointer wildcard match: linear, backtracking only to the last
+        // `%`.
+        let (mut t, mut p) = (0usize, 0usize);
+        let (mut star, mut resume) = (None, 0usize);
+        while t < text.len() {
+            match pattern.get(p) {
+                Some('%') => {
+                    star = Some(p);
+                    resume = t;
+                    p += 1;
+                }
+                Some('_') => {
+                    t += 1;
+                    p += 1;
+                }
+                Some(expected) if *expected == text[t] => {
+                    t += 1;
+                    p += 1;
+                }
+                _ => match star {
+                    Some(at) => {
+                        p = at + 1;
+                        resume += 1;
+                        t = resume;
+                    }
+                    None => return false,
+                },
+            }
+        }
+        pattern[p..].iter().all(|c| *c == '%')
+    }
+
+    /// Order two stored values, numerically when both are numbers.
+    fn json_less_than(left: &JsonValue, right: &JsonValue) -> bool {
+        match (left.as_f64(), right.as_f64()) {
+            (Some(left), Some(right)) => left < right,
+            _ => match (left.as_str(), right.as_str()) {
+                (Some(left), Some(right)) => left < right,
+                _ => false,
+            },
+        }
+    }
+
+    /// Reclaim in the background, so old versions do not need a hand.
+    ///
+    /// The interval is the cadence at which the check runs; the reclaim itself
+    /// does nothing while any block is open, so a busy server pays only for
+    /// the check. Returns the task handle so a caller can stop it.
+    #[must_use]
+    pub fn start_autovacuum(
+        engine: Arc<Self>,
+        interval: std::time::Duration,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            // A missed tick is not worth catching up on: the next one reclaims
+            // whatever accumulated.
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                ticker.tick().await;
+                for record in drain_pending_log() {
+                    if let Err(e) = engine.record_change(&record).await {
+                        tracing::warn!("could not log a change for replication: {e}");
+                    }
+                }
+                match engine.vacuum(None).await {
+                    Ok(0) => {}
+                    Ok(reclaimed) => {
+                        tracing::debug!(reclaimed, "autovacuum reclaimed superseded rows");
+                    }
+                    Err(e) => tracing::warn!("autovacuum failed: {e}"),
+                }
+            }
+        })
+    }
+
+    /// Reclaim rows no open block can still need.
+    ///
+    /// # Errors
+    /// Returns an error when a table cannot be read or written.
+    pub async fn vacuum(&self, table: Option<&str>) -> ProtocolResult<usize> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(0);
+        };
+        // A version is dead once no open block could still see it: the block
+        // that removed it finished, and it finished before the oldest block
+        // now running began. Waiting for *every* block to close instead meant
+        // one long-lived transaction stopped reclamation altogether.
+        let oldest_open = open_transactions()
+            .read()
+            .map(|open| open.iter().copied().min())
+            .unwrap_or(None);
+
+        let tables = match table {
+            Some(name) => vec![fold_identifier(name)],
+            None => storage.list_tables().await?,
+        };
+
+        let mut reclaimed = 0usize;
+        for name in tables {
+            if !storage.table_exists(&name).await? {
+                continue;
+            }
+            let marked: Vec<_> = storage
+                .select_rows(&name, Vec::new(), Vec::new(), None)
+                .await?
+                .into_iter()
+                .filter(|row| row.values.contains_key(DELETED_BY))
+                .filter(|row| !row.values[DELETED_BY].is_null())
+                .collect();
+
+            for row in marked {
+                let Some(writer) = row.values.get(DELETED_BY).and_then(JsonValue::as_u64) else {
+                    continue;
+                };
+                // Still running, or old enough that a running block might have
+                // begun before it committed: leave it be.
+                let still_running = open_transactions()
+                    .read()
+                    .map(|open| open.contains(&writer))
+                    .unwrap_or(true);
+                if still_running || oldest_open.is_some_and(|oldest| writer >= oldest) {
+                    continue;
+                }
+                reclaimed += storage
+                    .delete_rows(
+                        &name,
+                        vec![QueryCondition {
+                            column: DELETED_BY.to_string(),
+                            operator: "=".to_string(),
+                            value: JsonValue::from(writer),
+                        }],
+                    )
+                    .await?
+                    .max(0) as usize;
+            }
+        }
+        Ok(reclaimed)
+    }
+
+    /// Remove the rows a committing transaction marked deleted.
+    ///
+    /// # Errors
+    /// Returns an error when a table cannot be written.
+    pub async fn purge_deleted(&self, transaction: u64, tables: &[String]) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        // A block still running may hold a snapshot that includes these rows,
+        // so they are left marked until nothing else is open. The mark already
+        // hides them from every new reader.
+        let others_open = open_transactions()
+            .read()
+            .map(|open| open.iter().any(|id| *id != transaction))
+            .unwrap_or(false);
+        if others_open {
+            return Ok(());
+        }
+        for table in tables {
+            let table = fold_identifier(table);
+            if !storage.table_exists(&table).await? {
+                continue;
+            }
+            storage
+                .delete_rows(
+                    &table,
+                    vec![QueryCondition {
+                        column: DELETED_BY.to_string(),
+                        operator: "=".to_string(),
+                        value: JsonValue::from(transaction),
+                    }],
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Un-mark the rows a rolled-back transaction had deleted.
+    ///
+    /// # Errors
+    /// Returns an error when a table cannot be written.
+    pub async fn restore_deleted(&self, transaction: u64, tables: &[String]) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        for table in tables {
+            let table = fold_identifier(table);
+            if !storage.table_exists(&table).await? {
+                continue;
+            }
+            // The versions this block wrote go; the ones it marked come back.
+            storage
+                .delete_rows(
+                    &table,
+                    vec![QueryCondition {
+                        column: TRANSACTION_STAMP.to_string(),
+                        operator: "=".to_string(),
+                        value: JsonValue::from(transaction),
+                    }],
+                )
+                .await?;
+            storage
+                .update_rows(
+                    &table,
+                    std::collections::HashMap::from([(DELETED_BY.to_string(), JsonValue::Null)]),
+                    vec![QueryCondition {
+                        column: DELETED_BY.to_string(),
+                        operator: "=".to_string(),
+                        value: JsonValue::from(transaction),
+                    }],
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Re-check every deferrable foreign key in the database.
+    ///
+    /// Called at `COMMIT` when checks were deferred, so a set of rows that
+    /// only makes sense together — a circular reference, most often — can be
+    /// inserted and validated as a whole.
+    ///
+    /// # Errors
+    /// Returns an error naming the first constraint that does not hold.
+    pub async fn check_deferred_constraints(&self, touched: &[String]) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+
+        // Only the tables this transaction wrote can have broken a constraint,
+        // so only those are re-read. Scanning every table made the cost of a
+        // COMMIT depend on the size of the database rather than on the work
+        // the transaction did.
+        let tables: Vec<String> = storage
+            .list_tables()
+            .await?
+            .into_iter()
+            .filter(|name| touched.iter().any(|t| fold_identifier(t) == *name))
+            .collect();
+
+        for name in tables {
+            let Some(schema) = storage.get_table_schema(&name).await? else {
+                continue;
+            };
+            if !schema.foreign_keys.iter().any(|key| key.deferrable) {
+                continue;
+            }
+
+            let deferred = crate::protocols::postgres_wire::persistent_storage::TableSchema {
+                foreign_keys: schema
+                    .foreign_keys
+                    .iter()
+                    .filter(|key| key.deferrable)
+                    .cloned()
+                    .collect(),
+                ..schema.clone()
+            };
+            for row in storage
+                .select_rows(&name, Vec::new(), Vec::new(), None)
+                .await?
+            {
+                self.check_references(storage, &deferred, &row.values, true)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The columns a foreign key points at, filling in the target's key when
+    /// the clause named no columns.
+    async fn referenced_columns(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        key: &crate::protocols::postgres_wire::persistent_storage::ForeignKey,
+    ) -> ProtocolResult<Vec<String>> {
+        if !key.referenced.is_empty() {
+            return Ok(key.referenced.iter().map(|c| fold_identifier(c)).collect());
+        }
+        Ok(match storage.get_table_schema(&key.table).await? {
+            Some(schema) => schema
+                .columns
+                .iter()
+                .filter(|column| column.unique)
+                .map(|column| fold_identifier(&column.name))
+                .collect(),
+            None => Vec::new(),
+        })
+    }
+
+    /// Reject a delete that would orphan a row in another table.
+    ///
+    /// # Errors
+    /// Returns an error naming the table that still refers to the row.
+    async fn check_not_referenced(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+        conditions: &[QueryCondition],
+    ) -> ProtocolResult<()> {
+        use crate::protocols::postgres_wire::persistent_storage::ReferentialAction;
+
+        let referrers = self.tables_referring_to(storage, table).await?;
+        if referrers.is_empty() {
+            return Ok(());
+        }
+
+        let doomed = storage
+            .select_rows(table, Vec::new(), conditions.to_vec(), None)
+            .await?;
+        for row in &doomed {
+            for (child, key) in &referrers {
+                let referenced = self.referenced_columns(storage, key).await?;
+                let Some(conditions) = Self::child_conditions(row, key, &referenced) else {
+                    continue;
+                };
+
+                let referring = storage
+                    .select_rows(child, Vec::new(), conditions.clone(), None)
+                    .await?;
+                if referring.is_empty() {
+                    continue;
+                }
+
+                match key.on_delete {
+                    // The referring rows go too.
+                    ReferentialAction::Cascade => {
+                        Box::pin(self.cascade_delete(storage, child, conditions)).await?;
+                    }
+                    // The referring column is cleared or reset instead.
+                    ReferentialAction::SetNull | ReferentialAction::SetDefault => {
+                        let child_schema = storage.get_table_schema(child).await?;
+                        let mut set_values = HashMap::new();
+                        for column in &key.columns {
+                            let replacement = if key.on_delete == ReferentialAction::SetDefault {
+                                child_schema
+                                    .as_ref()
+                                    .and_then(|schema| {
+                                        schema
+                                            .columns
+                                            .iter()
+                                            .find(|c| fold_identifier(&c.name) == *column)
+                                    })
+                                    .and_then(|c| c.default_value.clone())
+                                    .unwrap_or(JsonValue::Null)
+                            } else {
+                                JsonValue::Null
+                            };
+                            set_values.insert(column.clone(), replacement);
+                        }
+                        storage.update_rows(child, set_values, conditions).await?;
+                    }
+                    ReferentialAction::NoAction | ReferentialAction::Restrict => {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "delete violates foreign key constraint: \"{child}\" still refers to \
+                             this row through ({})",
+                            key.columns.join(", ")
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Apply each foreign key's `ON UPDATE` action before a key column moves.
+    ///
+    /// # Errors
+    /// Returns an error when a child still refers to the row and the action is
+    /// `NO ACTION` or `RESTRICT`.
+    async fn apply_update_actions(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+        conditions: &[QueryCondition],
+        set_values: &std::collections::HashMap<String, JsonValue>,
+    ) -> ProtocolResult<()> {
+        use crate::protocols::postgres_wire::persistent_storage::ReferentialAction;
+
+        let referrers = self.tables_referring_to(storage, table).await?;
+        if referrers.is_empty() {
+            return Ok(());
+        }
+
+        let changing = storage
+            .select_rows(table, Vec::new(), conditions.to_vec(), None)
+            .await?;
+        for row in &changing {
+            for (child, key) in &referrers {
+                let referenced = self.referenced_columns(storage, key).await?;
+                let Some(child_conditions) = Self::child_conditions(row, key, &referenced) else {
+                    continue;
+                };
+                let referring = storage
+                    .select_rows(child, Vec::new(), child_conditions.clone(), Some(1))
+                    .await?;
+                if referring.is_empty() {
+                    continue;
+                }
+
+                match key.on_update {
+                    // The children follow the key to its new value.
+                    ReferentialAction::Cascade => {
+                        let mut updates = std::collections::HashMap::new();
+                        for (column, target) in key.columns.iter().zip(&referenced) {
+                            if let Some(value) = set_values.iter().find_map(|(name, value)| {
+                                (fold_identifier(name) == *target).then(|| value.clone())
+                            }) {
+                                updates.insert(column.clone(), value);
+                            }
+                        }
+                        if !updates.is_empty() {
+                            storage
+                                .update_rows(child, updates, child_conditions)
+                                .await?;
+                        }
+                    }
+                    ReferentialAction::SetNull | ReferentialAction::SetDefault => {
+                        let child_schema = storage.get_table_schema(child).await?;
+                        let mut updates = std::collections::HashMap::new();
+                        for column in &key.columns {
+                            let replacement = if key.on_update == ReferentialAction::SetDefault {
+                                child_schema
+                                    .as_ref()
+                                    .and_then(|schema| {
+                                        schema
+                                            .columns
+                                            .iter()
+                                            .find(|c| fold_identifier(&c.name) == *column)
+                                    })
+                                    .and_then(|c| c.default_value.clone())
+                                    .unwrap_or(JsonValue::Null)
+                            } else {
+                                JsonValue::Null
+                            };
+                            updates.insert(column.clone(), replacement);
+                        }
+                        storage
+                            .update_rows(child, updates, child_conditions)
+                            .await?;
+                    }
+                    ReferentialAction::NoAction | ReferentialAction::Restrict => {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "update violates foreign key constraint: \"{child}\" still refers to \
+                             this row through ({})",
+                            key.columns.join(", ")
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Delete the rows a cascade reaches, checking their own children first.
+    async fn cascade_delete(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+        conditions: Vec<QueryCondition>,
+    ) -> ProtocolResult<()> {
+        Box::pin(self.check_not_referenced(storage, table, &conditions)).await?;
+        storage.delete_rows(table, conditions).await?;
+        Ok(())
+    }
+
+    /// Every table that refers to `table`, with the constraint that does it.
+    #[allow(clippy::type_complexity)]
+    async fn tables_referring_to(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+    ) -> ProtocolResult<
+        Vec<(
+            String,
+            crate::protocols::postgres_wire::persistent_storage::ForeignKey,
+        )>,
+    > {
+        let mut referrers = Vec::new();
+        for name in storage.list_tables().await? {
+            let Some(schema) = storage.get_table_schema(&name).await? else {
+                continue;
+            };
+            for key in &schema.foreign_keys {
+                if fold_identifier(&key.table) == fold_identifier(table) {
+                    referrers.push((name.clone(), key.clone()));
+                }
+            }
+        }
+        Ok(referrers)
+    }
+
+    /// Conditions selecting the child rows that point at `parent`.
+    fn child_conditions(
+        parent: &TableRow,
+        key: &crate::protocols::postgres_wire::persistent_storage::ForeignKey,
+        referenced: &[String],
+    ) -> Option<Vec<QueryCondition>> {
+        if referenced.len() != key.columns.len() {
+            return None;
+        }
+        let mut conditions = Vec::with_capacity(key.columns.len());
+        for (column, target) in key.columns.iter().zip(referenced) {
+            let value = parent
+                .values
+                .iter()
+                .find(|(name, _)| fold_identifier(name) == *target)
+                .map(|(_, value)| value.clone())
+                .filter(|value| !value.is_null())?;
+            conditions.push(QueryCondition {
+                column: column.clone(),
+                operator: "=".to_string(),
+                value,
+            });
+        }
+        Some(conditions)
+    }
+
+    /// Reject a row whose foreign key names a row that is not there.
+    ///
+    /// # Errors
+    /// Returns an error naming the column and the table it references.
+    pub async fn check_references(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        schema: &crate::protocols::postgres_wire::persistent_storage::TableSchema,
+        row: &std::collections::HashMap<String, JsonValue>,
+        deferred_pass: bool,
+    ) -> ProtocolResult<()> {
+        for key in &schema.foreign_keys {
+            // A deferrable key is checked at COMMIT, not when the row is
+            // written — that is what lets a circular reference be inserted at
+            // all. Each pass therefore looks at exactly the other's keys.
+            if key.deferrable != deferred_pass {
+                continue;
+            }
+            let referenced = self.referenced_columns(storage, key).await?;
+            if referenced.len() != key.columns.len() {
+                continue;
+            }
+
+            // What a partly-NULL key means depends on MATCH:
+            //   SIMPLE  — any NULL satisfies the constraint (the default)
+            //   FULL    — all NULL or none; a mixture is an error
+            //   PARTIAL — the non-NULL parts must still match a row
+            use crate::protocols::postgres_wire::persistent_storage::MatchType;
+            let mut conditions = Vec::with_capacity(key.columns.len());
+            let mut nulls = 0usize;
+            for (column, target) in key.columns.iter().zip(&referenced) {
+                let value = row
+                    .iter()
+                    .find(|(name, _)| fold_identifier(name) == *column)
+                    .map(|(_, value)| value.clone())
+                    .filter(|value| !value.is_null());
+                match value {
+                    Some(value) => conditions.push(QueryCondition {
+                        column: target.clone(),
+                        operator: "=".to_string(),
+                        value,
+                    }),
+                    None => nulls += 1,
+                }
+            }
+
+            // An entirely NULL key refers to nothing under every MATCH type.
+            if nulls == key.columns.len() {
+                continue;
+            }
+            match key.match_type {
+                MatchType::Simple if nulls > 0 => continue,
+                MatchType::Full if nulls > 0 => {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "MATCH FULL does not allow mixing null and nonnull key values in ({})",
+                        key.columns.join(", ")
+                    )));
+                }
+                // MATCH PARTIAL keeps checking with the parts it has, so the
+                // conditions built above already express it: a NULL column
+                // simply contributes no condition.
+                MatchType::Partial | MatchType::Full | MatchType::Simple => {}
+            }
+
+            let found = storage
+                .select_rows(&key.table, Vec::new(), conditions, Some(1))
+                .await?;
+            if found.is_empty() {
+                return Err(ProtocolError::PostgresError(format!(
+                    "insert or update violates foreign key constraint: no row in \"{}\" \
+                     matches ({})",
+                    key.table,
+                    key.columns.join(", ")
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Reject a row that duplicates a unique or primary-key column.
+    ///
+    /// # Errors
+    /// Returns an error when the value is already present.
+    async fn check_unique(
+        &self,
+        storage: &Arc<dyn PersistentTableStorage>,
+        table: &str,
+        schema: &crate::protocols::postgres_wire::persistent_storage::TableSchema,
+        row: &std::collections::HashMap<String, JsonValue>,
+    ) -> ProtocolResult<()> {
+        for column in &schema.columns {
+            if !column.unique {
+                continue;
+            }
+            let Some(value) = row.get(&column.name).filter(|v| !v.is_null()) else {
+                continue;
+            };
+
+            let existing = storage
+                .select_rows(
+                    table,
+                    Vec::new(),
+                    vec![QueryCondition {
+                        column: fold_identifier(&column.name),
+                        operator: "=".to_string(),
+                        value: value.clone(),
+                    }],
+                    Some(1),
+                )
+                .await?;
+            if !existing.is_empty() {
+                return Err(ProtocolError::PostgresError(format!(
+                    "duplicate key value violates unique constraint on column \"{}\"",
+                    column.name
+                )));
+            }
+        }
+        Ok(())
     }
 
     /// Execute UPDATE query on persistent storage
@@ -2932,12 +7645,87 @@ impl QueryEngine {
             vec![]
         };
 
-        // Execute update
-        let count = storage.update_rows(table, set_values, conditions).await?;
+        // Changing a key column moves the row out from under any child that
+        // points at it, so the same check a delete makes applies here.
+        let touches_key = match storage.get_table_schema(table).await? {
+            Some(schema) => set_values.keys().any(|column| {
+                schema
+                    .columns
+                    .iter()
+                    .any(|c| c.unique && fold_identifier(&c.name) == fold_identifier(column))
+            }),
+            None => false,
+        };
+        if touches_key {
+            self.apply_update_actions(storage, table, &conditions, &set_values)
+                .await?;
+        }
 
-        Ok(QueryResult::Update {
-            count: count as usize,
-        })
+        // Execute update
+        // An update always writes a new version: the previous row is marked
+        // deleted by the writing transaction and a fresh row carries the new
+        // values under a key that includes that transaction's id.
+        //
+        // Doing this only inside a block was not enough. An autocommit update
+        // overwrote in place, so it left no trace of having happened — a
+        // snapshot reader saw the new value, and a serializable block could
+        // not tell that what it read had moved. Old versions accumulate until
+        // `VACUUM`, which is the trade this model makes.
+        {
+            let stamp = stamp_for_write();
+            let previous = storage
+                .select_rows(table, Vec::new(), conditions.clone(), None)
+                .await?;
+            let visible: Vec<_> = previous
+                .into_iter()
+                .filter(|row| row_is_visible(&row.values))
+                .collect();
+            let count = visible.len();
+
+            // The previous rows are marked first: marking after writing the
+            // new version would match it too — it satisfies the same predicate
+            // — and the row would vanish for everyone.
+            storage
+                .update_rows(
+                    table,
+                    std::collections::HashMap::from([(
+                        DELETED_BY.to_string(),
+                        JsonValue::from(stamp),
+                    )]),
+                    conditions,
+                )
+                .await?;
+
+            for row in visible {
+                let now = chrono::Utc::now();
+                let mut values = row.values.clone();
+                for (column, value) in &set_values {
+                    let stored = values
+                        .keys()
+                        .find(|name| fold_identifier(name) == fold_identifier(column))
+                        .cloned()
+                        .unwrap_or_else(|| column.clone());
+                    values.insert(stored, value.clone());
+                }
+                values.insert(TRANSACTION_STAMP.to_string(), JsonValue::from(stamp));
+                values.remove(DELETED_BY);
+
+                publish_change("UPDATE", table, &values);
+                storage
+                    .insert_row(
+                        table,
+                        TableRow {
+                            values,
+                            created_at: now,
+                            updated_at: now,
+                        },
+                    )
+                    .await?;
+            }
+
+            self.flush_change_log().await?;
+            Ok(QueryResult::Update { count })
+        }
     }
 
     /// Execute DELETE query on persistent storage
@@ -2969,9 +7757,52 @@ impl QueryEngine {
             vec![]
         };
 
-        // Execute delete
-        let count = storage.delete_rows(table, conditions).await?;
+        // A row cannot be deleted while another table's row points at it.
+        // Checking only on insert let a parent be removed out from under its
+        // children, leaving foreign keys naming rows that are not there.
+        self.check_not_referenced(storage, table, &conditions)
+            .await?;
 
+        // Inside a transaction the rows are marked rather than removed, so a
+        // concurrent session keeps seeing them until this block commits and a
+        // rollback has something to put back.
+        if let Some(stamp) = current_transaction_stamp() {
+            let marked = storage
+                .update_rows(
+                    table,
+                    std::collections::HashMap::from([(
+                        DELETED_BY.to_string(),
+                        JsonValue::from(stamp),
+                    )]),
+                    conditions,
+                )
+                .await?;
+            return Ok(QueryResult::Delete {
+                count: marked.max(0) as usize,
+            });
+        }
+
+        // Superseded versions still match the predicate but are not rows any
+        // client can see, so they must not be counted as deleted. They are
+        // removed along with the visible ones.
+        let visible = storage
+            .select_rows(table, Vec::new(), conditions.clone(), None)
+            .await?
+            .into_iter()
+            .filter(|row| row_is_visible(&row.values))
+            .count();
+        for row in storage
+            .select_rows(table, Vec::new(), conditions.clone(), None)
+            .await?
+        {
+            if row_is_visible(&row.values) {
+                publish_change("DELETE", table, &row.values);
+            }
+        }
+        storage.delete_rows(table, conditions).await?;
+        let count = visible as i64;
+
+        self.flush_change_log().await?;
         Ok(QueryResult::Delete {
             count: count as usize,
         })
@@ -2984,6 +7815,7 @@ impl QueryEngine {
         table: &str,
         columns: Vec<SimpleColumnDef>,
         if_not_exists: bool,
+        foreign_keys: Vec<crate::protocols::postgres_wire::persistent_storage::ForeignKey>,
     ) -> ProtocolResult<QueryResult> {
         use crate::protocols::postgres_wire::persistent_storage::{
             ColumnDefinition, ColumnType, TableSchema,
@@ -3003,7 +7835,35 @@ impl QueryEngine {
 
         // Convert simple column definitions to persistent storage format
         let mut column_defs = Vec::new();
-        for col in columns {
+        // A column whose type names a domain takes that domain's base type and
+        // inherits its constraints, which is what makes a domain more than an
+        // alias.
+        let mut columns = columns;
+        let mut column_domains: HashMap<String, String> = HashMap::new();
+        for col in &mut columns {
+            let domain = fold_identifier(&col.data_type);
+            let Some(definition) = self.domain_definition(&domain).await? else {
+                continue;
+            };
+            column_domains.insert(fold_identifier(&col.name), domain);
+            let mut words = definition.split_whitespace();
+            if let Some(base) = words.next() {
+                col.data_type = base.to_string();
+            }
+            // A domain's `CHECK (VALUE > 0)` is written in terms of `VALUE`;
+            // on a column it has to name that column instead.
+            let rest = words
+                .collect::<Vec<_>>()
+                .join(" ")
+                .replace("VALUE", &col.name)
+                .replace("value", &col.name);
+            if !rest.is_empty() {
+                col.constraints
+                    .extend(rest.split_whitespace().map(str::to_string));
+            }
+        }
+
+        for col in &columns {
             let column_type = match col.data_type.to_uppercase().as_str() {
                 "INTEGER" | "INT" => ColumnType::Integer,
                 "BIGINT" => ColumnType::BigInt,
@@ -3030,10 +7890,57 @@ impl QueryEngine {
                 }
             };
 
-            let nullable = !col
+            let constraints: Vec<String> = col
                 .constraints
                 .iter()
-                .any(|c| c.to_uppercase() == "NOT" || c.to_uppercase().contains("NULL"));
+                .map(|word| word.to_uppercase())
+                .collect();
+            let says = |word: &str| constraints.iter().any(|c| c == word);
+
+            let nullable = !(says("PRIMARY") || says("NOT") && says("NULL"));
+            let unique = says("UNIQUE") || (says("PRIMARY") && says("KEY"));
+
+            // `DEFAULT <literal>`: the word after DEFAULT, kept as stored JSON
+            // so an omitted column is filled with the declared value rather
+            // than with NULL.
+            let default_value = col
+                .constraints
+                .iter()
+                .position(|word| word.eq_ignore_ascii_case("DEFAULT"))
+                .and_then(|at| col.constraints.get(at + 1))
+                .map(|literal| Self::literal_to_json(literal));
+
+            // `CHECK (<predicate>)`: the parenthesised text after CHECK, kept
+            // as written so the evaluator can run it against each row.
+            let check = col
+                .constraints
+                .iter()
+                .position(|word| word.to_uppercase().starts_with("CHECK"))
+                .map(|at| col.constraints[at..].join(" "))
+                .and_then(|text| {
+                    let open = text.find('(')?;
+                    let close = text.rfind(')')?;
+                    (close > open).then(|| text[open + 1..close].trim().to_string())
+                })
+                .filter(|predicate| !predicate.is_empty());
+
+            // `REFERENCES other(column)`, or `REFERENCES other` naming its
+            // primary key.
+            let references = col
+                .constraints
+                .iter()
+                .position(|word| word.eq_ignore_ascii_case("REFERENCES"))
+                .and_then(|at| col.constraints.get(at + 1))
+                .map(|target| {
+                    let target = target.trim_end_matches(',');
+                    match target.split_once('(') {
+                        Some((table, column)) => (
+                            fold_identifier(table),
+                            fold_identifier(column.trim_end_matches(')')),
+                        ),
+                        None => (fold_identifier(target), String::new()),
+                    }
+                });
 
             column_defs.push(ColumnDefinition {
                 // Folded like every other identifier, so the keys a row is
@@ -3043,8 +7950,27 @@ impl QueryEngine {
                 name: fold_identifier(&col.name),
                 data_type: column_type,
                 nullable,
-                default_value: None, // TODO: Parse DEFAULT values
+                default_value,
+                unique,
+                check,
+                references,
+                domain: column_domains.get(&fold_identifier(&col.name)).cloned(),
             });
+        }
+
+        // A column-level `REFERENCES` is a one-column foreign key; both forms
+        // end up in the same list so the check does not care how it was
+        // written.
+        let mut foreign_keys = foreign_keys;
+        for (column, definition) in column_defs.iter().zip(&columns) {
+            let text = definition.constraints.join(" ");
+            if !text.to_uppercase().contains("REFERENCES") {
+                continue;
+            }
+            if let Some(mut key) = Self::parse_foreign_key(&text) {
+                key.columns = vec![fold_identifier(&column.name)];
+                foreign_keys.push(key);
+            }
         }
 
         let schema = TableSchema {
@@ -3052,6 +7978,7 @@ impl QueryEngine {
             columns: column_defs,
             created_at: chrono::Utc::now(),
             row_count: 0,
+            foreign_keys,
         };
 
         // Create the table
@@ -3225,10 +8152,7 @@ mod literal_case_tests {
     /// written through this engine.
     #[tokio::test]
     async fn string_literals_keep_their_case_through_insert_and_select() {
-        let dir = std::env::temp_dir().join(format!(
-            "orbit-literal-case-{}",
-            std::process::id()
-        ));
+        let dir = std::env::temp_dir().join(format!("orbit-literal-case-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let storage = Arc::new(
             RocksDbTableStorage::new(dir.to_str().expect("utf-8 temp path"))
@@ -3296,7 +8220,10 @@ mod literal_tests {
     #[test]
     fn booleans_are_recognised_unquoted_only() {
         assert_eq!(QueryEngine::literal_to_json("true"), JsonValue::Bool(true));
-        assert_eq!(QueryEngine::literal_to_json("FALSE"), JsonValue::Bool(false));
+        assert_eq!(
+            QueryEngine::literal_to_json("FALSE"),
+            JsonValue::Bool(false)
+        );
         assert_eq!(
             QueryEngine::literal_to_json("'true'"),
             JsonValue::String("true".to_string())
@@ -3352,5 +8279,95 @@ mod literal_tests {
                 "round trip failed for {value:?} via {literal:?}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod quoted_identifier_tests {
+    use super::{fold_identifier, QueryEngine};
+
+    /// A quoted identifier keeps its case; an unquoted one folds down.
+    #[test]
+    fn folding_respects_quotes() {
+        assert_eq!(fold_identifier("\"Id\""), "Id");
+        assert_eq!(fold_identifier("Id"), "id");
+    }
+
+    /// The column list of a CREATE TABLE keeps quoted names as written.
+    #[test]
+    fn create_table_keeps_quoted_column_case() {
+        let engine = QueryEngine::new();
+        let statement = engine
+            .parse_sql("CREATE TABLE qq (\"Id\" INTEGER, plain TEXT)")
+            .expect("parses");
+        let super::Statement::CreateTable { columns, .. } = statement else {
+            panic!("not a CREATE TABLE");
+        };
+        let names: Vec<String> = columns
+            .iter()
+            .map(|column| fold_identifier(&column.name))
+            .collect();
+        assert_eq!(names, vec!["Id".to_string(), "plain".to_string()]);
+    }
+}
+
+#[cfg(test)]
+mod transaction_visibility_tests {
+    use super::{
+        begin_transaction, current_transaction_stamp, end_transaction, row_is_visible,
+        within_transaction, TRANSACTION_STAMP,
+    };
+    use serde_json::Value as JsonValue;
+    use std::collections::HashMap;
+
+    fn stamped(id: u64) -> HashMap<String, JsonValue> {
+        HashMap::from([(TRANSACTION_STAMP.to_string(), JsonValue::from(id))])
+    }
+
+    #[tokio::test]
+    async fn a_statement_inside_a_transaction_knows_its_id() {
+        let context = begin_transaction(false);
+        let id = context.id;
+        let seen = within_transaction(context, async { current_transaction_stamp() }).await;
+        end_transaction(id);
+        assert_eq!(seen, Some(id));
+    }
+
+    #[tokio::test]
+    async fn an_open_transactions_rows_are_hidden_from_everyone_else() {
+        let context = begin_transaction(false);
+        let id = context.id;
+
+        // The writer sees its own row...
+        assert!(within_transaction(context, async { row_is_visible(&stamped(id)) }).await);
+        // ...and nobody else does.
+        assert!(!row_is_visible(&stamped(id)));
+
+        // Ending the transaction publishes it.
+        end_transaction(id);
+        assert!(row_is_visible(&stamped(id)));
+    }
+
+    /// A snapshot judges a row against the moment the block began, so work
+    /// that commits afterwards stays invisible for its whole life.
+    #[tokio::test]
+    async fn a_snapshot_hides_work_committed_after_it_was_taken() {
+        let reader = begin_transaction(true);
+        let reader_id = reader.id;
+
+        // A write that happens and commits after the snapshot was taken.
+        let later = begin_transaction(false);
+        end_transaction(later.id);
+
+        assert!(!within_transaction(reader, async { row_is_visible(&stamped(later.id)) }).await);
+        end_transaction(reader_id);
+
+        // Without a snapshot the same row is visible: it is committed.
+        assert!(row_is_visible(&stamped(later.id)));
+    }
+
+    #[tokio::test]
+    async fn an_unstamped_row_is_visible() {
+        assert!(row_is_visible(&HashMap::new()));
     }
 }

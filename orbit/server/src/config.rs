@@ -2674,8 +2674,8 @@ mod shipped_config_tests {
     /// the two against each other; this does.
     #[tokio::test]
     async fn the_shipped_configuration_file_parses() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../config/orbit-server.toml");
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/orbit-server.toml");
 
         assert!(
             path.exists(),

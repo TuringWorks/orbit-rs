@@ -739,9 +739,9 @@ impl ExpressionEvaluator {
             // boolean tests, where they differ from `=` by treating NULL as a
             // value rather than propagating it.
             BinaryOperator::Is => Ok(SqlValue::Boolean(Self::is_identical(&left_val, &right_val))),
-            BinaryOperator::IsNot => {
-                Ok(SqlValue::Boolean(!Self::is_identical(&left_val, &right_val)))
-            }
+            BinaryOperator::IsNot => Ok(SqlValue::Boolean(!Self::is_identical(
+                &left_val, &right_val,
+            ))),
 
             // Comparison operators
             BinaryOperator::IsDistinctFrom => self.is_distinct_from(&left_val, &right_val),
@@ -958,9 +958,7 @@ impl ExpressionEvaluator {
             // Reported as unknown rather than fabricated: this engine does not
             // track per-relation on-disk size.
             "PG_ENCODING_TO_CHAR" => Ok(SqlValue::Text("UTF8".to_string())),
-            "PG_GET_EXPR" | "PG_GET_CONSTRAINTDEF" | "PG_GET_INDEXDEF" => {
-                Ok(SqlValue::Null)
-            }
+            "PG_GET_EXPR" | "PG_GET_CONSTRAINTDEF" | "PG_GET_INDEXDEF" => Ok(SqlValue::Null),
             "NOW" => self.evaluate_now(&args),
             "CURRENT_DATE" | "CURDATE" => self.evaluate_current_date(&args),
             "CURRENT_TIME" => self.evaluate_current_time(&args),
@@ -1671,10 +1669,9 @@ impl ExpressionEvaluator {
     /// String value of any character-like type.
     fn as_string(value: &SqlValue) -> Option<String> {
         match value {
-            SqlValue::Text(s)
-            | SqlValue::Varchar(s)
-            | SqlValue::Char(s)
-            | SqlValue::Name(s) => Some(s.clone()),
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) | SqlValue::Name(s) => {
+                Some(s.clone())
+            }
             _ => None,
         }
     }
