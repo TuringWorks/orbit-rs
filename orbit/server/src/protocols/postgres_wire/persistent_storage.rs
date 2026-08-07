@@ -127,6 +127,18 @@ pub enum ColumnType {
     Json,         // JSON data
     Timestamp,    // Timestamp with timezone
     Double,       // Double precision float
+    /// Exact decimal, with the precision and scale it was declared with.
+    ///
+    /// Without this a `NUMERIC(10,2)` column was stored as a `Double`: the
+    /// declared scale was lost, so `10.50` read back as `10.5`, and a value
+    /// that cannot be represented in binary floating point was rounded to one
+    /// that can. `NUMERIC` exists to avoid exactly that.
+    Numeric {
+        /// Total digits, when declared.
+        precision: Option<u8>,
+        /// Digits after the point, when declared.
+        scale: Option<u8>,
+    },
 }
 
 /// Row data for a table

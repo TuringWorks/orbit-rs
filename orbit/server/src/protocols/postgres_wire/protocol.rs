@@ -39,6 +39,22 @@ struct Savepoint {
     tables: HashMap<String, Vec<super::persistent_storage::TableRow>>,
 }
 
+/// A distinct backend id for each session.
+///
+/// PostgreSQL gives every backend its own process id; this used to report
+/// `std::process::id()`, the same value for every connection. Two things read
+/// it and both were wrong: the cancel registry is keyed by it, so a map with
+/// one slot meant only the newest connection could ever be cancelled, and
+/// `NOTIFY` reports it so a listener can tell its own notifications apart —
+/// with one shared id every notification looked self-sent.
+fn next_process_id() -> i32 {
+    static NEXT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(1);
+    // Wrapping keeps it positive: a negative id would be a valid i32 but not
+    // something a client would expect from a pid.
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        .rem_euclid(i32::MAX)
+}
+
 /// PostgreSQL wire protocol handler
 pub struct PostgresWireProtocol {
     state: ConnectionState,
@@ -122,6 +138,12 @@ pub struct PostgresWireProtocol {
     announced_relations: std::collections::HashSet<String>,
     /// Table ids handed out for this stream.
     relation_ids: HashMap<String, i32>,
+    /// The transaction a `Begin` has been sent for and not yet closed.
+    replication_open_transaction: Option<u64>,
+    /// Whether the subscriber asked for binary values rather than text.
+    replication_binary: bool,
+    /// Set when another connection asks to cancel this session's work.
+    cancelled: Option<Arc<std::sync::atomic::AtomicBool>>,
     /// The change stream a `START_REPLICATION` opened, if any.
     replication_stream: Option<tokio::sync::broadcast::Receiver<super::query_engine::ChangeRecord>>,
     /// Whether this session has asked for immediate constraint checking.
@@ -228,7 +250,7 @@ impl PostgresWireProtocol {
             database: None,
             parameters: HashMap::new(),
             query_engine: Arc::new(QueryEngine::new()),
-            process_id: std::process::id() as i32,
+            process_id: next_process_id(),
             secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             statement_param_types: HashMap::new(),
@@ -249,6 +271,9 @@ impl PostgresWireProtocol {
             replication_plugin: "orbit_json".to_string(),
             announced_relations: std::collections::HashSet::new(),
             relation_ids: HashMap::new(),
+            replication_open_transaction: None,
+            replication_binary: false,
+            cancelled: None,
             replication_stream: None,
             constraints_immediate: false,
             transaction_inserts: HashMap::new(),
@@ -274,7 +299,7 @@ impl PostgresWireProtocol {
             database: None,
             parameters: HashMap::new(),
             query_engine,
-            process_id: std::process::id() as i32,
+            process_id: next_process_id(),
             secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             statement_param_types: HashMap::new(),
@@ -295,6 +320,9 @@ impl PostgresWireProtocol {
             replication_plugin: "orbit_json".to_string(),
             announced_relations: std::collections::HashSet::new(),
             relation_ids: HashMap::new(),
+            replication_open_transaction: None,
+            replication_binary: false,
+            cancelled: None,
             replication_stream: None,
             constraints_immediate: false,
             transaction_inserts: HashMap::new(),
@@ -353,6 +381,12 @@ impl PostgresWireProtocol {
                 // everyone else; a rolled-back block's rows are removed by the
                 // undo log before this point.
                 if let Some(context) = self.transaction_id.take() {
+                    // The subscriber's `Begin`/`Commit` pair closes here, so a
+                    // multi-statement block arrives as one transaction rather
+                    // than as several.
+                    if matches!(head.as_str(), "COMMIT" | "END") {
+                        QueryEngine::publish_transaction_end(context.id);
+                    }
                     super::query_engine::end_transaction(context.id);
                 }
                 self.snapshot_isolation = false;
@@ -551,7 +585,7 @@ impl PostgresWireProtocol {
                     .await
                 {
                     let failed = self.restore_snapshots().await;
-                    self.send_error(buf, &e.to_string());
+                    self.send_error_for(buf, &e);
                     if !failed.is_empty() {
                         tracing::error!("could not undo after a deferred failure: {failed:?}");
                     }
@@ -777,7 +811,7 @@ impl PostgresWireProtocol {
                 .create_replication_slot(&stored, plugin)
                 .await
             {
-                self.send_error(buf, &e.to_string());
+                self.send_error_for(buf, &e);
                 BackendMessage::ReadyForQuery {
                     status: self.transaction_status(),
                 }
@@ -834,10 +868,17 @@ impl PostgresWireProtocol {
             // logical frames would be a wrong answer rather than a missing
             // feature — the standby would parse change JSON as WAL records.
             if upper.contains("PHYSICAL") {
-                self.send_error(
+                // `0A000` is `feature_not_supported`, which is what this is.
+                // Reported as `XX000` a client could not tell a feature this
+                // server does not have from a backend that fell over.
+                self.send_error_for(
                     buf,
-                    "physical replication is not supported; use \
-                     START_REPLICATION SLOT <name> LOGICAL",
+                    &ProtocolError::SqlState {
+                        code: "0A000",
+                        message: "physical replication is not supported; use \
+                                  START_REPLICATION SLOT <name> LOGICAL"
+                            .to_string(),
+                    },
                 );
                 BackendMessage::ReadyForQuery {
                     status: self.transaction_status(),
@@ -845,6 +886,13 @@ impl PostgresWireProtocol {
                 .encode(buf);
                 return Some(Ok(()));
             }
+
+            // `(proto_version '1', binary 'true')` — the options a subscriber
+            // passes to the output plugin.
+            self.replication_binary = trimmed
+                .split_once('(')
+                .map(|(_, options)| options.to_lowercase())
+                .is_some_and(|options| options.contains("binary") && options.contains("true"));
 
             let words: Vec<&str> = trimmed.split_whitespace().collect();
             let slot = words
@@ -878,6 +926,26 @@ impl PostgresWireProtocol {
                     .map(|(_, position)| position),
                 (None, None) => None,
             };
+
+            // A named slot has to exist. Streaming from one that was dropped —
+            // or invalidated for falling too far behind — would look like a
+            // healthy subscription that silently starts from nowhere.
+            if let Some(name) = slot.as_ref() {
+                match self.query_engine.replication_slot(name).await {
+                    Ok(Some(_)) => {}
+                    _ => {
+                        self.send_error(
+                            buf,
+                            &format!("replication slot \"{name}\" does not exist"),
+                        );
+                        BackendMessage::ReadyForQuery {
+                            status: self.transaction_status(),
+                        }
+                        .encode(buf);
+                        return Some(Ok(()));
+                    }
+                }
+            }
 
             // Subscribing before replaying means a change written in between
             // is queued rather than lost.
@@ -1254,7 +1322,7 @@ impl PostgresWireProtocol {
                 }
                 MessageResult::Error(e) => {
                     error!("Error handling message: {}", e);
-                    self.send_error(write_buf, &e.to_string());
+                    self.send_error_for(write_buf, &e);
                     // The protocol requires a ReadyForQuery after an error
                     // before the client may send anything else. Without it the
                     // client waits for a message that never comes and the
@@ -1377,6 +1445,17 @@ impl PostgresWireProtocol {
                 // Nothing to do, data is flushed after each message
             }
             FrontendMessage::Terminate => {
+                super::query_engine::forget_cancellable(self.process_id);
+                return Ok(false);
+            }
+            FrontendMessage::CancelRequest {
+                process_id,
+                secret_key,
+            } => {
+                // The connection carrying a cancel request is not a session:
+                // it sends nothing back and closes, which is what the protocol
+                // specifies and what stops it being used to probe for keys.
+                super::query_engine::request_cancel(process_id, &secret_key);
                 return Ok(false);
             }
             FrontendMessage::SSLRequest => {
@@ -1389,22 +1468,14 @@ impl PostgresWireProtocol {
             FrontendMessage::SASLResponse { data } => {
                 self.handle_sasl_response(data, buf).await?;
             }
-            FrontendMessage::FunctionCall { oid, .. } => {
-                // The legacy fast-path call. Answering nothing left the client
-                // waiting on a reply that never came; an error plus
-                // ReadyForQuery is what an unsupported function warrants and
-                // keeps the connection usable.
-                self.send_error(
-                    buf,
-                    &format!(
-                        "fastpath function call is not supported (function OID {oid}); \
-                         call the function from a query instead"
-                    ),
-                );
-                BackendMessage::ReadyForQuery {
-                    status: self.transaction_status(),
-                }
-                .encode(buf);
+            FrontendMessage::FunctionCall {
+                oid,
+                args,
+                arg_formats,
+                result_format,
+            } => {
+                self.handle_function_call(oid, &args, &arg_formats, result_format, buf)
+                    .await?;
             }
             FrontendMessage::CopyData { data } => {
                 // On a replication stream a CopyData is the standby telling us
@@ -1517,12 +1588,39 @@ impl PostgresWireProtocol {
         Ok(())
     }
 
+    /// The version this server reports, in `ParameterStatus` and in `SHOW`.
+    ///
+    /// The number leads because clients parse it: libpq takes the digits
+    /// before the first non-numeric character, so anything else has to follow.
+    const SERVER_VERSION: &'static str = "14.0 (Orbit-RS Protocol Adapter)";
+
+    /// The settings a session starts with, reported by `SHOW`.
+    fn advertised_parameters() -> [(&'static str, &'static str); 6] {
+        [
+            ("server_version", Self::SERVER_VERSION),
+            ("server_encoding", "UTF8"),
+            ("client_encoding", "UTF8"),
+            ("DateStyle", "ISO, MDY"),
+            ("integer_datetimes", "on"),
+            ("standard_conforming_strings", "on"),
+        ]
+    }
+
     /// Finish authentication and unblock connection
     fn finish_authentication(&mut self, buf: &mut BytesMut) {
+        // Whatever is advertised here is also what `SHOW` must answer. They
+        // came from different places, so the server told a client one thing at
+        // connect and another when asked: `SHOW server_version` returned an
+        // empty string while `ParameterStatus` carried a version, and a driver
+        // reading the empty one cannot tell what it is talking to.
+        for (name, value) in Self::advertised_parameters() {
+            self.parameters.insert(name.to_string(), value.to_string());
+        }
+
         // Send parameter status
         BackendMessage::ParameterStatus {
             name: "server_version".to_string(),
-            value: "14.0 (Orbit-RS Protocol Adapter)".to_string(),
+            value: Self::SERVER_VERSION.to_string(),
         }
         .encode(buf);
 
@@ -1538,7 +1636,13 @@ impl PostgresWireProtocol {
         }
         .encode(buf);
 
-        // Send backend key data (PostgreSQL 18: supports variable-length keys)
+        // Send backend key data (PostgreSQL 18: supports variable-length keys).
+        // The same key registers the session, so a cancel arriving on another
+        // connection can find it.
+        self.cancelled = Some(super::query_engine::register_cancellable(
+            self.process_id,
+            self.secret_key.clone(),
+        ));
         BackendMessage::BackendKeyData {
             process_id: self.process_id,
             secret_key: self.secret_key.clone(),
@@ -1772,7 +1876,7 @@ impl PostgresWireProtocol {
                     .check_deferred_constraints(&self.tables_written())
                     .await
                 {
-                    self.send_error(buf, &e.to_string());
+                    self.send_error_for(buf, &e);
                     self.note_failure();
                     BackendMessage::ReadyForQuery {
                         status: self.transaction_status(),
@@ -1809,15 +1913,23 @@ impl PostgresWireProtocol {
 
         // Statements run inside the session's transaction so the rows they
         // write carry its stamp and stay private until it ends.
-        let executed = match self.transaction_id.clone() {
-            Some(context) => {
-                super::query_engine::within_transaction(
-                    context,
-                    self.query_engine.execute_multiple_queries(query),
-                )
-                .await
+        let run = async {
+            match self.transaction_id.clone() {
+                Some(context) => {
+                    super::query_engine::within_transaction(
+                        context,
+                        self.query_engine.execute_multiple_queries(query),
+                    )
+                    .await
+                }
+                None => self.query_engine.execute_multiple_queries(query).await,
             }
-            None => self.query_engine.execute_multiple_queries(query).await,
+        };
+        // The session's cancel flag travels with the statement, so the engine
+        // can check it between the statements of one message.
+        let executed = match self.cancelled.clone() {
+            Some(flag) => super::query_engine::with_cancel(flag, run).await,
+            None => run.await,
         };
 
         match executed {
@@ -1838,7 +1950,7 @@ impl PostgresWireProtocol {
                         .check_deferred_constraints(&self.tables_written())
                         .await
                     {
-                        self.send_error(buf, &e.to_string());
+                        self.send_error_for(buf, &e);
                         self.note_failure();
                         BackendMessage::ReadyForQuery {
                             status: self.transaction_status(),
@@ -1856,7 +1968,7 @@ impl PostgresWireProtocol {
                 .encode(buf);
             }
             Err(e) => {
-                self.send_error(buf, &e.to_string());
+                self.send_error_for(buf, &e);
                 self.note_failure();
                 BackendMessage::ReadyForQuery {
                     status: self.transaction_status(),
@@ -2211,7 +2323,7 @@ impl PostgresWireProtocol {
         let bound = match Self::bind_parameters(query, params, &param_types) {
             Ok(bound) => bound,
             Err(e) => {
-                self.send_error(buf, &e.to_string());
+                self.send_error_for(buf, &e);
                 return Ok(());
             }
         };
@@ -2264,7 +2376,7 @@ impl PostgresWireProtocol {
                 self.note_statement(&bound_for_state);
             }
             Err(e) => {
-                self.send_error(buf, &e.to_string());
+                self.send_error_for(buf, &e);
                 self.note_failure();
             }
         }
@@ -2548,6 +2660,10 @@ impl PostgresWireProtocol {
         let position = change.position;
         let payload = if self.replication_plugin.eq_ignore_ascii_case("pgoutput") {
             self.pgoutput_payload(change)
+        } else if change.action == "COMMIT" {
+            // The JSON plugin has no transaction framing, so a marker carries
+            // nothing a subscriber could use.
+            return;
         } else {
             format!(
                 "{{\"action\":\"{}\",\"table\":\"{}\",\"xid\":{},\"row\":{}}}",
@@ -2581,11 +2697,27 @@ impl PostgresWireProtocol {
         let relation = self.relation_id(&change.table);
         let mut out = BytesMut::new();
 
-        // Begin: final LSN, commit timestamp, transaction id.
-        out.put_u8(b'B');
-        out.put_u64(change.position);
-        out.put_i64(0);
-        out.put_i32(change.transaction as i32);
+        // A `COMMIT` marker closes the pair a block opened.
+        if change.action == "COMMIT" {
+            out.put_u8(b'C');
+            out.put_u8(0);
+            out.put_u64(change.position);
+            out.put_u64(change.position);
+            out.put_i64(0);
+            self.replication_open_transaction = None;
+            return out.to_vec();
+        }
+
+        // Begin once per transaction: a block's statements belong to one.
+        let grouped = change.transaction != 0
+            && self.replication_open_transaction == Some(change.transaction);
+        if !grouped {
+            out.put_u8(b'B');
+            out.put_u64(change.position);
+            out.put_i64(0);
+            out.put_i32(change.transaction as i32);
+            self.replication_open_transaction = Some(change.transaction);
+        }
 
         // Relation, sent once per table per stream, as the protocol expects.
         if self.announced_relations.insert(change.table.clone()) {
@@ -2605,24 +2737,19 @@ impl PostgresWireProtocol {
             }
         }
 
-        let tuple = |out: &mut BytesMut, row: &std::collections::BTreeMap<String, serde_json::Value>| {
-            out.put_u8(b'N'); // a new tuple follows
-            out.put_i16(row.len() as i16);
-            for value in row.values() {
-                match value {
-                    serde_json::Value::Null => out.put_u8(b'n'),
-                    other => {
-                        let text = other
-                            .as_str()
-                            .map(str::to_string)
-                            .unwrap_or_else(|| other.to_string());
-                        out.put_u8(b't');
-                        out.put_i32(text.len() as i32);
-                        out.extend_from_slice(text.as_bytes());
+        let binary = self.replication_binary;
+        let tuple =
+            move |out: &mut BytesMut,
+                  row: &std::collections::BTreeMap<String, serde_json::Value>| {
+                out.put_u8(b'N'); // a new tuple follows
+                out.put_i16(row.len() as i16);
+                for value in row.values() {
+                    match value {
+                        serde_json::Value::Null => out.put_u8(b'n'),
+                        other => Self::put_replication_value(out, other, binary),
                     }
                 }
-            }
-        };
+            };
 
         match change.action.as_str() {
             "INSERT" => {
@@ -2641,27 +2768,62 @@ impl PostgresWireProtocol {
                 // The old row identifies what went; `K` is the key tuple.
                 out.put_u8(b'K');
                 out.put_i16(row.len() as i16);
+                let binary = self.replication_binary;
                 for value in row.values() {
-                    let text = value
-                        .as_str()
-                        .map(str::to_string)
-                        .unwrap_or_else(|| value.to_string());
-                    out.put_u8(b't');
-                    out.put_i32(text.len() as i32);
-                    out.extend_from_slice(text.as_bytes());
+                    Self::put_replication_value(&mut out, value, binary);
                 }
             }
             _ => {}
         }
 
-        // Commit: flags, commit LSN, end LSN, timestamp.
-        out.put_u8(b'C');
-        out.put_u8(0);
-        out.put_u64(change.position);
-        out.put_u64(change.position);
-        out.put_i64(0);
+        // A statement outside a block is its own transaction, so it commits
+        // straight away; one inside a block waits for the marker.
+        if change.transaction == 0 {
+            out.put_u8(b'C');
+            out.put_u8(0);
+            out.put_u64(change.position);
+            out.put_u64(change.position);
+            out.put_i64(0);
+            self.replication_open_transaction = None;
+        }
 
         out.to_vec()
+    }
+
+    /// Write one column value into a `pgoutput` tuple.
+    ///
+    /// `t` is the text form the protocol defaults to; `b` is the binary form a
+    /// subscriber gets when it asks for it, which for a number is the network
+    /// byte order PostgreSQL sends rather than its decimal spelling.
+    fn put_replication_value(out: &mut BytesMut, value: &serde_json::Value, binary: bool) {
+        if binary {
+            if let Some(number) = value.as_i64() {
+                out.put_u8(b'b');
+                out.put_i32(8);
+                out.put_i64(number);
+                return;
+            }
+            if let Some(number) = value.as_f64() {
+                out.put_u8(b'b');
+                out.put_i32(8);
+                out.put_f64(number);
+                return;
+            }
+            if let Some(flag) = value.as_bool() {
+                out.put_u8(b'b');
+                out.put_i32(1);
+                out.put_u8(u8::from(flag));
+                return;
+            }
+        }
+
+        let text = value
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| value.to_string());
+        out.put_u8(if binary { b'b' } else { b't' });
+        out.put_i32(text.len() as i32);
+        out.extend_from_slice(text.as_bytes());
     }
 
     /// A stable id for a table within this stream.
@@ -2763,7 +2925,7 @@ impl PostgresWireProtocol {
             Ok(QueryResult::Select { columns, rows }) => (columns.len(), rows),
             Ok(_) => (0, Vec::new()),
             Err(e) => {
-                self.send_error(buf, &e.to_string());
+                self.send_error_for(buf, &e);
                 return;
             }
         };
@@ -2871,7 +3033,7 @@ impl PostgresWireProtocol {
         let schema = match self.query_engine.table_schema(table).await {
             Ok(schema) => schema,
             Err(e) => {
-                self.send_error(buf, &e.to_string());
+                self.send_error_for(buf, &e);
                 return;
             }
         };
@@ -3397,6 +3559,106 @@ impl PostgresWireProtocol {
         }
     }
 
+    /// Run a legacy fast-path function call.
+    ///
+    /// The OID names a function in `pg_proc`; this server publishes its own
+    /// there with OIDs in PostgreSQL's user range, so a client that looks one
+    /// up can call it this way. An OID it did not publish is refused by
+    /// number, because guessing which built-in a number meant would have the
+    /// client silently calling something else.
+    async fn handle_function_call(
+        &mut self,
+        oid: i32,
+        args: &[Option<bytes::Bytes>],
+        arg_formats: &[i16],
+        result_format: i16,
+        buf: &mut BytesMut,
+    ) -> ProtocolResult<()> {
+        let found = self.query_engine.function_for_oid(i64::from(oid)).await?;
+
+        let Some((name, parameters, return_type)) = found else {
+            self.send_error(
+                buf,
+                &format!(
+                    "function with OID {oid} does not exist; \
+                     look it up in pg_proc or call it from a query"
+                ),
+            );
+            BackendMessage::ReadyForQuery {
+                status: self.transaction_status(),
+            }
+            .encode(buf);
+            return Ok(());
+        };
+
+        // Arguments arrive as bytes in whichever format the client chose.
+        // Their declared types come from the same catalogue entry the client
+        // read the OID from, which is what makes decoding a binary one
+        // possible rather than a guess.
+        let inputs = super::plpgsql_function::inputs(&parameters);
+        let mut rendered = Vec::with_capacity(args.len());
+        for (index, arg) in args.iter().enumerate() {
+            let declared = inputs
+                .get(index)
+                .map_or("", |parameter| parameter.sql_type.as_str());
+            match super::fastpath::decode_argument(
+                arg.as_deref(),
+                Self::format_at(arg_formats, index),
+                declared,
+            ) {
+                Ok(value) => rendered.push(value),
+                Err(e) => {
+                    self.send_error_for(buf, &e);
+                    BackendMessage::ReadyForQuery {
+                        status: self.transaction_status(),
+                    }
+                    .encode(buf);
+                    return Ok(());
+                }
+            }
+        }
+
+        let call = format!("SELECT {name}({})", rendered.join(", "));
+        match self.query_engine.execute_query(&call).await {
+            Ok(super::query_engine::QueryResult::Select { rows, .. }) => {
+                let value = rows
+                    .into_iter()
+                    .next()
+                    .and_then(|row| row.into_iter().next())
+                    .flatten();
+                match super::fastpath::encode_result(value, result_format, &return_type) {
+                    Ok(val) => BackendMessage::FunctionCallResponse { val }.encode(buf),
+                    Err(e) => self.send_error_for(buf, &e),
+                }
+            }
+            Ok(_) => {
+                BackendMessage::FunctionCallResponse { val: None }.encode(buf);
+            }
+            Err(e) => {
+                self.send_error_for(buf, &e);
+            }
+        }
+
+        BackendMessage::ReadyForQuery {
+            status: self.transaction_status(),
+        }
+        .encode(buf);
+        Ok(())
+    }
+
+    /// The format code that applies to argument `index`.
+    ///
+    /// None means every argument is text; one means it applies to all of them;
+    /// otherwise there is one per argument. Reading the array as one-per-
+    /// argument regardless would misread the common single-code case.
+    fn format_at(formats: &[i16], index: usize) -> i16 {
+        match formats {
+            [] => 0,
+            [only] => *only,
+            many => many.get(index).copied().unwrap_or(0),
+        }
+    }
+
     /// Handle SSL request
     /// Answer an `SSLRequest` that reached the message loop.
     ///
@@ -3409,12 +3671,41 @@ impl PostgresWireProtocol {
         Ok(())
     }
 
-    /// Send error response
-    fn send_error(&self, buf: &mut BytesMut, message: &str) {
+    /// Report an error under the SQLSTATE it carries.
+    ///
+    /// An error that knows its own code keeps it — a `RAISE EXCEPTION` is
+    /// `P0001` whatever its text says, and no reading of that text would
+    /// reveal it.
+    fn send_error_for(&self, buf: &mut BytesMut, error: &ProtocolError) {
+        let code = super::sqlstate::of(error);
+        let reported = error.to_string();
+        let reported = reported
+            .split_once("PostgreSQL protocol error: ")
+            .map_or(reported.as_str(), |(_, rest)| rest);
+
         let mut fields = HashMap::new();
         fields.insert(b'S', "ERROR".to_string());
-        fields.insert(b'C', "XX000".to_string()); // Internal error
-        fields.insert(b'M', message.to_string());
+        fields.insert(b'C', code.to_string());
+        fields.insert(b'M', reported.to_string());
+        BackendMessage::ErrorResponse { fields }.encode(buf);
+    }
+
+    /// Send error response
+    ///
+    /// The SQLSTATE is classified rather than always `XX000`: a driver reading
+    /// `internal_error` for a duplicate key cannot tell a constraint it should
+    /// handle from a backend that fell over.
+    fn send_error(&self, buf: &mut BytesMut, message: &str) {
+        // The transport's name is not part of the error. `PostgreSQL protocol
+        // error: relation does not exist` is our plumbing showing through.
+        let reported = message
+            .split_once("PostgreSQL protocol error: ")
+            .map_or(message, |(_, rest)| rest);
+
+        let mut fields = HashMap::new();
+        fields.insert(b'S', "ERROR".to_string());
+        fields.insert(b'C', super::sqlstate::classify(reported).to_string());
+        fields.insert(b'M', reported.to_string());
 
         BackendMessage::ErrorResponse { fields }.encode(buf);
     }

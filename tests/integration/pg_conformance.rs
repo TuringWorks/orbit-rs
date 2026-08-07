@@ -129,6 +129,16 @@ impl Report {
 /// `tokio_postgres::Error` renders as the useless "db error"; the server's
 /// message is one level down. A conformance report whose failures all read
 /// "db error" cannot be acted on.
+/// The SQLSTATE a failure carried, or `-` when it carried none.
+///
+/// This is the thing a driver branches on, so it is checked directly rather
+/// than through the message.
+fn sqlstate(error: &tokio_postgres::Error) -> String {
+    error
+        .code()
+        .map_or_else(|| "-".to_string(), |code| code.code().to_string())
+}
+
 fn describe<E: std::error::Error>(error: E) -> String {
     let mut message = error.to_string();
     let mut source = error.source();
@@ -1577,6 +1587,34 @@ async fn postgres_protocol_conformance() {
             "NULL",
         ),
         ("LIMIT 0 returns nothing", "SELECT id FROM conf_four LIMIT 0", ""),
+        // A LIMIT lets the filter stop early, which is only sound when nothing
+        // downstream needs the rows it would skip. Each of these would return a
+        // wrong answer — not a slow one — if the early exit ignored its clause.
+        (
+            "LIMIT does not truncate an aggregate",
+            "SELECT COUNT(*) FROM conf_four LIMIT 1",
+            "3",
+        ),
+        (
+            "LIMIT does not truncate a GROUP BY",
+            "SELECT COUNT(*) FROM conf_four GROUP BY name LIMIT 1",
+            "1",
+        ),
+        (
+            "ORDER BY with LIMIT sorts before it limits",
+            "SELECT id FROM conf_four ORDER BY id DESC LIMIT 1",
+            "3",
+        ),
+        (
+            "LIMIT with OFFSET and no ORDER BY returns the right count",
+            "SELECT id FROM conf_four LIMIT 2 OFFSET 1",
+            "2,3",
+        ),
+        (
+            "DISTINCT dedupes across every row, not just the limited ones",
+            "SELECT DISTINCT name FROM conf_four ORDER BY name LIMIT 1",
+            "alpha",
+        ),
         (
             "CASE with no ELSE yields NULL",
             "SELECT CASE WHEN amount > 100 THEN 'big' END FROM conf_four WHERE id = 1",
@@ -4265,6 +4303,1766 @@ async fn postgres_protocol_conformance() {
         }
         .await,
     );
+
+    // ---- PL/pgSQL ------------------------------------------------------
+    //
+    // `DO` and `CREATE FUNCTION ... LANGUAGE plpgsql` both used to answer
+    // "Command completed successfully" and run nothing, so every check here
+    // would have passed its statement and failed its effect. Each one asserts
+    // what the block *did*, never that it was accepted.
+
+    drop_table(&client, "conf_pl").await;
+    let _ = client
+        .simple_query("CREATE TABLE conf_pl (id INTEGER)")
+        .await;
+
+    for (name, block, expect) in [
+        (
+            "a DO block runs its statement",
+            "DO $$ BEGIN INSERT INTO conf_pl (id) VALUES (1); END $$",
+            "1",
+        ),
+        (
+            "a FOR loop runs its body once per value",
+            "DO $$ BEGIN FOR i IN 1..4 LOOP INSERT INTO conf_pl (id) VALUES (i); END LOOP; END $$",
+            "1,1,2,3,4",
+        ),
+        (
+            "REVERSE counts down without changing the set",
+            "DO $$ BEGIN FOR i IN REVERSE 5..6 LOOP INSERT INTO conf_pl (id) VALUES (i); END LOOP; END $$",
+            "1,1,2,3,4,5,6",
+        ),
+        (
+            "IF runs only the branch that holds",
+            "DO $$ BEGIN IF 1 > 2 THEN INSERT INTO conf_pl (id) VALUES (99); ELSE INSERT INTO conf_pl (id) VALUES (7); END IF; END $$",
+            "1,1,2,3,4,5,6,7",
+        ),
+        (
+            "a declared variable is substituted",
+            "DO $$ DECLARE n INTEGER := 8; BEGIN INSERT INTO conf_pl (id) VALUES (n); END $$",
+            "1,1,2,3,4,5,6,7,8",
+        ),
+        (
+            "a WHILE loop assigns and terminates",
+            "DO $$ DECLARE n INTEGER := 8; BEGIN WHILE n < 10 LOOP n := n + 1; INSERT INTO conf_pl (id) VALUES (n); END LOOP; END $$",
+            "1,1,2,3,4,5,6,7,8,9,10",
+        ),
+        (
+            "EXIT WHEN leaves the loop early",
+            "DO $$ BEGIN FOR i IN 20..99 LOOP EXIT WHEN i > 21; INSERT INTO conf_pl (id) VALUES (i); END LOOP; END $$",
+            "1,1,2,3,4,5,6,7,8,9,10,20,21",
+        ),
+    ] {
+        report.record(
+            Area::Sql,
+            name,
+            async {
+                client.simple_query(block).await.map_err(describe)?;
+                let ids = simple_column(&client, "SELECT id FROM conf_pl ORDER BY id").await?;
+                let got = ids.join(",");
+                (got == expect)
+                    .then_some(())
+                    .ok_or(format!("rows are {got}, expected {expect}"))
+            }
+            .await,
+        );
+    }
+
+    report.record(
+        Area::Sql,
+        "RAISE EXCEPTION aborts the block and its writes",
+        async {
+            let before = simple_column(&client, "SELECT COUNT(*) FROM conf_pl").await?;
+            let outcome = client
+                .simple_query(
+                    "DO $$ BEGIN INSERT INTO conf_pl (id) VALUES (555); RAISE EXCEPTION 'refused'; END $$",
+                )
+                .await;
+            let message = match outcome {
+                Ok(_) => return Err("the block was accepted; RAISE EXCEPTION did nothing".into()),
+                Err(e) => describe(e),
+            };
+            if !message.contains("refused") {
+                return Err(format!("aborted with {message}, expected the raised message"));
+            }
+            // The negative control: the statement before the RAISE must not
+            // survive, or the abort is only cosmetic.
+            let after = simple_column(&client, "SELECT COUNT(*) FROM conf_pl").await?;
+            (after == before)
+                .then_some(())
+                .ok_or(format!("row count went {before:?} -> {after:?} despite the abort"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "SELECT ... INTO binds a variable",
+        async {
+            client
+                .simple_query(
+                    "DO $$ DECLARE c INTEGER; BEGIN SELECT COUNT(*) FROM conf_pl INTO c; INSERT INTO conf_pl (id) VALUES (1000 + c); END $$",
+                )
+                .await
+                .map_err(describe)?;
+            // 13 rows were present, so the block must have written 1013.
+            let found = simple_column(&client, "SELECT id FROM conf_pl WHERE id > 1000").await?;
+            (found == ["1013"])
+                .then_some(())
+                .ok_or(format!("got {found:?}, expected [1013] from a bound COUNT"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a plpgsql function returns a value to its caller",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_double").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_double(x INTEGER) RETURNS INTEGER AS $$ BEGIN RETURN x * 2; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            let doubled = simple_column(&client, "SELECT conf_double(21)").await?;
+            (doubled == ["42"])
+                .then_some(())
+                .ok_or(format!("got {doubled:?}, expected [42]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a function body with a branch is interpreted, not just run",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_sign").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_sign(x INTEGER) RETURNS TEXT AS $$ BEGIN IF x > 0 THEN RETURN 'positive'; ELSIF x < 0 THEN RETURN 'negative'; ELSE RETURN 'zero'; END IF; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            let mut seen = Vec::new();
+            for argument in ["5", "-5", "0"] {
+                let answer =
+                    simple_column(&client, &format!("SELECT conf_sign({argument})")).await?;
+                seen.push(answer.join(""));
+            }
+            (seen == ["positive", "negative", "zero"])
+                .then_some(())
+                .ok_or(format!("got {seen:?}, expected each branch in turn"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a malformed block is refused rather than silently accepted",
+        async {
+            // The failure this guards against is the original one: a block
+            // that cannot be run reporting success.
+            match client
+                .simple_query("DO $$ BEGIN IF 1 > 0 THEN NULL; END $$")
+                .await
+            {
+                Ok(_) => Err("an IF with no END IF was accepted".into()),
+                Err(_) => Ok(()),
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "an expression in INSERT ... VALUES is evaluated, not stored as text",
+        async {
+            drop_table(&client, "conf_expr").await;
+            client
+                .simple_query("CREATE TABLE conf_expr (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_expr (id) VALUES (500 + 1)")
+                .await
+                .map_err(describe)?;
+            let stored = simple_column(&client, "SELECT id FROM conf_expr").await?;
+            if stored != ["501"] {
+                drop_table(&client, "conf_expr").await;
+                return Err(format!("stored {stored:?}, expected [501]"));
+            }
+            // Storing the text made every later comparison fail, which is how
+            // it stayed invisible: the row was there, it just never matched.
+            let matched =
+                simple_column(&client, "SELECT COUNT(*) FROM conf_expr WHERE id > 500").await?;
+            let result = (matched == ["1"])
+                .then_some(())
+                .ok_or(format!("comparison matched {matched:?}, expected [1]"));
+            drop_table(&client, "conf_expr").await;
+            result
+        }
+        .await,
+    );
+
+    // Everything above runs a block for its effect on one table. These check
+    // the constructs that read or return rows, and the one property a handler
+    // exists for: that what it catches left nothing behind.
+
+    report.record(
+        Area::Sql,
+        "a TEXT argument reaches a function as a string",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_greet").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_greet(who TEXT) RETURNS TEXT AS $$ BEGIN RETURN 'hello ' || who; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            // Substituting it unquoted made this `'hello ' || world`, which
+            // failed with `column "world" does not exist`.
+            let greeting = simple_column(&client, "SELECT conf_greet('world')").await?;
+            (greeting == ["hello world"])
+                .then_some(())
+                .ok_or(format!("got {greeting:?}, expected [hello world]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "FOR ... IN SELECT reads each row's columns",
+        async {
+            drop_table(&client, "conf_src").await;
+            drop_table(&client, "conf_dst").await;
+            client
+                .simple_query("CREATE TABLE conf_src (id INTEGER, name TEXT)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("CREATE TABLE conf_dst (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_src (id, name) VALUES (1, 'a'), (2, 'b'), (3, 'c')")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "DO $$ BEGIN FOR r IN SELECT id, name FROM conf_src LOOP INSERT INTO conf_dst (id) VALUES (r.id * 10); END LOOP; END $$",
+                )
+                .await
+                .map_err(describe)?;
+            let ids = simple_column(&client, "SELECT id FROM conf_dst ORDER BY id").await?;
+            (ids == ["10", "20", "30"])
+                .then_some(())
+                .ok_or(format!("got {ids:?}, expected [10, 20, 30]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "RETURN QUERY makes a function set-returning",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_big").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_big() RETURNS SETOF INTEGER AS $$ BEGIN RETURN QUERY SELECT id FROM conf_src WHERE id > 1; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            let ids = simple_column(&client, "SELECT conf_big()").await?;
+            (ids == ["2", "3"])
+                .then_some(())
+                .ok_or(format!("got {ids:?}, expected two rows [2, 3]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "an EXCEPTION handler catches and the block carries on",
+        async {
+            client
+                .simple_query(
+                    "DO $$ BEGIN BEGIN RAISE EXCEPTION 'boom'; EXCEPTION WHEN OTHERS THEN INSERT INTO conf_dst (id) VALUES (777); END; END $$",
+                )
+                .await
+                .map_err(describe)?;
+            let found = simple_column(&client, "SELECT id FROM conf_dst WHERE id = 777").await?;
+            (found == ["777"])
+                .then_some(())
+                .ok_or("the handler did not run".to_string())
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a caught exception undoes what the protected block wrote",
+        async {
+            client
+                .simple_query(
+                    "DO $$ BEGIN BEGIN INSERT INTO conf_dst (id) VALUES (888); RAISE EXCEPTION 'x'; EXCEPTION WHEN OTHERS THEN NULL; END; END $$",
+                )
+                .await
+                .map_err(describe)?;
+            // Catching without undoing would leave a half-finished write,
+            // which is the thing a handler exists to prevent.
+            let left = simple_column(&client, "SELECT COUNT(*) FROM conf_dst WHERE id = 888")
+                .await?;
+            (left == ["0"])
+                .then_some(())
+                .ok_or(format!("{left:?} rows survived a caught exception"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "SQLERRM carries the raised message",
+        async {
+            client
+                .simple_query(
+                    "DO $$ BEGIN BEGIN RAISE EXCEPTION 'the reason'; EXCEPTION WHEN OTHERS THEN INSERT INTO conf_src (id, name) VALUES (99, SQLERRM); END; END $$",
+                )
+                .await
+                .map_err(describe)?;
+            let message = simple_column(&client, "SELECT name FROM conf_src WHERE id = 99").await?;
+            (message == ["the reason"])
+                .then_some(())
+                .ok_or(format!("got {message:?}, expected [the reason]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "an unhandled exception still reaches the client",
+        async {
+            match client
+                .simple_query("DO $$ BEGIN BEGIN RAISE EXCEPTION 'unhandled'; END; END $$")
+                .await
+            {
+                Ok(_) => Err("a block with no handler swallowed its exception".into()),
+                Err(e) => {
+                    let message = describe(e);
+                    message.contains("unhandled").then_some(()).ok_or(format!(
+                        "failed with {message}, expected the raised message"
+                    ))
+                }
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "RETURN NEXT appends one value at a time",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_next").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_next() RETURNS SETOF INTEGER AS $$ BEGIN RETURN NEXT 10; RETURN NEXT 20; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            let values = simple_column(&client, "SELECT conf_next()").await?;
+            (values == ["10", "20"])
+                .then_some(())
+                .ok_or(format!("got {values:?}, expected [10, 20]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a cursor is opened, fetched from and closed",
+        async {
+            client
+                .simple_query("DELETE FROM conf_dst")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "DO $$ DECLARE c CURSOR FOR SELECT id FROM conf_src ORDER BY id; v INTEGER; BEGIN OPEN c; FETCH c INTO v; INSERT INTO conf_dst (id) VALUES (v); FETCH c INTO v; INSERT INTO conf_dst (id) VALUES (v); CLOSE c; END $$",
+                )
+                .await
+                .map_err(describe)?;
+            let ids = simple_column(&client, "SELECT id FROM conf_dst ORDER BY id").await?;
+            (ids == ["1", "2"])
+                .then_some(())
+                .ok_or(format!("got {ids:?}, expected the first two rows [1, 2]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "FOUND reports whether a FETCH returned a row",
+        async {
+            client
+                .simple_query("DELETE FROM conf_dst")
+                .await
+                .map_err(describe)?;
+            // The loop can only terminate if FOUND goes false at the end, and
+            // it can only run at all if FOUND is usable in a condition —
+            // spelled `t` rather than `TRUE` it failed with
+            // `column "t" does not exist`.
+            client
+                .simple_query(
+                    "DO $$ DECLARE c CURSOR FOR SELECT id FROM conf_src WHERE id < 10; v INTEGER; BEGIN OPEN c; LOOP FETCH c INTO v; EXIT WHEN NOT FOUND; INSERT INTO conf_dst (id) VALUES (v); END LOOP; CLOSE c; END $$",
+                )
+                .await
+                .map_err(describe)?;
+            let counted = simple_column(&client, "SELECT COUNT(*) FROM conf_dst").await?;
+            (counted == ["3"])
+                .then_some(())
+                .ok_or(format!("got {counted:?} rows, expected all 3"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a cursor FOR loop walks every row",
+        async {
+            client
+                .simple_query("DELETE FROM conf_dst")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "DO $$ DECLARE c CURSOR FOR SELECT id FROM conf_src WHERE id < 10; BEGIN FOR r IN c LOOP INSERT INTO conf_dst (id) VALUES (r.id); END LOOP; END $$",
+                )
+                .await
+                .map_err(describe)?;
+            let counted = simple_column(&client, "SELECT COUNT(*) FROM conf_dst").await?;
+            (counted == ["3"])
+                .then_some(())
+                .ok_or(format!("got {counted:?} rows, expected 3"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a %TYPE variable takes the column's type",
+        async {
+            // `name` is TEXT, so the value must be quoted when substituted.
+            // Taking it as untyped would paste it in bare and fail.
+            client
+                .simple_query(
+                    "DO $$ DECLARE n conf_src.name%TYPE; BEGIN n := 'from a domain'; INSERT INTO conf_src (id, name) VALUES (50, n); END $$",
+                )
+                .await
+                .map_err(describe)?;
+            let found = simple_column(&client, "SELECT name FROM conf_src WHERE id = 50").await?;
+            (found == ["from a domain"])
+                .then_some(())
+                .ok_or(format!("got {found:?}, expected [from a domain]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "two functions of one name are told apart by argument count",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_over").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_over(a INTEGER) RETURNS INTEGER AS $$ BEGIN RETURN a; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_over(a INTEGER, b INTEGER) RETURNS INTEGER AS $$ BEGIN RETURN a + b; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            let one = simple_column(&client, "SELECT conf_over(5)").await?;
+            let two = simple_column(&client, "SELECT conf_over(5, 6)").await?;
+            // Defining the second must not have replaced the first.
+            (one == ["5"] && two == ["11"])
+                .then_some(())
+                .ok_or(format!("got {one:?} and {two:?}, expected [5] and [11]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "DROP FUNCTION removes every arity of the name",
+        async {
+            client
+                .simple_query("DROP FUNCTION conf_over")
+                .await
+                .map_err(describe)?;
+            match client.simple_query("SELECT conf_over(5)").await {
+                Ok(_) => Err("the one-argument form survived the drop".into()),
+                Err(_) => match client.simple_query("SELECT conf_over(5, 6)").await {
+                    Ok(_) => Err("the two-argument form survived the drop".into()),
+                    Err(_) => Ok(()),
+                },
+            }
+        }
+        .await,
+    );
+
+    // ---- SQLSTATE ------------------------------------------------------
+    //
+    // Every error used to leave as XX000, so a driver could not tell a
+    // duplicate key from a crashed backend. These trigger each condition
+    // through the real code path and assert the code a client receives —
+    // which is also what keeps the classifier from drifting as messages are
+    // reworded.
+
+    drop_table(&client, "conf_state").await;
+    drop_table(&client, "conf_state_child").await;
+    let _ = client
+        .simple_query(
+            "CREATE TABLE conf_state (id INTEGER PRIMARY KEY, n TEXT NOT NULL, amt INTEGER CHECK (amt > 0))",
+        )
+        .await;
+    let _ = client
+        .simple_query(
+            "CREATE TABLE conf_state_child (id INTEGER, pid INTEGER REFERENCES conf_state(id))",
+        )
+        .await;
+    let _ = client
+        .simple_query("INSERT INTO conf_state (id, n, amt) VALUES (1, 'a', 5)")
+        .await;
+
+    for (name, sql, want) in [
+        (
+            "undefined_table is 42P01",
+            "SELECT * FROM conf_no_such_table",
+            "42P01",
+        ),
+        (
+            "undefined_column is 42703",
+            "SELECT no_such_column FROM conf_state",
+            "42703",
+        ),
+        (
+            "duplicate_table is 42P07",
+            "CREATE TABLE conf_state (id INTEGER)",
+            "42P07",
+        ),
+        (
+            "unique_violation is 23505",
+            "INSERT INTO conf_state (id, n, amt) VALUES (1, 'b', 5)",
+            "23505",
+        ),
+        (
+            "not_null_violation is 23502",
+            "INSERT INTO conf_state (id, amt) VALUES (2, 5)",
+            "23502",
+        ),
+        (
+            "check_violation is 23514",
+            "INSERT INTO conf_state (id, n, amt) VALUES (3, 'c', -1)",
+            "23514",
+        ),
+        (
+            "foreign_key_violation is 23503",
+            "INSERT INTO conf_state_child (id, pid) VALUES (1, 999)",
+            "23503",
+        ),
+        ("division_by_zero is 22012", "SELECT 1/0", "22012"),
+        (
+            "undefined_function is 42883",
+            "SELECT conf_no_such_function(1)",
+            "42883",
+        ),
+        (
+            "raise_exception is P0001",
+            "DO $$ BEGIN RAISE EXCEPTION 'raised'; END $$",
+            "P0001",
+        ),
+    ] {
+        report.record(
+            Area::Sql,
+            name,
+            async {
+                match client.simple_query(sql).await {
+                    Ok(_) => Err(format!(
+                        "{sql} was accepted; expected it to fail with {want}"
+                    )),
+                    Err(e) => {
+                        let got = sqlstate(&e);
+                        (got == want)
+                            .then_some(())
+                            .ok_or(format!("reported {got}, expected {want}"))
+                    }
+                }
+            }
+            .await,
+        );
+    }
+
+    report.record(
+        Area::Sql,
+        "an error message does not carry the transport's name",
+        async {
+            match client
+                .simple_query("SELECT * FROM conf_no_such_table")
+                .await
+            {
+                Ok(_) => Err("the missing table was accepted".into()),
+                Err(e) => {
+                    let message = describe(e);
+                    // `PostgreSQL protocol error: ...` is our plumbing showing
+                    // through; a client sees the condition, not the pipe.
+                    (!message.contains("protocol error"))
+                        .then_some(())
+                        .ok_or(format!("message leaked the transport: {message}"))
+                }
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a named EXCEPTION condition catches only its own failure",
+        async {
+                drop_table(&client, "conf_caught").await;
+            client
+                .simple_query("CREATE TABLE conf_caught (what TEXT)")
+                .await
+                .map_err(describe)?;
+
+            // Catches: the condition names what actually happened.
+            client
+                .simple_query(
+                    "DO $$ BEGIN BEGIN INSERT INTO conf_state (id, n, amt) VALUES (1, 'x', 5); EXCEPTION WHEN unique_violation THEN INSERT INTO conf_caught (what) VALUES ('caught'); END; END $$",
+                )
+                .await
+                .map_err(describe)?;
+            let caught = simple_column(&client, "SELECT what FROM conf_caught").await?;
+            if caught != ["caught"] {
+                return Err(format!("WHEN unique_violation did not catch: {caught:?}"));
+            }
+
+            // Does not catch: a different condition must let it through, or
+            // the matching is just `OTHERS` wearing a name.
+            match client
+                .simple_query(
+                    "DO $$ BEGIN BEGIN INSERT INTO conf_state (id, n, amt) VALUES (1, 'y', 5); EXCEPTION WHEN division_by_zero THEN NULL; END; END $$",
+                )
+                .await
+            {
+                Ok(_) => Err("WHEN division_by_zero swallowed a unique violation".into()),
+                Err(e) => {
+                    let got = sqlstate(&e);
+                    (got == "23505")
+                        .then_some(())
+                        .ok_or(format!("escaped with {got}, expected 23505"))
+                }
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "OUT parameters are the function's result",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_out").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_out(a INTEGER, OUT dbl INTEGER, OUT trp INTEGER) AS $$ BEGIN dbl := a * 2; trp := a * 3; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            // Two values, named after the parameters — not one anonymous
+            // column, and not whatever RETURN would have said.
+            let rows = client
+                .simple_query("SELECT conf_out(4)")
+                .await
+                .map_err(describe)?;
+            let row = rows
+                .iter()
+                .find_map(|m| match m {
+                    tokio_postgres::SimpleQueryMessage::Row(r) => Some(r),
+                    _ => None,
+                })
+                .ok_or("no row came back")?;
+            let got: Vec<String> = (0..row.len())
+                .map(|i| row.get(i).unwrap_or("NULL").to_string())
+                .collect();
+            (got == ["8", "12"])
+                .then_some(())
+                .ok_or(format!("got {got:?}, expected [8, 12]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "INOUT both takes and returns",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_bump").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_bump(INOUT n INTEGER) AS $$ BEGIN n := n + 1; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            let bumped = simple_column(&client, "SELECT conf_bump(41)").await?;
+            (bumped == ["42"])
+                .then_some(())
+                .ok_or(format!("got {bumped:?}, expected [42]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "two functions of one name and arity are told apart by type",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_kind").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_kind(a INTEGER) RETURNS TEXT AS $$ BEGIN RETURN 'number'; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_kind(a TEXT) RETURNS TEXT AS $$ BEGIN RETURN 'text'; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            // Same name, same arity: keyed by count alone the second would
+            // have replaced the first.
+            let number = simple_column(&client, "SELECT conf_kind(5)").await?;
+            let text = simple_column(&client, "SELECT conf_kind('x')").await?;
+            (number == ["number"] && text == ["text"])
+                .then_some(())
+                .ok_or(format!("got {number:?} and {text:?}"))
+        }
+        .await,
+    );
+
+    for (name, definitions, call, want) in [
+        (
+            "INTEGER and BIGINT overloads are told apart",
+            &["a INTEGER", "a BIGINT"][..],
+            &["SELECT conf_width(42)", "SELECT conf_width(5000000000)"][..],
+            &["a INTEGER", "a BIGINT"][..],
+        ),
+        (
+            "VARCHAR and TEXT overloads are told apart",
+            &["a VARCHAR", "a TEXT"][..],
+            &["SELECT conf_width('x')"][..],
+            // An untyped literal fits both; PostgreSQL prefers text.
+            &["a TEXT"][..],
+        ),
+        (
+            "a call widens to the only candidate that fits",
+            &["a SMALLINT", "a BIGINT"][..],
+            // int4 cannot narrow to int2, so only the BIGINT form is viable.
+            &["SELECT conf_width(42)"][..],
+            &["a BIGINT"][..],
+        ),
+        (
+            "an exact type match beats an implicit conversion",
+            &["a NUMERIC", "a INTEGER"][..],
+            &["SELECT conf_width(7)"][..],
+            &["a INTEGER"][..],
+        ),
+    ] {
+        report.record(
+            Area::Sql,
+            name,
+            async {
+                let _ = client.simple_query("DROP FUNCTION conf_width").await;
+                for declaration in definitions {
+                    client
+                        .simple_query(&format!(
+                            "CREATE FUNCTION conf_width({declaration}) RETURNS TEXT AS $$ BEGIN RETURN '{declaration}'; END $$ LANGUAGE plpgsql"
+                        ))
+                        .await
+                        .map_err(describe)?;
+                }
+                for (call, want) in call.iter().zip(want) {
+                    let got = simple_column(&client, call).await?;
+                    if got != [(*want).to_string()] {
+                        return Err(format!("{call} chose {got:?}, expected [{want}]"));
+                    }
+                }
+                Ok(())
+            }
+            .await,
+        );
+    }
+
+    report.record(
+        Area::Catalog,
+        "pg_proc lists a stored function with its types",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_proc").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_proc(a INTEGER) RETURNS TEXT AS $$ BEGIN RETURN 'x'; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            // 23 is int4 and 25 is text: the argument and return types a
+            // client reads to know how to call it.
+            let described = simple_column(
+                &client,
+                "SELECT pronargs FROM pg_proc WHERE proname = 'conf_proc'",
+            )
+            .await?;
+            if described != ["1"] {
+                return Err(format!("pronargs is {described:?}, expected [1]"));
+            }
+            let argument_types = simple_column(
+                &client,
+                "SELECT proargtypes FROM pg_proc WHERE proname = 'conf_proc'",
+            )
+            .await?;
+            if argument_types != ["23"] {
+                return Err(format!("proargtypes is {argument_types:?}, expected [23]"));
+            }
+            let return_type = simple_column(
+                &client,
+                "SELECT prorettype FROM pg_proc WHERE proname = 'conf_proc'",
+            )
+            .await?;
+            (return_type == ["25"])
+                .then_some(())
+                .ok_or(format!("prorettype is {return_type:?}, expected [25]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Catalog,
+        "a function's OID is in the user range and does not move",
+        async {
+            let before =
+                simple_column(&client, "SELECT oid FROM pg_proc WHERE proname = 'conf_proc'")
+                    .await?;
+            let oid: i64 = before
+                .first()
+                .and_then(|value| value.parse().ok())
+                .ok_or("no OID reported")?;
+            // PostgreSQL reserves everything below 16384 for built-in objects.
+            if oid < 16_384 {
+                return Err(format!("OID {oid} is in the reserved range"));
+            }
+
+            // Creating another function must not shift it: an OID that moved
+            // would make pg_proc useless for the thing OIDs are for.
+            let _ = client.simple_query("DROP FUNCTION conf_proc_other").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_proc_other() RETURNS INTEGER AS $$ BEGIN RETURN 1; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            let after =
+                simple_column(&client, "SELECT oid FROM pg_proc WHERE proname = 'conf_proc'")
+                    .await?;
+            (after == before)
+                .then_some(())
+                .ok_or(format!("OID moved from {before:?} to {after:?}"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a cast names an argument's type, overriding its value",
+        async {
+            for name in ["conf_kindof", "conf_ret8"] {
+                let _ = client.simple_query(&format!("DROP FUNCTION {name}")).await;
+            }
+            for (declaration, answer) in [
+                ("a INTEGER", "int4"),
+                ("a BIGINT", "int8"),
+                ("a TEXT", "text"),
+            ] {
+                client
+                    .simple_query(&format!(
+                        "CREATE FUNCTION conf_kindof({declaration}) RETURNS TEXT AS $$ BEGIN RETURN '{answer}'; END $$ LANGUAGE plpgsql"
+                    ))
+                    .await
+                    .map_err(describe)?;
+            }
+
+            // 42 fits an int4, so its value says int4; the cast says
+            // otherwise and the cast is what a caller wrote down.
+            let plain = simple_column(&client, "SELECT conf_kindof(42)").await?;
+            let cast = simple_column(&client, "SELECT conf_kindof(42::BIGINT)").await?;
+            let spelled = simple_column(&client, "SELECT conf_kindof(CAST(42 AS BIGINT))").await?;
+            let textual = simple_column(&client, "SELECT conf_kindof(42::TEXT)").await?;
+            (plain == ["int4"] && cast == ["int8"] && spelled == ["int8"] && textual == ["text"])
+                .then_some(())
+                .ok_or(format!(
+                    "got {plain:?}, {cast:?}, {spelled:?}, {textual:?}; expected int4, int8, int8, text"
+                ))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a nested call is typed from the catalogue, not its value",
+        async {
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_ret8() RETURNS BIGINT AS $$ BEGIN RETURN 1; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            // The value 1 fits an int4; only the catalogue knows the function
+            // was declared to return int8.
+            let chosen = simple_column(&client, "SELECT conf_kindof(conf_ret8())").await?;
+            (chosen == ["int8"])
+                .then_some(())
+                .ok_or(format!("got {chosen:?}, expected [int8]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a domain parameter is the type it is built on",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_dom").await;
+            let _ = client
+                .simple_query("CREATE DOMAIN conf_posint AS INTEGER CHECK (VALUE > 0)")
+                .await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_dom(a conf_posint) RETURNS INTEGER AS $$ BEGIN RETURN a * 2; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            // Bound under the domain's own name the value was quoted, and
+            // `a * 2` failed as arithmetic on text.
+            let doubled = simple_column(&client, "SELECT conf_dom(5)").await?;
+            if doubled != ["10"] {
+                return Err(format!("got {doubled:?}, expected [10]"));
+            }
+            // And the catalogue reports what a caller must pass, not `text`.
+            let reported = simple_column(
+                &client,
+                "SELECT proargtypes FROM pg_proc WHERE proname = 'conf_dom'",
+            )
+            .await?;
+            (reported == ["23"])
+                .then_some(())
+                .ok_or(format!("proargtypes is {reported:?}, expected [23]"))
+        }
+        .await,
+    );
+
+    for (name, sql, want) in [
+        ("= ANY over an array", "SELECT 1 = ANY(ARRAY[1,2])", "t"),
+        (
+            "= ANY that does not match",
+            "SELECT 5 = ANY(ARRAY[1,2])",
+            "f",
+        ),
+        ("= ALL over an array", "SELECT 1 = ALL(ARRAY[1,1])", "t"),
+        (
+            "= ALL that does not hold",
+            "SELECT 1 = ALL(ARRAY[1,2])",
+            "f",
+        ),
+        // The `<`/`>` forms already worked; `=` is the one people write.
+        ("> ANY still works", "SELECT 2 > ANY(ARRAY[1,5])", "t"),
+    ] {
+        report.record(
+            Area::Sql,
+            name,
+            async {
+                let got = simple_column(&client, sql).await?;
+                (got == [want.to_string()])
+                    .then_some(())
+                    .ok_or(format!("got {got:?}, expected [{want}]"))
+            }
+            .await,
+        );
+    }
+
+    report.record(
+        Area::Sql,
+        "a quantified comparison filters rows",
+        async {
+            drop_table(&client, "conf_any").await;
+            client
+                .simple_query("CREATE TABLE conf_any (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_any (id) VALUES (1), (2), (3)")
+                .await
+                .map_err(describe)?;
+            // Stored as the text `ANY(ARRAY[1,3])` this matched nothing —
+            // a wrong answer rather than an error.
+            let ids = simple_column(
+                &client,
+                "SELECT id FROM conf_any WHERE id = ANY(ARRAY[1,3]) ORDER BY id",
+            )
+            .await?;
+            let result = (ids == ["1", "3"])
+                .then_some(())
+                .ok_or(format!("got {ids:?}, expected [1, 3]"));
+            drop_table(&client, "conf_any").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "an expression on the right of a comparison is evaluated",
+        async {
+            drop_table(&client, "conf_rhs").await;
+            client
+                .simple_query("CREATE TABLE conf_rhs (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_rhs (id) VALUES (1), (2), (3)")
+                .await
+                .map_err(describe)?;
+            let ids = simple_column(&client, "SELECT id FROM conf_rhs WHERE id = 1 + 1").await?;
+            let result = (ids == ["2"])
+                .then_some(())
+                .ok_or(format!("got {ids:?}, expected [2]"));
+            drop_table(&client, "conf_rhs").await;
+            result
+        }
+        .await,
+    );
+
+    for (name, sql, want) in [
+        // These were parse errors: the types were reachable as column
+        // declarations but missing from the cast-target list, so a type you
+        // could declare was not a type you could cast to.
+        ("cast to NUMERIC", "SELECT '1.5'::NUMERIC", "1.5"),
+        (
+            "a declared scale is rendered",
+            "SELECT 1.5::NUMERIC(10,2)",
+            "1.50",
+        ),
+        (
+            "a declared scale rounds",
+            "SELECT '1.567'::NUMERIC(10,2)",
+            "1.57",
+        ),
+        (
+            "an integer takes the scale",
+            "SELECT 3::NUMERIC(10,2)",
+            "3.00",
+        ),
+        (
+            "cast to json then read a key",
+            "SELECT ('{\"a\":1}'::json)->>'a'",
+            "1",
+        ),
+        (
+            "cast to jsonb then read a key",
+            "SELECT '{\"a\":1}'::jsonb->>'a'",
+            "1",
+        ),
+    ] {
+        report.record(
+            Area::Types,
+            name,
+            async {
+                let got = simple_column(&client, sql).await?;
+                (got == [want.to_string()])
+                    .then_some(())
+                    .ok_or(format!("got {got:?}, expected [{want}]"))
+            }
+            .await,
+        );
+    }
+
+    report.record(
+        Area::Sql,
+        "a comparison on a non-integer column filters, not returns nothing",
+        async {
+            drop_table(&client, "conf_cmp").await;
+            client
+                .simple_query(
+                    "CREATE TABLE conf_cmp (id INTEGER, amt NUMERIC(10,2), d DOUBLE, t TEXT)",
+                )
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "INSERT INTO conf_cmp (id, amt, d, t) VALUES (1, 10.50, 7.5, 'b'), (2, 3, 1.5, 'a')",
+                )
+                .await
+                .map_err(describe)?;
+
+            // The storage matcher compared only `BigInt` against `BigInt`, so
+            // `>` on a numeric, float or text column matched no rows at all —
+            // an empty result rather than an error.
+            for (sql, want) in [
+                ("SELECT id FROM conf_cmp WHERE amt > 5", "1"),
+                ("SELECT id FROM conf_cmp WHERE d > 5", "1"),
+                ("SELECT id FROM conf_cmp WHERE d < 5", "2"),
+                ("SELECT id FROM conf_cmp WHERE t > 'a'", "1"),
+                ("SELECT id FROM conf_cmp WHERE id > 1", "2"),
+            ] {
+                let got = simple_column(&client, sql).await?;
+                if got != [want.to_string()] {
+                    drop_table(&client, "conf_cmp").await;
+                    return Err(format!("{sql} gave {got:?}, expected [{want}]"));
+                }
+            }
+            drop_table(&client, "conf_cmp").await;
+            Ok(())
+        }
+        .await,
+    );
+
+    for (name, sql, want) in [
+        (
+            "date plus interval is a timestamp",
+            "SELECT DATE '2024-01-01' + INTERVAL '1 day'",
+            "2024-01-02 00:00:00",
+        ),
+        (
+            "date plus an integer is a date",
+            "SELECT DATE '2024-01-01' + 1",
+            "2024-01-02",
+        ),
+        (
+            "date minus an integer crosses a leap day",
+            "SELECT DATE '2024-03-01' - 1",
+            "2024-02-29",
+        ),
+        (
+            "date minus date is a count of days",
+            "SELECT DATE '2024-03-01' - DATE '2024-02-01'",
+            "29",
+        ),
+    ] {
+        report.record(
+            Area::Types,
+            name,
+            async {
+                let got = simple_column(&client, sql).await?;
+                (got == [want.to_string()])
+                    .then_some(())
+                    .ok_or(format!("got {got:?}, expected [{want}]"))
+            }
+            .await,
+        );
+    }
+
+    report.record(
+        Area::Types,
+        "a malformed value is refused by the cast, not accepted",
+        async {
+            // The direction that matters: adding the cast must not make
+            // anything castable.
+            for sql in ["SELECT 'nope'::json", "SELECT 'abc'::NUMERIC"] {
+                if client.simple_query(sql).await.is_ok() {
+                    return Err(format!("{sql} was accepted"));
+                }
+            }
+            Ok(())
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Connection,
+        "SHOW agrees with what the startup advertised",
+        async {
+            // A driver reads `server_version` to decide what the server
+            // supports. It arrived in ParameterStatus but `SHOW` answered an
+            // empty string, so the two disagreed about the same setting.
+            let version = simple_column(&client, "SHOW server_version").await?;
+            let reported = version.first().cloned().unwrap_or_default();
+            if reported.is_empty() {
+                return Err("SHOW server_version is empty".to_string());
+            }
+            // libpq reads the leading digits, so a version must start with one.
+            if !reported.starts_with(|c: char| c.is_ascii_digit()) {
+                return Err(format!(
+                    "server_version {reported:?} does not start with a digit"
+                ));
+            }
+            let encoding = simple_column(&client, "SHOW client_encoding").await?;
+            (encoding == ["UTF8"])
+                .then_some(())
+                .ok_or(format!("client_encoding is {encoding:?}, expected [UTF8]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Connection,
+        "GSSENCRequest is declined in the conforming way",
+        async {
+            // A server without Kerberos integration answers a single `N` and
+            // the client continues in the clear. PostgreSQL built without
+            // --with-gssapi does exactly this; the negotiation is a protocol
+            // outcome, not a missing message.
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let mut socket = tokio::net::TcpStream::connect("127.0.0.1:5432")
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let mut request = Vec::new();
+            request.extend_from_slice(&8i32.to_be_bytes());
+            request.extend_from_slice(&80_877_104i32.to_be_bytes());
+            socket
+                .write_all(&request)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let mut answer = [0u8; 1];
+            socket
+                .read_exact(&mut answer)
+                .await
+                .map_err(|e| e.to_string())?;
+            if answer != *b"N" {
+                return Err(format!("answered {:?}, expected N", answer[0] as char));
+            }
+
+            // And the same connection must still be usable: a decline is not
+            // a disconnect.
+            let mut startup = Vec::new();
+            for (key, value) in [("user", "postgres"), ("database", "orbit")] {
+                startup.extend_from_slice(key.as_bytes());
+                startup.push(0);
+                startup.extend_from_slice(value.as_bytes());
+                startup.push(0);
+            }
+            startup.push(0);
+            let mut framed = Vec::new();
+            framed.extend_from_slice(&((startup.len() + 8) as i32).to_be_bytes());
+            framed.extend_from_slice(&196_608i32.to_be_bytes());
+            framed.extend_from_slice(&startup);
+            socket.write_all(&framed).await.map_err(|e| e.to_string())?;
+
+            let mut tag = [0u8; 1];
+            socket
+                .read_exact(&mut tag)
+                .await
+                .map_err(|e| e.to_string())?;
+            (tag == *b"R")
+                .then_some(())
+                .ok_or(format!("startup answered {:?}, expected R", tag[0] as char))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "an expression in WHERE filters instead of being dropped",
+        async {
+            drop_table(&client, "conf_expr_where").await;
+            client
+                .simple_query("CREATE TABLE conf_expr_where (id INTEGER, name TEXT)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "INSERT INTO conf_expr_where (id, name) VALUES (1, 'ada'), (2, 'grace'), (3, 'alan')",
+                )
+                .await
+                .map_err(describe)?;
+
+            // `id * 2 = 4` was read as column `id`, operator `*`, and the
+            // storage matcher treats an operator it does not know as matching
+            // every row — so this returned the whole table.
+            let arithmetic =
+                simple_column(&client, "SELECT name FROM conf_expr_where WHERE id * 2 = 4").await?;
+            if arithmetic != ["grace"] {
+                return Err(format!("arithmetic gave {arithmetic:?}, expected [grace]"));
+            }
+            // A function call in WHERE went the same way and matched nothing.
+            let called = simple_column(
+                &client,
+                "SELECT name FROM conf_expr_where WHERE UPPER(name) = 'ADA'",
+            )
+            .await?;
+            let result = (called == ["ada"])
+                .then_some(())
+                .ok_or(format!("a function gave {called:?}, expected [ada]"));
+            drop_table(&client, "conf_expr_where").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a stored function can be called from inside a query",
+        async {
+            drop_table(&client, "conf_callable").await;
+            client
+                .simple_query("CREATE TABLE conf_callable (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_callable (id) VALUES (1), (2), (3)")
+                .await
+                .map_err(describe)?;
+            let _ = client.simple_query("DROP FUNCTION conf_dbl").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_dbl(a INTEGER) RETURNS INTEGER AS $$ BEGIN RETURN a * 2; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+
+            // Only `SELECT f(literal)` used to work; over a table this failed
+            // and in a WHERE it quietly matched nothing.
+            let projected =
+                simple_column(&client, "SELECT conf_dbl(id) FROM conf_callable ORDER BY id").await?;
+            if projected != ["2", "4", "6"] {
+                return Err(format!("select list gave {projected:?}, expected [2, 4, 6]"));
+            }
+            let filtered = simple_column(
+                &client,
+                "SELECT id FROM conf_callable WHERE conf_dbl(id) = 4",
+            )
+            .await?;
+            let result = (filtered == ["2"])
+                .then_some(())
+                .ok_or(format!("WHERE gave {filtered:?}, expected [2]"));
+            drop_table(&client, "conf_callable").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a column's declared type chooses the overload inside a query",
+        async {
+            drop_table(&client, "conf_mix").await;
+            client
+                .simple_query("CREATE TABLE conf_mix (n INTEGER, s TEXT, b BIGINT)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_mix (n, s, b) VALUES (2, 'ada', 5000000000)")
+                .await
+                .map_err(describe)?;
+            let _ = client.simple_query("DROP FUNCTION conf_kindof2").await;
+            for (declaration, answer) in [
+                ("a INTEGER", "int4"),
+                ("a TEXT", "text"),
+                ("a BIGINT", "int8"),
+            ] {
+                client
+                    .simple_query(&format!(
+                        "CREATE FUNCTION conf_kindof2({declaration}) RETURNS TEXT AS $$ BEGIN RETURN '{answer}'; END $$ LANGUAGE plpgsql"
+                    ))
+                    .await
+                    .map_err(describe)?;
+            }
+
+            // Keyed by argument count alone, every one of these reached
+            // whichever overload was defined last.
+            let mut chosen = Vec::new();
+            for column in ["n", "s", "b"] {
+                chosen.push(
+                    simple_column(&client, &format!("SELECT conf_kindof2({column}) FROM conf_mix"))
+                        .await?
+                        .join(""),
+                );
+            }
+            let result = (chosen == ["int4", "text", "int8"])
+                .then_some(())
+                .ok_or(format!("chose {chosen:?}, expected [int4, text, int8]"));
+            drop_table(&client, "conf_mix").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a function that runs SQL is refused inside a query, not mis-run",
+        async {
+            drop_table(&client, "conf_impure").await;
+            client
+                .simple_query("CREATE TABLE conf_impure (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_impure (id) VALUES (1)")
+                .await
+                .map_err(describe)?;
+            let _ = client.simple_query("DROP FUNCTION conf_writes").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_writes(a INTEGER) RETURNS INTEGER AS $$ BEGIN INSERT INTO conf_impure (id) VALUES (a); RETURN a; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+
+            // The evaluator is synchronous; a body that runs SQL cannot be
+            // called from it. Saying so beats running it in a way that could
+            // deadlock, and beats answering the wrong thing.
+            let refused = client
+                .simple_query("SELECT conf_writes(id) FROM conf_impure")
+                .await
+                .is_err();
+            if !refused {
+                drop_table(&client, "conf_impure").await;
+                return Err("a SQL-running function was called from inside a query".into());
+            }
+            // But it still works where it always did.
+            let direct = simple_column(&client, "SELECT conf_writes(9)").await?;
+            let result = (direct == ["9"])
+                .then_some(())
+                .ok_or(format!("a direct call gave {direct:?}, expected [9]"));
+            drop_table(&client, "conf_impure").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Types,
+        "a composite type is created and appears in pg_type",
+        async {
+            let _ = client.simple_query("DROP TYPE IF EXISTS conf_addr").await;
+            client
+                .simple_query("CREATE TYPE conf_addr AS (street TEXT, num INTEGER)")
+                .await
+                .map_err(describe)?;
+            // `c` is what tells a composite from a base type; a client reads
+            // it to know the type has fields.
+            let kind = simple_column(
+                &client,
+                "SELECT typtype FROM pg_type WHERE typname = 'conf_addr'",
+            )
+            .await?;
+            (kind == ["c"])
+                .then_some(())
+                .ok_or(format!("typtype is {kind:?}, expected [c]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a composite variable's fields are assignable and readable",
+        async {
+            drop_table(&client, "conf_comp").await;
+            client
+                .simple_query("CREATE TABLE conf_comp (v TEXT)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "DO $$ DECLARE a conf_addr; BEGIN a.street := 'Main'; a.num := 7; INSERT INTO conf_comp (v) VALUES (a.street); END $$",
+                )
+                .await
+                .map_err(describe)?;
+            let stored = simple_column(&client, "SELECT v FROM conf_comp").await?;
+            let result = (stored == ["Main"])
+                .then_some(())
+                .ok_or(format!("got {stored:?}, expected [Main]"));
+            drop_table(&client, "conf_comp").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a composite is its own type when choosing an overload",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_comp_fn").await;
+            for (declaration, answer) in [("a conf_addr", "composite"), ("a TEXT", "text")] {
+                client
+                    .simple_query(&format!(
+                        "CREATE FUNCTION conf_comp_fn({declaration}) RETURNS TEXT AS $$ BEGIN RETURN '{answer}'; END $$ LANGUAGE plpgsql"
+                    ))
+                    .await
+                    .map_err(describe)?;
+            }
+            // Reduced to `text` these would be one signature, and a text call
+            // could reach the composite form.
+            let textual = simple_column(&client, "SELECT conf_comp_fn('x')").await?;
+            if textual != ["text"] {
+                return Err(format!("a text call chose {textual:?}"));
+            }
+            // And the catalogue reports the composite's own OID, the same one
+            // pg_type gives it.
+            let declared = simple_column(
+                &client,
+                "SELECT proargtypes FROM pg_proc WHERE proname = 'conf_comp_fn'",
+            )
+            .await?;
+            let composite = simple_column(
+                &client,
+                "SELECT oid FROM pg_type WHERE typname = 'conf_addr'",
+            )
+            .await?;
+            (composite.first().is_some_and(|oid| declared.contains(oid)))
+                .then_some(())
+                .ok_or(format!("proargtypes {declared:?} do not include {composite:?}"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Types,
+        "DROP TYPE refuses a type that was never there",
+        async {
+            // Reporting success for a type that does not exist is the silent
+            // no-op this harness exists to catch.
+            match client.simple_query("DROP TYPE conf_no_such_type").await {
+                Ok(_) => return Err("dropping an absent type reported success".into()),
+                Err(e) => {
+                    let got = sqlstate(&e);
+                    if got != "42704" {
+                        return Err(format!("reported {got}, expected 42704"));
+                    }
+                }
+            }
+            // IF EXISTS is the form that may say nothing.
+            client
+                .simple_query("DROP TYPE IF EXISTS conf_no_such_type")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("DROP TYPE conf_addr")
+                .await
+                .map_err(describe)?;
+            let left = simple_column(
+                &client,
+                "SELECT typname FROM pg_type WHERE typname = 'conf_addr'",
+            )
+            .await?;
+            left.is_empty()
+                .then_some(())
+                .ok_or(format!("{left:?} survived the drop"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Types,
+        "a cast to a domain is a cast to what it is built on",
+        async {
+            let _ = client
+                .simple_query("CREATE DOMAIN conf_pos AS INTEGER CHECK (VALUE > 0)")
+                .await;
+            let cast = simple_column(&client, "SELECT 42::conf_pos").await?;
+            if cast != ["42"] {
+                return Err(format!("got {cast:?}, expected [42]"));
+            }
+            // The direction that matters: a name that is not a domain must
+            // still fail, or every typo'd type would silently succeed.
+            match client.simple_query("SELECT 42::conf_no_such_type").await {
+                Ok(_) => Err("a cast to an unknown type was accepted".into()),
+                Err(_) => Ok(()),
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "two array overloads of one name coexist",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_arrs").await;
+            for (declaration, answer) in [("a INTEGER[]", "ints"), ("a TEXT[]", "texts")] {
+                client
+                    .simple_query(&format!(
+                        "CREATE FUNCTION conf_arrs({declaration}) RETURNS TEXT AS $$ BEGIN RETURN '{answer}'; END $$ LANGUAGE plpgsql"
+                    ))
+                    .await
+                    .map_err(describe)?;
+            }
+            // 1007 is int4[] and 1009 is text[]. Collapsing every array to one
+            // kind made these one signature, so the second replaced the first.
+            let types = simple_column(
+                &client,
+                "SELECT proargtypes FROM pg_proc WHERE proname = 'conf_arrs'",
+            )
+            .await?;
+            (types.contains(&"1007".to_string()) && types.contains(&"1009".to_string()))
+                .then_some(())
+                .ok_or(format!("proargtypes are {types:?}, expected 1007 and 1009"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "an array parameter is its own type",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_arr").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_arr(a INTEGER[]) RETURNS TEXT AS $$ BEGIN RETURN 'array'; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_arr(a TEXT) RETURNS TEXT AS $$ BEGIN RETURN 'scalar'; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            // 1007 is int4[]. Collapsing it to text would have the two
+            // overloads collide and report the wrong type to a client.
+            let types = simple_column(
+                &client,
+                "SELECT proargtypes FROM pg_proc WHERE proname = 'conf_arr'",
+            )
+            .await?;
+            if !types.contains(&"1007".to_string()) {
+                return Err(format!("proargtypes are {types:?}, expected one to be 1007"));
+            }
+            // An array must never swallow a scalar call.
+            let scalar = simple_column(&client, "SELECT conf_arr('x')").await?;
+            (scalar == ["scalar"])
+                .then_some(())
+                .ok_or(format!("a scalar call chose {scalar:?}"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Catalog,
+        "two overloads of a name get different OIDs",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_two").await;
+            for declaration in ["a INTEGER", "a TEXT"] {
+                client
+                    .simple_query(&format!(
+                        "CREATE FUNCTION conf_two({declaration}) RETURNS TEXT AS $$ BEGIN RETURN 'x'; END $$ LANGUAGE plpgsql"
+                    ))
+                    .await
+                    .map_err(describe)?;
+            }
+            let oids =
+                simple_column(&client, "SELECT oid FROM pg_proc WHERE proname = 'conf_two'")
+                    .await?;
+            // One OID for two functions would make a fast-path call ambiguous.
+            (oids.len() == 2 && oids[0] != oids[1])
+                .then_some(())
+                .ok_or(format!("got {oids:?}, expected two distinct OIDs"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "an ambiguous call reports ambiguous_function, not undefined",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_amb").await;
+            // Neither takes a string, so the untyped-literal rule cannot
+            // choose and both are their category's preferred type.
+            for declaration in ["a INTEGER", "a BOOLEAN"] {
+                client
+                    .simple_query(&format!(
+                        "CREATE FUNCTION conf_amb({declaration}) RETURNS TEXT AS $$ BEGIN RETURN 'x'; END $$ LANGUAGE plpgsql"
+                    ))
+                    .await
+                    .map_err(describe)?;
+            }
+            // Telling a caller the function is missing when it is the choice
+            // between two of them that failed sends them looking in the wrong
+            // place.
+            match client.simple_query("SELECT conf_amb(NULL)").await {
+                Ok(_) => Err("an ambiguous call was answered".into()),
+                Err(e) => {
+                    let got = sqlstate(&e);
+                    (got == "42725")
+                        .then_some(())
+                        .ok_or(format!("reported {got}, expected 42725"))
+                }
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "an ambiguous call is refused rather than guessed",
+        async {
+            // NULL names no type, so it fits both overloads. Picking one
+            // silently would be a coin toss the caller cannot see.
+            match client.simple_query("SELECT conf_amb(NULL)").await {
+                Ok(_) => Err("an ambiguous call was answered".into()),
+                Err(e) => describe(e)
+                    .contains("not unique")
+                    .then_some(())
+                    .ok_or_else(|| "refused, but not as an ambiguity".to_string()),
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a value that cannot be the declared type is 22P02",
+        async {
+            match client
+                .simple_query("SELECT conf_bump('not a number')")
+                .await
+            {
+                Ok(_) => Err("text was accepted for an INTEGER parameter".into()),
+                Err(e) => {
+                    let got = sqlstate(&e);
+                    (got == "22P02")
+                        .then_some(())
+                        .ok_or(format!("reported {got}, expected 22P02"))
+                }
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a parameter type containing a comma is one parameter",
+        async {
+            let _ = client.simple_query("DROP FUNCTION conf_money").await;
+            client
+                .simple_query(
+                    "CREATE FUNCTION conf_money(a NUMERIC(10, 2)) RETURNS NUMERIC AS $$ BEGIN RETURN a; END $$ LANGUAGE plpgsql",
+                )
+                .await
+                .map_err(describe)?;
+            // Splitting the list on every comma made this two parameters, so
+            // the call arrived with the wrong count.
+            let value = simple_column(&client, "SELECT conf_money(3.14)").await?;
+            (value == ["3.14"])
+                .then_some(())
+                .ok_or(format!("got {value:?}, expected [3.14]"))
+        }
+        .await,
+    );
+
+    drop_table(&client, "conf_caught").await;
+    drop_table(&client, "conf_state_child").await;
+    drop_table(&client, "conf_state").await;
+
+    drop_table(&client, "conf_src").await;
+    drop_table(&client, "conf_dst").await;
+    drop_table(&client, "conf_pl").await;
 
     drop_table(&client, "conf_five").await;
 

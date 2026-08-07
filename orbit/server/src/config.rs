@@ -291,6 +291,11 @@ pub struct GrpcConfig {
     pub tls: Option<TlsConfig>,
 }
 
+/// Changes a replication slot may fall behind by before it is invalidated.
+fn default_max_slot_change_backlog() -> u64 {
+    100_000
+}
+
 /// PostgreSQL server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostgresqlConfig {
@@ -314,6 +319,15 @@ pub struct PostgresqlConfig {
 
     /// PostgreSQL-specific features
     pub features: PostgresqlFeatures,
+
+    /// How far a replication slot may fall behind before it is invalidated,
+    /// counted in changes.
+    ///
+    /// A slot that stops confirming would otherwise hold the change log open
+    /// for ever; this is the equivalent of `max_slot_wal_keep_size`. Defaulted
+    /// so an existing configuration file keeps working.
+    #[serde(default = "default_max_slot_change_backlog")]
+    pub max_slot_change_backlog: u64,
 }
 
 /// Redis server configuration
@@ -2168,6 +2182,7 @@ impl Default for PostgresqlConfig {
             sql_engine: SqlEngineConfig::default(),
             vector_ops: VectorOpsConfig::default(),
             features: PostgresqlFeatures::default(),
+            max_slot_change_backlog: default_max_slot_change_backlog(),
         }
     }
 }

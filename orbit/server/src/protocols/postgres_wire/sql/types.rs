@@ -444,6 +444,26 @@ impl SqlType {
     }
 }
 
+/// The [`SqlType`] a type name stands for, for the types a domain may be
+/// built on.
+///
+/// Returns `None` for anything unrecognised, so a domain over a type this
+/// module cannot construct fails the cast rather than silently becoming text.
+#[must_use]
+pub fn named_sql_type(name: &str) -> Option<SqlType> {
+    let bare = name.split('(').next().unwrap_or(name).trim().to_uppercase();
+    Some(match bare.as_str() {
+        "INT2" | "SMALLINT" => SqlType::SmallInt,
+        "INT" | "INT4" | "INTEGER" => SqlType::Integer,
+        "INT8" | "BIGINT" => SqlType::BigInt,
+        "REAL" | "FLOAT4" => SqlType::Real,
+        "DOUBLE" | "DOUBLE PRECISION" | "FLOAT" | "FLOAT8" => SqlType::DoublePrecision,
+        "BOOL" | "BOOLEAN" => SqlType::Boolean,
+        "TEXT" => SqlType::Text,
+        _ => return None,
+    })
+}
+
 impl SqlValue {
     /// Get the SQL type of this value
     pub fn sql_type(&self) -> SqlType {
@@ -763,6 +783,60 @@ impl SqlValue {
                     });
                 }
             }
+            // `NUMERIC` and `JSON` were reachable as column types but not as
+            // cast targets, and once the parser accepted them the conversion
+            // still had to exist.
+            SqlType::Numeric { .. } | SqlType::Decimal { .. } => {
+                use std::str::FromStr;
+                let parsed = match self {
+                    SqlValue::Text(text) | SqlValue::Varchar(text) | SqlValue::Char(text) => {
+                        rust_decimal::Decimal::from_str(text.trim())
+                            .map_err(|_| format!("invalid input syntax for numeric: \"{text}\""))?
+                    }
+                    SqlValue::SmallInt(v) => rust_decimal::Decimal::from(*v),
+                    SqlValue::Integer(v) => rust_decimal::Decimal::from(*v),
+                    SqlValue::BigInt(v) => rust_decimal::Decimal::from(*v),
+                    SqlValue::Decimal(v) => *v,
+                    SqlValue::Real(v) => rust_decimal::Decimal::from_str(&v.to_string())
+                        .map_err(|_| format!("cannot represent {v} as numeric"))?,
+                    SqlValue::DoublePrecision(v) => rust_decimal::Decimal::from_str(&v.to_string())
+                        .map_err(|_| format!("cannot represent {v} as numeric"))?,
+                    other => return Err(format!("cannot cast {:?} to numeric", other.sql_type())),
+                };
+                // A declared scale is applied, so `1.5::NUMERIC(10,2)` reads
+                // back as `1.50` rather than losing the trailing zero.
+                let mut scaled = parsed;
+                if let SqlType::Numeric {
+                    scale: Some(scale), ..
+                }
+                | SqlType::Decimal {
+                    scale: Some(scale), ..
+                } = target_type
+                {
+                    // `rescale` rather than `round_dp`: rounding alone leaves
+                    // `1.5` at one decimal place, and PostgreSQL renders a
+                    // declared scale in full.
+                    scaled.rescale(u32::from(*scale));
+                }
+                return Ok(SqlValue::Decimal(scaled));
+            }
+            SqlType::Json | SqlType::Jsonb => {
+                if let SqlValue::Text(text) | SqlValue::Varchar(text) | SqlValue::Char(text) = self
+                {
+                    let parsed: serde_json::Value = serde_json::from_str(text)
+                        .map_err(|e| format!("invalid input syntax for json: {e}"))?;
+                    return Ok(match target_type {
+                        SqlType::Jsonb => SqlValue::Jsonb(parsed),
+                        _ => SqlValue::Json(parsed),
+                    });
+                }
+                if let SqlValue::Json(v) | SqlValue::Jsonb(v) = self {
+                    return Ok(match target_type {
+                        SqlType::Jsonb => SqlValue::Jsonb(v.clone()),
+                        _ => SqlValue::Json(v.clone()),
+                    });
+                }
+            }
             SqlType::Boolean => {
                 if let SqlValue::Text(text) | SqlValue::Varchar(text) | SqlValue::Char(text) = self
                 {
@@ -774,6 +848,18 @@ impl SqlValue {
                 }
             }
             _ => {}
+        }
+
+        // A cast to a domain is a cast to what the domain is built on. The
+        // name is resolved through the registry the query engine keeps,
+        // because this function has no catalogue; a name that is not a known
+        // domain still fails below rather than passing the value through.
+        if let SqlType::Custom { type_name } = target_type {
+            if let Some(base) = crate::protocols::postgres_wire::domains::base_of(type_name) {
+                if let Some(resolved) = named_sql_type(&base) {
+                    return self.cast_to(&resolved);
+                }
+            }
         }
 
         if self.sql_type().can_cast_to(target_type) {

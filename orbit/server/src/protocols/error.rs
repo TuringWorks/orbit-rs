@@ -16,6 +16,20 @@ pub enum ProtocolError {
     #[error("PostgreSQL protocol error: {0}")]
     PostgresError(String),
 
+    /// An error carrying the SQLSTATE code it should be reported under.
+    ///
+    /// Most errors have their code worked out from their message; this is for
+    /// the ones where the message cannot say. A `RAISE EXCEPTION` in PL/pgSQL
+    /// is `P0001` no matter what text it carries, and no amount of reading
+    /// that text would reveal it.
+    #[error("{message}")]
+    SqlState {
+        /// The five-character SQLSTATE.
+        code: &'static str,
+        /// The message shown to the client.
+        message: String,
+    },
+
     /// Cypher query parsing error
     #[error("Cypher query error: {0}")]
     CypherError(String),

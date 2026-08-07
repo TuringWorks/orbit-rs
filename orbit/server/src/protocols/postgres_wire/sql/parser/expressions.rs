@@ -131,7 +131,24 @@ impl ExpressionParser {
                 *pos += 1;
             }
 
-            let right = self.parse_comparison_expression(tokens, pos)?;
+            // `= ANY(...)` and `<> ALL(...)` are quantified comparisons, the
+            // same as the `<`/`>` forms the comparison level already handles.
+            // Missing here, `x = ANY(ARRAY[...])` parsed as a call to a
+            // function named `ANY` — the most common form of the construct was
+            // the one that did not work.
+            let right = if *pos < tokens.len()
+                && matches!(&tokens[*pos], Token::Any | Token::Some | Token::All)
+            {
+                let quantifier = tokens[*pos].clone();
+                *pos += 1;
+                let sub = self.parse_primary_expression(tokens, pos)?;
+                match quantifier {
+                    Token::All => Expression::All(Box::new(sub)),
+                    _ => Expression::Any(Box::new(sub)),
+                }
+            } else {
+                self.parse_comparison_expression(tokens, pos)?
+            };
             left = Expression::Binary {
                 left: Box::new(left),
                 operator,
@@ -1795,6 +1812,46 @@ impl ExpressionParser {
                 *pos += 1;
                 Ok(SqlType::Text)
             }
+            // These are types this server stores and compares, but they were
+            // missing from the *cast target* list, so `'1.5'::NUMERIC` and
+            // `'{"a":1}'::json` were parse errors while `'x'::VARCHAR(10)`
+            // worked. A type you can declare a column as must also be a type
+            // you can cast to.
+            Token::Numeric | Token::Decimal => {
+                let decimal = matches!(tokens[*pos], Token::Decimal);
+                *pos += 1;
+                let (precision, scale) = Self::parse_precision_and_scale(tokens, pos)?;
+                Ok(if decimal {
+                    SqlType::Decimal { precision, scale }
+                } else {
+                    SqlType::Numeric { precision, scale }
+                })
+            }
+            Token::Json => {
+                *pos += 1;
+                Ok(SqlType::Json)
+            }
+            Token::Jsonb => {
+                *pos += 1;
+                Ok(SqlType::Jsonb)
+            }
+            Token::Interval => {
+                *pos += 1;
+                Ok(SqlType::Interval)
+            }
+            Token::Bytea => {
+                *pos += 1;
+                Ok(SqlType::Bytea)
+            }
+            Token::Uuid => {
+                *pos += 1;
+                Ok(SqlType::Uuid)
+            }
+            Token::Char => {
+                *pos += 1;
+                let (length, _) = Self::parse_precision_and_scale(tokens, pos)?;
+                Ok(SqlType::Char(length.map(u32::from)))
+            }
             Token::Varchar => {
                 *pos += 1;
                 // Check for optional length specification
@@ -1908,6 +1965,58 @@ impl ExpressionParser {
                 tokens[*pos]
             ))),
         }
+    }
+
+    /// Read an optional `(precision)` or `(precision, scale)` after a type.
+    ///
+    /// Absent parentheses are not an error: `NUMERIC` and `NUMERIC(10,2)` are
+    /// both valid, and so is `NUMERIC(10)`.
+    fn parse_precision_and_scale(
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<(Option<u8>, Option<u8>)> {
+        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::LeftParen) {
+            return Ok((None, None));
+        }
+        *pos += 1;
+
+        // A free function rather than a closure: a closure capturing `pos`
+        // holds the borrow for the rest of the block.
+        fn read(tokens: &[Token], pos: &mut usize) -> Option<u8> {
+            let Some(Token::NumericLiteral(text)) = tokens.get(*pos) else {
+                return None;
+            };
+            let parsed = text.parse::<u8>().ok()?;
+            *pos += 1;
+            Some(parsed)
+        }
+
+        let precision = read(tokens, pos);
+        if precision.is_none() {
+            return Err(crate::protocols::error::ProtocolError::ParseError(
+                "Invalid precision specification".to_string(),
+            ));
+        }
+        let scale = if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
+            *pos += 1;
+            let scale = read(tokens, pos);
+            if scale.is_none() {
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Invalid scale specification".to_string(),
+                ));
+            }
+            scale
+        } else {
+            None
+        };
+
+        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+            *pos += 1;
+            return Ok((precision, scale));
+        }
+        Err(crate::protocols::error::ProtocolError::ParseError(
+            "Unterminated precision specification".to_string(),
+        ))
     }
 
     /// Check for array suffix [] and wrap base type in Array if present

@@ -597,6 +597,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             rocksdb_storage.clone(),
             unified_postgres,
             toml_config.server.tls.clone(),
+            toml_config
+                .protocols
+                .postgresql
+                .as_ref()
+                .map_or(100_000, |postgres| postgres.max_slot_change_backlog),
         )
         .await?;
         protocol_handles.push(postgres_handle);
@@ -1336,6 +1341,7 @@ async fn start_postgresql_server(
     rocksdb: Arc<RocksDbTableStorage>,
     unified_storage: Option<Arc<UnifiedTableStorage>>,
     tls_config: Option<orbit_server::config::TlsConfig>,
+    max_slot_change_backlog: u64,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
     use orbit_server::protocols::postgres_wire::persistent_storage::PersistentTableStorage;
 
@@ -1354,6 +1360,12 @@ async fn start_postgresql_server(
     let query_engine = std::sync::Arc::new(query_engine);
     // Continue the change stream where the last run left off, so a replica's
     // recorded position still means what it meant before the restart.
+    // The replication backlog bound comes from configuration, so an operator
+    // can trade log growth against how long a slow subscriber is tolerated.
+    orbit_server::protocols::postgres_wire::query_engine::set_max_slot_backlog(
+        max_slot_change_backlog,
+    );
+
     match query_engine.resume_change_positions().await {
         Ok(0) => {}
         Ok(position) => info!("[PostgreSQL] replication resumes at position {position}"),

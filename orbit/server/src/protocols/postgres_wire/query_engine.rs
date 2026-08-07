@@ -88,6 +88,158 @@ const PUBLIC_NAMESPACE_OID: i64 = 2200;
 /// PostgreSQL reserves everything below 16384 for built-in objects.
 const FIRST_USER_OID: i64 = 16_384;
 
+/// The type OID a declared type maps to.
+///
+/// Anything outside the set this server implements reports `text`, which is
+/// also how it is stored and compared.
+#[must_use]
+pub fn type_oid_for(sql_type: &str) -> i32 {
+    use super::messages::type_oids;
+
+    // An array has its own OID per element type, so it is read before the
+    // lattice collapses every array to one kind.
+    let written = sql_type.trim();
+    if let Some(element) = written.strip_suffix("[]").or_else(|| {
+        written
+            .to_uppercase()
+            .strip_suffix(" ARRAY")
+            .map(|_| written[..written.len() - " ARRAY".len()].trim())
+    }) {
+        return match plpgsql_function::normalize(element).as_str() {
+            "int2" => 1005,
+            "int4" => 1007,
+            "int8" => 1016,
+            "float4" => 1021,
+            "float8" => 1022,
+            "numeric" => 1231,
+            "bool" => 1000,
+            "varchar" => 1015,
+            _ => 1009,
+        };
+    }
+
+    match plpgsql_function::normalize(sql_type).as_str() {
+        "int2" => type_oids::INT2,
+        "int4" => type_oids::INT4,
+        "int8" => type_oids::INT8,
+        "float4" => type_oids::FLOAT4,
+        "float8" => type_oids::FLOAT8,
+        "numeric" => type_oids::NUMERIC,
+        "bool" => type_oids::BOOL,
+        "varchar" => type_oids::VARCHAR,
+        "bpchar" => type_oids::BPCHAR,
+        "date" => type_oids::DATE,
+        "time" => type_oids::TIME,
+        "timestamp" => type_oids::TIMESTAMP,
+        "timestamptz" => type_oids::TIMESTAMPTZ,
+        _ => type_oids::TEXT,
+    }
+}
+
+/// The type a domain definition leads with.
+///
+/// A definition is the base type followed by whatever constraints were
+/// declared: `INTEGER CHECK (VALUE > 0)`. Only the leading type says what it is
+/// built on — taking the whole string left the type lattice reading
+/// `INTEGER CHECK (VALUE > 0)` as text.
+#[must_use]
+pub fn leading_type(definition: &str) -> String {
+    let upper = definition.to_uppercase();
+    let end = ["CHECK", "NOT NULL", "DEFAULT", "CONSTRAINT", "|"]
+        .iter()
+        .filter_map(|keyword| upper.find(keyword))
+        .min()
+        .unwrap_or(definition.len());
+    definition[..end].trim().to_string()
+}
+
+/// Whether a word is a bare column reference rather than an expression.
+///
+/// A qualified name (`t.id`) counts; anything with an operator, a call or a
+/// literal in it does not.
+#[must_use]
+fn is_simple_column(word: &str) -> bool {
+    let bare = word.trim_matches('"');
+    !bare.is_empty()
+        && bare
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '.')
+        && !bare.chars().next().is_some_and(|c| c.is_ascii_digit())
+}
+
+/// Whether the right-hand side is something a stored condition can carry.
+///
+/// The column and operator were checked but not this, so
+/// `WHERE id = ANY(ARRAY[1,3])` was stored as `id = 'ANY(ARRAY[1,3])'` and
+/// matched nothing — the same silent wrong answer as an unhandled operator,
+/// arriving from the other side of the comparison.
+#[must_use]
+fn is_simple_value(operator: &str, value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    match operator.to_uppercase().as_str() {
+        // `IS NULL` / `IS NOT NULL`, and nothing else.
+        "IS" => matches!(
+            trimmed.to_uppercase().as_str(),
+            "NULL" | "NOT NULL" | "TRUE" | "FALSE" | "NOT TRUE" | "NOT FALSE"
+        ),
+        // A parenthesised list of literals.
+        "IN" | "NOT" => {
+            trimmed.starts_with('(')
+                && trimmed.ends_with(')')
+                && trimmed[1..trimmed.len() - 1].split(',').all(is_literal)
+        }
+        _ => is_literal(trimmed),
+    }
+}
+
+/// Whether a token is a literal rather than an expression.
+#[must_use]
+fn is_literal(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.len() > 1 && trimmed.starts_with('\'') && trimmed.ends_with('\'') {
+        // A quoted string, provided the quotes are the only ones in it: a
+        // value like `'a' || 'b'` is an expression.
+        return !trimmed[1..trimmed.len() - 1].contains('\'');
+    }
+    matches!(
+        trimmed.to_uppercase().as_str(),
+        "NULL" | "TRUE" | "FALSE" | "DEFAULT"
+    ) || trimmed.parse::<f64>().is_ok()
+}
+
+/// Whether a word is a comparison this parser's conditions can carry.
+#[must_use]
+fn is_comparison(word: &str) -> bool {
+    matches!(
+        word.to_uppercase().as_str(),
+        "=" | "==" | "!=" | "<>" | "<" | "<=" | ">" | ">=" | "IS" | "LIKE" | "ILIKE" | "IN" | "NOT"
+    )
+}
+
+/// A stable OID for a composite type, in the same user range as a function's.
+#[must_use]
+pub fn composite_oid(name: &str) -> i64 {
+    function_oid(&format!("composite:{name}"))
+}
+
+/// A stable OID for a stored function, in PostgreSQL's user-object range.
+///
+/// Derived from the catalog key rather than from position, so it survives a
+/// restart and does not shift when another function is created or dropped —
+/// an OID that moved would make `pg_proc` useless for the thing OIDs are for.
+#[must_use]
+pub fn function_oid(key: &str) -> i64 {
+    // FNV-1a: small, stable, and not sensitive to the order keys arrive in.
+    let hash = key.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+    });
+    let span = (i32::MAX as u64) - (FIRST_USER_OID as u64);
+    FIRST_USER_OID + (hash % span) as i64
+}
+
 /// Fold a SQL identifier the way PostgreSQL does.
 ///
 /// An unquoted identifier folds to lower case; a double-quoted one keeps the
@@ -110,6 +262,9 @@ pub fn fold_identifier(identifier: &str) -> String {
 /// Table holding view definitions.
 ///
 /// Prefixed so it cannot collide with a user table named `views`.
+use super::plpgsql;
+use super::plpgsql_function;
+
 const VIEW_CATALOG: &str = "orbit_catalog_views";
 
 /// Table holding the durable change log a replica replays from.
@@ -228,8 +383,68 @@ pub struct ChangeRecord {
 static HISTORY: std::sync::OnceLock<std::sync::Mutex<std::collections::VecDeque<ChangeRecord>>> =
     std::sync::OnceLock::new();
 
-/// How many changes are retained for replay.
+/// How many changes are retained for replay in memory.
 const HISTORY_DEPTH: usize = 4096;
+
+/// How far a slot may fall behind before it is invalidated.
+///
+/// The durable log is bounded by this: a subscriber that stops confirming
+/// cannot hold it open indefinitely, which is what `max_slot_wal_keep_size`
+/// protects against in PostgreSQL. Set from
+/// `postgresql.max_slot_change_backlog`; the default stands when the setting
+/// is absent.
+static MAX_RETAINED_CHANGES: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(100_000);
+
+/// How many rows have been marked deleted since the last reclaim.
+///
+/// Vacuum read every row of every table on each tick to find out whether there
+/// was anything to do. On a large table that is continuous work for an idle
+/// server — the tick ran far more often than the thing it was looking for
+/// changed. This counter answers the same question without a scan.
+static PENDING_RECLAIM: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Note that rows were marked deleted and will need reclaiming.
+pub fn note_reclaimable(rows: u64) {
+    PENDING_RECLAIM.fetch_add(rows, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether anything is waiting to be reclaimed.
+#[must_use]
+pub fn reclaim_pending() -> bool {
+    PENDING_RECLAIM.load(std::sync::atomic::Ordering::Relaxed) > 0
+}
+
+pub use crate::protocols::common::cancel::{
+    cancel_requested, check_cancelled, forget_cancellable, register_cancellable, request_cancel,
+    with_cancel, CANCEL_CHECK_INTERVAL,
+};
+
+/// Whether any replication slot exists: `0` unknown, `1` none, `2` at least one.
+///
+/// Consulted on every write, so it is a cached answer rather than a catalog
+/// read; creating or dropping a slot clears it.
+static SLOT_CACHE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Forget whether a slot exists, after one is created or dropped.
+pub fn forget_slot_cache() {
+    SLOT_CACHE.store(0, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Set how far a slot may fall behind before it is invalidated.
+pub fn set_max_slot_backlog(changes: u64) {
+    // Zero would invalidate every slot the moment it was created, which is a
+    // configuration mistake rather than a policy anyone wants.
+    if changes > 0 {
+        MAX_RETAINED_CHANGES.store(changes, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// How far a slot may currently fall behind.
+#[must_use]
+pub fn max_slot_backlog() -> u64 {
+    MAX_RETAINED_CHANGES.load(std::sync::atomic::Ordering::Relaxed)
+}
 
 fn history() -> &'static std::sync::Mutex<std::collections::VecDeque<ChangeRecord>> {
     HISTORY.get_or_init(|| std::sync::Mutex::new(std::collections::VecDeque::new()))
@@ -242,9 +457,7 @@ fn history() -> &'static std::sync::Mutex<std::collections::VecDeque<ChangeRecor
 #[must_use]
 pub fn changes_since(position: u64) -> Option<Vec<ChangeRecord>> {
     let history = history().lock().ok()?;
-    let Some(oldest) = history.front().map(|record| record.position) else {
-        return None;
-    };
+    let oldest = history.front().map(|record| record.position)?;
     if position < oldest.saturating_sub(1) {
         return None;
     }
@@ -302,6 +515,25 @@ pub fn drain_pending_log() -> Vec<ChangeRecord> {
 #[must_use]
 pub fn subscribe_to_changes() -> tokio::sync::broadcast::Receiver<ChangeRecord> {
     changes().subscribe()
+}
+
+/// Publish a marker that carries no row — the end of a transaction.
+fn publish_marker(action: &str, transaction: u64) {
+    let position = CHANGE_POSITION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let record = ChangeRecord {
+        position,
+        transaction,
+        action: action.to_string(),
+        table: String::new(),
+        row: "{}".to_string(),
+    };
+    if let Ok(mut history) = history().lock() {
+        history.push_back(record.clone());
+        while history.len() > HISTORY_DEPTH {
+            history.pop_front();
+        }
+    }
+    let _ = changes().send(record);
 }
 
 /// Publish a change. Does nothing when nobody is listening.
@@ -415,6 +647,47 @@ pub fn begin_transaction_at(snapshot_isolation: bool, serializable: bool) -> Tra
         snapshot,
         reads: serializable.then(|| Arc::new(std::sync::Mutex::new(Default::default()))),
     }
+}
+
+tokio::task_local! {
+    /// Tables written while a procedural block is running.
+    ///
+    /// A `DO` block is atomic in PostgreSQL: a `RAISE EXCEPTION` after an
+    /// `INSERT` leaves no row behind. Undoing needs to know where to look, and
+    /// recording it in the write paths is exact — parsing table names back out
+    /// of the statements would not be.
+    static BLOCK_TABLES: Arc<std::sync::Mutex<std::collections::HashSet<String>>>;
+}
+
+tokio::task_local! {
+    /// Transaction ids opened by nested blocks while a block is running.
+    ///
+    /// A sub-transaction that commits is still part of the block containing
+    /// it: if that block then fails, its rows must go too, and they carry the
+    /// sub-transaction's stamp rather than the outer one's.
+    static BLOCK_TRANSACTIONS: Arc<std::sync::Mutex<Vec<u64>>>;
+}
+
+/// Note a sub-transaction opened inside the block currently running.
+pub fn note_block_transaction(id: u64) {
+    BLOCK_TRANSACTIONS
+        .try_with(|ids| {
+            if let Ok(mut ids) = ids.lock() {
+                ids.push(id);
+            }
+        })
+        .ok();
+}
+
+/// Note that `table` was written by the block currently running, if any.
+pub fn note_block_write(table: &str) {
+    BLOCK_TABLES
+        .try_with(|tables| {
+            if let Ok(mut tables) = tables.lock() {
+                tables.insert(fold_identifier(table));
+            }
+        })
+        .ok();
 }
 
 /// Mark a transaction finished, making its rows visible to everyone.
@@ -596,6 +869,174 @@ pub struct TriggerDefinition {
     pub action: String,
 }
 
+/// Pull the body out of `AS $$ ... $$` (or `$tag$ ... $tag$`).
+///
+/// Returns `None` when there is no dollar-quoted section, which is the only
+/// form a PL/pgSQL body is accepted in — a body in single quotes would have to
+/// escape every quote inside it.
+fn extract_dollar_quoted(source: &str) -> Option<String> {
+    let open = source.find('$')?;
+    let tag_end = source[open + 1..].find('$')? + open + 1;
+    let tag = &source[open..=tag_end];
+    let rest = &source[tag_end + 1..];
+    let close = rest.find(tag)?;
+    Some(rest[..close].to_string())
+}
+
+/// The type named by a top-level `::` cast, if the expression ends in one.
+///
+/// Only at paren depth zero and outside a string: `f('a::b')` casts nothing,
+/// and neither does `f((x::int) + 1)` as a whole.
+fn split_top_level_cast(expression: &str) -> Option<String> {
+    let bytes: Vec<char> = expression.chars().collect();
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut last = None;
+
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            '\'' => in_string = !in_string,
+            '(' if !in_string => depth += 1,
+            ')' if !in_string => depth -= 1,
+            ':' if !in_string && depth == 0 && bytes.get(index + 1) == Some(&':') => {
+                last = Some(index + 2);
+                index += 2;
+                continue;
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+
+    let at = last?;
+    let named: String = bytes[at..].iter().collect();
+    let named = named.trim();
+    (!named.is_empty()
+        && named
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == ' ' || c == '[' || c == ']'))
+    .then(|| named.to_string())
+}
+
+/// Split a call's argument list on commas that are not inside parentheses or
+/// a string.
+fn split_arguments(arguments: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0i32;
+    let mut in_string = false;
+
+    for c in arguments.chars() {
+        match c {
+            '\'' => {
+                in_string = !in_string;
+                current.push(c);
+            }
+            '(' if !in_string => {
+                depth += 1;
+                current.push(c);
+            }
+            ')' if !in_string => {
+                depth -= 1;
+                current.push(c);
+            }
+            ',' if !in_string && depth == 0 => {
+                parts.push(current.trim().to_string());
+                current = String::new();
+            }
+            _ => current.push(c),
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
+    }
+    parts
+}
+
+#[async_trait::async_trait]
+impl plpgsql::PlPgSqlHost for QueryEngine {
+    async fn evaluate(&self, expression: &str) -> ProtocolResult<Option<String>> {
+        Box::pin(self.evaluate_scalar(expression)).await
+    }
+
+    async fn run(&self, sql: &str) -> ProtocolResult<()> {
+        Box::pin(self.execute_query(sql)).await.map(|_| ())
+    }
+
+    async fn query(&self, sql: &str) -> ProtocolResult<plpgsql::Rows> {
+        Ok(match Box::pin(self.execute_query(sql)).await? {
+            QueryResult::Select { columns, rows } => plpgsql::Rows { columns, rows },
+            // A statement that is not a query contributes no rows rather than
+            // failing: `PERFORM` and `RETURN QUERY` over a DML statement both
+            // reach here.
+            _ => plpgsql::Rows::default(),
+        })
+    }
+
+    async fn column_type(&self, table: &str, column: &str) -> ProtocolResult<Option<String>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(None);
+        };
+        let Some(schema) = storage.get_table_schema(&fold_identifier(table)).await? else {
+            return Ok(None);
+        };
+        Ok(schema
+            .columns
+            .iter()
+            .find(|c| fold_identifier(&c.name) == fold_identifier(column))
+            .map(|c| format!("{:?}", c.data_type).to_uppercase()))
+    }
+
+    async fn row_columns(&self, table: &str) -> ProtocolResult<Vec<String>> {
+        // A composite type is a row shape too, so `DECLARE v mytype` brings
+        // its fields into scope exactly as `%ROWTYPE` does for a table.
+        if let Some(fields) = self.composite_fields(table).await? {
+            return Ok(fields.into_iter().map(|field| field.name).collect());
+        }
+
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(Vec::new());
+        };
+        Ok(storage
+            .get_table_schema(&fold_identifier(table))
+            .await?
+            .map(|schema| schema.columns.iter().map(|c| c.name.clone()).collect())
+            .unwrap_or_default())
+    }
+
+    async fn run_protected(
+        &self,
+        block: &plpgsql::Block,
+        state: plpgsql::State,
+    ) -> ProtocolResult<(Result<plpgsql::Returned, ProtocolError>, plpgsql::State)> {
+        let mut state = state;
+        let tables = Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+        let context = begin_transaction(false);
+        let id = context.id;
+        // Registered with the enclosing block so that if *it* fails later,
+        // these rows go too — a sub-transaction that committed is still part
+        // of the block that contained it.
+        note_block_transaction(id);
+
+        let outcome = BLOCK_TABLES
+            .scope(Arc::clone(&tables), async {
+                within_transaction(context, plpgsql::execute_in(block, self, &mut state)).await
+            })
+            .await;
+
+        if outcome.is_err() {
+            let written: Vec<String> = tables
+                .lock()
+                .map(|tables| tables.iter().cloned().collect())
+                .unwrap_or_default();
+            self.discard_transaction_writes(&written, id).await?;
+        }
+        end_transaction(id);
+        Ok((outcome, state))
+    }
+}
+
 /// Remove duplicate rows, preserving first-seen order.
 ///
 /// `UNION` (without `ALL`) deduplicates; `SqlValue` is not hashable, so this
@@ -620,6 +1061,7 @@ pub fn column_type_oid(column_type: &ColumnType) -> i32 {
         ColumnType::BigInt => type_oids::INT8,
         ColumnType::Boolean => type_oids::BOOL,
         ColumnType::Double => type_oids::FLOAT8,
+        ColumnType::Numeric { .. } => type_oids::NUMERIC,
         ColumnType::Timestamp => type_oids::TIMESTAMPTZ,
         ColumnType::Json => type_oids::JSON,
         ColumnType::Text | ColumnType::Varchar(_) => type_oids::TEXT,
@@ -966,6 +1408,80 @@ impl QueryEngine {
                         })
                         .collect(),
                 ),
+                (false, "pg_proc") => {
+                    let composites: HashMap<String, i64> = self
+                        .all_composites()
+                        .await?
+                        .into_iter()
+                        .map(|(name, _)| (name.clone(), composite_oid(&name)))
+                        .collect();
+                    let mut functions = self.all_functions().await?;
+                    // A domain reports the OID of what it is built on. This
+                    // server assigns OIDs to functions, not to domains, and
+                    // reporting `text` for a domain over `INTEGER` would tell
+                    // a client the wrong thing about how to call it.
+                    for (_, parameters, return_type, _) in &mut functions {
+                        for parameter in parameters.iter_mut() {
+                            parameter.sql_type = self.base_type_of(&parameter.sql_type).await?;
+                        }
+                        *return_type = self.base_type_of(return_type).await?;
+                    }
+                    (
+                        vec![
+                            "oid",
+                            "proname",
+                            "pronamespace",
+                            "pronargs",
+                            "proargtypes",
+                            "prorettype",
+                            "prokind",
+                        ],
+                        functions
+                            .iter()
+                            .map(|(key, parameters, return_type, _)| {
+                                let name = key
+                                    .trim_start_matches("function:")
+                                    .split('/')
+                                    .next()
+                                    .unwrap_or_default();
+                                let inputs = plpgsql_function::inputs(parameters);
+                                vec![
+                                    Some(function_oid(key).to_string()),
+                                    Some(name.to_string()),
+                                    Some(PUBLIC_NAMESPACE_OID.to_string()),
+                                    Some(inputs.len().to_string()),
+                                    // `oidvector` is space-separated, as
+                                    // PostgreSQL renders it.
+                                    Some(
+                                        inputs
+                                            .iter()
+                                            .map(|p| {
+                                                composites
+                                                    .get(&fold_identifier(&p.sql_type))
+                                                    .copied()
+                                                    .unwrap_or_else(|| {
+                                                        i64::from(type_oid_for(&p.sql_type))
+                                                    })
+                                                    .to_string()
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join(" "),
+                                    ),
+                                    Some(
+                                        composites
+                                            .get(&fold_identifier(return_type))
+                                            .copied()
+                                            .unwrap_or_else(|| i64::from(type_oid_for(return_type)))
+                                            .to_string(),
+                                    ),
+                                    // `f` is a plain function; this server has
+                                    // no procedures, aggregates or windows.
+                                    Some("f".to_string()),
+                                ]
+                            })
+                            .collect(),
+                    )
+                }
                 (false, "pg_namespace") => (
                     vec!["oid", "nspname"],
                     vec![
@@ -976,45 +1492,61 @@ impl QueryEngine {
                         vec![Some("11".to_string()), Some("pg_catalog".to_string())],
                     ],
                 ),
-                (false, "pg_type") => (
-                    vec![
-                        "oid",
-                        "typname",
-                        "typtype",
-                        "typelem",
-                        "typbasetype",
-                        "typrelid",
-                    ],
-                    [
-                        (type_oids::BOOL, "bool"),
-                        (type_oids::BYTEA, "bytea"),
-                        (type_oids::INT8, "int8"),
-                        (type_oids::INT2, "int2"),
-                        (type_oids::INT4, "int4"),
-                        (type_oids::TEXT, "text"),
-                        (type_oids::JSON, "json"),
-                        (type_oids::FLOAT4, "float4"),
-                        (type_oids::FLOAT8, "float8"),
-                        (type_oids::VARCHAR, "varchar"),
-                        (type_oids::TIMESTAMP, "timestamp"),
-                        (type_oids::TIMESTAMPTZ, "timestamptz"),
-                        (type_oids::UUID, "uuid"),
-                        (type_oids::JSONB, "jsonb"),
-                    ]
-                    .into_iter()
-                    .map(|(oid, name)| {
+                (false, "pg_type") => {
+                    let composites = self.all_composites().await?;
+                    (
                         vec![
-                            Some(oid.to_string()),
-                            Some(name.to_string()),
-                            // Base type, no element, no composite relation.
-                            Some("b".to_string()),
-                            Some("0".to_string()),
-                            Some("0".to_string()),
-                            Some("0".to_string()),
+                            "oid",
+                            "typname",
+                            "typtype",
+                            "typelem",
+                            "typbasetype",
+                            "typrelid",
+                        ],
+                        [
+                            (type_oids::BOOL, "bool"),
+                            (type_oids::BYTEA, "bytea"),
+                            (type_oids::INT8, "int8"),
+                            (type_oids::INT2, "int2"),
+                            (type_oids::INT4, "int4"),
+                            (type_oids::TEXT, "text"),
+                            (type_oids::JSON, "json"),
+                            (type_oids::FLOAT4, "float4"),
+                            (type_oids::FLOAT8, "float8"),
+                            (type_oids::VARCHAR, "varchar"),
+                            (type_oids::TIMESTAMP, "timestamp"),
+                            (type_oids::TIMESTAMPTZ, "timestamptz"),
+                            (type_oids::UUID, "uuid"),
+                            (type_oids::JSONB, "jsonb"),
                         ]
-                    })
-                    .collect(),
-                ),
+                        .into_iter()
+                        .map(|(oid, name)| {
+                            vec![
+                                Some(oid.to_string()),
+                                Some(name.to_string()),
+                                // Base type, no element, no composite relation.
+                                Some("b".to_string()),
+                                Some("0".to_string()),
+                                Some("0".to_string()),
+                                Some("0".to_string()),
+                            ]
+                        })
+                        // A composite created here is a real type and belongs in
+                        // the catalogue a client reads to find out what exists.
+                        // `c` is what tells one from a base type.
+                        .chain(composites.iter().map(|(name, _)| {
+                            vec![
+                                Some(composite_oid(name).to_string()),
+                                Some(name.clone()),
+                                Some("c".to_string()),
+                                Some("0".to_string()),
+                                Some("0".to_string()),
+                                Some("0".to_string()),
+                            ]
+                        }))
+                        .collect(),
+                    )
+                }
                 (true, "tables") => (
                     vec!["table_catalog", "table_schema", "table_name", "table_type"],
                     tables
@@ -1768,6 +2300,11 @@ impl QueryEngine {
 
     /// Execute a SQL query and return results
     pub async fn execute_query(&self, sql: &str) -> ProtocolResult<QueryResult> {
+        // Domains stored before this process started are loaded once, so a
+        // cast to one works after a restart and not only in the session that
+        // created it.
+        self.warm_domain_registry().await;
+
         let sql_upper = sql.trim().to_uppercase();
 
         // Check if this is a GraphRAG function query
@@ -1786,6 +2323,14 @@ impl QueryEngine {
             if self.is_vector_query(&sql_upper) {
                 return vector_engine.execute_vector_query(sql).await;
             }
+        }
+
+        // PL/pgSQL before anything else looks at the text: a `DO` block and a
+        // `CREATE FUNCTION ... LANGUAGE plpgsql` were both answered with
+        // "Command completed successfully" and then not run, so a block that
+        // should have written a row reported success and wrote nothing.
+        if let Some(result) = self.execute_plpgsql(sql).await? {
+            return Ok(result);
         }
 
         // DDL that changes a stored table's shape is applied here for the same
@@ -1856,6 +2401,21 @@ impl QueryEngine {
                 table,
                 where_clause,
             } => {
+                // A catalogue query carrying a `WHERE` has to go through the
+                // path that can evaluate one. Answering it here dropped the
+                // clause and returned every row, so a driver asking
+                // `... FROM pg_class WHERE relname = $1` got the whole
+                // catalogue and read the first entry as its answer.
+                if where_clause.is_some()
+                    && self
+                        .select_system_catalog(&table, &["*".to_string()])
+                        .await?
+                        .is_some()
+                {
+                    if let Some(result) = self.select_over_storage(sql).await? {
+                        return Ok(result);
+                    }
+                }
                 if let Some(result) = self.select_system_catalog(&table, &columns).await? {
                     return Ok(result);
                 }
@@ -1979,6 +2539,14 @@ impl QueryEngine {
     pub async fn execute_multiple_queries(&self, sql: &str) -> ProtocolResult<Vec<QueryResult>> {
         let mut results = Vec::new();
         for statement in split_statements(sql) {
+            // A cancel is honoured between statements, which is where
+            // PostgreSQL takes one too: the statement already running finishes,
+            // and nothing after it starts.
+            if cancel_requested() {
+                return Err(ProtocolError::PostgresError(
+                    "canceling statement due to user request".to_string(),
+                ));
+            }
             results.push(self.execute_query(&statement).await?);
         }
         Ok(results)
@@ -2215,8 +2783,13 @@ impl QueryEngine {
             let target = trimmed.split_whitespace().nth(1).filter(|word| {
                 !word.eq_ignore_ascii_case("FULL") && !word.eq_ignore_ascii_case("ANALYZE")
             });
+            // The change log is reclaimed here too: it is storage nobody can
+            // still need, which is what VACUUM is for.
+            let trimmed = self.truncate_change_log().await?;
             let reclaimed = self.vacuum(target).await?;
-            return Ok(Some(QueryResult::Delete { count: reclaimed }));
+            return Ok(Some(QueryResult::Delete {
+                count: reclaimed + trimmed,
+            }));
         }
 
         // `CREATE TRIGGER <name> {BEFORE|AFTER} <events> ON <table>
@@ -2844,6 +3417,16 @@ impl QueryEngine {
     /// # Errors
     /// Returns an error when a statement fails, or when `RAISE` is reached.
     async fn run_trigger_body(&self, body: &str) -> ProtocolResult<()> {
+        // A body with a variable, a branch or a loop in it goes to the
+        // interpreter; one that is only SQL statements keeps the simpler path,
+        // which is what almost every trigger is.
+        if plpgsql::needs_interpreter(body) {
+            let block = plpgsql::parse(body)?;
+            return Box::pin(plpgsql::execute(&block, self, HashMap::new()))
+                .await
+                .map(|_| ());
+        }
+
         let trimmed = body.trim().trim_end_matches(';').trim();
         // A dollar-quoted body is unwrapped here; the quoting exists to carry
         // the semicolons through the statement splitter, not to be executed.
@@ -3045,6 +3628,107 @@ impl QueryEngine {
         Ok(Some(QueryResult::Update { count: 0 }))
     }
 
+    /// Publish the end of a transaction, so a subscriber can close its
+    /// `Begin`/`Commit` pair around everything the block wrote.
+    pub fn publish_transaction_end(transaction: u64) {
+        publish_marker("COMMIT", transaction);
+    }
+
+    /// Drop logged changes every slot has confirmed.
+    ///
+    /// Without this the log is a table that only grows. The bound is the
+    /// slowest slot's confirmed position: anything before it has been read by
+    /// everyone who asked, so nothing can still need it.
+    ///
+    /// # Errors
+    /// Returns an error when the log or the catalog cannot be read or written.
+    pub async fn truncate_change_log(&self) -> ProtocolResult<usize> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(0);
+        };
+        if !storage.table_exists(CHANGE_LOG).await? {
+            return Ok(0);
+        }
+
+        // The slowest slot decides. With no slots at all nothing is
+        // subscribed, so the whole log is spent.
+        let mut bound = latest_change_position();
+        let mut any_slot = false;
+        let mut invalidated: Vec<String> = Vec::new();
+        if storage.table_exists(VIEW_CATALOG).await? {
+            for row in storage
+                .select_rows(VIEW_CATALOG, Vec::new(), Vec::new(), None)
+                .await?
+            {
+                let Some(name) = row.values.get("name").and_then(JsonValue::as_str) else {
+                    continue;
+                };
+                if !name.starts_with("slot:") {
+                    continue;
+                }
+                let confirmed = row
+                    .values
+                    .get("definition")
+                    .and_then(JsonValue::as_str)
+                    .and_then(|definition| definition.split_once('|'))
+                    .and_then(|(_, position)| position.parse::<u64>().ok())
+                    .unwrap_or(0);
+
+                // A slot that has fallen further behind than the log is
+                // allowed to grow is invalidated, as PostgreSQL does past
+                // `max_slot_wal_keep_size`. Keeping it would let one dead
+                // subscriber hold the log open for ever.
+                if latest_change_position().saturating_sub(confirmed) > max_slot_backlog() {
+                    tracing::warn!(
+                        slot = name.trim_start_matches("slot:"),
+                        confirmed,
+                        "invalidating a replication slot that has fallen too far behind"
+                    );
+                    invalidated.push(name.to_string());
+                    continue;
+                }
+
+                any_slot = true;
+                bound = bound.min(confirmed);
+            }
+        }
+        if !invalidated.is_empty() {
+            forget_slot_cache();
+        }
+        for name in invalidated {
+            storage
+                .delete_rows(
+                    VIEW_CATALOG,
+                    vec![QueryCondition {
+                        column: "name".to_string(),
+                        operator: "=".to_string(),
+                        value: JsonValue::String(name),
+                    }],
+                )
+                .await?;
+        }
+
+        if any_slot && bound == 0 {
+            return Ok(0);
+        }
+
+        // One conditional delete, not one per row: deleting each position
+        // individually rescanned the log every time, so trimming a log of any
+        // size took quadratic work and timed out well before it finished.
+        let removed = storage
+            .delete_rows(
+                CHANGE_LOG,
+                vec![QueryCondition {
+                    column: "last".to_string(),
+                    operator: "<=".to_string(),
+                    value: JsonValue::from(bound),
+                }],
+            )
+            .await?
+            .max(0) as usize;
+        Ok(removed)
+    }
+
     /// Continue the change stream where the last run left off.
     ///
     /// Positions are handed out from a counter that starts at one, so without
@@ -3074,10 +3758,51 @@ impl QueryEngine {
     /// # Errors
     /// Returns an error when the log cannot be written.
     pub async fn flush_change_log(&self) -> ProtocolResult<()> {
-        for record in drain_pending_log() {
-            self.record_change(&record).await?;
+        // With no slot, nothing can ever ask to replay, so the log would be
+        // written and never read — doubling every write for no one. The
+        // pending queue is drained either way so it cannot grow.
+        let pending = drain_pending_log();
+        if !self.any_replication_slot().await? {
+            return Ok(());
         }
-        Ok(())
+        if pending.is_empty() {
+            return Ok(());
+        }
+        // One row per flush rather than per change: a statement writing a
+        // thousand rows produced a thousand log rows, each of which the replay
+        // scan then had to read.
+        self.record_changes(&pending).await
+    }
+
+    /// Whether any replication slot exists.
+    ///
+    /// Cached: this is on the write path, and a catalog read per write would
+    /// cost more than the log row it saves.
+    async fn any_replication_slot(&self) -> ProtocolResult<bool> {
+        use std::sync::atomic::Ordering;
+
+        match SLOT_CACHE.load(Ordering::Relaxed) {
+            1 => return Ok(false),
+            2 => return Ok(true),
+            _ => {}
+        }
+
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(false);
+        };
+        let any = storage.table_exists(VIEW_CATALOG).await?
+            && storage
+                .select_rows(VIEW_CATALOG, Vec::new(), Vec::new(), None)
+                .await?
+                .iter()
+                .any(|row| {
+                    row.values
+                        .get("name")
+                        .and_then(JsonValue::as_str)
+                        .is_some_and(|name| name.starts_with("slot:"))
+                });
+        SLOT_CACHE.store(if any { 2 } else { 1 }, Ordering::Relaxed);
+        Ok(any)
     }
 
     /// Write a change to the durable log a replica replays from.
@@ -3085,27 +3810,42 @@ impl QueryEngine {
     /// The in-memory window is a cache in front of this: it answers the common
     /// case without a read, and the log answers a replica that reconnects
     /// after a restart, when the window is empty.
-    async fn record_change(&self, record: &ChangeRecord) -> ProtocolResult<()> {
+    async fn record_changes(&self, records: &[ChangeRecord]) -> ProtocolResult<()> {
         let Some(storage) = self.persistent_storage.as_ref() else {
             return Ok(());
         };
+        let Some(first) = records.first() else {
+            return Ok(());
+        };
         self.ensure_change_log(storage).await?;
+
+        // The batch is keyed by its first position, and trimming compares
+        // against the last one, so a batch is dropped only once every change
+        // in it has been confirmed.
+        let payload: Vec<String> = records
+            .iter()
+            .map(|record| {
+                format!(
+                    "{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}",
+                    record.position, record.transaction, record.action, record.table, record.row
+                )
+            })
+            .collect();
+
         let now = chrono::Utc::now();
         storage
             .insert_row(
                 CHANGE_LOG,
                 TableRow {
                     values: HashMap::from([
+                        ("position".to_string(), JsonValue::from(first.position)),
                         (
-                            "position".to_string(),
-                            JsonValue::from(record.position),
+                            "last".to_string(),
+                            JsonValue::from(records.last().map_or(first.position, |r| r.position)),
                         ),
                         (
                             "payload".to_string(),
-                            JsonValue::String(format!(
-                                "{}|{}|{}|{}",
-                                record.transaction, record.action, record.table, record.row
-                            )),
+                            JsonValue::String(payload.join("\u{2}")),
                         ),
                     ]),
                     created_at: now,
@@ -3143,6 +3883,16 @@ impl QueryEngine {
                         domain: None,
                     },
                     ColumnDefinition {
+                        name: "last".to_string(),
+                        data_type: ColumnType::BigInt,
+                        nullable: false,
+                        default_value: None,
+                        unique: false,
+                        check: None,
+                        references: None,
+                        domain: None,
+                    },
+                    ColumnDefinition {
                         name: "payload".to_string(),
                         data_type: ColumnType::Text,
                         nullable: false,
@@ -3172,25 +3922,39 @@ impl QueryEngine {
             return Ok(Vec::new());
         }
 
+        // The predicate goes to storage rather than being applied after: a log
+        // trimmed to the slot backlog is still large, and building a TableRow
+        // for every batch only to drop it is work the storage layer can skip.
         let mut records: Vec<ChangeRecord> = storage
-            .select_rows(CHANGE_LOG, Vec::new(), Vec::new(), None)
+            .select_rows(
+                CHANGE_LOG,
+                Vec::new(),
+                vec![QueryCondition {
+                    column: "last".to_string(),
+                    operator: ">".to_string(),
+                    value: JsonValue::from(position),
+                }],
+                None,
+            )
             .await?
             .into_iter()
-            .filter_map(|row| {
-                let at = row.values.get("position")?.as_u64()?;
-                if at <= position {
-                    return None;
-                }
-                let payload = row.values.get("payload")?.as_str()?;
-                let mut parts = payload.splitn(4, '|');
-                Some(ChangeRecord {
-                    position: at,
-                    transaction: parts.next()?.parse().ok()?,
-                    action: parts.next()?.to_string(),
-                    table: parts.next()?.to_string(),
-                    row: parts.next()?.to_string(),
-                })
+            .filter_map(|row| Some(row.values.get("payload")?.as_str()?.to_string()))
+            .flat_map(|payload| {
+                payload
+                    .split('\u{2}')
+                    .filter_map(|entry| {
+                        let mut parts = entry.splitn(5, '\u{1}');
+                        Some(ChangeRecord {
+                            position: parts.next()?.parse().ok()?,
+                            transaction: parts.next()?.parse().ok()?,
+                            action: parts.next()?.to_string(),
+                            table: parts.next()?.to_string(),
+                            row: parts.next()?.to_string(),
+                        })
+                    })
+                    .collect::<Vec<_>>()
             })
+            .filter(|record| record.position > position)
             .collect();
         records.sort_by_key(|record| record.position);
         Ok(records)
@@ -3201,6 +3965,7 @@ impl QueryEngine {
     /// # Errors
     /// Returns an error when the catalog cannot be written.
     pub async fn create_replication_slot(&self, name: &str, plugin: &str) -> ProtocolResult<()> {
+        forget_slot_cache();
         let Some(storage) = self.persistent_storage.as_ref() else {
             return Ok(());
         };
@@ -3285,6 +4050,7 @@ impl QueryEngine {
     /// # Errors
     /// Returns an error when the catalog cannot be written.
     pub async fn drop_replication_slot(&self, name: &str) -> ProtocolResult<()> {
+        forget_slot_cache();
         let Some(storage) = self.persistent_storage.as_ref() else {
             return Ok(());
         };
@@ -3380,8 +4146,738 @@ impl QueryEngine {
             .collect())
     }
 
+    /// Run a `DO` block, define a PL/pgSQL function, or call one.
+    ///
+    /// Returns `None` when `sql` is none of those, so the caller carries on.
+    ///
+    /// # Errors
+    /// Returns an error when the block will not parse, a statement inside it
+    /// fails, or a `RAISE EXCEPTION` fires.
+    async fn execute_plpgsql(&self, sql: &str) -> ProtocolResult<Option<QueryResult>> {
+        let trimmed = sql.trim().trim_end_matches(';').trim();
+        let upper = trimmed.to_uppercase();
+
+        if upper.starts_with("DO ") || upper == "DO" {
+            let body = trimmed[2..].trim();
+            // `DO ... LANGUAGE plpgsql` is the same block with the language
+            // named after it rather than before.
+            let body = match body.to_uppercase().rfind("LANGUAGE") {
+                Some(at) if body[at..].to_uppercase().contains("PLPGSQL") => body[..at].trim(),
+                _ => body,
+            };
+            let block = plpgsql::parse(body)?;
+            Box::pin(self.run_block_atomically(&block, HashMap::new())).await?;
+            return Ok(Some(QueryResult::Set {
+                variable: "DO".to_string(),
+                value: String::new(),
+            }));
+        }
+
+        // `CREATE TYPE name AS (field type, ...)` — a composite. Its fields are
+        // stored so a PL/pgSQL variable of the type can bring them into scope
+        // and so the type is its own type when choosing between overloads.
+        if upper.starts_with("CREATE TYPE") {
+            let rest = trimmed["CREATE TYPE".len()..].trim();
+            let Some(as_at) = rest.to_uppercase().find(" AS ") else {
+                return Ok(None);
+            };
+            let name = fold_identifier(rest[..as_at].trim());
+            let body = rest[as_at + 4..].trim();
+            let Some(fields) = body
+                .strip_prefix('(')
+                .and_then(|inner| inner.strip_suffix(')'))
+            else {
+                // `CREATE TYPE ... AS ENUM (...)` and the other forms are not
+                // composites; leaving them unhandled is better than storing
+                // something that claims to be one.
+                return Ok(None);
+            };
+            let parsed = plpgsql_function::parse_parameters(fields);
+            if parsed.is_empty() {
+                return Err(ProtocolError::PostgresError(
+                    "a composite type needs at least one field".to_string(),
+                ));
+            }
+            self.forget_catalog_entry(&format!("composite:{name}"))
+                .await?;
+            self.remember_domain(
+                &format!("__composite__{name}"),
+                &plpgsql_function::encode(&parsed),
+            )
+            .await?;
+            self.rename_catalog_entry(
+                &format!("domain:__composite__{name}"),
+                &format!("composite:{name}"),
+            )
+            .await?;
+            super::domains::forget(&format!("__composite__{name}"));
+            return Ok(Some(QueryResult::Set {
+                variable: "CREATE TYPE".to_string(),
+                value: String::new(),
+            }));
+        }
+
+        if upper.starts_with("DROP TYPE") {
+            let name = fold_identifier(
+                trimmed["DROP TYPE".len()..]
+                    .trim()
+                    .trim_start_matches("IF EXISTS")
+                    .trim(),
+            );
+            if self.composite_fields(&name).await?.is_none() {
+                // Reporting success for a type that was never there is the
+                // silent no-op this document records elsewhere.
+                if upper.contains("IF EXISTS") {
+                    return Ok(Some(QueryResult::Set {
+                        variable: "DROP TYPE".to_string(),
+                        value: String::new(),
+                    }));
+                }
+                return Err(ProtocolError::SqlState {
+                    code: "42704",
+                    message: format!("type \"{name}\" does not exist"),
+                });
+            }
+            self.forget_catalog_entry(&format!("composite:{name}"))
+                .await?;
+            return Ok(Some(QueryResult::Set {
+                variable: "DROP TYPE".to_string(),
+                value: String::new(),
+            }));
+        }
+
+        if upper.starts_with("CREATE FUNCTION") || upper.starts_with("CREATE OR REPLACE FUNCTION") {
+            if !upper.contains("PLPGSQL") {
+                return Ok(None);
+            }
+            return self.define_plpgsql_function(trimmed).await.map(Some);
+        }
+
+        if upper.starts_with("DROP FUNCTION") {
+            let name = trimmed
+                .split_whitespace()
+                .nth(2)
+                .map(|n| n.split('(').next().unwrap_or(n))
+                .unwrap_or_default();
+            let name = fold_identifier(name);
+            // Without argument types to name one, a bare `DROP FUNCTION f`
+            // removes every overload of `f`.
+            let keys = self.function_keys(&name).await?;
+            if keys.is_empty() {
+                return Ok(None);
+            }
+            for key in keys {
+                self.forget_catalog_entry(&key).await?;
+            }
+            super::stored_functions::forget(&name);
+            return Ok(Some(QueryResult::Set {
+                variable: "DROP FUNCTION".to_string(),
+                value: String::new(),
+            }));
+        }
+
+        // `SELECT fname(args)` where `fname` is one of ours.
+        self.call_plpgsql_function(trimmed).await
+    }
+
+    /// Run a block so that a failure leaves none of its writes behind.
+    ///
+    /// PostgreSQL runs a `DO` block and a function body inside a transaction:
+    /// a `RAISE EXCEPTION` after an `INSERT` leaves no row. Running the
+    /// statements directly left the `INSERT` committed and only reported the
+    /// error, which is a partial write reported as a failure — the worst of
+    /// both.
+    ///
+    /// Inside an open transaction this does nothing extra: the block joins the
+    /// transaction already running, and `ROLLBACK` undoes it along with
+    /// everything else.
+    ///
+    /// # Errors
+    /// Returns whatever the block failed with, after undoing its writes.
+    async fn run_block_atomically(
+        &self,
+        block: &plpgsql::Block,
+        scope: HashMap<String, plpgsql::Value>,
+    ) -> ProtocolResult<plpgsql::Returned> {
+        if current_transaction_stamp().is_some() {
+            return plpgsql::execute(block, self, scope).await;
+        }
+
+        let tables = Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+        let nested = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let context = begin_transaction(false);
+        let id = context.id;
+
+        let outcome = BLOCK_TRANSACTIONS
+            .scope(Arc::clone(&nested), async {
+                BLOCK_TABLES
+                    .scope(
+                        Arc::clone(&tables),
+                        within_transaction(context, plpgsql::execute(block, self, scope)),
+                    )
+                    .await
+            })
+            .await;
+
+        if outcome.is_err() {
+            let written: Vec<String> = tables
+                .lock()
+                .map(|tables| tables.iter().cloned().collect())
+                .unwrap_or_default();
+            // Undo before the id is retired: while it is still open, the rows
+            // it wrote are invisible to everyone else, so nobody can read a
+            // row that is about to be removed.
+            let mut ids = vec![id];
+            if let Ok(nested) = nested.lock() {
+                ids.extend(nested.iter().copied());
+            }
+            for id in ids {
+                self.discard_transaction_writes(&written, id).await?;
+            }
+        }
+        end_transaction(id);
+        outcome
+    }
+
+    /// Run a block and report both what it returned and the values of the
+    /// variables named in `wanted`.
+    ///
+    /// Output parameters are ordinary variables while the block runs; this is
+    /// how their final values are read back out afterwards.
+    ///
+    /// # Errors
+    /// Returns whatever the block failed with.
+    async fn run_block_reporting_state(
+        &self,
+        block: &plpgsql::Block,
+        scope: HashMap<String, plpgsql::Value>,
+        wanted: &[String],
+    ) -> ProtocolResult<(plpgsql::Returned, HashMap<String, Option<String>>)> {
+        if wanted.is_empty() {
+            let returned = self.run_block_atomically(block, scope).await?;
+            return Ok((returned, HashMap::new()));
+        }
+
+        // `run_protected` is the path that hands the state back; used here for
+        // its return value rather than for its rollback, which is why the
+        // block it runs has no handlers of its own.
+        let (outcome, state) = <Self as plpgsql::PlPgSqlHost>::run_protected(
+            self,
+            block,
+            plpgsql::State::with_arguments(scope),
+        )
+        .await?;
+        let returned = outcome?;
+        let values = wanted
+            .iter()
+            .map(|name| {
+                (
+                    name.clone(),
+                    state.scope.get(name).and_then(|value| value.text.clone()),
+                )
+            })
+            .collect();
+        Ok((returned, values))
+    }
+
+    /// Remove everything a transaction wrote, by its stamp.
+    ///
+    /// Rows it inserted carry its id and are deleted; rows it deleted carry
+    /// its id as the remover and are unmarked. That covers an `UPDATE` too,
+    /// which is stored as both.
+    ///
+    /// # Errors
+    /// Returns an error when a table cannot be written.
+    async fn discard_transaction_writes(&self, tables: &[String], id: u64) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        for table in tables {
+            if !storage.table_exists(table).await? {
+                continue;
+            }
+            storage
+                .delete_rows(
+                    table,
+                    vec![QueryCondition {
+                        column: TRANSACTION_STAMP.to_string(),
+                        operator: "=".to_string(),
+                        value: JsonValue::from(id),
+                    }],
+                )
+                .await?;
+            storage
+                .update_rows(
+                    table,
+                    HashMap::from([(DELETED_BY.to_string(), JsonValue::Null)]),
+                    vec![QueryCondition {
+                        column: DELETED_BY.to_string(),
+                        operator: "=".to_string(),
+                        value: JsonValue::from(id),
+                    }],
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Store a PL/pgSQL function's arguments and body in the catalog.
+    async fn define_plpgsql_function(&self, sql: &str) -> ProtocolResult<QueryResult> {
+        let after_function = sql
+            .to_uppercase()
+            .find("FUNCTION")
+            .map(|at| at + "FUNCTION".len())
+            .ok_or_else(|| ProtocolError::PostgresError("malformed CREATE FUNCTION".to_string()))?;
+        let rest = sql[after_function..].trim();
+
+        let open = rest.find('(').ok_or_else(|| {
+            ProtocolError::PostgresError("a function needs an argument list".to_string())
+        })?;
+        let close = rest.find(')').ok_or_else(|| {
+            ProtocolError::PostgresError("unterminated function argument list".to_string())
+        })?;
+        let name = fold_identifier(rest[..open].trim());
+
+        let parameters = plpgsql_function::parse_parameters(&rest[open + 1..close]);
+
+        // `RETURNS <type>` sits between the argument list and the body. It is
+        // what `pg_proc.prorettype` reports; without it the catalog would
+        // claim every function returns the same thing.
+        let after_args = &sql[after_function + close + 1..];
+        let return_type = after_args
+            .to_uppercase()
+            .find("RETURNS")
+            .map(|at| &after_args[at + "RETURNS".len()..])
+            .map(|rest| {
+                let end = rest.to_uppercase().find(" AS ").unwrap_or(rest.len());
+                rest[..end].trim().to_uppercase()
+            })
+            .unwrap_or_default();
+
+        let body_source = sql[after_function + open..].to_string();
+        let body = extract_dollar_quoted(&body_source).ok_or_else(|| {
+            ProtocolError::PostgresError(
+                "a PL/pgSQL function body must be dollar-quoted: AS $$ ... $$".to_string(),
+            )
+        })?;
+
+        // Parsing now rather than at call time means a body that cannot be
+        // parsed is refused where the mistake was made.
+        let parsed = plpgsql::parse(&body)?;
+        // A body that needs no database can be called from an expression, so
+        // `SELECT f(id) FROM t` and `WHERE f(id) = 4` work rather than failing
+        // or, worse, quietly matching nothing.
+        super::stored_functions::remember(&name, parameters.clone(), parsed);
+
+        // Keyed by name, how many arguments a caller passes, and what kinds
+        // they are, so `f(INTEGER)` and `f(TEXT)` are two functions rather
+        // than one overwriting the other. Output parameters are not in the
+        // key: a caller does not pass them.
+        let arity = plpgsql_function::input_arity(&parameters);
+        // The key records base types: a parameter declared as a domain is the
+        // type the domain is built on, so `f(posint)` and `f(text)` are two
+        // entries rather than one overwriting the other.
+        let mut resolved = parameters.clone();
+        for parameter in &mut resolved {
+            parameter.sql_type = self.base_type_of(&parameter.sql_type).await?;
+        }
+        let signature = plpgsql_function::signature(&resolved);
+        let key = format!("function:{name}/{arity}/{signature}");
+        let slug = format!("__function__{name}__{arity}__{signature}");
+        self.forget_catalog_entry(&key).await?;
+        self.remember_domain(
+            &slug,
+            &format!(
+                "{}|{return_type}|{body}",
+                plpgsql_function::encode(&parameters)
+            ),
+        )
+        .await?;
+        // `remember_domain` writes under a `domain:` prefix; rewrite the name
+        // so lookups find it as a function.
+        self.rename_catalog_entry(&format!("domain:{slug}"), &key)
+            .await?;
+
+        Ok(QueryResult::Set {
+            variable: "CREATE FUNCTION".to_string(),
+            value: String::new(),
+        })
+    }
+
+    /// The stored parameters and body of a PL/pgSQL function, if it exists.
+    async fn stored_functions(
+        &self,
+        name: &str,
+        arity: usize,
+    ) -> ProtocolResult<Vec<(Vec<plpgsql_function::Parameter>, String)>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(Vec::new());
+        };
+        if !storage.table_exists(VIEW_CATALOG).await? {
+            return Ok(Vec::new());
+        }
+        // Every overload of this name that takes this many arguments; which
+        // one a call means is decided by the argument types.
+        let prefix = format!("function:{name}/{arity}/");
+        let rows = storage
+            .select_rows(VIEW_CATALOG, Vec::new(), Vec::new(), None)
+            .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let stored = row.values.get("name").and_then(JsonValue::as_str)?;
+                if !stored.starts_with(&prefix) {
+                    return None;
+                }
+                let definition = row.values.get("definition").and_then(JsonValue::as_str)?;
+                let (parameters, rest) = definition.split_once('|')?;
+                // `params|rettype|body`; an entry written before return types
+                // were recorded has no second separator and is all body.
+                let body = rest.split_once('|').map_or(rest, |(_, body)| body);
+                Some((plpgsql_function::decode(parameters), body.to_string()))
+            })
+            .collect())
+    }
+
+    /// Every stored function: catalog key, parameters, return type, body.
+    ///
+    /// # Errors
+    /// Returns an error when the catalog cannot be read.
+    pub async fn all_functions(
+        &self,
+    ) -> ProtocolResult<Vec<(String, Vec<plpgsql_function::Parameter>, String, String)>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(Vec::new());
+        };
+        if !storage.table_exists(VIEW_CATALOG).await? {
+            return Ok(Vec::new());
+        }
+        let rows = storage
+            .select_rows(VIEW_CATALOG, Vec::new(), Vec::new(), None)
+            .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let key = row.values.get("name").and_then(JsonValue::as_str)?;
+                if !key.starts_with("function:") {
+                    return None;
+                }
+                let definition = row.values.get("definition").and_then(JsonValue::as_str)?;
+                let (parameters, rest) = definition.split_once('|')?;
+                let (return_type, body) = rest.split_once('|').unwrap_or(("", rest));
+                Some((
+                    key.to_string(),
+                    plpgsql_function::decode(parameters),
+                    return_type.to_string(),
+                    body.to_string(),
+                ))
+            })
+            .collect())
+    }
+
+    /// The function a fast-path OID names, if this server published it.
+    ///
+    /// # Errors
+    /// Returns an error when the catalog cannot be read.
+    pub async fn function_for_oid(
+        &self,
+        oid: i64,
+    ) -> ProtocolResult<Option<(String, Vec<plpgsql_function::Parameter>, String)>> {
+        Ok(self
+            .all_functions()
+            .await?
+            .into_iter()
+            .find_map(|(key, parameters, return_type, _)| {
+                (function_oid(&key) == oid).then(|| {
+                    // `function:name/arity/signature` — the name is what a
+                    // message reports back.
+                    let name = key
+                        .trim_start_matches("function:")
+                        .split('/')
+                        .next()
+                        .unwrap_or_default()
+                        .to_string();
+                    (name, parameters, return_type)
+                })
+            }))
+    }
+
+    /// Every catalog key belonging to a function of this name, at any arity.
+    async fn function_keys(&self, name: &str) -> ProtocolResult<Vec<String>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(Vec::new());
+        };
+        if !storage.table_exists(VIEW_CATALOG).await? {
+            return Ok(Vec::new());
+        }
+        let prefix = format!("function:{name}/");
+        let rows = storage
+            .select_rows(VIEW_CATALOG, Vec::new(), Vec::new(), None)
+            .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let stored = row.values.get("name").and_then(JsonValue::as_str)?;
+                stored.starts_with(&prefix).then(|| stored.to_string())
+            })
+            .collect())
+    }
+
+    /// Run `SELECT fname(args)` when `fname` is a stored PL/pgSQL function.
+    async fn call_plpgsql_function(&self, sql: &str) -> ProtocolResult<Option<QueryResult>> {
+        let upper = sql.to_uppercase();
+        if !upper.starts_with("SELECT") {
+            return Ok(None);
+        }
+        let call = sql["SELECT".len()..].trim();
+        let Some(open) = call.find('(') else {
+            return Ok(None);
+        };
+        let Some(close) = call.rfind(')') else {
+            return Ok(None);
+        };
+        let name = fold_identifier(call[..open].trim());
+        if name.is_empty() || !call[close + 1..].trim().is_empty() {
+            return Ok(None);
+        }
+        let arguments = split_arguments(&call[open + 1..close]);
+        let candidates = self.stored_functions(&name, arguments.len()).await?;
+        if candidates.is_empty() {
+            return Ok(None);
+        }
+
+        // Each argument is evaluated once, in the caller's context, before the
+        // body runs — so an argument that is itself a query is not re-run per
+        // reference inside the body. The values are also what says which
+        // overload the call means.
+        let mut values = Vec::with_capacity(arguments.len());
+        for argument in &arguments {
+            values.push(self.evaluate_scalar(argument).await?);
+        }
+        // An argument's type comes from the catalogue where the text names
+        // one — a cast, or a call to a function whose return type is
+        // recorded — from how it was written where that says, and from its
+        // value only as a last resort.
+        let mut argument_types = Vec::with_capacity(arguments.len());
+        for (source, value) in arguments.iter().zip(&values) {
+            argument_types.push(self.argument_type_of(source, value.as_deref()).await?);
+        }
+        let argument_types: Vec<&str> = argument_types.iter().map(String::as_str).collect();
+
+        let mut signatures: Vec<Vec<plpgsql_function::Parameter>> =
+            candidates.iter().map(|(p, _)| p.clone()).collect();
+        // Overload choice is made on base types, so a domain parameter is
+        // resolved to what it is built on first.
+        for parameters in &mut signatures {
+            for parameter in parameters.iter_mut() {
+                parameter.sql_type = self.base_type_of(&parameter.sql_type).await?;
+            }
+        }
+        let chosen = match plpgsql_function::resolve(&name, &signatures, &argument_types) {
+            Ok(chosen) => chosen,
+            Err(unresolved) => {
+                // With one candidate, the caller did not choose the wrong
+                // overload — they passed a value that cannot be the declared
+                // type. Saying which value and which type is more use than
+                // saying no overload matched.
+                if let [(parameters, _)] = candidates.as_slice() {
+                    for (parameter, value) in plpgsql_function::inputs(parameters)
+                        .into_iter()
+                        .zip(&values)
+                    {
+                        plpgsql_function::check_argument(parameter, value.as_deref())?;
+                    }
+                }
+                return Err(unresolved);
+            }
+        };
+        let (_, body) = &candidates[chosen];
+        // The resolved parameters, so a domain binds as the type it is built
+        // on: bound under its own name it was quoted, and `a * 2` failed with
+        // an arithmetic error on text.
+        let parameters = &signatures[chosen];
+
+        let mut scope = HashMap::new();
+        for (parameter, value) in plpgsql_function::inputs(parameters).into_iter().zip(values) {
+            plpgsql_function::check_argument(parameter, value.as_deref())?;
+            scope.insert(
+                parameter.name.clone(),
+                plpgsql::Value::typed(value, &parameter.sql_type),
+            );
+        }
+        // Output parameters start as NULL and are whatever the body leaves.
+        for parameter in plpgsql_function::outputs(parameters) {
+            if !parameter.mode.is_input() {
+                scope.insert(
+                    parameter.name.clone(),
+                    plpgsql::Value::typed(None, &parameter.sql_type),
+                );
+            }
+        }
+
+        let block = plpgsql::parse(body)?;
+        let outputs: Vec<String> = plpgsql_function::outputs(parameters)
+            .into_iter()
+            .map(|p| p.name.clone())
+            .collect();
+        let (returned, state) =
+            Box::pin(self.run_block_reporting_state(&block, scope, &outputs)).await?;
+
+        Ok(Some(match returned {
+            // A set-returning body answers with its rows and their own column
+            // names, as `RETURN QUERY` produced them.
+            plpgsql::Returned::Rows(rows) => QueryResult::Select {
+                columns: rows.columns,
+                rows: rows.rows,
+            },
+            other if outputs.is_empty() => QueryResult::Select {
+                columns: vec![name],
+                rows: vec![vec![other.scalar()]],
+            },
+            // With output parameters the answer is their values, named after
+            // them — `RETURN` is not how such a function reports.
+            _ => QueryResult::Select {
+                rows: vec![outputs
+                    .iter()
+                    .map(|name| state.get(name).cloned().flatten())
+                    .collect()],
+                columns: outputs,
+            },
+        }))
+    }
+
+    /// The type of a call's argument.
+    ///
+    /// A cast says what it is, and so does a call to a function whose return
+    /// type this server recorded. Falling back to the printed value is a last
+    /// resort: it cannot tell an `int8` that happens to be small from an
+    /// `int4`, which is why anything that names a type is preferred.
+    ///
+    /// # Errors
+    /// Returns an error when the catalogue cannot be read.
+    async fn argument_type_of(&self, source: &str, value: Option<&str>) -> ProtocolResult<String> {
+        let written = source.trim();
+
+        // `expr::TYPE`, at the top level rather than inside a call.
+        if let Some(named) = split_top_level_cast(written) {
+            return Ok(plpgsql_function::normalize(
+                &self.base_type_of(&named).await?,
+            ));
+        }
+
+        // `CAST(expr AS TYPE)`
+        let upper = written.to_uppercase();
+        if upper.starts_with("CAST(") || upper.starts_with("CAST (") {
+            if let Some(inner) = written
+                .find('(')
+                .and_then(|open| written.rfind(')').map(|close| &written[open + 1..close]))
+            {
+                if let Some(at) = inner.to_uppercase().rfind(" AS ") {
+                    let named = inner[at + 4..].trim();
+                    return Ok(
+                        plpgsql_function::normalize(&self.base_type_of(named).await?).to_string(),
+                    );
+                }
+            }
+        }
+
+        // A call to one of this server's own functions: its return type is in
+        // the catalogue, so there is no need to guess from the value.
+        if let Some(open) = written.find('(') {
+            if written.ends_with(')') {
+                let called = fold_identifier(written[..open].trim());
+                if !called.is_empty() {
+                    let inner_arity = split_arguments(&written[open + 1..written.len() - 1]).len();
+                    let candidates = self.stored_functions(&called, inner_arity).await?;
+                    // Only when one candidate could have been meant; two
+                    // overloads may return different types, and picking one
+                    // here would be a guess dressed as a lookup.
+                    if let [(_, _)] = candidates.as_slice() {
+                        if let Some((_, _, return_type)) = self
+                            .all_functions()
+                            .await?
+                            .into_iter()
+                            .find(|(key, parameters, _, _)| {
+                                key.starts_with(&format!("function:{called}/{inner_arity}/"))
+                                    && plpgsql_function::input_arity(parameters) == inner_arity
+                            })
+                            .map(|(key, parameters, return_type, _)| (key, parameters, return_type))
+                        {
+                            if !return_type.trim().is_empty() {
+                                return Ok(plpgsql_function::normalize(
+                                    &self.base_type_of(&return_type).await?,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(plpgsql_function::argument_type(source, value).to_string())
+    }
+
+    /// Evaluate a scalar expression by asking the engine for `SELECT <expr>`.
+    async fn evaluate_scalar(&self, expression: &str) -> ProtocolResult<Option<String>> {
+        let result = Box::pin(self.execute_query(&format!("SELECT {expression}"))).await?;
+        Ok(match result {
+            QueryResult::Select { rows, .. } => rows
+                .into_iter()
+                .next()
+                .and_then(|row| row.into_iter().next())
+                .flatten(),
+            _ => None,
+        })
+    }
+
+    /// Remove a catalog entry by its full name.
+    async fn forget_catalog_entry(&self, name: &str) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        if !storage.table_exists(VIEW_CATALOG).await? {
+            return Ok(());
+        }
+        storage
+            .delete_rows(
+                VIEW_CATALOG,
+                vec![QueryCondition {
+                    column: "name".to_string(),
+                    operator: "=".to_string(),
+                    value: JsonValue::String(name.to_string()),
+                }],
+            )
+            .await
+            .map(|_| ())
+    }
+
+    /// Rename a catalog entry, which is how a definition written under one
+    /// prefix is filed under another.
+    async fn rename_catalog_entry(&self, from: &str, to: &str) -> ProtocolResult<()> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(());
+        };
+        storage
+            .update_rows(
+                VIEW_CATALOG,
+                HashMap::from([("name".to_string(), JsonValue::String(to.to_string()))]),
+                vec![QueryCondition {
+                    column: "name".to_string(),
+                    operator: "=".to_string(),
+                    value: JsonValue::String(from.to_string()),
+                }],
+            )
+            .await
+            .map(|_| ())
+    }
+
     /// Record a domain's base type and constraints.
     async fn remember_domain(&self, name: &str, definition: &str) -> ProtocolResult<()> {
+        // Functions are filed through here too and then renamed; only a real
+        // domain belongs in the cast registry.
+        if !name.starts_with("__function__") {
+            super::domains::remember(name, &leading_type(definition));
+        }
         let Some(storage) = self.persistent_storage.as_ref() else {
             return Ok(());
         };
@@ -3407,6 +4903,122 @@ impl QueryEngine {
             )
             .await
             .map(|_| ())
+    }
+
+    /// Load every stored domain into the cast registry, once per process.
+    ///
+    /// Failure is not fatal and not retried per query: a cast to a domain then
+    /// reports that it cannot be cast, which is what it did before this
+    /// existed.
+    async fn warm_domain_registry(&self) {
+        static WARMED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+        if WARMED.get().is_some() {
+            return;
+        }
+
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return;
+        };
+        let Ok(true) = storage.table_exists(VIEW_CATALOG).await else {
+            return;
+        };
+        let Ok(rows) = storage
+            .select_rows(VIEW_CATALOG, Vec::new(), Vec::new(), None)
+            .await
+        else {
+            return;
+        };
+        for row in rows {
+            let Some(name) = row.values.get("name").and_then(JsonValue::as_str) else {
+                continue;
+            };
+            let Some(domain) = name.strip_prefix("domain:") else {
+                continue;
+            };
+            if let Some(definition) = row.values.get("definition").and_then(JsonValue::as_str) {
+                super::domains::remember(domain, &leading_type(definition));
+            }
+        }
+
+        // Functions stored before this process started, so one created in an
+        // earlier run is callable from an expression too.
+        if let Ok(functions) = self.all_functions().await {
+            for (key, parameters, _, body) in functions {
+                let name = key
+                    .trim_start_matches("function:")
+                    .split('/')
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                if let Ok(parsed) = plpgsql::parse(&body) {
+                    super::stored_functions::remember(&name, parameters, parsed);
+                }
+            }
+        }
+
+        let _ = WARMED.set(());
+    }
+
+    /// The fields of a composite type, if the name is one.
+    ///
+    /// # Errors
+    /// Returns an error when the catalogue cannot be read.
+    pub async fn composite_fields(
+        &self,
+        name: &str,
+    ) -> ProtocolResult<Option<Vec<plpgsql_function::Parameter>>> {
+        Ok(self
+            .view_definition(&format!("composite:{}", fold_identifier(name)))
+            .await?
+            .map(|definition| plpgsql_function::decode(&definition)))
+    }
+
+    /// Every composite type, by name.
+    ///
+    /// # Errors
+    /// Returns an error when the catalogue cannot be read.
+    pub async fn all_composites(
+        &self,
+    ) -> ProtocolResult<Vec<(String, Vec<plpgsql_function::Parameter>)>> {
+        let Some(storage) = self.persistent_storage.as_ref() else {
+            return Ok(Vec::new());
+        };
+        if !storage.table_exists(VIEW_CATALOG).await? {
+            return Ok(Vec::new());
+        }
+        let rows = storage
+            .select_rows(VIEW_CATALOG, Vec::new(), Vec::new(), None)
+            .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                let name = row.values.get("name").and_then(JsonValue::as_str)?;
+                let composite = name.strip_prefix("composite:")?;
+                let definition = row.values.get("definition").and_then(JsonValue::as_str)?;
+                Some((composite.to_string(), plpgsql_function::decode(definition)))
+            })
+            .collect())
+    }
+
+    /// A parameter's type with any domain resolved to what it is built on.
+    ///
+    /// A domain is a base type plus constraints; for choosing between
+    /// overloads only the base type matters, and the lattice has no catalogue
+    /// to look one up in. Resolved per call rather than recorded at definition
+    /// time, so `ALTER DOMAIN` is seen by calls made after it.
+    ///
+    /// # Errors
+    /// Returns an error when the catalogue cannot be read.
+    pub async fn base_type_of(&self, declared: &str) -> ProtocolResult<String> {
+        let Some(definition) = self.domain_definition(&fold_identifier(declared)).await? else {
+            return Ok(declared.to_string());
+        };
+        let base = leading_type(&definition);
+        Ok(if base.is_empty() {
+            declared.to_string()
+        } else {
+            base
+        })
     }
 
     /// A domain's declared type and constraints, if the name is one.
@@ -5014,10 +6626,17 @@ impl QueryEngine {
                         .select_rows(&table, Vec::new(), Vec::new(), None)
                         .await?;
 
+                    // A long scan is where a cancelled query spends its time,
+                    // so it is checked as the rows go by.
+                    let mut scanned = 0usize;
                     let rows: Vec<Row> = stored
                         .into_iter()
                         .filter(|row| row_is_visible(&row.values))
                         .map(|row| {
+                            scanned += 1;
+                            if scanned.is_multiple_of(CANCEL_CHECK_INTERVAL) {
+                                check_cancelled()?;
+                            }
                             let mut out = Row::new();
                             for column in &schema.columns {
                                 let value = row
@@ -5035,9 +6654,9 @@ impl QueryEngine {
                                 out.insert(format!("{qualifier}.{name}"), value.clone());
                                 out.insert(name, value);
                             }
-                            out
+                            Ok(out)
                         })
-                        .collect();
+                        .collect::<ProtocolResult<Vec<Row>>>()?;
 
                     let order = schema
                         .columns
@@ -5218,6 +6837,21 @@ impl QueryEngine {
             JsonValue::Null => SqlValue::Null,
             JsonValue::Bool(b) => SqlValue::Boolean(*b),
             JsonValue::Number(n) => match column_type {
+                // An exact decimal keeps its declared scale, so a column
+                // declared `NUMERIC(10,2)` reads back `10.50` rather than
+                // `10.5` — and never goes through binary floating point.
+                ColumnType::Numeric { scale, .. } => {
+                    use std::str::FromStr;
+                    rust_decimal::Decimal::from_str(&n.to_string()).map_or(
+                        SqlValue::Null,
+                        |mut decimal| {
+                            if let Some(scale) = scale {
+                                decimal.rescale(u32::from(*scale));
+                            }
+                            SqlValue::Decimal(decimal)
+                        },
+                    )
+                }
                 ColumnType::BigInt => n.as_i64().map_or(SqlValue::Null, SqlValue::BigInt),
                 ColumnType::Double => n.as_f64().map_or(SqlValue::Null, SqlValue::DoublePrecision),
                 ColumnType::Serial | ColumnType::Integer => {
@@ -5752,6 +7386,40 @@ impl QueryEngine {
     ///
     /// Quoting carries meaning: `NULL` is the null value while `'NULL'` is the
     /// three-letter string, and `123` is a number while `'123'` is text.
+    /// Whether a `VALUES` entry is a literal that needs no evaluation.
+    ///
+    /// Everything else is an expression — `500 + 1`, `NOW()`, `a || b` — which
+    /// PostgreSQL evaluates. This engine stored the *text*: an `INTEGER`
+    /// column given `500 + 1` held the string `500 + 1`, which then failed
+    /// every later comparison against a number.
+    fn is_plain_literal(value: &str) -> bool {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return true;
+        }
+        let quoted = (trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() > 1)
+            || (trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() > 1);
+        quoted
+            || matches!(
+                trimmed.to_uppercase().as_str(),
+                "NULL" | "TRUE" | "FALSE" | "DEFAULT"
+            )
+            || trimmed.parse::<f64>().is_ok()
+    }
+
+    /// Convert one `VALUES` entry, evaluating it if it is an expression.
+    ///
+    /// # Errors
+    /// Returns the engine's error when the expression cannot be evaluated —
+    /// an unknown column, say, which PostgreSQL also refuses.
+    async fn value_to_json(&self, value: &str) -> ProtocolResult<JsonValue> {
+        if Self::is_plain_literal(value) {
+            return Ok(Self::literal_to_json(value));
+        }
+        let evaluated = Box::pin(self.evaluate_scalar(value)).await?;
+        Ok(evaluated.map_or(JsonValue::Null, |text| Self::literal_to_json(&text)))
+    }
+
     pub fn literal_to_json(literal: &str) -> JsonValue {
         let trimmed = literal.trim();
 
@@ -5814,12 +7482,28 @@ impl QueryEngine {
                         "Invalid WHERE clause".to_string(),
                     ));
                 }
+                // Only `column op value` can be represented here. Anything
+                // else — `id * 2 = 4`, `UPPER(name) = 'ADA'` — was accepted
+                // with the first word as the column and the second as the
+                // operator, and the storage matcher treats an operator it does
+                // not know as matching every row. `WHERE id * 2 = 4` returned
+                // the whole table. Refusing sends the statement to the path
+                // that evaluates expressions properly.
+                let value = words[2..].join(" ");
+                if !is_simple_column(words[0])
+                    || !is_comparison(words[1])
+                    || !is_simple_value(words[1], &value)
+                {
+                    return Err(ProtocolError::PostgresError(
+                        "statement uses a clause this parser does not implement".to_string(),
+                    ));
+                }
                 Ok(Condition {
                     column: words[0].to_string(),
                     operator: words[1].to_string(),
                     // Quotes are kept and interpreted by `literal_to_json`, so
                     // `x = NULL` and `x = 'NULL'` stay distinguishable.
-                    value: words[2..].join(" "),
+                    value,
                 })
             })
             .collect::<ProtocolResult<Vec<_>>>()?;
@@ -6264,6 +7948,7 @@ impl QueryEngine {
             count += 1;
         }
 
+        self.flush_change_log().await?;
         Ok(QueryResult::Insert { count })
     }
 
@@ -6449,6 +8134,12 @@ impl QueryEngine {
             .filter(|row| row_is_visible(&row.values))
             .collect();
 
+        // Whether the fetch that just returned should have been abandoned.
+        // Walking these rows to check would be theatre: `select_rows` has
+        // already done the work, so the only honest thing a check can do here
+        // is stop the rest of the statement.
+        check_cancelled()?;
+
         // A serializable block records what it saw, so a later write to one of
         // those rows is a conflict and a write elsewhere is not.
         if records_reads() {
@@ -6479,16 +8170,20 @@ impl QueryEngine {
             }
         }
 
+        // The schema is read once, and is also what says a column carries a
+        // declared scale.
+        let table_schema = storage.get_table_schema(table).await?;
+
         // Convert TableRows to QueryResult format
         let result_columns = if storage_columns.is_empty() {
             // The schema already holds each name in its final form: a quoted
             // identifier kept its case when the table was created. Folding it
             // again lowercased it, so `SELECT "Id"` could not find a column
             // that `SELECT *` reported as `id`, and reading it returned NULL.
-            match storage.get_table_schema(table).await? {
-                Some(schema) => schema.columns.into_iter().map(|c| c.name).collect(),
-                None => vec![],
-            }
+            table_schema
+                .as_ref()
+                .map(|schema| schema.columns.iter().map(|c| c.name.clone()).collect())
+                .unwrap_or_default()
         } else {
             storage_columns.clone()
         };
@@ -6540,6 +8235,7 @@ impl QueryEngine {
         columns: Vec<String>,
         values_list: Vec<Vec<String>>,
     ) -> ProtocolResult<QueryResult> {
+        note_block_write(table);
         // Check if table exists
         if !storage.table_exists(table).await? {
             return Err(ProtocolError::PostgresError(format!(
@@ -6595,13 +8291,13 @@ impl QueryEngine {
                         continue;
                     }
 
-                    row_values.insert(column_def.name.clone(), Self::literal_to_json(val));
+                    row_values.insert(column_def.name.clone(), self.value_to_json(val).await?);
                 } else {
                     // Column not found in schema, skip or insert with uppercase?
                     // For now, insert with uppercase as fallback, but this might be wrong if schema is strict
                     // But if we are here, it means we are inserting a column that doesn't exist in schema?
                     // Postgres would error. For now, let's just use uppercase as before.
-                    row_values.insert(col_upper, Self::literal_to_json(val));
+                    row_values.insert(col_upper, self.value_to_json(val).await?);
                 }
             }
 
@@ -6631,6 +8327,7 @@ impl QueryEngine {
             count += 1;
         }
 
+        self.flush_change_log().await?;
         Ok(QueryResult::Insert { count })
     }
 
@@ -7032,10 +8729,13 @@ impl QueryEngine {
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             loop {
                 ticker.tick().await;
-                for record in drain_pending_log() {
-                    if let Err(e) = engine.record_change(&record).await {
-                        tracing::warn!("could not log a change for replication: {e}");
-                    }
+                if let Err(e) = engine.flush_change_log().await {
+                    tracing::warn!("could not log changes for replication: {e}");
+                }
+                match engine.truncate_change_log().await {
+                    Ok(0) => {}
+                    Ok(removed) => tracing::debug!(removed, "trimmed the change log"),
+                    Err(e) => tracing::warn!("could not trim the change log: {e}"),
                 }
                 match engine.vacuum(None).await {
                     Ok(0) => {}
@@ -7065,28 +8765,34 @@ impl QueryEngine {
             .map(|open| open.iter().copied().min())
             .unwrap_or(None);
 
+        // Nothing has been marked since the last pass, so there is nothing to
+        // find and no reason to read a single row.
+        if !reclaim_pending() {
+            return Ok(0);
+        }
+
         let tables = match table {
             Some(name) => vec![fold_identifier(name)],
             None => storage.list_tables().await?,
         };
 
+        PENDING_RECLAIM.store(0, std::sync::atomic::Ordering::Relaxed);
         let mut reclaimed = 0usize;
         for name in tables {
             if !storage.table_exists(&name).await? {
                 continue;
             }
-            let marked: Vec<_> = storage
+            // One pass per distinct writer, not per row: a table with many
+            // rows removed by one transaction would otherwise delete the same
+            // set once for each of them.
+            let writers: std::collections::BTreeSet<u64> = storage
                 .select_rows(&name, Vec::new(), Vec::new(), None)
                 .await?
                 .into_iter()
-                .filter(|row| row.values.contains_key(DELETED_BY))
-                .filter(|row| !row.values[DELETED_BY].is_null())
+                .filter_map(|row| row.values.get(DELETED_BY)?.as_u64())
                 .collect();
 
-            for row in marked {
-                let Some(writer) = row.values.get(DELETED_BY).and_then(JsonValue::as_u64) else {
-                    continue;
-                };
+            for writer in writers {
                 // Still running, or old enough that a running block might have
                 // begun before it committed: leave it be.
                 let still_running = open_transactions()
@@ -7617,6 +9323,7 @@ impl QueryEngine {
         set_clauses: Vec<(String, String)>,
         where_clause: Option<WhereClause>,
     ) -> ProtocolResult<QueryResult> {
+        note_block_write(table);
         // Check if table exists
         if !storage.table_exists(table).await? {
             return Err(ProtocolError::PostgresError(format!(
@@ -7723,6 +9430,7 @@ impl QueryEngine {
                     .await?;
             }
 
+            note_reclaimable(count as u64);
             self.flush_change_log().await?;
             Ok(QueryResult::Update { count })
         }
@@ -7735,6 +9443,7 @@ impl QueryEngine {
         table: &str,
         where_clause: Option<WhereClause>,
     ) -> ProtocolResult<QueryResult> {
+        note_block_write(table);
         // Check if table exists
         if !storage.table_exists(table).await? {
             return Err(ProtocolError::PostgresError(format!(
@@ -7777,6 +9486,7 @@ impl QueryEngine {
                     conditions,
                 )
                 .await?;
+            note_reclaimable(marked.max(0) as u64);
             return Ok(QueryResult::Delete {
                 count: marked.max(0) as usize,
             });
@@ -7873,6 +9583,27 @@ impl QueryEngine {
                 "JSON" => ColumnType::Json,
                 "DOUBLE" => ColumnType::Double,
                 "TIMESTAMP" => ColumnType::Timestamp,
+                "REAL" | "FLOAT" | "FLOAT4" | "FLOAT8" | "DOUBLE PRECISION" => ColumnType::Double,
+                data_type
+                    if data_type.starts_with("NUMERIC") || data_type.starts_with("DECIMAL") =>
+                {
+                    // `NUMERIC(10,2)` reached none of the arms above and fell
+                    // through to the unknown case, which is `TEXT`. The column
+                    // then held whatever the value happened to be, and its
+                    // declared scale existed nowhere.
+                    let (precision, scale) = data_type
+                        .find('(')
+                        .and_then(|open| {
+                            let close = data_type.find(')')?;
+                            let inside = &data_type[open + 1..close];
+                            let mut parts = inside.split(',');
+                            let precision = parts.next()?.trim().parse::<u8>().ok();
+                            let scale = parts.next().and_then(|s| s.trim().parse::<u8>().ok());
+                            Some((precision, scale))
+                        })
+                        .unwrap_or((None, None));
+                    ColumnType::Numeric { precision, scale }
+                }
                 data_type => {
                     if data_type.starts_with("VARCHAR") {
                         // Extract length if present

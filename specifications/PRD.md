@@ -966,10 +966,68 @@ Properties the harness cannot reach, verified by hand against a running server:
 | Replication replay | Write with nobody streaming, then connect and `START_REPLICATION ... 0/1` | Both missed writes replayed from the requested LSN |
 | Replication feedback | Standby status update with the reply flag set | Keepalive returned; the confirmed position is written to the slot |
 | Slot durability | Create a slot, restart, `START_REPLICATION` on it | Slot survives |
+| Durable change log | Write two rows, restart, replay from `0/1` | Both replayed from the log on disk |
+| `pgoutput` format | Slot created with the `pgoutput` plugin | `Begin`, `Relation`, `Insert`, `Commit` in one frame |
+| Physical replication | `START_REPLICATION 0/0 PHYSICAL` | Refused with `0A000` (`feature_not_supported`), not answered with logical frames; the session stays usable and `IDENTIFY_SYSTEM` still replies |
+| Transaction grouping | A two-statement block on a `pgoutput` stream | One `Begin`, both rows, one `Commit` |
+| Change-log trimming | `VACUUM` with and without an unconfirmed slot | Trimmed when nothing is subscribed; retained while a slot has not confirmed |
+| Binary `pgoutput` | Slot streamed with `(binary 'true')` | Values arrive as `b` frames — an `int8` in network byte order, not its decimal spelling |
+| Stale slot invalidation | 110,000 writes past an unconfirmed slot, then `VACUUM` | Slot invalidated, log trimmed to zero, a healthy slot still streams |
+| Trimming at scale | `VACUUM` over a 110,000-row change log | 2.5s; deleting per row instead took longer than the request timeout |
+| No write amplification without a subscriber | Five writes with no slot, then five with one | Log absent in the first case, five rows in the second |
+| Batched log writes | A 1000-row `INSERT` with a slot open | One log row, not 1000; all 1000 changes still replay, from the window and from disk after a restart |
+| Selective log read | 20,000 changes in 100 batches, resume near the end | 33 changes returned, not 20,000 |
+| Query cancellation | `CancelRequest` on a second connection with the session's `BackendKeyData` | Next message refused with "canceling statement due to user request"; session stays usable; a wrong secret is ignored |
+| Fast-path function call | `FunctionCall` on a raw connection, with the OID read from `pg_proc` | `fp(6)` → 42 and `greetfp('world')` → `hi world` over the `F`/`V` messages; an OID nobody published is refused with `42883` and the session stays usable |
+| Mid-statement cancellation | `CancelRequest` 0.3s into a 200,000-row scan | The running statement stops: 4.04s → 1.56s, no rows, "canceling statement due to user request"; an uncancelled run and a wrong-secret run both return all 200,000 rows |
+| Concurrency under load | `SELECT 1` on a second connection, and an HTTP health check, during a 200,000-row scan | Health check 0.56s (was 2.66s — see below) |
 
 The multi-protocol checks matter because all four protocols share the storage
 backend that was replaced; verifying only PostgreSQL would have left the others
 unmeasured after the change.
+
+#### Defects found by measuring, not by building
+
+A green build and a passing harness said nothing about any of these. Each was
+found by running the server and timing it, and each is recorded with the number
+that exposed it.
+
+| Defect | Symptom | Cause | After |
+|--------|---------|-------|-------|
+| Autovacuum scanned everything, always | 200,000 rows left the server at 101% CPU and 1.3 GB RSS, unresponsive | Each 60s tick materialised every row of every table just to discover whether anything was reclaimable — the tick ran far more often than the thing it looked for changed | A counter of rows marked deleted answers the same question without a scan: 0.0% idle CPU, 131 MB RSS |
+| `LIMIT` applied after filtering everything | `... WHERE note LIKE '%x%' LIMIT 1` over 200,000 rows took 190.8s | The limit was applied at the end of the pipeline, so every row was filtered before all but one was discarded | The filter stops once the limit is reached — 2.70s. Guarded: `ORDER BY`, `GROUP BY`, `DISTINCT`, aggregates and window functions all still scan in full, since they need the rows the limit would skip |
+| `LIKE` compiled its pattern per row | 20,000 rows: 18.97s for `LIKE`, 0.26s for `=` on the same column — ~0.94ms per row, all in `Regex::new` | The pattern is identical for every row of a scan, but was recompiled for each one | A bounded per-thread cache of compiled patterns: 0.35s. The 200,000-row scan went 190.4s → 3.90s |
+| Every session shared one backend id | — | `process_id` was `std::process::id()`, the same value for every connection | A per-session counter. Two things read that id and both were wrong: the cancel registry is keyed by it, so only the newest connection could ever be cancelled, and `NOTIFY` reports it so a listener can tell its own notifications apart — with one shared id every notification looked self-sent |
+| `INSERT ... VALUES` stored expressions as text | `INSERT INTO t (id) VALUES (500 + 1)` put the string `500 + 1` into an `INTEGER` column, while `SELECT 500 + 1` correctly gave 501 | Anything that was not a quoted string, `NULL`, a boolean or a number fell through to being stored verbatim | The value is evaluated when it is not a plain literal. This was found while testing PL/pgSQL and had nothing to do with it — it stayed invisible because the row *was* written, it just never matched a comparison afterwards |
+| A function's catalog key drifted between writer and reader | Every stored function stopped resolving: `SELECT addone(41)` answered `Function 'ADDONE' not implemented` | Adding the argument count to the key changed the *lookup* but the edit to the *store* silently did not apply, so one wrote `function:f` and the other read `function:f/1` | Both sides changed together. The two are eight lines apart in one file and still drifted — the edit that missed reported nothing, and only a live call caught it |
+| A function's return type was read as its body | A fast-path call asking for a binary result got text: the return type resolved to nothing recognisable, so `text` was written | An edit swapping two fields of a tuple was written without an assertion, and `make format` had reflowed the code so it silently matched nothing | Both fields swapped, with the assertion that would have caught it. This happened five times this session; every replacement that carried an assertion failed loudly and was fixed at once, and every one that did not cost a debugging cycle |
+| Every overload of a name collided inside a query | With `f(int4)`, `f(text)` and `f(int8)` all defined, `SELECT f(a_text_column) FROM t` answered `int8` — whichever was created last | The registry that makes a function callable from an expression was keyed by name and argument *count*, so each definition overwrote the previous one | Candidates are kept per signature and resolved by the arguments' own types. This was a defect in the previous round's work, found by asking what happened when the feature met the overloading built two rounds before it |
+| `= ANY(...)` was parsed as a call to a function named `ANY` | `WHERE id = ANY(ARRAY[1,3])` matched no rows; `SELECT 1 = ANY(ARRAY[1,2])` failed with `Function 'ANY' not implemented` | The parser handles a quantified comparison after `<`, `<=`, `>`, `>=` but the equality level had no such branch — so the two forms people actually write, `= ANY` and `<> ANY`, were the ones that did not work | The same branch at the equality level. The evaluator already understood `Expression::Any`; only the parser never produced one |
+| A comparison's right-hand side was stored as text | `WHERE id = ANY(ARRAY[1,3])` was stored as `id = 'ANY(ARRAY[1,3])'` and matched nothing; `WHERE id = 1 + 1` matched nothing | The earlier fix checked the column and the operator but not the value, so an expression on the right fell through the same crack from the other side | The value must be a literal — or a parenthesised list for `IN`, or `NULL` for `IS` — and anything else routes to the pipeline |
+| `SHOW` disagreed with the startup handshake | `SHOW server_version` returned an empty string while `ParameterStatus` carried a version. A driver reads that value to decide what the server supports | The two came from different places: the handshake sent a literal, and `SHOW` read a session map nothing had populated | One list feeds both. `SHOW ALL` now reports the advertised settings alongside the session's own |
+| An expression in `WHERE` was dropped entirely | `SELECT name FROM t WHERE id * 2 = 4` returned **every row**; `WHERE UPPER(name) = 'ADA'` returned none. Adding ` AND id > 0` made both correct, because the conjunction routed the statement to the full pipeline | The simple parser read the first whitespace-separated word as the column and the second as the operator, so `id * 2 = 4` became column `id`, operator `*` — and the storage matcher treats an operator it does not know as matching every row | The parser refuses a conjunct it cannot represent as `column op value`, which sends the statement to the path that evaluates expressions. Found while checking why a stored function did not work in a `WHERE`; the arithmetic case is the worse one, and nothing was looking for it |
+| A catalogue query dropped its `WHERE` | `SELECT ... FROM pg_class WHERE relname = $1` returned the whole catalogue, so a driver read the first entry as its answer | The clause was parsed and then not passed to the catalogue path, which only projected columns | A catalogue query carrying a clause goes through the path that can evaluate one. Found by writing `WHERE proname = ...` against the new `pg_proc` and getting every row back |
+| One query stalled the whole server | During a 200,000-row scan, `SELECT 1` on a second connection took 3.3s and an HTTP health check 2.7s; the server never even read the second connection's message until the scan finished | The scan ran as one long CPU-bound stretch that never yielded, so the runtime could not service anything else — 100% of one core with nine idle | The row-conversion loop yields every 512 rows: health check 0.56s. This is also what made cancellation work at all — a `CancelRequest` could not be *received* in time before |
+
+The cancellation case is worth stating plainly, because the first three attempts
+to verify it all failed for reasons that were not the server's: a Python timer
+thread starved by the GIL, then interpreter startup that took 3.5s under load,
+then a `wait()` on a child that was sleeping 99s. Only after the harness was
+made deterministic — the child announces readiness before the query is sent, and
+the parent signals the exact moment the query goes out — did the measurement
+mean anything. Two of those runs would have been reported as "cancellation does
+not work" and one as a hang.
+
+**Left alone deliberately:** the remaining 0.56s stall is in the synchronous
+part of the select pipeline (`run_select_values`), which cannot `await`. Making
+it async ripples through `execution_strategy.rs`; `block_in_place` is not an
+option because it panics on a current-thread runtime, which is what
+`#[tokio::test]` gives. The dominant term is fixed and the rest is recorded
+here rather than rushed.
+
+**Also noted, not fixed:** `server.worker_threads` in `config.rs` is read by
+nothing — `#[tokio::main]` takes no arguments, so the runtime always uses the
+default worker count. It is a knob that cannot change any output.
 
 #### Scale
 
@@ -1000,6 +1058,140 @@ back to memory.
 Note that `unified_storage.data_dir` in `config/orbit-server.toml` is a
 separate setting from the `--data-dir` flag, which the unified store does not
 read.
+
+#### SQLSTATE
+
+Every error left as `XX000` — `internal_error`, the code PostgreSQL uses for
+"something went wrong that we cannot name". Drivers branch on this: an
+application could not tell a duplicate key from a crashed backend, so no
+retry-on-conflict loop and no ORM's "is this a unique violation?" test could
+work. The message also carried `PostgreSQL protocol error: ` — our plumbing
+showing through into text meant for the user.
+
+`orbit/server/src/protocols/postgres_wire/sqlstate.rs` now classifies errors,
+and each of these is triggered end-to-end by a conformance check that asserts
+the code a real client receives:
+
+| Condition | Code |
+|-----------|------|
+| `undefined_table` | `42P01` |
+| `undefined_column` | `42703` |
+| `undefined_function` | `42883` |
+| `ambiguous_function` | `42725` |
+| `duplicate_table` | `42P07` |
+| `unique_violation` | `23505` |
+| `not_null_violation` | `23502` |
+| `foreign_key_violation` | `23503` |
+| `check_violation` | `23514` |
+| `division_by_zero` | `22012` |
+| `serialization_failure` | `40001` |
+| `query_canceled` | `57014` |
+| `raise_exception` | `P0001` |
+
+The right shape is a code at every raise site. There are several hundred, and a
+half-converted error type would be worse than none — some codes honest, others
+silently still `XX000`, with no way to tell which from outside. So the mapping
+is in one place, keyed on the message text the engine produces, with one
+exception: `ProtocolError::SqlState` carries a code explicitly, for the case
+where the message cannot say. A `RAISE EXCEPTION` is `P0001` whatever text it
+carries, and no amount of reading that text would reveal it.
+
+Classifying text is a contract between the raise sites and that table, and such
+contracts drift. The guard is the conformance checks above: a reworded message
+shows up as a failing check rather than as a silent return to `XX000`. An error
+nobody has categorised still reports `XX000`, which is what it is — returning a
+plausible-looking code for an unclassified error would be worse than admitting
+it.
+
+#### Found by probing, not yet fixed
+
+Widening the harness into areas it had never covered found three defects that
+were fixed (above) and three that were not. They are written down with the
+statement that shows each, so they are gaps with evidence rather than a feeling
+that something is missing:
+
+Two of the three were the same defect: `NUMERIC`, `DECIMAL`, `JSON`, `JSONB`,
+`INTERVAL`, `BYTEA`, `UUID` and `CHAR` were reachable as **column** types but
+missing from the **cast-target** list, so a type you could declare was not a
+type you could cast to. The parser now accepts them with an optional
+`(precision, scale)`, and the conversions exist: a declared scale is rendered
+in full (`1.5::NUMERIC(10,2)` is `1.50`, not `1.5`) because rounding alone
+leaves the value at its original scale. A malformed value is still refused —
+adding the cast must not make everything castable, and there is a check for
+that.
+
+Date arithmetic followed: only the *timestamp* forms existed, so
+`DATE '2024-01-01' + INTERVAL '1 day'` — the way anyone writes it — failed.
+`date + interval` (a timestamp, as in PostgreSQL), `date ± integer` (a date),
+`date - date` (a count of days) and `interval ± interval` all work now.
+
+Chasing the `NUMERIC(10,2)` scale found something larger: **`ColumnType` had no
+numeric variant at all**, so `NUMERIC(10,2)` matched none of the declared type
+names and fell through to the unknown case, which is `TEXT`. The declared scale
+existed nowhere, and a type that exists specifically to avoid binary floating
+point was not being stored as one. `ColumnType::Numeric { precision, scale }`
+now exists, the DDL parser produces it, `pg_type` reports `NUMERIC`, and a
+stored value is read back as an exact decimal at its declared scale.
+
+And chasing *that* found the worst of the round, which had nothing to do with
+numerics: the storage matcher compared only `BigInt` against `BigInt`, so
+`WHERE amount > 5` on a numeric, float or text column **matched no rows at
+all**. Not an error — an empty result. `WHERE id > 1` on an integer column
+worked, which is why it had never been noticed. Comparison is now numeric
+across the integer, float and decimal types, ordered for text, dates,
+timestamps and booleans, and `None` — no match — only for values that genuinely
+cannot be compared.
+
+What remains from that round:
+
+Following the `NUMERIC(10,2)` rendering to its cause found something larger
+than rendering. `SqlType` → `ColumnType` mapping in
+`orbit/server/src/protocols/common/storage/unified.rs` had no arm for
+`Numeric`, `Decimal`, `Real` or `DoublePrecision`, so all of them fell to
+`_ => ColumnType::Text`: **every numeric and floating-point column was stored
+as text**, and the declared scale existed nowhere. With the mapping added,
+`SELECT amt` renders `10.50`, `SUM` is exact, comparisons work, and arithmetic
+on the column keeps the type. Two things had to follow it — arithmetic and
+`SUM` over an exact decimal, neither of which had an arm — because values that
+had been floats were now decimals.
+
+A first attempt to fix the rendering by patching `execute_persistent_select`
+was **removed**: no query reached it, so it changed no output, and code that
+changes no output is the decorative kind this document argues against
+elsewhere.
+
+#### An UPDATE with an expression is silently lost
+
+`UPDATE t SET n = n + 1` changes nothing. `RETURNING` reports the new value, so
+a client is told a write happened that did not — the same combination as a
+wrong answer, and worse than an error. The `SET` value is stored through
+`literal_to_json`, which turns anything that is not a literal into text.
+
+**A fix for this was written and reverted.** Computing each expression against
+the row being updated made it worse: rows disappeared entirely, because the
+per-row write interacts with the versioned-update logic that marks the previous
+row deleted and re-inserts a new version. Losing rows is worse than failing to
+update them, so the change came out and the defect stands recorded rather than
+half-fixed. Whoever takes it next should start from the interaction with
+version marking, not from the expression evaluation.
+
+The lesson is about the number rather than the three: the check count had been
+presented as covering the remaining work, and one afternoon of probing
+untested constructs found six things wrong. Two of them —
+`WHERE id = ANY(...)` and `WHERE id = 1 + 1` — returned wrong rows rather than
+errors, which is the class this document keeps recording and the class no
+passing suite reveals until someone writes the check.
+
+#### Observed once, unexplained
+
+A single run of the conformance harness failed one check with
+`connect: authentication error: invalid nonce`; eight consecutive runs before
+and after were clean, and it has not reproduced. The SCRAM nonce alphabet was
+checked and is correct — `0x21..=0x7E` with the comma removed, 93 code points,
+and the shift that skips the comma cannot reach `DEL`. The handshake state is
+per-session, so there is no shared nonce to race on. That leaves it unexplained
+rather than fixed, and it is written down here because an intermittent
+authentication failure is not something to leave in a passing run's shadow.
 
 #### Not yet implemented
 
@@ -1046,9 +1238,23 @@ read.
 - Every write path undoes per row: `TRUNCATE` records each row it removes as a
   pre-image, `INSERT ... SELECT` predicts the rows it will add by running its
   select, and `COPY` records each copied line.
-- **GSSAPI encryption** is refused explicitly: it needs a Kerberos KDC to
-  authenticate against, which cannot be exercised here, and an unverified
-  implementation would be worse than its absence.
+- **`CancelRequest` interrupts the statement running**, not only the one after
+  it. The session's flag is checked every 512 rows in the storage fetch and in
+  the filter, so a scan stops part-way: a cancel 0.3s into a 200,000-row scan
+  ended it at 1.56s against 4.04s uncancelled, with no rows and
+  "canceling statement due to user request". A wrong secret is ignored. What
+  remains unchecked is the phase that formats and sends the result, so a cancel
+  arriving after the last row is read is honoured only when the next statement
+  starts.
+- **GSSAPI encryption** is declined the way the protocol defines: a
+  `GSSENCRequest` is answered with a single `N` and the client continues in the
+  clear on the same connection, which is exactly what PostgreSQL built without
+  `--with-gssapi` does. There is a conformance check for both halves — the
+  answer and the fact that the session survives it.
+  What is absent is the *Kerberos integration*, not a wire message: validating
+  a ticket needs a KDC and a keytab. Shipping a handshake that cannot check a
+  token would add an authentication path whose only honest outcome is failure,
+  and whose dishonest outcome is accepting anyone.
 - **Replication is logical only.** A connection opened with
   `replication=database` answers `IDENTIFY_SYSTEM`, `CREATE_REPLICATION_SLOT`,
   `DROP_REPLICATION_SLOT`, `TIMELINE_HISTORY` and `START_REPLICATION`, then
@@ -1057,15 +1263,62 @@ read.
   catalog and survive a restart; a standby status update records the confirmed
   position on the slot and answers a requested keepalive; a stream can replay
   from a named LSN or from the slot's confirmed position.
-- **What replication still lacks:** physical replication (`START_REPLICATION
-  PHYSICAL` is not distinguished from logical), a real WAL — the replay window
-  is the last 4096 changes held in memory, and a request older than that is
-  refused rather than served with a hole; the JSON payload is one plugin's
-  format rather than `pgoutput`; `TIMELINE_HISTORY` reports that the current
-  timeline has no history file, because there is only ever one.
-- **The fastpath `FunctionCall` message** answers an error naming the OID
-  rather than executing the function. It previously answered nothing at all,
-  leaving the client waiting on a reply that never came.
+  The payload format follows the slot's plugin: `pgoutput` emits the binary
+  `Begin`/`Relation`/`Insert`/`Update`/`Delete`/`Commit` messages a real
+  subscriber decodes, and anything else gets JSON. Changes are written to a
+  durable log as part of the write, so a replica that reconnects after a
+  restart replays from disk, and positions continue where the last run left
+  off rather than restarting at one. A block's statements arrive inside one
+  `Begin`/`Commit` pair rather than as several transactions. A subscriber that
+  passes `binary 'true'` gets values in binary rather than as text.
+- **What replication still lacks:** physical replication is refused rather than
+  served, with `0A000` (`feature_not_supported`) and a session that stays
+  usable — reported as `XX000` a client could not tell a feature this server
+  does not have from a backend that fell over.
+  The contract of `START_REPLICATION ... PHYSICAL` is "send me your WAL". There
+  is no PostgreSQL WAL here: storage is RocksDB plus a logical change log, with
+  no page layout, no consistent checkpoint and no LSNs that mean what a standby
+  reads them to mean. Synthesising records in that format would not be an
+  approximation, it would be a stream that corrupts any standby that trusts
+  it. Serving this is not a protocol gap to close but PostgreSQL's storage
+  engine to reimplement.
+  The change log is a table, not a WAL: it is trimmed to the slowest slot's
+  confirmed position by `VACUUM` and by the background worker, and a slot that
+  falls more than 100,000 changes behind is invalidated so one dead subscriber
+  cannot hold the log open for ever — what `max_slot_wal_keep_size` protects
+  against in PostgreSQL. The bound is
+  `protocols.postgresql.max_slot_change_backlog`, defaulted so an existing
+  configuration file keeps working.
+  `TIMELINE_HISTORY` reports that the current timeline has no history file,
+  because there is only ever one.
+- **A write is logged only while a slot exists**, so a server nobody replicates
+  from pays nothing. With a subscriber, a statement's changes are written as a
+  single batched log row rather than one row each, so a 1000-row `INSERT` costs
+  one row rather than a thousand, and a replay reads only the batches after the
+  position it asks for rather than the whole log. A batch is retained until
+  every change in it has been confirmed. What remains is that the underlying
+  storage answers a predicate by scanning its rows, so the read is proportional
+  to the log's size rather than to the answer — bounded by the trim and the
+  backlog setting, but not indexed.
+- **The fastpath `FunctionCall` message** executes a function this server
+  published in `pg_proc`. Stored functions get OIDs in PostgreSQL's user range
+  (at or above 16384), derived from the catalog key rather than from position,
+  so an OID survives a restart and does not shift when another function is
+  created or dropped — an OID that moved would make `pg_proc` useless for the
+  thing OIDs are for. An OID this server did not publish is refused by number
+  with `42883`, and the session stays usable; guessing which built-in a number
+  meant would have the client silently calling something else.
+  The message parser had to be fixed first: it read the argument count where
+  the *format code* array sits, so it misread every call a real client sends.
+  Arguments are read in either format. Binary is decoded against the
+  parameter's declared type from the same `pg_proc` entry the client took the
+  OID from: `int2`/`int4`/`int8`/`float4`/`float8` big-endian, `bool` as one
+  byte, and the string types as their bytes. A value of the wrong length is
+  `22P03` naming both lengths rather than a silently wrong number, and a type
+  with no binary form here (`numeric`, whose binary shape is digit groups with
+  a weight and a sign; `date`/`timestamp`, whose epoch is not the Unix one) is
+  refused as `0A000` rather than read approximately. The result is returned in
+  the format asked for.
 - **The deferred pass re-reads every row of the tables the transaction wrote**,
   not only the rows it changed. Scoped to those tables rather than the whole
   database, but still proportional to their size.
@@ -1074,12 +1327,154 @@ read.
   `INSERT`/`UPDATE`/`DELETE`, `FOR EACH ROW`/`STATEMENT`, `WHEN (...)`,
   `NEW`/`OLD` column references, `SET NEW.col = <expr>` on both `BEFORE
   INSERT` and `BEFORE UPDATE`, a `$$BEGIN ... END$$` body of several
-  statements, and `RAISE` to reject a write. There is still no PL/pgSQL:
-  variables, loops, `IF`, and `RETURN` are not expressible, and a
-  `BEFORE UPDATE` rewrite is applied only when the statement changes exactly
-  one row.
+  statements, and `RAISE` to reject a write. A body that declares a variable, branches or loops is
+  handed to the PL/pgSQL interpreter instead (see below); a `BEFORE UPDATE`
+  rewrite is still applied only when the statement changes exactly one row.
 - A recursive CTE is bounded at 1,000 rounds and fails loudly rather than
   running forever if it does not settle.
+- **PL/pgSQL** (`orbit/server/src/protocols/postgres_wire/plpgsql.rs`) covers
+  `DECLARE` with typed variables and defaults, assignment, `IF`/`ELSIF`/`ELSE`,
+  `WHILE`, `FOR v IN [REVERSE] a..b`, bare `LOOP`, `EXIT`/`CONTINUE` with an
+  optional `WHEN`, `RETURN`, `RAISE` at every level, `PERFORM`,
+  `SELECT ... INTO`, and any SQL statement. It runs `DO $$ ... $$`,
+  `CREATE FUNCTION ... LANGUAGE plpgsql` and calls to those functions, and any
+  trigger body that needs more than a list of statements. Functions are stored
+  in the catalog and survive a restart.
+  No expression is evaluated here: an expression is captured as tokens,
+  variable references are substituted, and the result is handed to the SQL
+  engine as `SELECT <expr>` — one implementation of every operator rather than
+  a second one that would drift. Substitution works on tokens, so a variable's
+  name inside a string literal is left alone.
+  A block is atomic. It runs in a transaction, and a failure removes what it
+  wrote by stamp — rows carrying the block's id are deleted and rows it marked
+  deleted are unmarked — before the id is retired, so nobody can read a row
+  that is about to be removed. Inside an open transaction the block joins it
+  rather than starting its own, and `ROLLBACK` covers it.
+  `FOR rec IN SELECT ... LOOP` iterates a query's rows, with columns read as
+  `rec.column`; a single-column row is also readable under the bare name.
+  Substitution understands `rec.column` as one reference, so an ordinary
+  `table.column` in SQL is left untouched.
+  `RETURN QUERY` accumulates rows, which makes a function set-returning: the
+  first query fixes the column names and later ones append.
+  `BEGIN ... EXCEPTION WHEN OTHERS THEN ... END` catches. What the protected
+  statements wrote is undone before the handler runs — catching without undoing
+  would leave the half-finished write a handler exists to prevent — and
+  `SQLERRM` carries the raised message. A sub-transaction that commits is
+  registered with the block containing it, so if *that* fails later its rows go
+  too. Variable values survive a caught exception; only database writes are
+  undone, as in PostgreSQL.
+  A parameter's declared type decides whether its value is quoted when
+  substituted. Without that a `TEXT` argument was pasted in bare and
+  `greet('world')` failed with `column "world" does not exist` — a defect in
+  the first version of this module, found by testing a text argument rather
+  than an integer one.
+
+  `RETURN NEXT` appends one value at a time, alongside `RETURN QUERY`.
+  Cursors are declared as `c CURSOR FOR <query>`, then `OPEN`, `FETCH [NEXT
+  FROM] c INTO v[, v...]`, `CLOSE`, and `FOR r IN c LOOP`; `FOUND` reports
+  whether the last `FETCH` returned a row, which is what ends a fetch loop.
+  `FOUND` is spelled `TRUE`/`FALSE` rather than `t`/`f` — substituted bare into
+  `EXIT WHEN NOT FOUND`, a `t` is an identifier and the statement failed with
+  `column "t" does not exist`.
+  `table.column%TYPE` takes that column's declared type, resolved against the
+  catalog when the block runs, and `table%ROWTYPE` brings the table's columns
+  into scope as `name.column`. An unknown column leaves the type unknown rather
+  than guessing: quoting is then read off whatever the variable is assigned.
+  Functions are keyed by name **and argument count**, so `f(a)` and `f(a, b)`
+  coexist; `DROP FUNCTION f` removes every arity of the name.
+
+  A named exception condition catches its own failure and no other:
+  `WHEN unique_violation` catches a duplicate key and lets a missing table
+  through, and `WHEN raise_exception` catches a `RAISE`. A condition name this
+  server does not define matches nothing rather than everything.
+
+  `OUT` and `INOUT` parameters are supported: a function with them answers with
+  their values, named after them, rather than with whatever `RETURN` said.
+  Overloading is resolved by argument **type**, following PostgreSQL's order.
+  Types are reduced to canonical names, so `INTEGER` and `INT4` are one type
+  and `INT8` another; a call keeps the candidates every argument converts to
+  (same category, not narrowing — `int4` reaches `int8` but not `int2`), then
+  prefers the candidate matching most arguments exactly, then resolves an
+  untyped literal towards the string category, then towards each category's
+  preferred type (`int4`, `text`, `float8`, `timestamptz`, `bool`). An
+  argument's type comes from how it was written where that says — a quoted
+  literal is `unknown` and fits either overload, an integer literal too large
+  for `int4` is `int8` — and from its evaluated value otherwise.
+  What survives all of that and is still tied is refused as `42725`
+  (`ambiguous_function`) rather than resolved by a coin toss the caller cannot
+  see; nothing viable is `42883` naming the argument types, as PostgreSQL also
+  phrases it. An argument that cannot be its declared type is `22P02` naming
+  the value and the type.
+  Parameter parsing is paren-aware, so `NUMERIC(10, 2)` is one parameter — it
+  had been split on every comma, and the stored form was joined on commas too,
+  so a type containing one was corrupted in both directions.
+
+  A parameter declared as a **domain** is the type the domain is built on,
+  resolved against the catalogue per call so `ALTER DOMAIN` is seen by calls
+  made after it. `pg_proc` reports the base type's OID for one, because this
+  server assigns OIDs to functions and not to domains and reporting `text` for
+  a domain over `INTEGER` would tell a client the wrong thing about how to call
+  it. An **array** (`INTEGER[]`, `TEXT ARRAY`) carries its element type —
+  `_int4` and `_text` are different types, so `f(int4[])` and `f(text[])`
+  coexist — and never satisfies a scalar parameter. One array does not convert
+  to another: widening `int4[]` to `int8[]` would mean rebuilding every
+  element, which nothing here does. `pg_proc` reports the element type's array
+  OID (`1007` for `int4[]`, `1009` for `text[]`).
+
+  A type name the lattice does not recognise **keeps its own spelling** rather
+  than becoming `text`. Collapsing it made every user-defined type — a
+  composite, an enum, anything — the same type as `text`, so `f(mytype)` and
+  `f(text)` could not both exist and a call to one could reach the other.
+
+  A cast **to a domain** (`42::posint`) is a cast to what the domain is built
+  on. `SqlValue::cast_to` is pure and has no catalogue, so it consults a
+  registry the query engine keeps
+  (`orbit/server/src/protocols/postgres_wire/domains.rs`): written when a
+  domain is created, and loaded once at startup for those already stored, so a
+  cast works after a restart and not only in the session that created the
+  domain. A name that is *not* a known domain still fails — a typo'd type must
+  not silently pass the value through, and there is a check for exactly that.
+
+  An argument that **names** a type is typed from that name rather than from
+  its value: `42::BIGINT` and `CAST(42 AS BIGINT)` are `int8` even though 42
+  fits an `int4`, and a call to a function whose return type this server
+  recorded is typed from the catalogue — `f(g())` where `g` returns `BIGINT`
+  chooses the `int8` overload though the value it returns would read as
+  `int4`. A nested call is only typed this way when one candidate could have
+  been meant; two overloads may return different types, and picking one there
+  would be a guess dressed as a lookup.
+
+  A stored function can be **called from inside a query** —
+  `SELECT f(id) FROM t`, `WHERE f(id) = 4`, `ORDER BY f(id)` — when its body
+  needs no database. The expression evaluator is synchronous, so only a *pure*
+  body is callable from it: assignments, conditionals, loops and `RETURN` over
+  expressions, with no SQL statement anywhere in it, checked recursively so a
+  branch or a nested block cannot smuggle one past
+  (`orbit/server/src/protocols/postgres_wire/stored_functions.rs`). A body that
+  does run SQL is refused there by name rather than run in a way that could
+  block a runtime worker; it still works as a direct `SELECT f(...)`.
+
+  Inside a query the argument's **own type** chooses the overload: a value
+  reaching the evaluator carries it, so `SqlValue::BigInt` is not
+  `SqlValue::Integer` and `f(a_bigint_column)` selects the `int8` form even
+  though the value prints the same as an `int4` would. **Composite types** are created with
+  `CREATE TYPE name AS (field type, ...)`, stored in the catalogue, and
+  reported in `pg_type` with `typtype = 'c'` and an OID in the user range. A
+  PL/pgSQL variable of one brings its fields into scope as `variable.field`,
+  assignable and readable; a composite is its own type when choosing between
+  overloads, and `pg_proc` reports the same OID `pg_type` gives it. `DROP TYPE`
+  removes one and **refuses a name that was never there** with `42704` —
+  `DROP TYPE IF EXISTS` is the form that may say nothing.
+  Not every `CREATE TYPE` form is a composite: `AS ENUM` and the others are
+  left unhandled rather than stored as something claiming to be one.
+  A variable whose name matches a column of a table the block writes is
+  substituted, so `INSERT INTO t (v) VALUES (v)` with a variable `v` rewrites
+  the column name too. PostgreSQL resolves this ambiguity with
+  `#variable_conflict`; here the rule is simply that a variable always wins, so
+  name a variable something the statement does not also use as a column.
+  A loop is bounded at 10,000,000 iterations and fails loudly. PostgreSQL lets
+  one run forever, which is right for a dedicated backend process; here a
+  statement that never finishes holds a connection and a share of the runtime.
 
 Note on scope: 212/212 is 212 of *these 212 checks*. Each widening found real
 defects — 62 checks found none, 93 found fourteen, 130 found fourteen more, 157

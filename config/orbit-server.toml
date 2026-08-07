@@ -58,6 +58,10 @@ enabled = true
 port = 5432
 max_connections = 1000
 connection_timeout_secs = 30
+# Changes a logical replication slot may fall behind by before it is
+# invalidated. A slot that stops confirming would otherwise hold the change log
+# open indefinitely; this is the equivalent of max_slot_wal_keep_size.
+max_slot_change_backlog = 100000
 
 # SQL Engine Configuration
 [protocols.postgresql.sql_engine]

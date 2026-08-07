@@ -35,6 +35,8 @@
 pub mod auth;
 #[cfg(feature = "fts")]
 // pub mod fts;  // Temporarily disabled - needs API update
+pub mod domains;
+pub mod fastpath;
 pub mod graphrag_engine;
 pub mod jsonb;
 pub mod messages;
@@ -42,9 +44,13 @@ pub mod messages;
 pub mod notifications;
 #[cfg(feature = "storage-rocksdb")]
 pub mod persistent_storage;
+pub mod plpgsql;
+pub mod plpgsql_function;
 pub mod protocol;
 #[cfg(feature = "storage-rocksdb")]
 pub mod query_engine;
+pub mod sqlstate;
+pub mod stored_functions;
 // pub mod server;  // Moved to orbit_server::protocols
 pub mod sql;
 #[cfg(feature = "storage-rocksdb")]

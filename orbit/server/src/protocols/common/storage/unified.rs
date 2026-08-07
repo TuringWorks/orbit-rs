@@ -864,10 +864,24 @@ impl TableStorage for UnifiedTableStorage {
             .await
             .map_err(|e| ProtocolError::Other(format!("Storage error: {}", e)))?;
 
-        Ok(rows
-            .into_iter()
-            .map(|r| Self::universal_row_to_sql(&r))
-            .collect())
+        // Converting the fetched rows is most of what a large scan costs, so
+        // this is where a cancel has to be able to land. A check further up
+        // the stack only runs once this has already finished.
+        // Converting the fetched rows is most of what a large scan costs, so
+        // this is where a cancel has to be able to land — and where the task
+        // has to hand the runtime back. A scan of 200,000 rows never yielded,
+        // and because it never yielded the runtime could not service anything
+        // else: a `SELECT 1` on a second connection took 3.3s and an HTTP
+        // health check 2.7s, both simply waiting for this to finish.
+        let mut converted = Vec::with_capacity(rows.len());
+        for (index, row) in rows.iter().enumerate() {
+            if index.is_multiple_of(crate::protocols::common::cancel::CANCEL_CHECK_INTERVAL) {
+                crate::protocols::common::cancel::check_cancelled()?;
+                tokio::task::yield_now().await;
+            }
+            converted.push(Self::universal_row_to_sql(row));
+        }
+        Ok(converted)
     }
 
     async fn update_rows(
@@ -1349,6 +1363,9 @@ mod persistent_storage_impl {
                         ColumnType::Boolean => SqlType::Boolean,
                         ColumnType::Json => SqlType::Json,
                         ColumnType::Double => SqlType::DoublePrecision,
+                        ColumnType::Numeric { precision, scale } => {
+                            SqlType::Numeric { precision, scale }
+                        }
                         ColumnType::Timestamp => SqlType::Timestamp {
                             with_timezone: false,
                         },
@@ -1439,7 +1456,22 @@ mod persistent_storage_impl {
                             SqlType::Boolean => ColumnType::Boolean,
                             SqlType::Json | SqlType::Jsonb => ColumnType::Json,
                             SqlType::Timestamp { .. } => ColumnType::Timestamp,
-                            _ => ColumnType::Text, // Default fallback
+                            // These have their own storage types and were
+                            // falling through to the default: a column
+                            // declared `NUMERIC(10,2)` or `DOUBLE` was stored
+                            // as `TEXT`, so its declared scale existed nowhere
+                            // and nothing downstream could know it was a
+                            // number.
+                            SqlType::Numeric { precision, scale }
+                            | SqlType::Decimal { precision, scale } => ColumnType::Numeric {
+                                precision: *precision,
+                                scale: *scale,
+                            },
+                            SqlType::Real | SqlType::DoublePrecision => ColumnType::Double,
+                            SqlType::Char(Some(n)) => ColumnType::Varchar(*n as i32),
+                            // Anything `ColumnType` cannot name stays text,
+                            // which is how it is stored and compared.
+                            _ => ColumnType::Text,
                         }
                     };
 
@@ -1553,6 +1585,40 @@ mod persistent_storage_impl {
                 SqlValue::Json(v) | SqlValue::Jsonb(v) => v.clone(),
                 _ => JsonValue::String(value.to_postgres_string()),
             }
+        }
+    }
+
+    /// Order two stored values when both are numbers or both are text.
+    ///
+    /// Returns `None` when they cannot be compared, which the caller reads
+    /// as "does not match" — the same answer as before for genuinely
+    /// incomparable values, but now only for those.
+    fn compare_values(left: &SqlValue, right: &SqlValue) -> Option<std::cmp::Ordering> {
+        fn as_number(value: &SqlValue) -> Option<f64> {
+            match value {
+                SqlValue::SmallInt(v) => Some(f64::from(*v)),
+                SqlValue::Integer(v) => Some(f64::from(*v)),
+                SqlValue::BigInt(v) => Some(*v as f64),
+                SqlValue::Real(v) => Some(f64::from(*v)),
+                SqlValue::DoublePrecision(v) => Some(*v),
+                SqlValue::Decimal(v) => v.to_string().parse().ok(),
+                _ => None,
+            }
+        }
+
+        if let (Some(left), Some(right)) = (as_number(left), as_number(right)) {
+            return left.partial_cmp(&right);
+        }
+
+        match (left, right) {
+            (
+                SqlValue::Text(left) | SqlValue::Varchar(left) | SqlValue::Char(left),
+                SqlValue::Text(right) | SqlValue::Varchar(right) | SqlValue::Char(right),
+            ) => Some(left.cmp(right)),
+            (SqlValue::Date(left), SqlValue::Date(right)) => Some(left.cmp(right)),
+            (SqlValue::Timestamp(left), SqlValue::Timestamp(right)) => Some(left.cmp(right)),
+            (SqlValue::Boolean(left), SqlValue::Boolean(right)) => Some(left.cmp(right)),
+            _ => None,
         }
     }
 
@@ -1674,22 +1740,19 @@ mod persistent_storage_impl {
                             match cond.operator.as_str() {
                                 "=" | "==" => row_value == &cond_value,
                                 "!=" | "<>" => row_value != &cond_value,
-                                "<" => {
-                                    if let (SqlValue::BigInt(a), SqlValue::BigInt(b)) =
-                                        (row_value, &cond_value)
-                                    {
-                                        a < b
-                                    } else {
-                                        false
-                                    }
-                                }
-                                ">" => {
-                                    if let (SqlValue::BigInt(a), SqlValue::BigInt(b)) =
-                                        (row_value, &cond_value)
-                                    {
-                                        a > b
-                                    } else {
-                                        false
+                                "<" | "<=" | ">" | ">=" => {
+                                    // Only `BigInt` against `BigInt` compared,
+                                    // so `WHERE amount > 5` on a float or a
+                                    // numeric column matched nothing at all —
+                                    // a silent empty result, not an error.
+                                    match compare_values(row_value, &cond_value) {
+                                        None => false,
+                                        Some(ordering) => match cond.operator.as_str() {
+                                            "<" => ordering.is_lt(),
+                                            "<=" => ordering.is_le(),
+                                            ">" => ordering.is_gt(),
+                                            _ => ordering.is_ge(),
+                                        },
                                     }
                                 }
                                 _ => true,

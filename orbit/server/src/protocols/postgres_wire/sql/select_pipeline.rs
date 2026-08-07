@@ -82,12 +82,44 @@ pub fn run_select_values(
         }
     }
 
+    // A `LIMIT` can stop the filter early, but only when nothing downstream
+    // needs the rows it would skip: an ORDER BY re-orders them, an aggregate
+    // or GROUP BY folds them, DISTINCT drops duplicates, and a window function
+    // spans the partition. Applying the limit only at the end meant
+    // `... WHERE note LIKE '%x%' LIMIT 1` filtered every row of the table
+    // before discarding all but one.
+    let stop_after = select
+        .limit
+        .as_ref()
+        .filter(|_| {
+            select.order_by.is_none()
+                && select.group_by.is_none()
+                && select.distinct.is_none()
+                && !has_aggregate(select)
+                && !select_has_window(select)
+        })
+        .and_then(|limit| limit.count.as_ref())
+        .and_then(|count| as_i64(&evaluate(&mut evaluator, count, &Row::new()).ok()?))
+        .and_then(|count| usize::try_from(count).ok())
+        .map(|count| count.saturating_add(select.offset.unwrap_or(0) as usize));
+
     // WHERE
     let filtered = match &select.where_clause {
-        None => rows,
+        None => match stop_after {
+            Some(enough) => rows.into_iter().take(enough).collect(),
+            None => rows,
+        },
         Some(predicate) => {
             let mut kept = Vec::new();
-            for row in rows {
+            for (index, row) in rows.into_iter().enumerate() {
+                if stop_after.is_some_and(|enough| kept.len() >= enough) {
+                    break;
+                }
+                // Filtering a large table is the other place a cancelled
+                // query spends its time.
+                if index.is_multiple_of(512) {
+                    crate::protocols::postgres_wire::query_engine::check_cancelled()?;
+                }
                 if is_true(&evaluate(&mut evaluator, predicate, &row)?) {
                     kept.push(row);
                 }
@@ -248,6 +280,23 @@ pub fn run_select_values(
         output_column_names(select),
         windowed.into_iter().map(|(_, _, output)| output).collect(),
     ))
+}
+
+/// Whether any select-list item calls a window function.
+fn select_has_window(select: &SelectStatement) -> bool {
+    fn walk(expr: &Expression) -> bool {
+        match expr {
+            Expression::WindowFunction { .. } => true,
+            Expression::Binary { left, right, .. } => walk(left) || walk(right),
+            Expression::Unary { operand, .. } => walk(operand),
+            Expression::Function(call) => call.args.iter().any(walk),
+            _ => false,
+        }
+    }
+    select.select_list.iter().any(|item| match item {
+        SelectItem::Expression { expr, .. } => walk(expr),
+        _ => false,
+    })
 }
 
 /// Whether the select list or HAVING clause calls an aggregate.
@@ -426,6 +475,10 @@ fn evaluate_over_group(
                 SqlValue::Null
             } else if inputs.iter().all(|v| as_i64(v).is_some()) {
                 SqlValue::BigInt(inputs.iter().filter_map(as_i64).sum())
+            } else if inputs.iter().any(|v| matches!(v, SqlValue::Decimal(_)))
+                && inputs.iter().all(|v| as_decimal(v).is_some())
+            {
+                SqlValue::Decimal(inputs.iter().filter_map(as_decimal).sum())
             } else {
                 SqlValue::DoublePrecision(inputs.iter().filter_map(as_f64).sum())
             }
@@ -590,7 +643,27 @@ fn as_f64(value: &SqlValue) -> Option<f64> {
     match value {
         SqlValue::Real(n) => Some(f64::from(*n)),
         SqlValue::DoublePrecision(n) => Some(*n),
+        // An exact decimal is a number: without this an aggregate over a
+        // `NUMERIC` column summed nothing at all.
+        SqlValue::Decimal(n) => n.to_string().parse().ok(),
         other => as_i64(other).map(|n| n as f64),
+    }
+}
+
+/// Sum values exactly when every one of them is exact.
+///
+/// `SUM` over a `NUMERIC` column must not go through binary floating point:
+/// that is the reason the column was declared `NUMERIC`.
+fn as_decimal(value: &SqlValue) -> Option<rust_decimal::Decimal> {
+    use std::str::FromStr;
+    match value {
+        SqlValue::Decimal(n) => Some(*n),
+        SqlValue::SmallInt(n) => Some(rust_decimal::Decimal::from(*n)),
+        SqlValue::Integer(n) => Some(rust_decimal::Decimal::from(*n)),
+        SqlValue::BigInt(n) => Some(rust_decimal::Decimal::from(*n)),
+        SqlValue::Real(n) => rust_decimal::Decimal::from_str(&n.to_string()).ok(),
+        SqlValue::DoublePrecision(n) => rust_decimal::Decimal::from_str(&n.to_string()).ok(),
+        _ => None,
     }
 }
 

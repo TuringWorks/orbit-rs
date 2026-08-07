@@ -1224,6 +1224,11 @@ pub async fn describe_table(
         ColumnType::Json => "json".to_string(),
         ColumnType::Timestamp => "timestamp".to_string(),
         ColumnType::Double => "double precision".to_string(),
+        ColumnType::Numeric { precision, scale } => match (precision, scale) {
+            (Some(p), Some(s)) => format!("numeric({p},{s})"),
+            (Some(p), None) => format!("numeric({p})"),
+            _ => "numeric".to_string(),
+        },
     };
 
     let description = TableDescription {

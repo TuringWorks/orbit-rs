@@ -264,6 +264,11 @@ impl OrbitMcpIntegration {
                     ColumnType::Boolean => "BOOLEAN".to_string(),
                     ColumnType::Json => "JSON".to_string(),
                     ColumnType::Double => "DOUBLE PRECISION".to_string(),
+                    ColumnType::Numeric { precision, scale } => match (precision, scale) {
+                        (Some(p), Some(s)) => format!("NUMERIC({p},{s})"),
+                        (Some(p), None) => format!("NUMERIC({p})"),
+                        _ => "NUMERIC".to_string(),
+                    },
                     ColumnType::Timestamp => "TIMESTAMP".to_string(),
                 };
 

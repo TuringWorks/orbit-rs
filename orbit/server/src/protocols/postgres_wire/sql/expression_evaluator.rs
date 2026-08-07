@@ -28,6 +28,43 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
+/// How many distinct patterns to keep compiled.
+///
+/// A cache that never evicts is a leak with a long fuse: patterns come from
+/// user queries, so the set is unbounded. This is large enough that a real
+/// workload's patterns all stay resident and small enough to be irrelevant.
+const PATTERN_CACHE_LIMIT: usize = 256;
+
+thread_local! {
+    /// Compiled regexes, keyed by their source. Per-thread so a lookup costs
+    /// no synchronisation; a duplicate compile on another thread is cheaper
+    /// than contending on a shared lock.
+    static PATTERN_CACHE: std::cell::RefCell<HashMap<String, Regex>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// The compiled form of `pattern`, compiling it only the first time.
+///
+/// Returns `None` when the pattern is not a valid regex, leaving the caller to
+/// fall back to a non-regex match.
+fn compiled_pattern(pattern: &str) -> Option<Regex> {
+    PATTERN_CACHE.with(|cache| {
+        if let Some(compiled) = cache.borrow().get(pattern) {
+            return Some(compiled.clone());
+        }
+        let compiled = Regex::new(pattern).ok()?;
+        let mut cache = cache.borrow_mut();
+        // Wholesale clearing rather than an eviction policy: the cache exists
+        // to make a repeated pattern free, and any workload that overflows it
+        // is already not the case being optimised.
+        if cache.len() >= PATTERN_CACHE_LIMIT {
+            cache.clear();
+        }
+        cache.insert(pattern.to_string(), compiled.clone());
+        Some(compiled)
+    })
+}
+
 #[cfg(feature = "lua-mlua")]
 use crate::lua::udf_registry::{SqlValue as UdfSqlValue, UdfRegistry};
 
@@ -1164,6 +1201,17 @@ impl ExpressionEvaluator {
                     }
                 }
 
+                // A stored PL/pgSQL function whose body needs no database can
+                // be run right here, which is what makes `SELECT f(id) FROM t`
+                // and `WHERE f(id) = 4` work at all.
+                let stored = crate::protocols::postgres_wire::stored_functions::candidates(
+                    &func_name,
+                    args.len(),
+                );
+                if !stored.is_empty() {
+                    return call_stored_function(&func_name, &stored, &args);
+                }
+
                 Err(ProtocolError::not_implemented("Function", &func_name))
             }
         }
@@ -1430,6 +1478,30 @@ impl ExpressionEvaluator {
         }
 
         match (left, right) {
+            // An exact decimal on either side keeps the result exact. Without
+            // this, arithmetic on a `NUMERIC` column had no arm at all and
+            // `SET amt = amt + 1` failed.
+            (SqlValue::Decimal(_), _) | (_, SqlValue::Decimal(_))
+                if decimal_of(left).is_some() && decimal_of(right).is_some() =>
+            {
+                let (a, b) = (
+                    decimal_of(left).unwrap_or_default(),
+                    decimal_of(right).unwrap_or_default(),
+                );
+                match op {
+                    "+" => Ok(SqlValue::Decimal(a + b)),
+                    "-" => Ok(SqlValue::Decimal(a - b)),
+                    "*" => Ok(SqlValue::Decimal(a * b)),
+                    "/" | "%" if b.is_zero() => {
+                        Err(ProtocolError::PostgresError("Division by zero".to_string()))
+                    }
+                    "/" => Ok(SqlValue::Decimal(a / b)),
+                    "%" => Ok(SqlValue::Decimal(a % b)),
+                    other => Err(ProtocolError::PostgresError(format!(
+                        "Unknown arithmetic operator: {other}"
+                    ))),
+                }
+            }
             (SqlValue::Integer(a), SqlValue::Integer(b)) => match op {
                 "+" => Ok(SqlValue::Integer(a + b)),
                 "-" => Ok(SqlValue::Integer(a - b)),
@@ -1587,6 +1659,67 @@ impl ExpressionEvaluator {
                         "Cannot perform operation {op} on timestamp with timezone and interval"
                     ))),
                 }
+            }
+
+            // `date + interval` is a timestamp in PostgreSQL, and `date +
+            // integer` is a date. Neither existed: only the timestamp forms
+            // did, so `DATE '2024-01-01' + INTERVAL '1 day'` — the way anyone
+            // writes it — failed.
+            (SqlValue::Date(date), SqlValue::Interval(interval)) => match op {
+                "+" | "-" => {
+                    let at_midnight = date
+                        .and_hms_opt(0, 0, 0)
+                        .ok_or_else(|| ProtocolError::PostgresError("invalid date".to_string()))?;
+                    // PostgreSQL widens `date + interval` to a timestamp
+                    // rather than keeping a date, even when the interval is a
+                    // whole number of days.
+                    let _ = interval;
+                    self.arithmetic_op(&SqlValue::Timestamp(at_midnight), right, op)
+                }
+                other => Err(ProtocolError::PostgresError(format!(
+                    "Cannot perform operation {other} on date and interval"
+                ))),
+            },
+
+            (
+                SqlValue::Date(date),
+                SqlValue::Integer(_) | SqlValue::BigInt(_) | SqlValue::SmallInt(_),
+            ) => {
+                let days = match right {
+                    SqlValue::Integer(v) => i64::from(*v),
+                    SqlValue::BigInt(v) => *v,
+                    SqlValue::SmallInt(v) => i64::from(*v),
+                    _ => unreachable!("guarded by the pattern"),
+                };
+                let moved = match op {
+                    "+" => *date + chrono::Duration::days(days),
+                    "-" => *date - chrono::Duration::days(days),
+                    other => {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "Cannot perform operation {other} on date and integer"
+                        )))
+                    }
+                };
+                Ok(SqlValue::Date(moved))
+            }
+
+            // `date - date` is the number of days between them.
+            (SqlValue::Date(left_date), SqlValue::Date(right_date)) if op == "-" => Ok(
+                SqlValue::Integer((*left_date - *right_date).num_days() as i32),
+            ),
+
+            (SqlValue::Interval(left_interval), SqlValue::Interval(right_interval))
+                if matches!(op, "+" | "-") =>
+            {
+                let sign = if op == "+" { 1 } else { -1 };
+                Ok(SqlValue::Interval(
+                    crate::protocols::postgres_wire::sql::types::PostgresInterval {
+                        months: left_interval.months + sign * right_interval.months,
+                        days: left_interval.days + sign * right_interval.days,
+                        microseconds: left_interval.microseconds
+                            + i64::from(sign) * right_interval.microseconds,
+                    },
+                ))
             }
 
             _ => Err(ProtocolError::PostgresError(format!(
@@ -6401,13 +6534,15 @@ impl ExpressionEvaluator {
             return text_to_match == pattern_to_match;
         }
 
-        // Try regex matching
-        match regex::Regex::new(&full_pattern) {
-            Ok(re) => re.is_match(&text_to_match),
-            Err(_) => {
-                // Fallback to simple matching if regex fails
-                self.simple_like_match(&text_to_match, &pattern_to_match)
-            }
+        // Try regex matching. The pattern is the same for every row of a
+        // scan, so compiling it here — as this used to, once per row — is the
+        // whole cost of a LIKE: `WHERE note LIKE '%x%'` over 20,000 rows took
+        // 19.0s against 0.26s for an equality on the same column, ~0.94ms per
+        // row, all of it in `Regex::new`.
+        match compiled_pattern(&full_pattern) {
+            Some(re) => re.is_match(&text_to_match),
+            // Fallback to simple matching if regex fails
+            None => self.simple_like_match(&text_to_match, &pattern_to_match),
         }
     }
 
@@ -9491,5 +9626,181 @@ impl ExpressionEvaluator {
 impl Default for ExpressionEvaluator {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Run a pure stored function over already-evaluated arguments.
+///
+/// The interpreter is async, but a pure body never awaits anything real: its
+/// host answers expressions synchronously and refuses SQL outright, so polling
+/// it to completion here cannot park. That is what lets a synchronous
+/// evaluator call one without blocking a runtime worker.
+///
+/// # Errors
+/// Returns whatever the body failed with.
+fn call_stored_function(
+    name: &str,
+    stored: &[crate::protocols::postgres_wire::stored_functions::PureFunction],
+    arguments: &[SqlValue],
+) -> ProtocolResult<SqlValue> {
+    use crate::protocols::postgres_wire::{plpgsql, plpgsql_function};
+
+    // Which overload the call means is decided by the arguments' own types. A
+    // value carries its type here — `SqlValue::BigInt` is not
+    // `SqlValue::Integer` — so a column's declared type reaches the choice
+    // rather than being guessed from how the value prints.
+    let argument_types: Vec<String> = arguments.iter().map(type_name_of).collect();
+    let signatures: Vec<Vec<plpgsql_function::Parameter>> =
+        stored.iter().map(|f| f.parameters.clone()).collect();
+    let borrowed: Vec<&str> = argument_types.iter().map(String::as_str).collect();
+    let chosen = plpgsql_function::resolve(name, &signatures, &borrowed)?;
+    let stored = &stored[chosen];
+
+    let inputs = plpgsql_function::inputs(&stored.parameters);
+    let mut scope = HashMap::new();
+    for (parameter, value) in inputs.iter().zip(arguments) {
+        let text = match value {
+            SqlValue::Null => None,
+            other => Some(sql_value_to_plain_text(other)),
+        };
+        scope.insert(
+            parameter.name.clone(),
+            plpgsql::Value::typed(text, &parameter.sql_type),
+        );
+    }
+
+    let host = PureHost;
+    let returned = futures::executor::block_on(plpgsql::execute(&stored.block, &host, scope))?;
+    Ok(match returned.scalar() {
+        None => SqlValue::Null,
+        Some(text) => text
+            .parse::<i64>()
+            .map(SqlValue::BigInt)
+            .or_else(|_| text.parse::<f64>().map(SqlValue::DoublePrecision))
+            .unwrap_or(SqlValue::Text(text)),
+    })
+}
+
+/// A value as an exact decimal, when it is one.
+fn decimal_of(value: &SqlValue) -> Option<rust_decimal::Decimal> {
+    use std::str::FromStr;
+    match value {
+        SqlValue::Decimal(n) => Some(*n),
+        SqlValue::SmallInt(n) => Some(rust_decimal::Decimal::from(*n)),
+        SqlValue::Integer(n) => Some(rust_decimal::Decimal::from(*n)),
+        SqlValue::BigInt(n) => Some(rust_decimal::Decimal::from(*n)),
+        SqlValue::Real(n) => rust_decimal::Decimal::from_str(&n.to_string()).ok(),
+        SqlValue::DoublePrecision(n) => rust_decimal::Decimal::from_str(&n.to_string()).ok(),
+        _ => None,
+    }
+}
+
+/// The canonical type of a value, for choosing between overloads.
+///
+/// This is the one place a column's declared type is available inside a query:
+/// the storage layer produced a typed `SqlValue`, so `int8` and `int4` are
+/// still distinguishable here even though they print the same.
+fn type_name_of(value: &SqlValue) -> String {
+    match value {
+        SqlValue::Null => crate::protocols::postgres_wire::plpgsql_function::UNKNOWN.to_string(),
+        SqlValue::Boolean(_) => "bool".to_string(),
+        SqlValue::SmallInt(_) => "int2".to_string(),
+        SqlValue::Integer(_) => "int4".to_string(),
+        SqlValue::BigInt(_) => "int8".to_string(),
+        SqlValue::Real(_) => "float4".to_string(),
+        SqlValue::DoublePrecision(_) => "float8".to_string(),
+        SqlValue::Decimal(_) => "numeric".to_string(),
+        SqlValue::Char(_) => "bpchar".to_string(),
+        SqlValue::Varchar(_) => "varchar".to_string(),
+        SqlValue::Text(_) | SqlValue::Name(_) => "text".to_string(),
+        SqlValue::Date(_) => "date".to_string(),
+        SqlValue::Time(_) => "time".to_string(),
+        SqlValue::Timestamp(_) => "timestamp".to_string(),
+        SqlValue::TimestampWithTimezone(_) | SqlValue::TimeWithTimezone(_) => {
+            "timestamptz".to_string()
+        }
+        // Anything else keeps its own name, which matches only itself.
+        other => format!("{:?}", other.sql_type()).to_lowercase(),
+    }
+}
+
+/// The value as it would be written without quotes.
+fn sql_value_to_plain_text(value: &SqlValue) -> String {
+    match value {
+        SqlValue::Text(t) | SqlValue::Varchar(t) | SqlValue::Char(t) => t.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// A host for a body that must not touch the database.
+struct PureHost;
+
+#[async_trait::async_trait]
+impl crate::protocols::postgres_wire::plpgsql::PlPgSqlHost for PureHost {
+    async fn evaluate(&self, expression: &str) -> ProtocolResult<Option<String>> {
+        // The expression is parsed and evaluated with no row in scope, which
+        // is all a pure body's expressions need: its variables were already
+        // substituted into the text.
+        let statement = crate::protocols::postgres_wire::sql::parser::SqlParser::new()
+            .parse(&format!("SELECT {expression}"))
+            .map_err(|e| ProtocolError::PostgresError(e.to_string()))?;
+        let crate::protocols::postgres_wire::sql::ast::Statement::Select(select) = statement else {
+            return Err(ProtocolError::PostgresError(format!(
+                "cannot evaluate {expression:?}"
+            )));
+        };
+        let Some(crate::protocols::postgres_wire::sql::ast::SelectItem::Expression {
+            expr, ..
+        }) = select.select_list.first()
+        else {
+            return Err(ProtocolError::PostgresError(format!(
+                "cannot evaluate {expression:?}"
+            )));
+        };
+
+        let mut evaluator = ExpressionEvaluator::new();
+        let context = EvaluationContext::empty();
+        Ok(match evaluator.evaluate(expr, &context)? {
+            SqlValue::Null => None,
+            other => Some(sql_value_to_plain_text(&other)),
+        })
+    }
+
+    async fn run(&self, _sql: &str) -> ProtocolResult<()> {
+        Err(ProtocolError::PostgresError(
+            "a function that runs SQL cannot be called from inside a query".to_string(),
+        ))
+    }
+
+    async fn query(
+        &self,
+        _sql: &str,
+    ) -> ProtocolResult<crate::protocols::postgres_wire::plpgsql::Rows> {
+        Err(ProtocolError::PostgresError(
+            "a function that runs a query cannot be called from inside a query".to_string(),
+        ))
+    }
+
+    async fn column_type(&self, _table: &str, _column: &str) -> ProtocolResult<Option<String>> {
+        Ok(None)
+    }
+
+    async fn row_columns(&self, _table: &str) -> ProtocolResult<Vec<String>> {
+        Ok(Vec::new())
+    }
+
+    async fn run_protected(
+        &self,
+        block: &crate::protocols::postgres_wire::plpgsql::Block,
+        state: crate::protocols::postgres_wire::plpgsql::State,
+    ) -> ProtocolResult<(
+        Result<crate::protocols::postgres_wire::plpgsql::Returned, ProtocolError>,
+        crate::protocols::postgres_wire::plpgsql::State,
+    )> {
+        // Nothing was written, so there is nothing to undo.
+        let mut state = state;
+        let outcome =
+            crate::protocols::postgres_wire::plpgsql::execute_in(block, self, &mut state).await;
+        Ok((outcome, state))
     }
 }

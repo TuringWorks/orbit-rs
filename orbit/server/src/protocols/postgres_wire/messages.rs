@@ -67,6 +67,14 @@ pub enum FrontendMessage {
     Query {
         query: String,
     },
+    /// Cancel the query running on the connection with this key.
+    ///
+    /// Arrives on a connection of its own, in the startup packet's shape
+    /// rather than as a tagged message, which is why it is parsed separately.
+    CancelRequest {
+        process_id: i32,
+        secret_key: Vec<u8>,
+    },
     /// Parse (prepared statement)
     Parse {
         statement_name: String,
@@ -128,6 +136,10 @@ pub enum FrontendMessage {
     FunctionCall {
         oid: i32,
         args: Vec<Option<Bytes>>,
+        /// Format of each argument: 0 text, 1 binary.
+        arg_formats: Vec<i16>,
+        /// Format wanted for the result.
+        result_format: i16,
     },
 }
 
@@ -290,8 +302,18 @@ impl FrontendMessage {
             if len >= 8 && buf.len() >= len {
                 // Check if this looks like a startup message
                 let protocol_version = (&buf[4..8]).get_i32();
-                if protocol_version == 196608 || protocol_version == 80877103 {
-                    // Valid startup or SSL request
+                // Every packet in the startup shape: a protocol-3 startup, and
+                // the SSL, GSS-encryption and cancel requests. Listing only
+                // two of them left a cancel request to be read as a tagged
+                // message, where its first length byte became the type byte
+                // and the packet was silently discarded.
+                let major = protocol_version >> 16;
+                use crate::protocols::postgres_server::pre_startup;
+                if major == 3
+                    || protocol_version == pre_startup::CANCEL_REQUEST
+                    || protocol_version == pre_startup::SSL_REQUEST
+                    || protocol_version == pre_startup::GSSENC_REQUEST
+                {
                     return Self::parse_startup(buf);
                 }
             }
@@ -362,6 +384,19 @@ impl FrontendMessage {
             buf.advance(len);
             // Return SSL request message
             return Ok(Some(FrontendMessage::SSLRequest));
+        }
+
+        // A cancel request has the startup packet's shape but carries a key
+        // rather than parameters. Reading it as a startup message would have
+        // produced a connection with no user and no database.
+        if protocol_version == crate::protocols::postgres_server::pre_startup::CANCEL_REQUEST {
+            let process_id = cursor.get_i32();
+            let secret_key = buf[12..len].to_vec();
+            buf.advance(len);
+            return Ok(Some(FrontendMessage::CancelRequest {
+                process_id,
+                secret_key,
+            }));
         }
 
         let mut parameters = HashMap::new();
@@ -479,28 +514,74 @@ impl FrontendMessage {
     }
 
     /// Parse function call
+    ///
+    /// The message carries an argument *format code* array between the OID and
+    /// the arguments, and a result format code after them. Reading the
+    /// argument count where the format count sits — as this used to — misreads
+    /// every call a real client sends.
     fn parse_function_call(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
         let oid = cursor.get_i32();
-        let num_args = cursor.get_i16();
 
+        let num_formats = cursor.get_i16();
+        if num_formats < 0 {
+            return Err(ProtocolError::PostgresError(
+                "negative format count in FunctionCall".to_string(),
+            ));
+        }
+        let mut arg_formats = Vec::with_capacity(num_formats as usize);
+        for _ in 0..num_formats {
+            if cursor.remaining() < 2 {
+                return Err(ProtocolError::PostgresError(
+                    "Unexpected EOF in FunctionCall format codes".to_string(),
+                ));
+            }
+            arg_formats.push(cursor.get_i16());
+        }
+
+        let num_args = cursor.get_i16();
+        if num_args < 0 {
+            return Err(ProtocolError::PostgresError(
+                "negative argument count in FunctionCall".to_string(),
+            ));
+        }
         let mut args = Vec::with_capacity(num_args as usize);
         for _ in 0..num_args {
+            if cursor.remaining() < 4 {
+                return Err(ProtocolError::PostgresError(
+                    "Unexpected EOF in FunctionCall args".to_string(),
+                ));
+            }
             let arg_len = cursor.get_i32();
             if arg_len == -1 {
                 args.push(None);
-            } else {
-                let mut arg_data = vec![0u8; arg_len as usize];
-                if cursor.remaining() < arg_len as usize {
-                    return Err(ProtocolError::PostgresError(
-                        "Unexpected EOF in FunctionCall args".to_string(),
-                    ));
-                }
-                cursor.copy_to_slice(&mut arg_data);
-                args.push(Some(Bytes::from(arg_data)));
+                continue;
             }
+            let wanted = usize::try_from(arg_len).map_err(|_| {
+                ProtocolError::PostgresError("negative argument length".to_string())
+            })?;
+            if cursor.remaining() < wanted {
+                return Err(ProtocolError::PostgresError(
+                    "Unexpected EOF in FunctionCall args".to_string(),
+                ));
+            }
+            let mut arg_data = vec![0u8; wanted];
+            cursor.copy_to_slice(&mut arg_data);
+            args.push(Some(Bytes::from(arg_data)));
         }
 
-        Ok(FrontendMessage::FunctionCall { oid, args })
+        // A client that omits the trailing result format means text.
+        let result_format = if cursor.remaining() >= 2 {
+            cursor.get_i16()
+        } else {
+            0
+        };
+
+        Ok(FrontendMessage::FunctionCall {
+            oid,
+            args,
+            arg_formats,
+            result_format,
+        })
     }
 
     /// Parse password or SASL response
@@ -888,6 +969,10 @@ pub mod type_oids {
     pub const INT2: i32 = 21;
     pub const INT4: i32 = 23;
     pub const TEXT: i32 = 25;
+    pub const NUMERIC: i32 = 1700;
+    pub const BPCHAR: i32 = 1042;
+    pub const DATE: i32 = 1082;
+    pub const TIME: i32 = 1083;
     pub const FLOAT4: i32 = 700;
     pub const FLOAT8: i32 = 701;
     pub const JSON: i32 = 114;
@@ -910,4 +995,49 @@ pub mod type_oids {
     pub const VECTOR: i32 = 16385; // vector type
     pub const HALFVEC: i32 = 16386; // halfvec type (half precision)
     pub const SPARSEVEC: i32 = 16387; // sparsevec type
+}
+
+#[cfg(test)]
+mod fastpath_message_tests {
+    use super::*;
+
+    #[test]
+    fn a_function_call_keeps_its_formats_and_result_format() {
+        // oid, one format code (binary), one argument of 4 bytes, result
+        // format binary.
+        let mut body = Vec::new();
+        body.extend_from_slice(&7i32.to_be_bytes());
+        body.extend_from_slice(&1i16.to_be_bytes());
+        body.extend_from_slice(&1i16.to_be_bytes());
+        body.extend_from_slice(&1i16.to_be_bytes());
+        body.extend_from_slice(&4i32.to_be_bytes());
+        body.extend_from_slice(&42i32.to_be_bytes());
+        body.extend_from_slice(&1i16.to_be_bytes());
+
+        let mut framed = vec![b'F'];
+        framed.extend_from_slice(&((body.len() + 4) as i32).to_be_bytes());
+        framed.extend_from_slice(&body);
+
+        match FrontendMessage::parse(&mut BytesMut::from(&framed[..]))
+            .expect("parses")
+            .expect("a message")
+        {
+            FrontendMessage::FunctionCall {
+                oid,
+                args,
+                arg_formats,
+                result_format,
+            } => {
+                assert_eq!(oid, 7);
+                assert_eq!(arg_formats, vec![1]);
+                assert_eq!(args.len(), 1);
+                assert_eq!(
+                    &args[0].as_ref().expect("an argument")[..],
+                    &42i32.to_be_bytes()
+                );
+                assert_eq!(result_format, 1, "the result format was dropped");
+            }
+            other => panic!("expected a FunctionCall, got {other:?}"),
+        }
+    }
 }

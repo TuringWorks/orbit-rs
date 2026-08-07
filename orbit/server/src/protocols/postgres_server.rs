@@ -120,11 +120,13 @@ impl Default for PostgresServer {
 /// Request codes a client may send before the startup message.
 ///
 /// These are sent as a bare `length + code` pair with no message-type byte.
-mod pre_startup {
+pub mod pre_startup {
     /// `SSLRequest`: asks whether the server will speak TLS.
     pub const SSL_REQUEST: i32 = 80_877_103;
     /// `GSSENCRequest`: asks for GSSAPI encryption, which is not supported.
     pub const GSSENC_REQUEST: i32 = 80_877_104;
+    /// A request to cancel the query running on another connection.
+    pub const CANCEL_REQUEST: i32 = 80_877_102;
 }
 
 /// Answer any pre-startup requests, upgrading to TLS if one is asked for and
