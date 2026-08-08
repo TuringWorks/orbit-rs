@@ -1357,10 +1357,16 @@ pub struct WarmTierConfig {
     /// Bloom filter bits per key
     pub bloom_bits_per_key: u32,
 
-    /// Enable WAL
+    /// Write to the write-ahead log.
+    ///
+    /// With this off, a crash loses every write since the last memtable flush.
     pub enable_wal: bool,
 
-    /// Sync WAL on write
+    /// Flush the write-ahead log to the physical disk before acknowledging a
+    /// write.
+    ///
+    /// With this off, an acknowledged write survives a process crash — the
+    /// kernel still holds the buffer — but not a power loss or kernel panic.
     pub sync_wal: bool,
 }
 
@@ -1938,7 +1944,7 @@ impl Default for WarmTierConfig {
             enable_bloom_filters: true,
             bloom_bits_per_key: 10,
             enable_wal: true,
-            sync_wal: false,
+            sync_wal: true,
         }
     }
 }

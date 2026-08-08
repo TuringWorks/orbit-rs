@@ -42,7 +42,12 @@ metrics = "0.24"
 regex = "1.10"
 
 # Persistence
-rocksdb = { version = "0.22", default-features = false, optional = true }
+# lz4 and zstd are named by the shipped configuration's compression_algorithm;
+# without these features RocksDB refuses to open a database that asks for them.
+rocksdb = { version = "0.22", default-features = false, features = [
+    "lz4",
+    "zstd",
+], optional = true }
 sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "sqlite"] }
 
 # Apache Iceberg for cold tier storage

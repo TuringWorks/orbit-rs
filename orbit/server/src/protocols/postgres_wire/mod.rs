@@ -38,6 +38,10 @@ pub mod auth;
 pub mod domains;
 pub mod fastpath;
 pub mod graphrag_engine;
+/// GSSAPI/Kerberos authentication. Absent when the `gssapi` feature is off,
+/// which is also the only way to build without a GSSAPI library to link to.
+#[cfg(feature = "gssapi")]
+pub mod gssapi;
 pub mod jsonb;
 pub mod messages;
 #[cfg(feature = "storage-rocksdb")]

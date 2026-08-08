@@ -1154,6 +1154,7 @@ mod tests {
             max_scan_limit: 1000,
             // The point of the test: the persistent backend, not the memory one.
             use_memory_backend: false,
+            ..Default::default()
         };
 
         let schema = PersistentTableSchema {
@@ -1567,6 +1568,7 @@ mod persistent_storage_impl {
 
         /// Convert SqlValue to JsonValue for row data
         fn sql_value_to_json(value: &SqlValue) -> JsonValue {
+            use std::str::FromStr;
             match value {
                 SqlValue::Null => JsonValue::Null,
                 SqlValue::Boolean(b) => JsonValue::Bool(*b),
@@ -1583,6 +1585,14 @@ mod persistent_storage_impl {
                 SqlValue::Varchar(s) => JsonValue::String(s.clone()),
                 SqlValue::Char(s) => JsonValue::String(s.clone()),
                 SqlValue::Json(v) | SqlValue::Jsonb(v) => v.clone(),
+                // An exact decimal is stored as a number, not as its printed
+                // form. Falling through to the string case put `"10.00"` in a
+                // numeric column, so the row read back as text: comparisons
+                // stopped matching it and an update computed from it silently
+                // did nothing.
+                SqlValue::Decimal(d) => serde_json::Number::from_str(&d.to_string())
+                    .map(JsonValue::Number)
+                    .unwrap_or(JsonValue::Null),
                 _ => JsonValue::String(value.to_postgres_string()),
             }
         }
@@ -3104,6 +3114,7 @@ mod storage_provider_tests {
             max_scan_limit: 1000,
             // Use memory backend for testing - this avoids RocksDB setup
             use_memory_backend: true,
+            ..Default::default()
         };
         let integration = UnifiedStorageIntegration::with_config(config)
             .await

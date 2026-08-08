@@ -75,7 +75,19 @@ required-features = ["minio-tests"]
 bytes = "1.12.1"
 futures-util = "0.3.33"
 tokio-postgres = "0.7"
+# For SIGKILL in the crash-durability test: `Child::kill` sends SIGTERM, which
+# a graceful shutdown would catch, and catching it is what the test must not
+# allow.
+libc = "0.2"
+# The crash test derives its configuration from the shipped one rather than
+# hand-writing a minimal file, so it cannot drift out of shape as the schema
+# grows a required field.
+toml = "0.9"
 
 [[test]]
 name = "pg_conformance"
 path = "integration/pg_conformance.rs"
+
+[[test]]
+name = "pg_crash_durability"
+path = "integration/pg_crash_durability.rs"

@@ -389,8 +389,14 @@ write_buffer_mb = 64
 max_write_buffers = 3
 enable_bloom_filters = true
 bloom_bits_per_key = 10
+# Write-ahead log. With this off, a crash loses every write since the last
+# memtable flush.
 enable_wal = true
-sync_wal = false
+# Flush the log to the physical disk before a write is acknowledged. With this
+# off, an acknowledged write survives a process crash but not a power loss:
+# the record is still only in the operating system's page cache. Turning it off
+# trades durability for write throughput.
+sync_wal = true
 
 # Cold Tier: Cloud Object Storage (archival, cost-effective)
 [unified_storage.cold_tier]

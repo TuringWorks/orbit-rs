@@ -5,12 +5,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
-use super::auth::{AuthManager, AuthMethod, ScramAuth, UserStore};
+use super::auth::{configured_auth_method, AuthManager, AuthMethod, ScramAuth, UserStore};
 use super::messages::{
     type_oids, AuthenticationResponse, BackendMessage, FieldDescription, FrontendMessage,
-    TransactionStatus,
+    PasswordMessageKind, TransactionStatus,
 };
 use super::notifications::{NotificationHub, SessionNotifications};
 use super::query_engine::{QueryEngine, QueryResult};
@@ -72,6 +72,20 @@ pub struct PostgresWireProtocol {
     /// Needed to answer `Describe(Statement)`, which must report one type per
     /// parameter before the row description.
     statement_param_types: HashMap<String, Vec<i32>>,
+    /// Whether the message being handled belongs to the extended protocol.
+    ///
+    /// Only there does an error start skipping: a simple query synchronises
+    /// with its own `ReadyForQuery` and never sends `Sync`, so treating its
+    /// failures the same way left the connection discarding everything the
+    /// client sent next — including the queries that would have cleared it.
+    handling_extended: bool,
+    /// Whether an extended-protocol message has failed since the last `Sync`.
+    ///
+    /// The protocol requires everything after an error to be discarded until
+    /// the client synchronises. Without this the statements queued behind a
+    /// failure still ran, so a client pipelining writes had later ones applied
+    /// when it expected them skipped.
+    skip_until_sync: bool,
     portals: HashMap<String, (String, Vec<Option<bytes::Bytes>>)>,
     /// Result format codes requested by `Bind`, per portal.
     ///
@@ -97,6 +111,12 @@ pub struct PostgresWireProtocol {
     portal_rows: HashMap<String, PortalRows>,
     auth_manager: AuthManager,
     scram_auth: Option<ScramAuth>,
+    /// The half-finished GSSAPI handshake, once one has been asked for.
+    ///
+    /// Its presence is also what tells the message parser that a `'p'` message
+    /// on this connection is a token rather than a password.
+    #[cfg(feature = "gssapi")]
+    gss: Option<super::gssapi::Acceptor>,
     /// Writes issued inside the current transaction block.
     writes_in_transaction: u64,
     /// Contents of each table as it stood when the transaction block first
@@ -170,6 +190,11 @@ pub struct PostgresWireProtocol {
 struct CopyInState {
     /// Whether the stream is in the binary format rather than text.
     binary: bool,
+    /// Whether the text stream is CSV rather than tab-separated.
+    ///
+    /// Read as tabs, a CSV line arrived as one field and the load failed with
+    /// a column-count mismatch.
+    csv: bool,
     /// Bytes of a binary stream not yet forming a whole tuple.
     pending: BytesMut,
     /// Whether the fixed binary header has been consumed.
@@ -240,8 +265,7 @@ impl PostgresWireProtocol {
         // Initialize user store with a default user
         let user_store = UserStore::new();
         // TODO: In a real app, we wouldn't add this user here or we'd load from config
-        // Default: Enable SCRAM-SHA-256
-        let auth_method = AuthMethod::ScramSha256;
+        let auth_method = configured_auth_method();
         let auth_manager = AuthManager::new(auth_method, user_store);
 
         Self {
@@ -254,12 +278,16 @@ impl PostgresWireProtocol {
             secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             statement_param_types: HashMap::new(),
+            handling_extended: false,
+            skip_until_sync: false,
             portals: HashMap::new(),
             portal_result_formats: HashMap::new(),
             statement_columns: HashMap::new(),
             portal_rows: HashMap::new(),
             auth_manager,
             scram_auth: None,
+            #[cfg(feature = "gssapi")]
+            gss: None,
             transaction: TransactionState::Idle,
             writes_in_transaction: 0,
             transaction_snapshots: HashMap::new(),
@@ -290,7 +318,7 @@ impl PostgresWireProtocol {
     pub fn new_with_query_engine(query_engine: Arc<QueryEngine>) -> Self {
         tracing::debug!("wire protocol session created with a custom query engine");
         let user_store = UserStore::new();
-        let auth_method = AuthMethod::ScramSha256;
+        let auth_method = configured_auth_method();
         let auth_manager = AuthManager::new(auth_method, user_store);
 
         Self {
@@ -303,12 +331,16 @@ impl PostgresWireProtocol {
             secret_key: Self::random_secret_key(),
             prepared_statements: HashMap::new(),
             statement_param_types: HashMap::new(),
+            handling_extended: false,
+            skip_until_sync: false,
             portals: HashMap::new(),
             portal_result_formats: HashMap::new(),
             statement_columns: HashMap::new(),
             portal_rows: HashMap::new(),
             auth_manager,
             scram_auth: None,
+            #[cfg(feature = "gssapi")]
+            gss: None,
             transaction: TransactionState::Idle,
             writes_in_transaction: 0,
             transaction_snapshots: HashMap::new(),
@@ -360,6 +392,22 @@ impl PostgresWireProtocol {
     /// Recognises the transaction-control statements themselves; everything
     /// else leaves the state alone.
     fn note_statement(&mut self, sql: &str) {
+        // One message may carry several statements. Reading only the first
+        // word of the whole thing meant `BEGIN; ...; COMMIT` was seen as a
+        // `BEGIN` alone, and the session was left holding a transaction open
+        // that the client had already committed.
+        let statements = super::query_engine::split_statements(sql);
+        if statements.len() > 1 {
+            for statement in statements {
+                self.note_one_statement(&statement);
+            }
+            return;
+        }
+        self.note_one_statement(sql);
+    }
+
+    /// Update the transaction state from a single statement.
+    fn note_one_statement(&mut self, sql: &str) {
         let head: String = sql
             .trim_start()
             .chars()
@@ -1312,7 +1360,7 @@ impl PostgresWireProtocol {
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
     {
-        while let Some(msg) = FrontendMessage::parse(read_buf)? {
+        while let Some(msg) = FrontendMessage::parse_as(read_buf, self.password_message_kind())? {
             debug!("Received message: {:?}", msg);
 
             match self.process_single_message(msg, write_buf).await {
@@ -1381,6 +1429,25 @@ impl PostgresWireProtocol {
         msg: FrontendMessage,
         buf: &mut BytesMut,
     ) -> ProtocolResult<bool> {
+        // Everything between a failure and the client's `Sync` is discarded,
+        // which is what makes a pipeline stop at its first error rather than
+        // running the rest of it.
+        // Only the extended protocol enters the skipping state, and only its
+        // own messages are discarded by it. A copy stream is exempt as well:
+        // its `CopyData`/`CopyDone` are what end the stream, and discarding
+        // them leaves both sides waiting forever.
+        self.handling_extended = matches!(
+            msg,
+            FrontendMessage::Parse { .. }
+                | FrontendMessage::Bind { .. }
+                | FrontendMessage::Execute { .. }
+                | FrontendMessage::Describe { .. }
+                | FrontendMessage::Close { .. }
+        );
+        if self.skip_until_sync && self.copy_in.is_none() && self.handling_extended {
+            return Ok(true);
+        }
+
         match msg {
             FrontendMessage::Startup {
                 protocol_version,
@@ -1400,7 +1467,8 @@ impl PostgresWireProtocol {
                 query,
                 param_types,
             } => {
-                self.handle_parse(&statement_name, &query, param_types, buf)?;
+                self.handle_parse(&statement_name, &query, param_types, buf)
+                    .await?;
             }
             FrontendMessage::Bind {
                 portal,
@@ -1434,6 +1502,7 @@ impl PostgresWireProtocol {
                 // ReadyForQuery into the middle of the stream, which is the
                 // "unexpected message from server" the client then reported.
                 if self.copy_in.is_none() {
+                    self.skip_until_sync = false;
                     self.deliver_pending_notifications(buf);
                     BackendMessage::ReadyForQuery {
                         status: self.transaction_status(),
@@ -1464,6 +1533,9 @@ impl PostgresWireProtocol {
             FrontendMessage::SASLInitialResponse { mechanism, data } => {
                 self.handle_sasl_initial_response(&mechanism, data, buf)
                     .await?;
+            }
+            FrontendMessage::GSSResponse { data } => {
+                self.handle_gss_response(&data, buf).await?;
             }
             FrontendMessage::SASLResponse { data } => {
                 self.handle_sasl_response(data, buf).await?;
@@ -1579,6 +1651,9 @@ impl PostgresWireProtocol {
         }
 
         let response = self.auth_manager.get_initial_auth_response();
+        if matches!(response, AuthenticationResponse::GSS) && !self.begin_gss(buf) {
+            return Ok(());
+        }
         BackendMessage::Authentication(response.clone()).encode(buf);
 
         if let AuthenticationResponse::Ok = response {
@@ -1586,6 +1661,40 @@ impl PostgresWireProtocol {
         }
 
         Ok(())
+    }
+
+    /// How a `'p'` message is to be read on this connection.
+    fn password_message_kind(&self) -> PasswordMessageKind {
+        #[cfg(feature = "gssapi")]
+        if self.gss.is_some() {
+            return PasswordMessageKind::GssToken;
+        }
+        PasswordMessageKind::Credential
+    }
+
+    /// Start a GSSAPI handshake, reporting whether it can proceed.
+    ///
+    /// Returns `false` — having already written an error — when this build
+    /// cannot do GSSAPI at all. Announcing `AuthenticationGSS` from a server
+    /// with no mechanism behind it would leave the client waiting on a
+    /// handshake that can never answer.
+    #[allow(unused_variables)]
+    fn begin_gss(&mut self, buf: &mut BytesMut) -> bool {
+        #[cfg(feature = "gssapi")]
+        {
+            self.gss = Some(super::gssapi::Acceptor::new());
+            true
+        }
+        #[cfg(not(feature = "gssapi"))]
+        {
+            let error = ProtocolError::SqlState {
+                code: "0A000",
+                message: "GSSAPI authentication is configured but this server was built without it"
+                    .to_string(),
+            };
+            self.send_error_for(buf, &error);
+            false
+        }
     }
 
     /// The version this server reports, in `ParameterStatus` and in `SHOW`.
@@ -1674,6 +1783,103 @@ impl PostgresWireProtocol {
         } else {
             self.send_error(buf, "Password authentication failed");
             Ok(()) // Don't terminate, just error? Usually terminate on auth fail.
+        }
+    }
+
+    /// Handle one GSSAPI token from the client.
+    ///
+    /// Each token is fed to the acceptor, which either asks for another round
+    /// or establishes the context and names the principal. The principal is
+    /// then checked against the user in the startup packet before the session
+    /// is let in — the Kerberos library says *who* the caller is, and nothing
+    /// but this check says whether that caller may be this user.
+    #[allow(unused_variables)]
+    async fn handle_gss_response(&mut self, data: &[u8], buf: &mut BytesMut) -> ProtocolResult<()> {
+        #[cfg(not(feature = "gssapi"))]
+        {
+            let error = ProtocolError::SqlState {
+                code: "0A000",
+                message: "GSSAPI authentication is not supported by this build".to_string(),
+            };
+            self.send_error_for(buf, &error);
+            Ok(())
+        }
+        #[cfg(feature = "gssapi")]
+        {
+            use super::gssapi::{AcceptStep, NameMapping};
+
+            let Some(acceptor) = self.gss.as_mut() else {
+                // A token with no handshake open is a client out of step with
+                // the protocol; it is not a password, so it must not be tried
+                // as one.
+                let error = ProtocolError::SqlState {
+                    code: "08P01",
+                    message: "unexpected GSSAPI token: no authentication is in progress"
+                        .to_string(),
+                };
+                self.send_error_for(buf, &error);
+                return Ok(());
+            };
+
+            let step = match acceptor.step(data) {
+                Ok(step) => step,
+                Err(error) => {
+                    // The handshake is over either way; keeping the acceptor
+                    // would let a client retry against a poisoned context.
+                    self.gss = None;
+                    // Sent through the error path that keeps the SQLSTATE:
+                    // `send_error` re-derives one from the prose, and a
+                    // rejected ticket came back as XX000 `internal_error`,
+                    // which tells a client to retry something that will never
+                    // succeed instead of to fix its credentials.
+                    self.send_error_for(buf, &error);
+                    return Ok(());
+                }
+            };
+
+            match step {
+                AcceptStep::Continue(token) => {
+                    BackendMessage::Authentication(AuthenticationResponse::GSSContinue {
+                        data: bytes::Bytes::from(token),
+                    })
+                    .encode(buf);
+                    Ok(())
+                }
+                AcceptStep::Complete { token, principal } => {
+                    // Sent before `Ok`, and before the authorization check:
+                    // under mutual authentication this token is what proves
+                    // the server's identity, and a client that asked for it
+                    // is entitled to it even when the answer is then no.
+                    if let Some(token) = token {
+                        BackendMessage::Authentication(AuthenticationResponse::GSSContinue {
+                            data: bytes::Bytes::from(token),
+                        })
+                        .encode(buf);
+                    }
+                    self.gss = None;
+
+                    let requested = self.username.clone().unwrap_or_default();
+                    match NameMapping::from_env().authorize(&principal, &requested) {
+                        Ok(()) => {
+                            info!(%principal, user = %requested, "GSSAPI authentication succeeded");
+                            BackendMessage::Authentication(AuthenticationResponse::Ok).encode(buf);
+                            self.finish_authentication(buf);
+                        }
+                        Err(denial) => {
+                            warn!(%principal, user = %requested, "GSSAPI authentication refused");
+                            let error = ProtocolError::SqlState {
+                                // 28000 invalid_authorization_specification,
+                                // which is what PostgreSQL reports when a
+                                // login is refused.
+                                code: "28000",
+                                message: denial.message(),
+                            };
+                            self.send_error_for(buf, &error);
+                        }
+                    }
+                    Ok(())
+                }
+            }
         }
     }
 
@@ -1817,9 +2023,17 @@ impl PostgresWireProtocol {
         // block has failed. Answering them instead let a client believe work
         // done after the failure was part of the committed transaction.
         if self.transaction == TransactionState::Failed && !Self::ends_transaction(query) {
-            self.send_error(
+            // `25P02` is `in_failed_sql_transaction`, which is how a driver
+            // knows it must roll back rather than retry. Reported as `XX000`
+            // it was indistinguishable from the backend falling over.
+            self.send_error_for(
                 buf,
-                "current transaction is aborted, commands ignored until end of transaction block",
+                &ProtocolError::SqlState {
+                    code: "25P02",
+                    message: "current transaction is aborted, commands ignored until end of \
+                              transaction block"
+                        .to_string(),
+                },
             );
             BackendMessage::ReadyForQuery {
                 status: self.transaction_status(),
@@ -1981,7 +2195,7 @@ impl PostgresWireProtocol {
     }
 
     /// Handle parse message (prepared statement)
-    fn handle_parse(
+    async fn handle_parse(
         &mut self,
         statement_name: &str,
         query: &str,
@@ -1993,20 +2207,31 @@ impl PostgresWireProtocol {
         self.prepared_statements
             .insert(statement_name.to_string(), query.to_string());
 
-        // A client may send fewer type OIDs than the statement has placeholders,
-        // leaving the rest to be inferred. This engine treats every parameter as
-        // text, so unspecified entries are filled in as such rather than left
-        // out — `Describe` must report one type per parameter.
+        // A client may send fewer type OIDs than the statement has
+        // placeholders, or send 0 for "you decide". Those were all filled in
+        // as text, so `WHERE id = $1` compared an integer column against
+        // `'2'` and matched nothing — the exact failure `bind_parameters`
+        // says it guards against, arriving from the other side. The engine
+        // already works the type out from the column each placeholder is
+        // compared against; it just was not asked.
         let placeholders = Self::count_placeholders(query);
         let mut param_types = param_types;
-        param_types.resize(
-            param_types.len().max(placeholders),
-            super::messages::type_oids::TEXT,
-        );
-        // OID 0 means "unspecified"; answer with the type actually used.
-        for oid in &mut param_types {
-            if *oid == 0 {
-                *oid = super::messages::type_oids::TEXT;
+        param_types.resize(param_types.len().max(placeholders), 0);
+
+        if param_types.contains(&0) {
+            let inferred = self
+                .query_engine
+                .describe_parameters(query)
+                .await
+                .unwrap_or_default();
+            for (position, oid) in param_types.iter_mut().enumerate() {
+                if *oid == 0 {
+                    *oid = inferred
+                        .get(position)
+                        .copied()
+                        .filter(|inferred| *inferred != 0)
+                        .unwrap_or(super::messages::type_oids::TEXT);
+                }
             }
         }
         self.statement_param_types
@@ -2025,6 +2250,10 @@ impl PostgresWireProtocol {
                 | type_oids::INT8
                 | type_oids::FLOAT4
                 | type_oids::FLOAT8
+                // An exact decimal is a number too. Quoted, `amt = $1`
+                // compared a `NUMERIC` column against a string and matched
+                // nothing.
+                | type_oids::NUMERIC
                 | type_oids::BOOL
         )
     }
@@ -2299,7 +2528,9 @@ impl PostgresWireProtocol {
             let already_sent = remaining.sent;
             let rows = remaining.rows.clone();
             let columns = remaining.columns.clone();
-            return Ok(self.send_portal_page(portal, &columns, &rows, already_sent, max_rows, buf));
+            self.send_portal_page(portal, &columns, &rows, already_sent, max_rows, buf)
+                .await;
+            return Ok(());
         }
 
         let (statement_name, params) = self
@@ -2327,6 +2558,15 @@ impl PostgresWireProtocol {
                 return Ok(());
             }
         };
+
+        // An empty statement is not an error. PostgreSQL answers
+        // `EmptyQueryResponse`, which is how a client tells "nothing to run"
+        // from "your statement was rejected"; the simple-query path already
+        // did this and the extended one reported a parse failure instead.
+        if bound.trim().is_empty() {
+            BackendMessage::EmptyQueryResponse.encode(buf);
+            return Ok(());
+        }
 
         self.copy_in_is_simple = false;
         if self
@@ -2366,7 +2606,8 @@ impl PostgresWireProtocol {
                         sent: 0,
                     },
                 );
-                self.send_portal_page(&portal_name, &columns, &rows, 0, max_rows, buf);
+                self.send_portal_page(&portal_name, &columns, &rows, 0, max_rows, buf)
+                    .await;
             }
             Ok(result) => {
                 // Extended protocol: the row description was already sent in
@@ -2850,6 +3091,10 @@ impl PostgresWireProtocol {
 
         let upper = trimmed.to_ascii_uppercase();
         let binary = upper.contains(" BINARY") || upper.contains("FORMAT BINARY");
+        // `WITH CSV` and `FORMAT CSV` were parsed by nothing, so a client that
+        // asked for CSV was written tab-separated text and had its CSV input
+        // read as one field.
+        let csv = !binary && (upper.contains(" CSV") || upper.contains("FORMAT CSV"));
 
         // `COPY <table> [(cols)] TO STDOUT` / `FROM STDIN`
         let body = trimmed[5..].trim();
@@ -2879,11 +3124,11 @@ impl PostgresWireProtocol {
         let _ = body;
 
         if to_stdout {
-            self.copy_table_to_stdout(&table, &columns, binary, buf)
+            self.copy_table_to_stdout(&table, &columns, binary, csv, buf)
                 .await;
             self.finish_copy_statement(send_ready, buf);
         } else {
-            self.begin_copy_from_stdin(&table, columns, binary, buf)
+            self.begin_copy_from_stdin(&table, columns, binary, csv, buf)
                 .await;
         }
         Some(())
@@ -2903,11 +3148,53 @@ impl PostgresWireProtocol {
     }
 
     /// Stream a table to the client as `COPY ... TO STDOUT` text.
+    /// Render one CSV field, quoting it only when it needs quoting.
+    ///
+    /// A field is quoted when it holds a comma, a quote, or a line break;
+    /// inside quotes a quote is doubled. That is the shape PostgreSQL writes
+    /// and the one a spreadsheet reads back.
+    fn csv_field(text: &str) -> String {
+        if text.contains([',', '"', '\n', '\r']) {
+            return format!("\"{}\"", text.replace('"', "\"\""));
+        }
+        text.to_string()
+    }
+
+    /// Split one CSV line into fields, honouring quotes.
+    ///
+    /// Returns each field with its quoting removed. A doubled quote inside a
+    /// quoted field is one quote.
+    fn split_csv_line(line: &str) -> Vec<String> {
+        let mut fields = Vec::new();
+        let mut current = String::new();
+        let mut in_quotes = false;
+        let mut chars = line.chars().peekable();
+
+        while let Some(character) = chars.next() {
+            match character {
+                '"' if in_quotes => {
+                    if chars.peek() == Some(&'"') {
+                        chars.next();
+                        current.push('"');
+                    } else {
+                        in_quotes = false;
+                    }
+                }
+                '"' => in_quotes = true,
+                ',' if !in_quotes => fields.push(std::mem::take(&mut current)),
+                other => current.push(other),
+            }
+        }
+        fields.push(current);
+        fields
+    }
+
     async fn copy_table_to_stdout(
         &mut self,
         table: &str,
         columns: &[String],
         binary: bool,
+        csv: bool,
         buf: &mut BytesMut,
     ) {
         let projection = if columns.is_empty() {
@@ -2993,20 +3280,30 @@ impl PostgresWireProtocol {
         }
 
         for row in &rows {
-            let line = row
-                .iter()
-                .map(|value| match value {
-                    // `\N` is how the text format spells NULL, and is why a
-                    // literal backslash has to be escaped.
-                    None => "\\N".to_string(),
-                    Some(text) => text
-                        .replace('\\', "\\\\")
-                        .replace('\t', "\\t")
-                        .replace('\n', "\\n")
-                        .replace('\r', "\\r"),
-                })
-                .collect::<Vec<_>>()
-                .join("\t");
+            let line = if csv {
+                row.iter()
+                    .map(|value| match value {
+                        // CSV spells NULL as an empty field, not `\N`.
+                        None => String::new(),
+                        Some(text) => Self::csv_field(text),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",")
+            } else {
+                row.iter()
+                    .map(|value| match value {
+                        // `\N` is how the text format spells NULL, and is why
+                        // a literal backslash has to be escaped.
+                        None => "\\N".to_string(),
+                        Some(text) => text
+                            .replace('\\', "\\\\")
+                            .replace('\t', "\\t")
+                            .replace('\n', "\\n")
+                            .replace('\r', "\\r"),
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\t")
+            };
             BackendMessage::CopyData {
                 data: bytes::Bytes::from(format!("{line}\n")),
             }
@@ -3026,6 +3323,7 @@ impl PostgresWireProtocol {
         table: &str,
         columns: Vec<String>,
         binary: bool,
+        csv: bool,
         buf: &mut BytesMut,
     ) {
         // Column order has to be known before the first row arrives; when the
@@ -3099,6 +3397,7 @@ impl PostgresWireProtocol {
 
         self.copy_in = Some(CopyInState {
             binary,
+            csv,
             pending: BytesMut::new(),
             header_seen: false,
             simple_protocol: self.copy_in_is_simple,
@@ -3282,18 +3581,34 @@ impl PostgresWireProtocol {
             return Ok(());
         };
 
-        let values: Vec<String> = line
-            .split('\t')
+        // CSV separates on commas and honours quotes; the text format
+        // separates on tabs and uses backslash escapes. Reading a CSV line the
+        // second way gave one field and a column-count mismatch.
+        let fields: Vec<String> = if state.csv {
+            Self::split_csv_line(line)
+        } else {
+            line.split('\t').map(str::to_string).collect()
+        };
+        let csv = state.csv;
+
+        let values: Vec<String> = fields
+            .iter()
             .enumerate()
             .map(|(index, field)| {
-                if field == "\\N" {
+                let field = field.as_str();
+                // CSV spells NULL as an empty unquoted field.
+                if (csv && field.is_empty()) || (!csv && field == "\\N") {
                     return "NULL".to_string();
                 }
-                let unescaped = field
-                    .replace("\\t", "\t")
-                    .replace("\\n", "\n")
-                    .replace("\\r", "\r")
-                    .replace("\\\\", "\\");
+                let unescaped = if csv {
+                    field.to_string()
+                } else {
+                    field
+                        .replace("\\t", "\t")
+                        .replace("\\n", "\n")
+                        .replace("\\r", "\r")
+                        .replace("\\\\", "\\")
+                };
 
                 // Bare only where the column takes a bare literal *and* the
                 // value really is one; anything else is quoted so a stray field
@@ -3366,7 +3681,7 @@ impl PostgresWireProtocol {
     /// after the limit is reached the reply is `PortalSuspended` rather than
     /// `CommandComplete`: that is what tells the client to ask for the next
     /// page instead of concluding the result set ended.
-    fn send_portal_page(
+    async fn send_portal_page(
         &mut self,
         portal: &str,
         columns: &[String],
@@ -3393,6 +3708,17 @@ impl PostgresWireProtocol {
             .and_then(|(statement, _)| self.statement_columns.get(statement))
             .cloned()
             .unwrap_or_default();
+
+        // Binary output is asked for in `Bind`, which a client may send
+        // without ever issuing `Describe` — and `Describe` was the only thing
+        // that recorded a column's type. Without it every value fell back to
+        // text, so a client that asked for binary silently got characters.
+        let wants_binary = formats.contains(&1);
+        let column_types = if wants_binary && column_types.is_empty() {
+            self.column_types_for_portal(portal).await
+        } else {
+            column_types
+        };
 
         for row in rows.iter().skip(already_sent).take(limit) {
             let values: Vec<Option<bytes::Bytes>> = row
@@ -3428,6 +3754,29 @@ impl PostgresWireProtocol {
             }
             .encode(buf);
         }
+    }
+
+    /// The column types of a portal's statement, described on demand.
+    ///
+    /// Only consulted when binary output was asked for and nothing has
+    /// described the statement yet, so an ordinary text query pays nothing.
+    async fn column_types_for_portal(&mut self, portal: &str) -> Vec<i32> {
+        let Some(statement) = self
+            .portals
+            .get(portal)
+            .map(|(statement, _)| statement.clone())
+        else {
+            return Vec::new();
+        };
+        let Some(sql) = self.prepared_statements.get(&statement).cloned() else {
+            return Vec::new();
+        };
+        let Ok(description) = self.query_engine.describe_statement(&sql).await else {
+            return Vec::new();
+        };
+        let types: Vec<i32> = description.columns.iter().map(|c| c.type_oid).collect();
+        self.statement_columns.insert(statement, types.clone());
+        types
     }
 
     /// Encode one value in PostgreSQL's binary format for `type_oid`.
@@ -3676,7 +4025,11 @@ impl PostgresWireProtocol {
     /// An error that knows its own code keeps it — a `RAISE EXCEPTION` is
     /// `P0001` whatever its text says, and no reading of that text would
     /// reveal it.
-    fn send_error_for(&self, buf: &mut BytesMut, error: &ProtocolError) {
+    fn send_error_for(&mut self, buf: &mut BytesMut, error: &ProtocolError) {
+        // Anything the client already pipelined behind this is discarded until
+        // it synchronises — in the extended protocol only, where `Sync` is the
+        // synchronisation point.
+        self.skip_until_sync |= self.handling_extended;
         let code = super::sqlstate::of(error);
         let reported = error.to_string();
         let reported = reported
@@ -3695,7 +4048,8 @@ impl PostgresWireProtocol {
     /// The SQLSTATE is classified rather than always `XX000`: a driver reading
     /// `internal_error` for a duplicate key cannot tell a constraint it should
     /// handle from a backend that fell over.
-    fn send_error(&self, buf: &mut BytesMut, message: &str) {
+    fn send_error(&mut self, buf: &mut BytesMut, message: &str) {
+        self.skip_until_sync |= self.handling_extended;
         // The transport's name is not part of the error. `PostgreSQL protocol
         // error: relation does not exist` is our plumbing showing through.
         let reported = message

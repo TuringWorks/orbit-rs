@@ -44,7 +44,9 @@ use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorag
 use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_server::protocols::rest::{server::RestApiConfig, RestApiServer};
 use orbit_server::protocols::{CqlServer, MySqlServer, PostgresServer, RespServer};
-use orbit_server::unified_storage::{UnifiedStorageIntegration, UnifiedStorageIntegrationConfig};
+use orbit_server::unified_storage::{
+    Compression, RocksDbBackendConfig, UnifiedStorageIntegration, UnifiedStorageIntegrationConfig,
+};
 use orbit_server::OrbitServerBuilder;
 
 /// Storage mode for protocol servers
@@ -377,12 +379,37 @@ async fn main() -> Result<(), Box<dyn Error>> {
             data_dir
         );
 
+        // The warm-tier block used to be read by nothing: every one of its
+        // knobs, `sync_wal` included, was parsed and discarded, so an operator
+        // who turned on sync-on-write got no fsync and no warning.
+        let warm_tier = &unified_config.warm_tier;
+        let durability = RocksDbBackendConfig {
+            sync_writes: warm_tier.sync_wal,
+            enable_wal: warm_tier.enable_wal,
+            compression: if warm_tier.enable_compression {
+                warm_tier.compression_algorithm.parse().map_err(|e| {
+                    Box::new(std::io::Error::other(format!(
+                        "unified_storage.warm_tier.compression_algorithm: {e}"
+                    ))) as Box<dyn Error>
+                })?
+            } else {
+                Compression::None
+            },
+            block_cache_mb: warm_tier.block_cache_mb,
+            write_buffer_mb: warm_tier.write_buffer_mb,
+            max_write_buffers: warm_tier.max_write_buffers,
+            bloom_bits_per_key: warm_tier
+                .enable_bloom_filters
+                .then_some(warm_tier.bloom_bits_per_key),
+        };
+
         let integration_config = UnifiedStorageIntegrationConfig {
             data_dir: data_dir.clone(),
             enable_ttl_expiration: unified_config.ttl.enabled,
             ttl_check_interval_secs: unified_config.ttl.check_interval_secs,
             max_scan_limit: 1_000_000,
             use_memory_backend: false, // Use persistent backend
+            durability,
         };
 
         let integration = UnifiedStorageIntegration::with_config(integration_config)

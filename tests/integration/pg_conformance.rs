@@ -618,6 +618,61 @@ async fn postgres_protocol_conformance() {
 
     report.record(
         Area::Copy,
+        "COPY ... WITH CSV round-trips, quoting included",
+        async {
+            drop_table(&client, "conf_csv").await;
+            client
+                .simple_query("CREATE TABLE conf_csv (id INTEGER, name TEXT)")
+                .await
+                .map_err(describe)?;
+
+            // The CSV option was parsed by nothing: output came back
+            // tab-separated and CSV input arrived as a single field.
+            let sink = client
+                .copy_in("COPY conf_csv FROM STDIN WITH CSV")
+                .await
+                .map_err(describe)?;
+            futures_util::pin_mut!(sink);
+            use futures_util::SinkExt as _;
+            // A comma inside quotes, a doubled quote, and an empty field for
+            // NULL — the three things separating CSV from "split on commas".
+            sink.as_mut()
+                .send(bytes::Bytes::from_static(
+                    b"1,ada\n2,\"a,b\"\n3,\"say \"\"hi\"\"\"\n4,\n",
+                ))
+                .await
+                .map_err(describe)?;
+            let written = sink.finish().await.map_err(describe)?;
+            if written != 4 {
+                return Err(format!("COPY FROM CSV reported {written} rows, expected 4"));
+            }
+            let names = simple_column(&client, "SELECT name FROM conf_csv ORDER BY id").await?;
+            if names != ["ada", "a,b", "say \"hi\"", "NULL"] {
+                return Err(format!("stored {names:?}"));
+            }
+
+            // And back out, with the same three cases re-quoted.
+            let stream = client
+                .copy_out("COPY conf_csv TO STDOUT WITH CSV")
+                .await
+                .map_err(describe)?;
+            futures_util::pin_mut!(stream);
+            let mut text = String::new();
+            while let Some(chunk) = futures_util::StreamExt::next(&mut stream).await {
+                text.push_str(&String::from_utf8_lossy(&chunk.map_err(describe)?));
+            }
+            let lines: Vec<&str> = text.lines().collect();
+            let result = (lines == ["1,ada", "2,\"a,b\"", "3,\"say \"\"hi\"\"\"", "4,"])
+                .then_some(())
+                .ok_or(format!("COPY TO CSV wrote {lines:?}"));
+            drop_table(&client, "conf_csv").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Copy,
         "COPY FROM STDIN ingests rows",
         async {
             let sink = client
@@ -5391,6 +5446,821 @@ async fn postgres_protocol_conformance() {
             .await,
         );
     }
+
+    report.record(
+        Area::Sql,
+        "UPDATE with an expression applies, and RETURNING agrees with storage",
+        async {
+            drop_table(&client, "conf_upd").await;
+            client
+                .simple_query(
+                    "CREATE TABLE conf_upd (id INTEGER, n INTEGER, amt NUMERIC(10,2), t TEXT)",
+                )
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "INSERT INTO conf_upd (id, n, amt, t) VALUES (1, 5, 10.00, 'a'), (2, 7, 20.00, 'b')",
+                )
+                .await
+                .map_err(describe)?;
+
+            // `SET n = n + 1` changed nothing while `RETURNING` reported the
+            // new value: a client was told a write had happened that had not.
+            client
+                .simple_query("UPDATE conf_upd SET n = n + 1 WHERE id = 1")
+                .await
+                .map_err(describe)?;
+            let counted = simple_column(&client, "SELECT n FROM conf_upd WHERE id = 1").await?;
+            if counted != ["6"] {
+                return Err(format!("n is {counted:?}, expected [6]"));
+            }
+
+            // The same for an exact decimal, which must stay exact.
+            client
+                .simple_query("UPDATE conf_upd SET amt = amt * 2 WHERE id = 2")
+                .await
+                .map_err(describe)?;
+            let doubled = simple_column(&client, "SELECT amt FROM conf_upd WHERE id = 2").await?;
+            if doubled != ["40.00"] {
+                return Err(format!("amt is {doubled:?}, expected [40.00]"));
+            }
+
+            // And what RETURNING says must be what was stored.
+            let returned =
+                simple_column(&client, "UPDATE conf_upd SET n = n + 100 WHERE id = 1 RETURNING n")
+                    .await?;
+            let stored = simple_column(&client, "SELECT n FROM conf_upd WHERE id = 1").await?;
+            (returned == stored)
+                .then_some(())
+                .ok_or(format!("RETURNING said {returned:?}, storage holds {stored:?}"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a quoted SET value stays text, however it is spelled",
+        async {
+            // The quotes are what say this is a literal. Stripped before the
+            // update saw them, `'a + b'` was indistinguishable from an
+            // expression — and `'it''s'` kept its doubled quote.
+            client
+                .simple_query("UPDATE conf_upd SET t = 'a + b' WHERE id = 1")
+                .await
+                .map_err(describe)?;
+            let text = simple_column(&client, "SELECT t FROM conf_upd WHERE id = 1").await?;
+            if text != ["a + b"] {
+                return Err(format!("got {text:?}, expected [a + b]"));
+            }
+            client
+                .simple_query("UPDATE conf_upd SET t = 'it''s' WHERE id = 2")
+                .await
+                .map_err(describe)?;
+            let escaped = simple_column(&client, "SELECT t FROM conf_upd WHERE id = 2").await?;
+            (escaped == ["it's"])
+                .then_some(())
+                .ok_or(format!("got {escaped:?}, expected [it's]"))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a failing UPDATE expression changes nothing",
+        async {
+            let before = simple_column(&client, "SELECT n FROM conf_upd ORDER BY id").await?;
+            // Computed after the old rows were marked deleted, a failure left
+            // the row marked and no new version written — it destroyed the row
+            // rather than merely failing.
+            if client
+                .simple_query("UPDATE conf_upd SET n = conf_no_such_column + 1")
+                .await
+                .is_ok()
+            {
+                return Err("an unknown column in SET was accepted".into());
+            }
+            let after = simple_column(&client, "SELECT n FROM conf_upd ORDER BY id").await?;
+            let result = (after == before).then_some(()).ok_or(format!(
+                "rows went {before:?} -> {after:?} after a failed update"
+            ));
+            drop_table(&client, "conf_upd").await;
+            result
+        }
+        .await,
+    );
+
+    // ---- Parameters, unspecified type ---------------------------------
+    //
+    // A driver may leave a parameter's type to the server. Every such
+    // parameter was filled in as text, so `WHERE id = $1` compared an integer
+    // column against `'2'` and matched nothing. The harness reaches this
+    // through `query`, which uses Parse/Bind/Execute rather than a simple
+    // query.
+
+    report.record(
+        Area::ExtendedQuery,
+        "a parameter's type is inferred from what it is compared against",
+        async {
+            drop_table(&client, "conf_param").await;
+            client
+                .simple_query(
+                    "CREATE TABLE conf_param (id INTEGER, name TEXT, amt NUMERIC(10,2), flag BOOLEAN)",
+                )
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "INSERT INTO conf_param (id, name, amt, flag) VALUES (1, 'ada', 10.50, TRUE), (2, 'grace', 20.00, FALSE)",
+                )
+                .await
+                .map_err(describe)?;
+
+            // Each of these is a different column type, and each was matching
+            // nothing when the parameter defaulted to text.
+            let by_int = client
+                .query("SELECT name FROM conf_param WHERE id = $1", &[&2i32])
+                .await
+                .map_err(describe)?;
+            if by_int.len() != 1 {
+                return Err(format!("integer parameter matched {} rows", by_int.len()));
+            }
+            let by_text = client
+                .query("SELECT id FROM conf_param WHERE name = $1", &[&"ada"])
+                .await
+                .map_err(describe)?;
+            if by_text.len() != 1 {
+                return Err(format!("text parameter matched {} rows", by_text.len()));
+            }
+            let by_bool = client
+                .query("SELECT id FROM conf_param WHERE flag = $1", &[&true])
+                .await
+                .map_err(describe)?;
+            (by_bool.len() == 1)
+                .then_some(())
+                .ok_or(format!("boolean parameter matched {} rows", by_bool.len()))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::ExtendedQuery,
+        "two parameters in one statement each get their own type",
+        async {
+            // With both forced to text this failed outright:
+            // `Cannot compare Integer(1) and Text("1")`.
+            let rows = client
+                .query(
+                    "SELECT id FROM conf_param WHERE id = $1 AND name = $2",
+                    &[&1i32, &"ada"],
+                )
+                .await
+                .map_err(describe)?;
+            (rows.len() == 1)
+                .then_some(())
+                .ok_or(format!("matched {} rows, expected 1", rows.len()))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::ExtendedQuery,
+        "a parameter in LIMIT is a row count, not text",
+        async {
+            // Spliced in quoted, the clause was ignored and every row came
+            // back.
+            let rows = client
+                .query("SELECT id FROM conf_param ORDER BY id LIMIT $1", &[&1i64])
+                .await
+                .map_err(describe)?;
+            (rows.len() == 1)
+                .then_some(())
+                .ok_or(format!("LIMIT $1 returned {} rows, expected 1", rows.len()))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::ExtendedQuery,
+        "a parameterised UPDATE applies",
+        async {
+            // This reported success and changed nothing, because the WHERE
+            // matched no row.
+            client
+                .execute(
+                    "UPDATE conf_param SET name = $1 WHERE id = $2",
+                    &[&"ADA", &1i32],
+                )
+                .await
+                .map_err(describe)?;
+            let names = simple_column(&client, "SELECT name FROM conf_param ORDER BY id").await?;
+            let result = (names == ["ADA", "grace"])
+                .then_some(())
+                .ok_or(format!("names are {names:?}, expected [ADA, grace]"));
+            drop_table(&client, "conf_param").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Transactions,
+        "a statement in a failed transaction reports in_failed_sql_transaction",
+        async {
+            let other = connect().await?;
+            other.simple_query("BEGIN").await.map_err(describe)?;
+            // Put the block into the failed state.
+            let _ = other
+                .simple_query("SELECT conf_no_such_column_at_all")
+                .await;
+
+            // `25P02` is how a driver knows it must roll back rather than
+            // retry. Reported as `XX000` it was indistinguishable from the
+            // backend falling over.
+            match other.simple_query("SELECT 1").await {
+                Ok(_) => Err("a statement in a failed block was accepted".into()),
+                Err(e) => {
+                    let got = sqlstate(&e);
+                    let _ = other.simple_query("ROLLBACK").await;
+                    (got == "25P02")
+                        .then_some(())
+                        .ok_or(format!("reported {got}, expected 25P02"))
+                }
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Transactions,
+        "a transaction block sent as one message leaves no transaction open",
+        async {
+            drop_table(&client, "conf_block").await;
+            client
+                .simple_query("CREATE TABLE conf_block (id INTEGER)")
+                .await
+                .map_err(describe)?;
+
+            // The session's state was read from the first word of the whole
+            // message, so the trailing COMMIT went unnoticed and the
+            // connection was left holding a transaction the client had
+            // already ended.
+            client
+                .simple_query("BEGIN; INSERT INTO conf_block (id) VALUES (9); COMMIT")
+                .await
+                .map_err(describe)?;
+
+            // If a transaction were still open, this would be inside it, and
+            // the rollback would discard it.
+            client
+                .simple_query("INSERT INTO conf_block (id) VALUES (10)")
+                .await
+                .map_err(describe)?;
+            let _ = client.simple_query("ROLLBACK").await;
+
+            let ids = simple_column(&client, "SELECT id FROM conf_block ORDER BY id").await?;
+            let result = (ids == ["9", "10"])
+                .then_some(())
+                .ok_or(format!("rows are {ids:?}, expected [9, 10]"));
+            drop_table(&client, "conf_block").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::ExtendedQuery,
+        "an empty statement is answered, not rejected",
+        async {
+            // `EmptyQueryResponse` is how a client tells "nothing to run" from
+            // "your statement was rejected". The simple-query path answered
+            // it; the extended path reported a parse error.
+            let rows = client.query("", &[]).await.map_err(describe)?;
+            rows.is_empty()
+                .then_some(())
+                .ok_or_else(|| format!("an empty query returned {} rows", rows.len()))
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Portals,
+        "a row-limited Execute suspends and resumes",
+        async {
+            drop_table(&client, "conf_portal").await;
+            client
+                .simple_query("CREATE TABLE conf_portal (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_portal (id) VALUES (1), (2), (3), (4)")
+                .await
+                .map_err(describe)?;
+
+            // Its own connection: a transaction needs a mutable client and
+            // this one is borrowed immutably here.
+            let mut owned = connect().await?;
+            let transaction = owned.transaction().await.map_err(describe)?;
+            let statement = transaction
+                .prepare("SELECT id FROM conf_portal ORDER BY id")
+                .await
+                .map_err(describe)?;
+            let portal = transaction.bind(&statement, &[]).await.map_err(describe)?;
+
+            // Two now, two later: the second page must continue rather than
+            // restart, and must not report the set ended early.
+            let first = transaction
+                .query_portal(&portal, 2)
+                .await
+                .map_err(describe)?;
+            let second = transaction
+                .query_portal(&portal, 0)
+                .await
+                .map_err(describe)?;
+            let seen: Vec<i32> = first
+                .iter()
+                .chain(second.iter())
+                .map(|row| row.get::<_, i32>(0))
+                .collect();
+            transaction.rollback().await.map_err(describe)?;
+
+            let result = (first.len() == 2 && seen == [1, 2, 3, 4])
+                .then_some(())
+                .ok_or(format!(
+                    "first page {} rows, all rows {seen:?}",
+                    first.len()
+                ));
+            drop_table(&client, "conf_portal").await;
+            result
+        }
+        .await,
+    );
+
+    for (name, sql, want) in [
+        // `position(sub IN str)` and `strpos(str, sub)` are the same function
+        // with opposite argument orders. Sharing one implementation made
+        // `strpos('abc','b')` search "abc" inside "b" and answer 0.
+        (
+            "STRPOS takes the string first",
+            "SELECT STRPOS('abc', 'b')",
+            "2",
+        ),
+        (
+            "STRPOS reports absence as 0",
+            "SELECT STRPOS('abc', 'z')",
+            "0",
+        ),
+        (
+            "POSITION takes the needle first",
+            "SELECT POSITION('b', 'abc')",
+            "2",
+        ),
+        // The standard spelling. Parsed at the usual level the comparison
+        // rules took `sub IN str` first and built an IN expression, leaving
+        // the call malformed.
+        (
+            "POSITION ... IN parses",
+            "SELECT POSITION('b' IN 'abc')",
+            "2",
+        ),
+        (
+            "POSITION ... IN reports absence",
+            "SELECT POSITION('z' IN 'abc')",
+            "0",
+        ),
+        // Character positions, not byte offsets.
+        (
+            "POSITION ... IN counts characters",
+            "SELECT POSITION('語' IN '日本語')",
+            "3",
+        ),
+        // And `IN` keeps its meaning everywhere else.
+        (
+            "IN is still an operator",
+            "SELECT 1 WHERE 2 IN (1, 2, 3)",
+            "1",
+        ),
+        (
+            "NOT IN is still an operator",
+            "SELECT 1 WHERE 5 NOT IN (1, 2, 3)",
+            "1",
+        ),
+        // An exact average is exact: through f64 the mean of 2, 3 and 5 came
+        // back as 3.3333333333333335, whose last digit is a rounding artifact.
+        (
+            "AVG over integers does not go through a float",
+            "SELECT AVG(n) FROM (SELECT 2 AS n UNION ALL SELECT 3 UNION ALL SELECT 5) t",
+            "3.3333333333333333333333333333",
+        ),
+    ] {
+        report.record(
+            Area::Sql,
+            name,
+            async {
+                let got = simple_column(&client, sql).await?;
+                (got == [want.to_string()])
+                    .then_some(())
+                    .ok_or(format!("got {got:?}, expected [{want}]"))
+            }
+            .await,
+        );
+    }
+
+    report.record(
+        Area::ExtendedQuery,
+        "a failed extended statement leaves the session usable",
+        async {
+            drop_table(&client, "conf_pipe").await;
+            client
+                .simple_query("CREATE TABLE conf_pipe (id INTEGER)")
+                .await
+                .map_err(describe)?;
+
+            // The extended path enters an error state that discards what the
+            // client already pipelined, until it synchronises. The discarding
+            // itself is checked against the raw protocol; what a driver can
+            // show here is that the state is left correctly — the failure is
+            // reported and the next statement works.
+            if client
+                .execute("INSERT INTO conf_pipe (id) VALUES ($1)", &[&"not a number"])
+                .await
+                .is_ok()
+            {
+                return Err("an invalid parameter was accepted".into());
+            }
+            client
+                .execute("INSERT INTO conf_pipe (id) VALUES ($1)", &[&7i32])
+                .await
+                .map_err(describe)?;
+            let ids = simple_column(&client, "SELECT id FROM conf_pipe").await?;
+            let result = (ids == ["7"])
+                .then_some(())
+                .ok_or(format!("rows are {ids:?}, expected [7]"));
+            drop_table(&client, "conf_pipe").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "ALTER TABLE DROP COLUMN and RENAME COLUMN",
+        async {
+            drop_table(&client, "conf_alter").await;
+            client
+                .simple_query("CREATE TABLE conf_alter (id INTEGER, extra TEXT, keep TEXT)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_alter (id, extra, keep) VALUES (1, 'x', 'y')")
+                .await
+                .map_err(describe)?;
+
+            client
+                .simple_query("ALTER TABLE conf_alter DROP COLUMN extra")
+                .await
+                .map_err(describe)?;
+            if client
+                .simple_query("SELECT extra FROM conf_alter")
+                .await
+                .is_ok()
+            {
+                return Err("a dropped column was still readable".into());
+            }
+            // The columns either side of it must survive.
+            let kept = simple_column(&client, "SELECT keep FROM conf_alter").await?;
+            if kept != ["y"] {
+                return Err(format!("keep is {kept:?} after dropping a neighbour"));
+            }
+
+            client
+                .simple_query("ALTER TABLE conf_alter RENAME COLUMN keep TO kept")
+                .await
+                .map_err(describe)?;
+            let renamed = simple_column(&client, "SELECT kept FROM conf_alter").await?;
+            if renamed != ["y"] {
+                return Err(format!("renamed column reads {renamed:?}, expected [y]"));
+            }
+            if client
+                .simple_query("SELECT keep FROM conf_alter")
+                .await
+                .is_ok()
+            {
+                return Err("the old name still resolves after a rename".into());
+            }
+
+            // Dropping something that was never there is an error, not a
+            // silent success.
+            let result = match client
+                .simple_query("ALTER TABLE conf_alter DROP COLUMN conf_no_such_column")
+                .await
+            {
+                Ok(_) => Err("dropping an absent column reported success".to_string()),
+                Err(_) => Ok(()),
+            };
+            drop_table(&client, "conf_alter").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "outer joins keep the rows that found no partner",
+        async {
+            drop_table(&client, "conf_j1").await;
+            drop_table(&client, "conf_j2").await;
+            client
+                .simple_query("CREATE TABLE conf_j1 (id INTEGER, tag TEXT)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("CREATE TABLE conf_j2 (id INTEGER, val TEXT)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_j1 (id, tag) VALUES (1,'a'),(2,'b'),(3,'c')")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_j2 (id, val) VALUES (2,'two'),(3,'three'),(4,'four')")
+                .await
+                .map_err(describe)?;
+
+            // Only unmatched *left* rows were kept, so RIGHT JOIN behaved as
+            // an inner join and FULL OUTER lost both unmatched sides.
+            for (sql, want) in [
+                (
+                    "SELECT j.id FROM conf_j1 j LEFT JOIN conf_j2 k ON j.id = k.id ORDER BY j.id",
+                    vec!["1", "2", "3"],
+                ),
+                (
+                    "SELECT k.id FROM conf_j1 j RIGHT JOIN conf_j2 k ON j.id = k.id ORDER BY k.id",
+                    vec!["2", "3", "4"],
+                ),
+                (
+                    "SELECT COUNT(*) FROM conf_j1 FULL OUTER JOIN conf_j2 ON conf_j1.id = conf_j2.id",
+                    vec!["4"],
+                ),
+            ] {
+                let got = simple_column(&client, sql).await?;
+                if got != want {
+                    drop_table(&client, "conf_j1").await;
+                    drop_table(&client, "conf_j2").await;
+                    return Err(format!("{sql} gave {got:?}, expected {want:?}"));
+                }
+            }
+
+            // An unmatched outer row must carry the other side's columns as
+            // NULL, not lack them: without that a bare column reference
+            // failed with `column does not exist` instead of returning NULL.
+            let bare = simple_column(
+                &client,
+                "SELECT val FROM conf_j1 LEFT JOIN conf_j2 ON conf_j1.id = conf_j2.id ORDER BY conf_j1.id",
+            )
+            .await?;
+            let result = (bare == ["NULL", "two", "three"])
+                .then_some(())
+                .ok_or(format!("got {bare:?}, expected [NULL, two, three]"));
+            drop_table(&client, "conf_j1").await;
+            drop_table(&client, "conf_j2").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a UNIQUE INDEX is enforced, and dropping it releases the constraint",
+        async {
+            drop_table(&client, "conf_uniq").await;
+            client
+                .simple_query("CREATE TABLE conf_uniq (id INTEGER, n INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_uniq (id, n) VALUES (1, 5)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("CREATE UNIQUE INDEX conf_uniq_id ON conf_uniq (id)")
+                .await
+                .map_err(describe)?;
+
+            // Accepted and not enforced, duplicates went in silently — an
+            // integrity constraint the caller asked for by name.
+            match client
+                .simple_query("INSERT INTO conf_uniq (id, n) VALUES (1, 6)")
+                .await
+            {
+                Ok(_) => return Err("a duplicate was accepted under a UNIQUE INDEX".into()),
+                Err(e) => {
+                    let got = sqlstate(&e);
+                    if got != "23505" {
+                        return Err(format!("reported {got}, expected 23505"));
+                    }
+                }
+            }
+            // A distinct value must still be accepted.
+            client
+                .simple_query("INSERT INTO conf_uniq (id, n) VALUES (2, 6)")
+                .await
+                .map_err(describe)?;
+
+            // Dropping the index takes the constraint with it.
+            client
+                .simple_query("DROP INDEX conf_uniq_id")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_uniq (id, n) VALUES (1, 7)")
+                .await
+                .map_err(describe)?;
+            let counted = simple_column(&client, "SELECT COUNT(*) FROM conf_uniq").await?;
+            let result = (counted == ["3"])
+                .then_some(())
+                .ok_or(format!("count is {counted:?}, expected [3]"));
+            drop_table(&client, "conf_uniq").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a UNIQUE INDEX over data that already violates it is refused",
+        async {
+            drop_table(&client, "conf_uniq2").await;
+            client
+                .simple_query("CREATE TABLE conf_uniq2 (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_uniq2 (id) VALUES (1), (1)")
+                .await
+                .map_err(describe)?;
+            // Creating it anyway would have the index claim something about
+            // the table that is not true.
+            let refused = client
+                .simple_query("CREATE UNIQUE INDEX conf_uniq2_id ON conf_uniq2 (id)")
+                .await
+                .is_err();
+            drop_table(&client, "conf_uniq2").await;
+            refused
+                .then_some(())
+                .ok_or_else(|| "a unique index was built over duplicate rows".to_string())
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "ALTER TABLE ADD COLUMN actually adds the column",
+        async {
+            drop_table(&client, "conf_add").await;
+            client
+                .simple_query("CREATE TABLE conf_add (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_add (id) VALUES (1)")
+                .await
+                .map_err(describe)?;
+
+            // Nothing handled `ADD COLUMN`, so it fell through to a generic
+            // "Command completed successfully" and the column was not there —
+            // every later reference then failed, pointing at the query rather
+            // than at the DDL that never happened.
+            client
+                .simple_query("ALTER TABLE conf_add ADD COLUMN label TEXT")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("UPDATE conf_add SET label = 'x' WHERE id = 1")
+                .await
+                .map_err(describe)?;
+            let labels = simple_column(&client, "SELECT label FROM conf_add").await?;
+            if labels != ["x"] {
+                return Err(format!("label is {labels:?}, expected [x]"));
+            }
+
+            // A default fills the rows that already exist, or the same table
+            // answers two ways depending on when a row arrived.
+            client
+                .simple_query("ALTER TABLE conf_add ADD COLUMN n INTEGER DEFAULT 7")
+                .await
+                .map_err(describe)?;
+            let backfilled = simple_column(&client, "SELECT n FROM conf_add").await?;
+            if backfilled != ["7"] {
+                return Err(format!("existing row has n = {backfilled:?}, expected [7]"));
+            }
+
+            // Adding the same column twice is an error, not a silent no-op.
+            match client
+                .simple_query("ALTER TABLE conf_add ADD COLUMN label TEXT")
+                .await
+            {
+                Ok(_) => Err("adding a column twice was accepted".into()),
+                Err(e) => {
+                    let got = sqlstate(&e);
+                    drop_table(&client, "conf_add").await;
+                    (got == "42701")
+                        .then_some(())
+                        .ok_or(format!("reported {got}, expected 42701"))
+                }
+            }
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Sql,
+        "a scalar subquery works in the select list, not only in WHERE",
+        async {
+            drop_table(&client, "conf_sub").await;
+            client
+                .simple_query("CREATE TABLE conf_sub (id INTEGER)")
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query("INSERT INTO conf_sub (id) VALUES (1), (2), (3)")
+                .await
+                .map_err(describe)?;
+
+            // Subqueries were resolved for `WHERE` and `HAVING` only, so the
+            // same subquery that filtered correctly failed as unimplemented
+            // when it appeared in the select list.
+            let counted = simple_column(&client, "SELECT (SELECT COUNT(*) FROM conf_sub)").await?;
+            if counted != ["3"] {
+                return Err(format!(
+                    "bare scalar subquery gave {counted:?}, expected [3]"
+                ));
+            }
+            let with_from = simple_column(
+                &client,
+                "SELECT (SELECT MAX(id) FROM conf_sub) FROM conf_sub ORDER BY id",
+            )
+            .await?;
+            if with_from != ["3", "3", "3"] {
+                return Err(format!("per-row scalar subquery gave {with_from:?}"));
+            }
+            // A subquery matching nothing is NULL, not an error or a zero.
+            let empty =
+                simple_column(&client, "SELECT (SELECT id FROM conf_sub WHERE id = 99)").await?;
+            let result = (empty == ["NULL"]).then_some(()).ok_or(format!(
+                "an empty scalar subquery gave {empty:?}, expected NULL"
+            ));
+            drop_table(&client, "conf_sub").await;
+            result
+        }
+        .await,
+    );
+
+    report.record(
+        Area::Types,
+        "a NUMERIC column renders at its declared scale",
+        async {
+            drop_table(&client, "conf_scale").await;
+            client
+                .simple_query(
+                    "CREATE TABLE conf_scale (id INTEGER, amt NUMERIC(10,2), d DOUBLE PRECISION)",
+                )
+                .await
+                .map_err(describe)?;
+            client
+                .simple_query(
+                    "INSERT INTO conf_scale (id, amt, d) VALUES (1, 10.5, 7.5), (2, 3, 1.25)",
+                )
+                .await
+                .map_err(describe)?;
+
+            // Every read path must agree: a clause-free select, a simple
+            // WHERE and an ORDER BY go through different code.
+            for sql in [
+                "SELECT amt FROM conf_scale ORDER BY id",
+                "SELECT amt FROM conf_scale WHERE id = 1",
+            ] {
+                let shown = simple_column(&client, sql).await?;
+                let expected: Vec<String> = if sql.contains("WHERE") {
+                    vec!["10.50".to_string()]
+                } else {
+                    vec!["10.50".to_string(), "3.00".to_string()]
+                };
+                if shown != expected {
+                    drop_table(&client, "conf_scale").await;
+                    return Err(format!("{sql} gave {shown:?}, expected {expected:?}"));
+                }
+            }
+            // And a column without a declared scale must not gain one.
+            let floats = simple_column(&client, "SELECT d FROM conf_scale ORDER BY id").await?;
+            let result = (floats == ["7.5", "1.25"]).then_some(()).ok_or(format!(
+                "a DOUBLE rendered as {floats:?}, expected [7.5, 1.25]"
+            ));
+            drop_table(&client, "conf_scale").await;
+            result
+        }
+        .await,
+    );
 
     report.record(
         Area::Sql,

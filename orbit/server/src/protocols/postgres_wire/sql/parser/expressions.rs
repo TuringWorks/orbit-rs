@@ -986,6 +986,14 @@ impl ExpressionParser {
                         table: None,
                         name: "*".to_string(),
                     }));
+                } else if func_name.eq_ignore_ascii_case("POSITION") && args.is_empty() {
+                    // `POSITION(sub IN str)` is the standard spelling, and the
+                    // `IN` in it separates two arguments. Parsed at the usual
+                    // level the comparison rules take it first and build an
+                    // `IN` expression, leaving the call malformed — so the
+                    // needle is read below that level, where `IN` is not an
+                    // operator.
+                    args.push(self.parse_additive_expression(tokens, pos)?);
                 } else {
                     args.push(self.parse_expression(tokens, pos)?);
                 }
@@ -1006,8 +1014,12 @@ impl ExpressionParser {
 
                 // `FROM` and `FOR` separate arguments in `EXTRACT(f FROM s)`
                 // and `SUBSTRING(s FROM a FOR b)`, where a comma would be a
-                // syntax error.
-                if *pos < tokens.len() && matches!(tokens[*pos], Token::From | Token::For) {
+                // syntax error; `IN` does the same in `POSITION(sub IN str)`.
+                if *pos < tokens.len()
+                    && (matches!(tokens[*pos], Token::From | Token::For)
+                        || (func_name.eq_ignore_ascii_case("POSITION")
+                            && matches!(tokens[*pos], Token::In)))
+                {
                     *pos += 1;
                 } else if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
                     // Lookahead for ORDER or SEPARATOR after comma (invalid but sometimes users type it?)

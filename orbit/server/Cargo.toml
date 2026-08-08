@@ -34,6 +34,7 @@ lazy_static = "1.4"
 url = "2.5"
 geohash = "0.13"
 md5 = "0.8"
+libgssapi = { version = "0.11", default-features = false, optional = true }
 sha1 = "0.10"  # For Redis EVALSHA script hashing
 sha2 = "0.10"
 hex = "0.4"
@@ -79,7 +80,13 @@ urlencoding = "2.1"
 flate2 = "1.0" # For compression
 toml = "0.9" # For configuration file support
 # New persistence backends
-rocksdb = { version = "0.22", default-features = false, optional = true }
+# Keep the feature set identical to orbit-engine's: cargo unifies them into one
+# build of librocksdb-sys, and a mismatch here silently changes which codecs the
+# unified store can open.
+rocksdb = { version = "0.22", default-features = false, features = [
+    "lz4",
+    "zstd",
+], optional = true }
 rand.workspace = true
 uuid = { version = "1.19", features = ["v4", "v7", "serde"] }
 env_logger = "0.11"
@@ -129,6 +136,7 @@ default = [
     "metrics",
     "protocol-redis",
     "protocol-postgres",
+    "gssapi",
     "protocol-grpc",
     "protocol-rest",
     "protocol-mcp",
@@ -181,6 +189,11 @@ metrics = []
 # Protocol Support
 protocol-redis = ["actor-system"]
 protocol-postgres = ["actor-system"]
+# GSSAPI/Kerberos authentication for the PostgreSQL wire protocol.
+# On by default so it is always compiled and tested; turn it off where
+# no GSSAPI implementation is available to link against (macOS ships
+# GSS.framework, Linux needs MIT or Heimdal krb5).
+gssapi = ["dep:libgssapi"]
 protocol-mysql = ["actor-system"]
 protocol-cassandra = ["actor-system"]
 protocol-neo4j = ["actor-system", "model-graph"]

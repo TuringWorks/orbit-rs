@@ -909,7 +909,15 @@ impl ExpressionEvaluator {
             "TRIM" | "BTRIM" => self.evaluate_trim(&args),
             "LTRIM" => self.evaluate_ltrim(&args),
             "RTRIM" => self.evaluate_rtrim(&args),
-            "POSITION" | "STRPOS" => self.evaluate_position(&args),
+            "POSITION" => self.evaluate_position(&args),
+            // `strpos(string, substring)` takes its arguments the other way
+            // round from `position(substring in string)`. Sharing one
+            // implementation gave `strpos('abc', 'b')` = 0 — it searched
+            // "abc" inside "b".
+            "STRPOS" => self.evaluate_position(&[
+                args.get(1).cloned().unwrap_or(SqlValue::Null),
+                args.first().cloned().unwrap_or(SqlValue::Null),
+            ]),
             "INITCAP" => self.evaluate_initcap(&args),
             "REPEAT" => self.evaluate_repeat(&args),
             "ASCII" => self.evaluate_ascii(&args),

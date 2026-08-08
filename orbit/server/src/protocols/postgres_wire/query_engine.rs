@@ -136,6 +136,30 @@ pub fn type_oid_for(sql_type: &str) -> i32 {
     }
 }
 
+/// Render a stored number, honouring a column's declared scale.
+///
+/// Only `NUMERIC`/`DECIMAL` carries one; everything else prints as stored. A
+/// scale that cannot be applied leaves the number alone rather than inventing
+/// digits.
+#[must_use]
+fn render_number(number: &serde_json::Number, declared: Option<&ColumnType>) -> String {
+    use std::str::FromStr;
+
+    let Some(ColumnType::Numeric {
+        scale: Some(scale), ..
+    }) = declared
+    else {
+        return number.to_string();
+    };
+    rust_decimal::Decimal::from_str(&number.to_string()).map_or_else(
+        |_| number.to_string(),
+        |mut decimal| {
+            decimal.rescale(u32::from(*scale));
+            decimal.to_string()
+        },
+    )
+}
+
 /// The type a domain definition leads with.
 ///
 /// A definition is the base type followed by whatever constraints were
@@ -151,6 +175,113 @@ pub fn leading_type(definition: &str) -> String {
         .min()
         .unwrap_or(definition.len());
     definition[..end].trim().to_string()
+}
+
+/// The storage type a declared type name maps to.
+///
+/// One table, used by `CREATE TABLE` and by `ALTER TABLE ... ADD COLUMN`.
+/// Two copies of this would drift, which is the failure mode this document
+/// records more than any other.
+#[must_use]
+fn column_type_from_name(declared: &str) -> ColumnType {
+    match declared.trim().to_uppercase().as_str() {
+        "INTEGER" | "INT" => ColumnType::Integer,
+        "BIGINT" => ColumnType::BigInt,
+        "SERIAL" | "BIGSERIAL" => ColumnType::Serial,
+        "TEXT" => ColumnType::Text,
+        "BOOLEAN" | "BOOL" => ColumnType::Boolean,
+        "JSON" => ColumnType::Json,
+        "DOUBLE" => ColumnType::Double,
+        "TIMESTAMP" => ColumnType::Timestamp,
+        "REAL" | "FLOAT" | "FLOAT4" | "FLOAT8" | "DOUBLE PRECISION" => ColumnType::Double,
+        data_type if data_type.starts_with("NUMERIC") || data_type.starts_with("DECIMAL") => {
+            // `NUMERIC(10,2)` reached none of the arms above and fell
+            // through to the unknown case, which is `TEXT`. The column
+            // then held whatever the value happened to be, and its
+            // declared scale existed nowhere.
+            let (precision, scale) = data_type
+                .find('(')
+                .and_then(|open| {
+                    let close = data_type.find(')')?;
+                    let inside = &data_type[open + 1..close];
+                    let mut parts = inside.split(',');
+                    let precision = parts.next()?.trim().parse::<u8>().ok();
+                    let scale = parts.next().and_then(|s| s.trim().parse::<u8>().ok());
+                    Some((precision, scale))
+                })
+                .unwrap_or((None, None));
+            ColumnType::Numeric { precision, scale }
+        }
+        data_type => {
+            if data_type.starts_with("VARCHAR") {
+                // Extract length if present
+                let len = if let Some(start) = data_type.find('(') {
+                    let end = data_type.find(')').unwrap_or(data_type.len());
+                    data_type[start + 1..end].parse().unwrap_or(255)
+                } else {
+                    255
+                };
+                ColumnType::Varchar(len)
+            } else {
+                // Default to text for unknown types
+                ColumnType::Text
+            }
+        }
+    }
+}
+
+/// Replace column references in an expression with a row's values.
+///
+/// Word boundaries only, and never inside a string literal: a column named `n`
+/// must not rewrite the `n` in `'n'`.
+#[must_use]
+fn substitute_columns(expression: &str, row: &HashMap<String, JsonValue>) -> String {
+    fn flush(word: &mut String, out: &mut String, row: &HashMap<String, JsonValue>) {
+        if word.is_empty() {
+            return;
+        }
+        let folded = fold_identifier(word);
+        match row
+            .iter()
+            .find(|(name, _)| fold_identifier(name) == folded)
+            .map(|(_, value)| value)
+        {
+            Some(JsonValue::Null) => out.push_str("NULL"),
+            Some(JsonValue::String(text)) => {
+                out.push('\'');
+                out.push_str(&text.replace('\'', "''"));
+                out.push('\'');
+            }
+            Some(value) => out.push_str(&value.to_string()),
+            None => out.push_str(word),
+        }
+        word.clear();
+    }
+
+    let mut out = String::with_capacity(expression.len());
+    let mut word = String::new();
+    let mut in_string = false;
+
+    for character in expression.chars() {
+        if character == '\'' {
+            flush(&mut word, &mut out, row);
+            in_string = !in_string;
+            out.push(character);
+            continue;
+        }
+        if in_string {
+            out.push(character);
+            continue;
+        }
+        if character.is_alphanumeric() || character == '_' {
+            word.push(character);
+            continue;
+        }
+        flush(&mut word, &mut out, row);
+        out.push(character);
+    }
+    flush(&mut word, &mut out, row);
+    out
 }
 
 /// Whether a word is a bare column reference rather than an expression.
@@ -285,7 +416,7 @@ fn upper_tail(statement: &str, if_exists: bool) -> &str {
 /// Semicolons inside string literals, quoted identifiers and dollar-quoted
 /// bodies do not separate statements; splitting on every `;` would cut
 /// `VALUES (\'a;b\')` in half.
-fn split_statements(sql: &str) -> Vec<String> {
+pub(crate) fn split_statements(sql: &str) -> Vec<String> {
     let mut statements = Vec::new();
     let mut current = String::new();
     let mut chars = sql.chars().peekable();
@@ -2016,6 +2147,15 @@ impl QueryEngine {
             }
         }
 
+        // A placeholder in `LIMIT`/`OFFSET` is compared against no column, so
+        // nothing above types it. Left as text it was spliced in quoted and
+        // the clause was ignored — `LIMIT $1` returned every row.
+        for position in Self::row_count_placeholders(sql) {
+            if position <= count {
+                types[position - 1] = type_oids::INT8;
+            }
+        }
+
         Ok(types)
     }
 
@@ -2062,6 +2202,19 @@ impl QueryEngine {
         }
 
         found
+    }
+
+    /// Placeholders that give a row count: `LIMIT $1`, `OFFSET $2`.
+    fn row_count_placeholders(sql: &str) -> Vec<usize> {
+        let upper = sql.to_uppercase();
+        Self::scan_placeholders(sql)
+            .into_iter()
+            .filter(|(_, at)| {
+                let before = upper[..*at].trim_end();
+                before.ends_with("LIMIT") || before.ends_with("OFFSET")
+            })
+            .map(|(position, _)| position)
+            .collect()
     }
 
     /// Placeholders that sit on the right of a comparison, paired with the
@@ -3124,6 +3277,223 @@ impl QueryEngine {
                 .columns
                 .retain(|existing| fold_identifier(&existing.name) != column);
             storage.create_table(schema).await?;
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        // `CREATE [UNIQUE] INDEX [name] ON <table> (<column>)`.
+        //
+        // A plain index is a performance structure and changes no answer, so
+        // accepting one without building it is honest. A *unique* index is an
+        // integrity constraint the caller asked for by name: accepted and not
+        // enforced, duplicates went in silently. It is recorded on the column,
+        // which is where uniqueness is already checked.
+        if upper.starts_with("CREATE ") && upper.contains(" INDEX ") {
+            let unique = upper.contains(" UNIQUE INDEX ");
+            if !unique {
+                return Ok(None);
+            }
+            let Some(on_at) = upper.find(" ON ") else {
+                return Ok(None);
+            };
+            let name = trimmed[..on_at]
+                .split_whitespace()
+                .last()
+                .map(fold_identifier)
+                .unwrap_or_default();
+            let rest = trimmed[on_at + 4..].trim();
+            let Some(open) = rest.find('(') else {
+                return Ok(None);
+            };
+            let Some(close) = rest.rfind(')') else {
+                return Ok(None);
+            };
+            let table = fold_identifier(rest[..open].trim());
+            let columns: Vec<String> = rest[open + 1..close]
+                .split(',')
+                .map(|column| fold_identifier(column.trim()))
+                .filter(|column| !column.is_empty())
+                .collect();
+
+            let [column] = columns.as_slice() else {
+                // A schema records uniqueness per column, so a multi-column
+                // unique index has nowhere to live. Refusing says so rather
+                // than accepting a constraint that would never be checked.
+                return Err(ProtocolError::SqlState {
+                    code: "0A000",
+                    message: "a multi-column UNIQUE INDEX is not supported; \
+                              declare the columns UNIQUE instead"
+                        .to_string(),
+                });
+            };
+
+            let mut schema = storage.get_table_schema(&table).await?.ok_or_else(|| {
+                ProtocolError::PostgresError(format!("Table '{table}' does not exist"))
+            })?;
+            let Some(existing) = schema
+                .columns
+                .iter_mut()
+                .find(|c| fold_identifier(&c.name) == *column)
+            else {
+                return Err(ProtocolError::SqlState {
+                    code: "42703",
+                    message: format!("column \"{column}\" of relation \"{table}\" does not exist"),
+                });
+            };
+
+            // The rows already there have to satisfy it, or the index would
+            // claim something about the table that is not true.
+            let rows = storage
+                .select_rows(&table, Vec::new(), Vec::new(), None)
+                .await?;
+            let mut seen = std::collections::HashSet::new();
+            for row in rows.iter().filter(|row| row_is_visible(&row.values)) {
+                let Some(value) = row
+                    .values
+                    .iter()
+                    .find(|(key, _)| fold_identifier(key) == *column)
+                    .map(|(_, value)| value)
+                    .filter(|value| !value.is_null())
+                else {
+                    continue;
+                };
+                if !seen.insert(value.to_string()) {
+                    return Err(ProtocolError::SqlState {
+                        code: "23505",
+                        message: format!(
+                            "could not create unique index \"{name}\":                              key value is duplicated"
+                        ),
+                    });
+                }
+            }
+
+            existing.unique = true;
+            storage.create_table(schema).await?;
+            self.remember_index(&name, &table, column).await?;
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        // `DROP INDEX <name>` — a unique index carries a constraint, so
+        // dropping it has to take the constraint with it.
+        if upper.starts_with("DROP INDEX") {
+            let name = fold_identifier(
+                trimmed["DROP INDEX".len()..]
+                    .trim()
+                    .trim_start_matches("IF EXISTS")
+                    .trim(),
+            );
+            let Some((table, column)) = self.index_definition(&name).await? else {
+                // Not a unique index this server recorded; nothing to undo.
+                return Ok(None);
+            };
+            if let Some(mut schema) = storage.get_table_schema(&table).await? {
+                if let Some(existing) = schema
+                    .columns
+                    .iter_mut()
+                    .find(|c| fold_identifier(&c.name) == column)
+                {
+                    existing.unique = false;
+                }
+                storage.create_table(schema).await?;
+            }
+            self.forget_catalog_entry(&format!("index:{name}")).await?;
+            return Ok(Some(QueryResult::Update { count: 0 }));
+        }
+
+        // `ALTER TABLE <name> ADD COLUMN <column> <type> [DEFAULT x] [NOT NULL]`.
+        //
+        // Nothing handled this, so it fell through to a generic
+        // "Command completed successfully": the statement reported success and
+        // the column was not there. Every later reference to it then failed
+        // with `column does not exist`, pointing at the query rather than at
+        // the DDL that never happened.
+        if upper.starts_with("ALTER TABLE") && upper.contains(" ADD ") {
+            let words: Vec<&str> = trimmed.split_whitespace().collect();
+            let table = words
+                .get(2)
+                .map(|name| fold_identifier(name))
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("ALTER TABLE requires a name".to_string())
+                })?;
+            let at = words
+                .iter()
+                .position(|word| word.eq_ignore_ascii_case("ADD"))
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError(
+                        "ALTER TABLE ... ADD requires a column".to_string(),
+                    )
+                })?;
+            // `COLUMN` is optional in PostgreSQL.
+            let start = if words
+                .get(at + 1)
+                .is_some_and(|word| word.eq_ignore_ascii_case("COLUMN"))
+            {
+                at + 2
+            } else {
+                at + 1
+            };
+            let definition: Vec<&str> = words[start.min(words.len())..].to_vec();
+            let (Some(name), Some(declared)) = (definition.first(), definition.get(1)) else {
+                return Err(ProtocolError::PostgresError(
+                    "ALTER TABLE ... ADD COLUMN requires a name and a type".to_string(),
+                ));
+            };
+            let rest: Vec<String> = definition[2.min(definition.len())..]
+                .iter()
+                .map(|word| word.to_uppercase())
+                .collect();
+            let says = |word: &str| rest.iter().any(|c| c == word);
+            let column = ColumnDefinition {
+                name: fold_identifier(name),
+                data_type: column_type_from_name(declared.trim_end_matches(',')),
+                // A column added to a table that already has rows must be
+                // nullable unless a default fills it, or the existing rows
+                // would violate it the moment it is added.
+                nullable: !(says("NOT") && says("NULL")),
+                default_value: rest
+                    .iter()
+                    .position(|word| word == "DEFAULT")
+                    .and_then(|at| definition.get(2 + at + 1))
+                    .map(|value| Self::literal_to_json(value)),
+                unique: says("UNIQUE"),
+                check: None,
+                references: None,
+                domain: None,
+            };
+
+            let mut schema = storage.get_table_schema(&table).await?.ok_or_else(|| {
+                ProtocolError::PostgresError(format!("Table '{table}' does not exist"))
+            })?;
+            if schema
+                .columns
+                .iter()
+                .any(|existing| fold_identifier(&existing.name) == fold_identifier(&column.name))
+            {
+                return Err(ProtocolError::SqlState {
+                    code: "42701",
+                    message: format!(
+                        "column \"{}\" of relation \"{table}\" already exists",
+                        column.name
+                    ),
+                });
+            }
+            let default_value = column.default_value.clone();
+            let column_name = column.name.clone();
+            schema.columns.push(column);
+            storage.create_table(schema).await?;
+
+            // PostgreSQL fills the rows that already exist with the default;
+            // left out, a row written before the column existed reads NULL
+            // while one written after reads the default, and the same table
+            // answers two ways depending on when a row arrived.
+            if let Some(default_value) = default_value {
+                storage
+                    .update_rows(
+                        &table,
+                        HashMap::from([(column_name, default_value)]),
+                        Vec::new(),
+                    )
+                    .await?;
+            }
             return Ok(Some(QueryResult::Update { count: 0 }));
         }
 
@@ -4817,6 +5187,23 @@ impl QueryEngine {
         Ok(plpgsql_function::argument_type(source, value).to_string())
     }
 
+    /// Evaluate an expression against one row's values.
+    ///
+    /// Column references are replaced with that row's values first, which is
+    /// what makes `SET n = n + 1` mean *this* row's `n`.
+    ///
+    /// # Errors
+    /// Returns the engine's error when the expression cannot be evaluated.
+    async fn evaluate_over_row(
+        &self,
+        expression: &str,
+        row: &HashMap<String, JsonValue>,
+    ) -> ProtocolResult<JsonValue> {
+        let substituted = substitute_columns(expression, row);
+        let evaluated = Box::pin(self.evaluate_scalar(&substituted)).await?;
+        Ok(evaluated.map_or(JsonValue::Null, |text| Self::literal_to_json(&text)))
+    }
+
     /// Evaluate a scalar expression by asking the engine for `SELECT <expr>`.
     async fn evaluate_scalar(&self, expression: &str) -> ProtocolResult<Option<String>> {
         let result = Box::pin(self.execute_query(&format!("SELECT {expression}"))).await?;
@@ -5019,6 +5406,26 @@ impl QueryEngine {
         } else {
             base
         })
+    }
+
+    /// Record a unique index so dropping it can take its constraint away.
+    async fn remember_index(&self, name: &str, table: &str, column: &str) -> ProtocolResult<()> {
+        self.remember_domain(&format!("__index__{name}"), &format!("{table}|{column}"))
+            .await?;
+        self.rename_catalog_entry(&format!("domain:__index__{name}"), &format!("index:{name}"))
+            .await
+    }
+
+    /// The table and column a recorded unique index covers.
+    async fn index_definition(&self, name: &str) -> ProtocolResult<Option<(String, String)>> {
+        Ok(self
+            .view_definition(&format!("index:{name}"))
+            .await?
+            .and_then(|definition| {
+                definition
+                    .split_once('|')
+                    .map(|(table, column)| (table.to_string(), column.to_string()))
+            }))
     }
 
     /// A domain's declared type and constraints, if the name is one.
@@ -5905,6 +6312,27 @@ impl QueryEngine {
                 resolved.having = Some(self.resolve_subqueries(having).await?);
             }
 
+            // The select list needs this as much as the predicate does. It was
+            // resolved for `WHERE` and `HAVING` only, so
+            // `SELECT (SELECT COUNT(*) FROM t)` reached the evaluator with the
+            // subquery still in it and failed as unimplemented — while the
+            // same subquery in a `WHERE` worked.
+            for item in &mut resolved.select_list {
+                if let crate::protocols::postgres_wire::sql::ast::SelectItem::Expression {
+                    expr,
+                    ..
+                } = item
+                {
+                    let taken = std::mem::replace(
+                        expr,
+                        crate::protocols::postgres_wire::sql::ast::Expression::Literal(
+                            crate::protocols::postgres_wire::sql::types::SqlValue::Null,
+                        ),
+                    );
+                    *expr = self.resolve_subqueries(taken).await?;
+                }
+            }
+
             let (names, mut values) = select_pipeline::run_select_values(&resolved, rows)?;
 
             // A wildcard is named by the pipeline as `*`; the real names come
@@ -6770,9 +7198,40 @@ impl QueryEngine {
         let mut evaluator = ExpressionEvaluator::new();
         let mut joined = Vec::new();
 
+        // Every column name each side contributes, so an unmatched row can be
+        // padded with NULLs instead of simply lacking them. Without the
+        // padding an outer row had no key for the other side's columns at all,
+        // and `SELECT val FROM a LEFT JOIN b ...` failed with
+        // `column "val" does not exist` rather than returning NULL.
+        let columns_of = |rows: &[crate::protocols::postgres_wire::sql::select_pipeline::Row]| {
+            let mut names: Vec<String> = Vec::new();
+            for row in rows {
+                for key in row.keys() {
+                    if !names.contains(key) {
+                        names.push(key.clone());
+                    }
+                }
+            }
+            names
+        };
+        let left_columns = columns_of(left_rows);
+        let right_columns = columns_of(right_rows);
+        let padded = |row: &crate::protocols::postgres_wire::sql::select_pipeline::Row,
+                      missing: &[String]| {
+            let mut out = row.clone();
+            for name in missing {
+                out.entry(name.clone()).or_insert(SqlValue::Null);
+            }
+            out
+        };
+
+        // Which right rows found a partner, for the outer joins that keep the
+        // ones that did not.
+        let mut right_matched = vec![false; right_rows.len()];
+
         for left_row in left_rows {
             let mut matched = false;
-            for right_row in right_rows {
+            for (right_index, right_row) in right_rows.iter().enumerate() {
                 let mut combined = left_row.clone();
                 for (key, value) in right_row {
                     // A bare name present on both sides keeps the left one;
@@ -6812,14 +7271,26 @@ impl QueryEngine {
 
                 if keep || matches!(join_type, JoinType::Cross) {
                     matched = true;
+                    right_matched[right_index] = true;
                     joined.push(combined);
                 }
             }
 
-            // A left outer join keeps an unmatched left row with NULLs for the
-            // right side.
-            if !matched && matches!(join_type, JoinType::LeftOuter) {
-                joined.push(left_row.clone());
+            // A left or full outer join keeps an unmatched left row, with the
+            // right side's columns present and NULL.
+            if !matched && matches!(join_type, JoinType::LeftOuter | JoinType::FullOuter) {
+                joined.push(padded(left_row, &right_columns));
+            }
+        }
+
+        // And the mirror: a right or full outer join keeps the right rows that
+        // found no partner. Neither did this at all, so `RIGHT JOIN` behaved
+        // as an inner join and `FULL OUTER JOIN` lost both unmatched sides.
+        if matches!(join_type, JoinType::RightOuter | JoinType::FullOuter) {
+            for (right_index, right_row) in right_rows.iter().enumerate() {
+                if !right_matched[right_index] {
+                    joined.push(padded(right_row, &left_columns));
+                }
             }
         }
 
@@ -7271,14 +7742,18 @@ impl QueryEngine {
     }
 
     /// Parse a single SET clause (key = value)
+    /// Split `column = value`, keeping the value exactly as written.
+    ///
+    /// The quotes are deliberately left on. Stripping them here threw away the
+    /// only thing that distinguishes a text literal from an expression, so
+    /// `SET n = n + 1` and `SET t = 'n + 1'` arrived identical — and it
+    /// mangled an escaped quote besides, turning `'it''s'` into `it''s`.
+    /// `literal_to_json` unquotes properly, as it already does for
+    /// `INSERT ... VALUES`.
     fn parse_single_set_clause(&self, clause: &str) -> Option<(String, String)> {
         let eq_pos = clause.find('=')?;
         let key = clause[..eq_pos].trim().to_string();
-        let value = clause[eq_pos + 1..]
-            .trim()
-            .trim_matches('\'')
-            .trim_matches('"')
-            .to_string();
+        let value = clause[eq_pos + 1..].trim().to_string();
         Some((key, value))
     }
 
@@ -7359,6 +7834,13 @@ impl QueryEngine {
             SqlValue::DoublePrecision(f) => {
                 serde_json::Number::from_f64(*f).map_or(JsonValue::Null, JsonValue::Number)
             }
+            // An exact decimal is a number. Rendered as a string it did not
+            // match the number in storage, and because an update identifies
+            // its row by *every* column, one mismatching column stopped the
+            // whole update — a table merely containing a `NUMERIC` column
+            // silently dropped updates to its other columns.
+            SqlValue::Decimal(d) => std::str::FromStr::from_str(&d.to_string())
+                .map_or(JsonValue::Null, JsonValue::Number),
             other => JsonValue::String(other.to_postgres_string()),
         }
     }
@@ -7979,9 +8461,15 @@ impl QueryEngine {
 
             // Apply updates
             for (col, val) in &set_clauses {
+                // The value keeps its quotes now, so unquote it the same way
+                // the stored path does.
+                let val = match Self::literal_to_json(val) {
+                    JsonValue::String(text) => text,
+                    other => other.to_string(),
+                };
                 match col.to_uppercase().as_str() {
                     "STATE" => {
-                        actor.state = serde_json::from_str(val)
+                        actor.state = serde_json::from_str(&val)
                             .unwrap_or_else(|_| JsonValue::String(val.clone()));
                     }
                     "ACTOR_TYPE" => {
@@ -8209,10 +8697,22 @@ impl QueryEngine {
                         // `None` is SQL NULL on the wire. Rendering it as the
                         // text "NULL" made a null indistinguishable from a row
                         // whose value is the three-letter string.
+                        // A column declared with a scale renders at that
+                        // scale: `NUMERIC(10,2)` reads back `10.50`, not
+                        // `10.5`. This was written once before and removed as
+                        // dead — it was inert only because the column's type
+                        // was still `Text` at the time, which is now fixed.
+                        let declared = table_schema.as_ref().and_then(|schema| {
+                            schema
+                                .columns
+                                .iter()
+                                .find(|c| fold_identifier(&c.name) == fold_identifier(col))
+                                .map(|c| &c.data_type)
+                        });
                         value.and_then(|v| match v {
                             JsonValue::Null => None,
                             JsonValue::String(s) => Some(s.clone()),
-                            JsonValue::Number(n) => Some(n.to_string()),
+                            JsonValue::Number(n) => Some(render_number(n, declared)),
                             JsonValue::Bool(b) => Some(b.to_string()),
                             other => Some(other.to_string()),
                         })
@@ -9332,10 +9832,23 @@ impl QueryEngine {
             )));
         }
 
-        // Convert SET clauses to HashMap
+        // Convert SET clauses to HashMap.
+        //
+        // A value that is not a literal is an expression over the row being
+        // updated — `SET n = n + 1`. Put through `literal_to_json` it became
+        // the *text* `n + 1` and was never applied, while `RETURNING` reported
+        // the computed value: a client was told a write had happened that had
+        // not. Those are computed per row, below.
+        let row_expressions: Vec<(String, String)> = set_clauses
+            .iter()
+            .filter(|(_, value)| !Self::is_plain_literal(value))
+            .cloned()
+            .collect();
         let mut set_values = std::collections::HashMap::new();
         for (col, val) in set_clauses {
-            set_values.insert(fold_identifier(&col), Self::literal_to_json(&val));
+            if Self::is_plain_literal(&val) {
+                set_values.insert(fold_identifier(&col), Self::literal_to_json(&val));
+            }
         }
 
         // Convert WHERE clause to QueryConditions
@@ -9389,6 +9902,27 @@ impl QueryEngine {
                 .collect();
             let count = visible.len();
 
+            // Every new row is built before a single old one is marked.
+            //
+            // Computed after the mark, an expression that failed to evaluate
+            // left the old row deleted and no new row written — the update did
+            // not merely fail, it destroyed the row. This way a failure
+            // returns an error having changed nothing.
+            let mut replacements = Vec::with_capacity(visible.len());
+            for row in &visible {
+                let mut values = row.values.clone();
+                for (column, expression) in &row_expressions {
+                    let computed = self.evaluate_over_row(expression, &row.values).await?;
+                    let stored = values
+                        .keys()
+                        .find(|name| fold_identifier(name) == fold_identifier(column))
+                        .cloned()
+                        .unwrap_or_else(|| fold_identifier(column));
+                    values.insert(stored, computed);
+                }
+                replacements.push(values);
+            }
+
             // The previous rows are marked first: marking after writing the
             // new version would match it too — it satisfies the same predicate
             // — and the row would vanish for everyone.
@@ -9403,9 +9937,8 @@ impl QueryEngine {
                 )
                 .await?;
 
-            for row in visible {
+            for mut values in replacements {
                 let now = chrono::Utc::now();
-                let mut values = row.values.clone();
                 for (column, value) in &set_values {
                     let stored = values
                         .keys()
@@ -9527,9 +10060,7 @@ impl QueryEngine {
         if_not_exists: bool,
         foreign_keys: Vec<crate::protocols::postgres_wire::persistent_storage::ForeignKey>,
     ) -> ProtocolResult<QueryResult> {
-        use crate::protocols::postgres_wire::persistent_storage::{
-            ColumnDefinition, ColumnType, TableSchema,
-        };
+        use crate::protocols::postgres_wire::persistent_storage::{ColumnDefinition, TableSchema};
 
         // Check if table already exists
         if storage.table_exists(table).await? {
@@ -9574,52 +10105,7 @@ impl QueryEngine {
         }
 
         for col in &columns {
-            let column_type = match col.data_type.to_uppercase().as_str() {
-                "INTEGER" | "INT" => ColumnType::Integer,
-                "BIGINT" => ColumnType::BigInt,
-                "SERIAL" | "BIGSERIAL" => ColumnType::Serial,
-                "TEXT" => ColumnType::Text,
-                "BOOLEAN" | "BOOL" => ColumnType::Boolean,
-                "JSON" => ColumnType::Json,
-                "DOUBLE" => ColumnType::Double,
-                "TIMESTAMP" => ColumnType::Timestamp,
-                "REAL" | "FLOAT" | "FLOAT4" | "FLOAT8" | "DOUBLE PRECISION" => ColumnType::Double,
-                data_type
-                    if data_type.starts_with("NUMERIC") || data_type.starts_with("DECIMAL") =>
-                {
-                    // `NUMERIC(10,2)` reached none of the arms above and fell
-                    // through to the unknown case, which is `TEXT`. The column
-                    // then held whatever the value happened to be, and its
-                    // declared scale existed nowhere.
-                    let (precision, scale) = data_type
-                        .find('(')
-                        .and_then(|open| {
-                            let close = data_type.find(')')?;
-                            let inside = &data_type[open + 1..close];
-                            let mut parts = inside.split(',');
-                            let precision = parts.next()?.trim().parse::<u8>().ok();
-                            let scale = parts.next().and_then(|s| s.trim().parse::<u8>().ok());
-                            Some((precision, scale))
-                        })
-                        .unwrap_or((None, None));
-                    ColumnType::Numeric { precision, scale }
-                }
-                data_type => {
-                    if data_type.starts_with("VARCHAR") {
-                        // Extract length if present
-                        let len = if let Some(start) = data_type.find('(') {
-                            let end = data_type.find(')').unwrap_or(data_type.len());
-                            data_type[start + 1..end].parse().unwrap_or(255)
-                        } else {
-                            255
-                        };
-                        ColumnType::Varchar(len)
-                    } else {
-                        // Default to text for unknown types
-                        ColumnType::Text
-                    }
-                }
-            };
+            let column_type = column_type_from_name(&col.data_type);
 
             let constraints: Vec<String> = col
                 .constraints

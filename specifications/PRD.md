@@ -957,7 +957,9 @@ Properties the harness cannot reach, verified by hand against a running server:
 | Property | How it was checked | Result |
 |----------|--------------------|--------|
 | Durability | Write, stop, restart, read | Rows and schemas survive |
-| Crash safety | Write, `SIGKILL`, restart, read | Survives via the RocksDB WAL |
+| Crash safety | Write, `SIGKILL`, restart, read | Survives via the RocksDB WAL — now automated as `pg_crash_durability` |
+| Power-loss safety | `sync_wal` issues an fsync before acknowledging | Writes reach the disk; **not** verified by a real power cut |
+| Corruption | Overwrite bytes inside an SST, reopen, scan | Reported as a checksum error, never served as data |
 | Redis durability | `SET`, restart, `GET` | Survives |
 | MySQL protocol | Raw handshake on 3306 | Server greeting, protocol 10 |
 | CQL protocol | `OPTIONS` frame on 9042 | `SUPPORTED` reply |
@@ -1059,6 +1061,88 @@ Note that `unified_storage.data_dir` in `config/orbit-server.toml` is a
 separate setting from the `--data-dir` flag, which the unified store does not
 read.
 
+##### An acknowledged write reaches the disk
+
+`set_sync` appeared nowhere in the repository, so every RocksDB write used the
+default `WriteOptions`, where `sync` is false. A `put` returned once the log
+record was in the operating system's page cache. That distinction is invisible
+to a `SIGKILL` test — the kernel still holds the buffer, so the process-crash
+check passed and proved only process-crash safety. A power cut or kernel panic
+lost every acknowledged write since the last flush.
+
+`RocksDbBackend` now builds one `WriteOptions` at open and uses it on every
+`put`, `delete`, and batch, so durability is a property of the store rather
+than of which call site made the write. Shutdown flushes the log before the
+memtable, so a stop interrupted between the two still has every write
+recoverable.
+
+The trade is real and belongs to the operator: `sync_wal = false` is roughly an
+order of magnitude faster and loses recent writes on power loss.
+`RocksDbBackendConfig::unsafe_fast()` names that choice for tests.
+
+##### Corruption is detected, not served
+
+Verified by writing 5,000 rows, flushing them to SST files, overwriting 512
+bytes in the middle of each, and reopening: the scan fails with a checksum
+error rather than returning damaged rows
+(`orbit/engine/tests/durability.rs::corrupted_data_on_disk_is_detected_rather_than_served`).
+RocksDB's per-block CRC32c already did this; the test pins it so a future
+options change cannot silently turn it off. `paranoid_checks` and
+`wal_recovery_mode` are now set explicitly rather than inherited — point-in-time
+recovery keeps every completed write and discards only a torn tail, which is
+the record that was being written when the power went out and that no client
+was told had succeeded.
+
+##### The warm-tier configuration was decorative
+
+Every knob under `[unified_storage.warm_tier]` — `sync_wal`, `block_cache_mb`,
+`write_buffer_mb`, `max_write_buffers`, `enable_bloom_filters`,
+`bloom_bits_per_key`, `max_disk_gb` — was parsed into `WarmTierConfig` and read
+by nothing; `grep` found zero read sites. `RocksDbBackend::open` took a path and
+no options. An operator who set `sync_wal = true` to get durable writes got no
+fsync and no warning, which is the failure mode a configuration file is
+supposed to prevent.
+
+`compression_algorithm = "lz4"` could not have worked either: the `rocksdb`
+dependency was built with `default-features = false`, so no codec was linked
+in. `lz4` and `zstd` are now enabled in both `orbit-engine` and `orbit-server`
+— they must match, because cargo unifies them into one build of
+`librocksdb-sys` — and a test opens a database with each codec in turn, so an
+unlinked codec fails the build rather than the server's start-up.
+`max_disk_gb` remains unread and is called out here rather than left to imply a
+quota that nothing enforces.
+
+Two contradictions are now refused at start-up instead of per operation:
+`sync_wal` with `enable_wal = false` (RocksDB rejects each such write
+individually, so the server would start clean and then fail everything), and an
+unknown `compression_algorithm`.
+
+##### Verified against a running server
+
+`tests/integration/pg_crash_durability.rs` owns the server process rather than
+connecting to one: it writes 25 rows over the PostgreSQL wire, sends `SIGKILL`
+so no shutdown hook or destructor runs, restarts over the same directory, and
+checks the rows are all present, in order, undamaged — and that the `PRIMARY
+KEY` still rejects a duplicate, which proves the constraints persisted and not
+merely the column names. It derives its configuration from the shipped
+`config/orbit-server.toml` so it cannot drift from what operators run, and it
+asserts `sync_wal` is on, so the test stops claiming durability if that default
+is ever turned back off.
+
+```bash
+cargo test -p orbit-integration-tests --test pg_crash_durability -- --ignored --nocapture
+```
+
+##### Ports in the configuration file are ignored
+
+Not fixed, recorded because it misleads: `apply_cli_overrides` in
+`orbit/server/src/main.rs` assigns `args.postgres_port` (and the redis, mysql,
+cql, grpc and metrics ports, `bind_address`, and `data_dir`) over the parsed
+configuration unconditionally. Clap supplies its default whether or not the
+flag was passed, so a port set in `config/orbit-server.toml` can never take
+effect. The crash-durability test passes ports on the command line for this
+reason.
+
 #### SQLSTATE
 
 Every error left as `XX000` — `internal_error`, the code PostgreSQL uses for
@@ -1103,12 +1187,21 @@ nobody has categorised still reports `XX000`, which is what it is — returning 
 plausible-looking code for an unclassified error would be worse than admitting
 it.
 
-#### Found by probing, not yet fixed
+#### Found by probing
 
-Widening the harness into areas it had never covered found three defects that
-were fixed (above) and three that were not. They are written down with the
-statement that shows each, so they are gaps with evidence rather than a feeling
-that something is missing:
+Widening the harness into areas it had never covered found six defects. Each is
+written down with the statement that showed it, so they are gaps with evidence
+rather than a feeling that something is missing.
+
+A `NUMERIC` column renders at its **declared scale** on every read path —
+clause-free, simple `WHERE`, and `ORDER BY` go through different code, and a
+check walks all three. A column without a declared scale does not gain one.
+That fix had been written once before and **removed as dead code**, correctly
+at the time: it was inert because the column's type was still `Text`, the
+mapping bug not yet found. Re-applied afterwards, it works. The removal was
+still right — code that changes no output should not sit in the tree looking
+like a feature — but it is worth recording that "this patch does nothing" can
+mean "something upstream is broken" rather than "this patch is wrong".
 
 Two of the three were the same defect: `NUMERIC`, `DECIMAL`, `JSON`, `JSONB`,
 `INTERVAL`, `BYTEA`, `UUID` and `CHAR` were reachable as **column** types but
@@ -1142,8 +1235,6 @@ across the integer, float and decimal types, ordered for text, dates,
 timestamps and booleans, and `None` — no match — only for values that genuinely
 cannot be compared.
 
-What remains from that round:
-
 Following the `NUMERIC(10,2)` rendering to its cause found something larger
 than rendering. `SqlType` → `ColumnType` mapping in
 `orbit/server/src/protocols/common/storage/unified.rs` had no arm for
@@ -1160,20 +1251,38 @@ was **removed**: no query reached it, so it changed no output, and code that
 changes no output is the decorative kind this document argues against
 elsewhere.
 
-#### An UPDATE with an expression is silently lost
+#### An UPDATE with an expression — fixed, after two wrong attempts
 
-`UPDATE t SET n = n + 1` changes nothing. `RETURNING` reports the new value, so
-a client is told a write happened that did not — the same combination as a
-wrong answer, and worse than an error. The `SET` value is stored through
-`literal_to_json`, which turns anything that is not a literal into text.
+`UPDATE t SET n = n + 1` changed nothing while `RETURNING` reported the new
+value: a client was told a write had happened that had not. Both halves are
+fixed, and both wrong attempts are recorded because each failed for a reason
+worth knowing.
 
-**A fix for this was written and reverted.** Computing each expression against
-the row being updated made it worse: rows disappeared entirely, because the
-per-row write interacts with the versioned-update logic that marks the previous
-row deleted and re-inserts a new version. Losing rows is worse than failing to
-update them, so the change came out and the defect stands recorded rather than
-half-fixed. Whoever takes it next should start from the interaction with
-version marking, not from the expression evaluation.
+**Where the fix belongs.** A `SET` value was stripped of its quotes by
+`parse_single_set_clause`, which threw away the only thing distinguishing a
+text literal from an expression — `SET t = 'n + 1'` and `SET n = n + 1`
+arrived identical. The first attempt tried to tell them apart downstream by
+guessing (a bare word is a literal unless it names a column or carries an
+operator) and that is wrong: `SET note = 'a + b'` carries an operator. The
+quotes are now kept and `literal_to_json` unquotes them, exactly as the
+`INSERT ... VALUES` path already did. That also fixed a corruption nobody had
+noticed: `trim_matches` turned `'it''s'` into `it''s`, storing the doubled
+quote.
+
+**Ordering.** The second attempt computed each expression *after* the old rows
+were marked deleted, so an expression that failed to evaluate left the row
+marked and no new version written — the update did not merely fail, it
+destroyed the row. Every replacement row is now built before the first mark, so
+a failure returns an error having changed nothing. There is a check for that.
+
+**And a regression this document has to own.** Adding `ColumnType::Numeric`
+made stored values `Decimal`, and two `SqlValue`→JSON converters had no arm for
+it, so a decimal was written as the *string* `"10.00"`. Because an update
+identifies its row by **every** column's value, one column converting wrongly
+matched no row at all: a table that merely *contained* a `NUMERIC` column
+silently dropped updates to its other columns. That shipped in
+`804e0a16` and was found by testing the update path against a table shaped like
+a real one rather than the two-integer table the first test used.
 
 The lesson is about the number rather than the three: the check count had been
 presented as covering the remaining work, and one afternoon of probing
@@ -1181,6 +1290,236 @@ untested constructs found six things wrong. Two of them —
 `WHERE id = ANY(...)` and `WHERE id = 1 + 1` — returned wrong rows rather than
 errors, which is the class this document keeps recording and the class no
 passing suite reveals until someone writes the check.
+
+#### Parameters of unspecified type
+
+A driver may leave a parameter's type to the server — that is what OID `0`
+means, and it is what most drivers send. Every such parameter was filled in as
+**text**, which broke the extended query protocol in six ways at once. The
+conformance harness had not caught any of them because it used simple queries
+almost throughout; these arrive through `Parse`/`Bind`/`Execute`.
+
+| Statement | What happened |
+|-----------|---------------|
+| `WHERE id = $1` | matched no rows — an integer column compared against `'2'` |
+| `WHERE id = $1 AND name = $2` | failed outright: `Cannot compare Integer(1) and Text("1")` |
+| `WHERE amt = $1` on `NUMERIC` | matched no rows |
+| `WHERE flag = $1` on `BOOLEAN` | matched no rows |
+| `LIMIT $1` | the clause was ignored and every row came back |
+| `UPDATE ... WHERE id = $2` | reported success and changed nothing |
+
+The engine could already work out a parameter's type from the column it is
+compared against — `describe_parameters` does exactly that — but it was only
+consulted to *answer* a `Describe`, never to decide how to bind. Parse now asks
+it for anything the client left unspecified, falling back to text only when
+inference finds nothing. Two gaps in the inference itself went with it:
+`NUMERIC` was missing from the types written unquoted, and a placeholder in
+`LIMIT`/`OFFSET` is compared against no column at all, so nothing typed it.
+
+The shape of this one is worth keeping: the server *knew* the right answer and
+told clients so when asked, while using a different answer internally. Nothing
+about the code looked wrong, and the check that would have caught it is the one
+nobody had written.
+
+Two more from the same probe, both the same shape — a capability implemented
+but reachable only by a route the client is not obliged to take:
+
+- **Binary result format was ignored.** A client asks for it in `Bind`. The
+  encoder existed and worked, but the column types it needs were recorded only
+  by `Describe`, which the protocol does not require. Without one, every value
+  fell back to text and a client that asked for binary silently got characters.
+  The types are now described on demand, and only when binary was actually
+  asked for, so a text query pays nothing.
+- **An empty statement was rejected.** The extended path answered a parse
+  error where PostgreSQL answers `EmptyQueryResponse` — which is how a client
+  tells "nothing to run" from "your statement was refused". The simple-query
+  path had always answered it correctly; only the extended one had not.
+
+What the same probe found already correct, now with checks: portal suspension
+(a row-limited `Execute` replies `PortalSuspended` and the next `Execute`
+continues rather than restarting), `Describe` of a statement returning both a
+`ParameterDescription` and a `RowDescription` with the right type OIDs,
+re-binding one statement with different parameters, and using a closed
+statement failing rather than silently succeeding.
+
+#### Transaction state
+
+Probing the transaction state machine — the part a driver relies on to know
+what it may send next — found two defects, and confirmed the rest correct.
+
+- **A statement in a failed block reported `XX000`.** PostgreSQL reports
+  `25P02` (`in_failed_sql_transaction`), which is how a driver knows it must
+  roll back rather than retry; as `XX000` it was indistinguishable from the
+  backend falling over. The refusal itself was already right, and
+  `ReadyForQuery` already reported `E` — only the code was wrong.
+- **A block sent as one message left a transaction open.** The session's state
+  was read from the first word of the whole message, so
+  `BEGIN; INSERT ...; COMMIT` was seen as a `BEGIN` alone and the trailing
+  `COMMIT` went unnoticed. The connection was left holding a transaction the
+  client had already ended — every later statement silently joined it, and a
+  disconnect would have discarded them. Each statement in a message is now
+  noted in turn.
+
+Correct already, and now checked: `ReadyForQuery` reporting `I`/`T`/`E` as the
+session moves; `COMMIT` of a failed block rolling back rather than committing;
+`SAVEPOINT` and `ROLLBACK TO SAVEPOINT`; and two statements in one message
+returning two results with their own command tags.
+
+#### COPY, notification and type formatting
+
+Probing the three surfaces the harness had barely touched found one defect and
+confirmed a good deal already right.
+
+**`WITH CSV` was parsed by nothing.** `COPY ... TO STDOUT WITH CSV` wrote
+tab-separated text and `COPY ... FROM STDIN WITH CSV` read a CSV line as one
+field, failing with a column-count mismatch. Both directions now handle CSV
+properly: a field is quoted only when it contains a comma, a quote or a line
+break; a quote inside a quoted field is doubled; and an empty unquoted field is
+NULL, which is how CSV spells it — the text format's `\N` means nothing here.
+There is a round-trip check covering exactly those three cases, because they
+are what separate CSV from splitting on commas.
+
+Correct already: `COPY FROM STDIN` and `COPY TO STDOUT` in the text format,
+including backslash escapes and `\N`; a client-initiated `CopyFail` aborting
+the load and leaving the table unchanged; `LISTEN` and `NOTIFY` accepted with a
+payload.
+
+**Type formatting was correct throughout** — booleans as `t`/`f`, timestamps in
+ISO form, NULL sorting last by default and first under `NULLS FIRST`, NULL
+rendered as a real NULL rather than the text "NULL", an empty result set
+carrying its row description, and `COUNT(n)` counting non-nulls where
+`COUNT(*)` counts rows. Nothing to fix; worth recording that it was checked
+rather than assumed.
+
+#### Sequences, conflicts, identifiers, text and subqueries
+
+A probe across five more surfaces found one defect and confirmed the rest.
+
+**A scalar subquery worked in `WHERE` but not in the select list.** Subqueries
+were resolved for the predicate and for `HAVING`, so the very same subquery
+that filtered correctly failed as unimplemented one clause to the left:
+`SELECT (SELECT COUNT(*) FROM t)` reached the evaluator with the subquery still
+in it. The select list is now resolved too, and an empty subquery yields NULL
+rather than an error, as SQL requires.
+
+Correct already, and now partly checked: `SERIAL` producing distinct non-null
+keys; `ON CONFLICT ... DO NOTHING` leaving the existing row and
+`ON CONFLICT ... DO UPDATE` replacing it; a quoted mixed-case identifier
+keeping its case, with the unquoted spelling correctly *not* finding it;
+UTF-8 round-tripping including accents, CJK and emoji, with `LENGTH` counting
+characters rather than bytes and `LIKE` matching across multibyte text; and
+`IN (subquery)`, `NOT IN (subquery)` and correlated `EXISTS`.
+
+#### DDL evolution, views, indexes and joins
+
+**`ALTER TABLE ... ADD COLUMN` reported success and did nothing.** No branch
+handled it, so it fell through to a generic "Command completed successfully"
+and the column was simply not there. Every later reference then failed with
+`column does not exist`, pointing at the query rather than at the DDL that
+never happened — the same silent acceptance this document records for `DO`
+blocks, `CREATE FUNCTION` and `DROP TYPE`. It now adds the column, fills the
+rows that already exist when a `DEFAULT` is given (without which the same table
+answers two ways depending on when a row arrived), makes `COLUMN` optional as
+PostgreSQL does, and refuses a duplicate with `42701`.
+
+Extracting that meant the declared-type table now has **one** copy, shared by
+`CREATE TABLE` and `ADD COLUMN`. Two copies would have drifted, which is the
+failure mode recorded here more than any other.
+
+Correct already, and checked: views (`CREATE VIEW`, selecting from one with and
+without a clause, aggregating over one, `DROP VIEW`); `CREATE INDEX` and
+`DROP INDEX`; `ALTER TABLE ... RENAME TO`; `INNER`, `LEFT` and `CROSS JOIN`,
+and `JOIN ... USING`; multi-row `RETURNING` on `INSERT`, `UPDATE` and `DELETE`.
+
+**`CREATE UNIQUE INDEX` did not enforce uniqueness.** Nothing handled the
+statement, so it reported success and duplicates went in silently — an
+integrity constraint the caller asked for by name. Uniqueness is recorded on
+the column, which is where it is already checked, so the index now works;
+`DROP INDEX` takes the constraint away again; creating one over rows that
+already violate it is refused with `23505` rather than claiming something about
+the table that is not true; and a multi-column unique index is refused with
+`0A000`, because a schema records uniqueness per column and there is nowhere
+for one to live. A plain, non-unique index is still accepted without being
+built — it changes no answer, only speed.
+
+**The outer joins kept only unmatched *left* rows.** `RIGHT JOIN` therefore
+behaved as an inner join and `FULL OUTER JOIN` lost both unmatched sides —
+counting 2 where 4 were right. Worse, an unmatched row was pushed *without* the
+other side's columns rather than with them set to NULL, so
+`SELECT val FROM a LEFT JOIN b ...` failed with `column "val" does not exist`
+instead of returning NULL. Unmatched rows on both sides are now kept and padded.
+
+**A finding this document got wrong.** `ALTER TABLE ... DROP COLUMN` and
+`RENAME COLUMN` were recorded here as failing on a column that exists. They do
+not. The probe that "found" them dropped and renamed a column it had added a
+moment earlier with `ADD COLUMN` — which was silently doing nothing, so the
+column was never there and both statements were right to refuse. Two working
+features were written down as broken because the failure upstream was silent.
+Both are now checked directly, on columns declared in `CREATE TABLE`.
+
+#### Pipeline error recovery
+
+**A failed statement did not stop the rest of its pipeline.** The protocol
+requires everything between an error and the client's next `Sync` to be
+discarded; instead the queued statements ran, so a client pipelining writes had
+later ones applied when it expected them skipped. Verified against the raw
+protocol: three statements sent before one `Sync` with the middle one failing
+now yield the first statement's rows, the error, and then only
+`ReadyForQuery` — where before, the third statement's `ParseComplete`,
+`BindComplete`, `DataRow` and `CommandComplete` all followed the error.
+
+**Two mistakes on the way, both of which hung the harness**, and both worth
+recording because a hang is the least informative failure there is:
+
+- The first attempt discarded `CopyData` and `CopyDone` too. Those are what end
+  a copy stream, so both sides waited for each other for ever.
+- The second scoped the skipping to *all* messages rather than the extended
+  protocol's. A simple query synchronises with its own `ReadyForQuery` and
+  never sends `Sync`, so after any failing simple statement the connection
+  discarded everything the client sent next — including the queries that would
+  have cleared the state. Nothing recovered it.
+
+Both were found by logging the last statement the server saw before the silence
+rather than by reading the code again: the hang pointed at
+`INSERT INTO conf_notnull (id) VALUES (NULL)`, a statement whose *failure* was
+the trigger, which named the mechanism immediately.
+
+The state is now entered only by `Parse`/`Bind`/`Execute`/`Describe`/`Close`,
+cleared by `Sync`, and never applied while a copy is open.
+
+Also checked and already correct: a prepared statement re-plans after the table
+under it changes — after `ADD COLUMN` it returns the new column, after
+`DROP COLUMN` it does not, with no stale result and no error.
+
+#### Set operations, aggregates, windows and functions
+
+A probe across this surface found two defects and confirmed a great deal.
+
+- **`strpos` had its arguments reversed.** `position(sub IN str)` and
+  `strpos(str, sub)` are the same function with opposite argument orders, and
+  both were routed to one implementation — so `strpos('abc', 'b')` searched
+  "abc" inside "b" and answered `0`. A wrong answer, not an error.
+- **`AVG` over exact inputs went through a float.** The mean of 2, 3 and 5 came
+  back as `3.3333333333333335`, whose last digit is a rounding artifact of
+  binary floating point. PostgreSQL averages integers as `numeric`; so does
+  this now, when every input is exact.
+
+Correct already, and checked: `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`;
+`GROUP BY` with `COUNT`/`SUM`/`MIN`/`MAX`, `HAVING` both including and
+excluding, `COUNT(DISTINCT ...)`; `ROW_NUMBER`, `RANK` with ties, `SUM OVER ()`,
+`PARTITION BY`, `LAG` with its leading NULL; `UPPER`/`LOWER`, `TRIM`,
+`REPLACE`, `||`, `ABS`, `ROUND`, `MOD`, `CEIL`, `FLOOR`, `GREATEST`, `LEAST`,
+`NOW`, `CURRENT_DATE` and `STRING_AGG`.
+
+**`POSITION(sub IN str)`** — the standard spelling — now parses. The first
+attempt added `IN` to the argument-separator list and changed nothing, because
+by the time that list is consulted the comparison rules have already taken
+`sub IN str` and built an `IN` expression; that attempt was removed rather than
+left in looking like a feature. The needle is now parsed one level below the
+comparison rules, where `IN` is not an operator, and only for `POSITION` —
+`IN` keeps its meaning everywhere else, which is checked both as a list
+operator and as `NOT IN`. Character positions, not byte offsets:
+`POSITION('語' IN '日本語')` is 3.
 
 #### Observed once, unexplained
 

@@ -484,11 +484,23 @@ fn evaluate_over_group(
             }
         }
         "AVG" => {
-            let numbers: Vec<f64> = inputs.iter().filter_map(as_f64).collect();
-            if numbers.is_empty() {
-                SqlValue::Null
+            // PostgreSQL averages exact inputs exactly: `AVG` over integers is
+            // `numeric`, not a float. Through `f64` the mean of 2, 3 and 5 came
+            // back as `3.3333333333333335` — a value that is not the average of
+            // anything, carrying a rounding artifact in its last digit.
+            if !inputs.is_empty() && inputs.iter().all(|v| as_decimal(v).is_some()) {
+                let total: rust_decimal::Decimal = inputs.iter().filter_map(as_decimal).sum();
+                let count = rust_decimal::Decimal::from(inputs.len());
+                total
+                    .checked_div(count)
+                    .map_or(SqlValue::Null, SqlValue::Decimal)
             } else {
-                SqlValue::DoublePrecision(numbers.iter().sum::<f64>() / numbers.len() as f64)
+                let numbers: Vec<f64> = inputs.iter().filter_map(as_f64).collect();
+                if numbers.is_empty() {
+                    SqlValue::Null
+                } else {
+                    SqlValue::DoublePrecision(numbers.iter().sum::<f64>() / numbers.len() as f64)
+                }
             }
         }
         "MIN" => inputs

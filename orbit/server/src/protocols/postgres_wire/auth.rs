@@ -28,6 +28,51 @@ pub enum AuthMethod {
     MD5,
     /// SCRAM-SHA-256 authentication
     ScramSha256,
+    /// GSSAPI (Kerberos) authentication.
+    ///
+    /// No credential is stored for this method: the ticket is checked by the
+    /// Kerberos library against a KDC, and this server only decides whether
+    /// the principal it vouched for may log in as the requested user.
+    Gss,
+}
+
+/// The method this server authenticates with, from `ORBIT_PG_AUTH_METHOD`.
+///
+/// Defaults to SCRAM-SHA-256. An unreadable value is refused loudly rather
+/// than falling back: silently dropping to a weaker method — or to `trust` —
+/// because of a typo is how a server ends up open.
+#[must_use]
+pub fn configured_auth_method() -> AuthMethod {
+    match std::env::var("ORBIT_PG_AUTH_METHOD") {
+        Ok(name) => AuthMethod::parse(&name).unwrap_or_else(|unknown| {
+            tracing::error!(
+                method = %unknown,
+                "ORBIT_PG_AUTH_METHOD is not a method this server knows; \
+                 falling back to scram-sha-256"
+            );
+            AuthMethod::ScramSha256
+        }),
+        Err(_) => AuthMethod::ScramSha256,
+    }
+}
+
+impl AuthMethod {
+    /// Read the method from `name`, as it is written in configuration.
+    ///
+    /// # Errors
+    /// Returns the unrecognised name. An unknown method is refused rather than
+    /// defaulting, because every plausible default is either a lock-out or —
+    /// worse — `trust`.
+    pub fn parse(name: &str) -> Result<Self, String> {
+        match name.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "trust" => Ok(Self::Trust),
+            "password" | "cleartext" => Ok(Self::Password),
+            "md5" => Ok(Self::MD5),
+            "scram-sha-256" | "scram" => Ok(Self::ScramSha256),
+            "gss" | "gssapi" | "kerberos" => Ok(Self::Gss),
+            other => Err(other.to_string()),
+        }
+    }
 }
 
 /// User credentials stored in the system
@@ -75,6 +120,17 @@ impl UserStore {
             AuthMethod::MD5 => UserCredentials {
                 username: username.clone(),
                 password_hash: password, // Will be hashed with salt + username during auth
+                scram_stored_key: None,
+                scram_server_key: None,
+                scram_salt: None,
+                scram_iterations: None,
+            },
+            // A GSSAPI login has no password to store. An entry is still
+            // written so the user exists, with no credential that could be
+            // used to log in by any other method.
+            AuthMethod::Gss => UserCredentials {
+                username: username.clone(),
+                password_hash: String::new(),
                 scram_stored_key: None,
                 scram_server_key: None,
                 scram_salt: None,
@@ -169,6 +225,7 @@ impl AuthManager {
             AuthMethod::ScramSha256 => AuthenticationResponse::SASL {
                 mechanisms: vec!["SCRAM-SHA-256".to_string()],
             },
+            AuthMethod::Gss => AuthenticationResponse::GSS,
         }
     }
 
@@ -205,6 +262,10 @@ impl AuthManager {
                 // SCRAM verification handled separately
                 Ok(false)
             }
+            // There is no password to verify: a GSSAPI login never sends one,
+            // and answering anything but `false` here would let a password
+            // message stand in for a ticket.
+            AuthMethod::Gss => Ok(false),
         }
     }
 

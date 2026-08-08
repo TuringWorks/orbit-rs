@@ -38,6 +38,8 @@
 //! let graph_adapter = integration.graph_adapter("cypher");
 //! ```
 
+pub use orbit_engine::unified::rocksdb_backend::{Compression, RocksDbBackendConfig};
+
 use orbit_engine::unified::{
     rocksdb_backend::RocksDbBackend, AdapterFactory, CqlAdapter, GraphAdapter, MemoryBackend,
     Protocol, RedisAdapter, RestAdapter, SchemaRegistry, SqlAdapter, UnifiedStorage,
@@ -60,6 +62,10 @@ pub struct UnifiedStorageIntegrationConfig {
     pub max_scan_limit: usize,
     /// Use memory backend (for testing)
     pub use_memory_backend: bool,
+    /// How the persistent backend trades durability against speed.
+    ///
+    /// Ignored when `use_memory_backend` is set, which keeps nothing.
+    pub durability: RocksDbBackendConfig,
 }
 
 impl Default for UnifiedStorageIntegrationConfig {
@@ -70,6 +76,7 @@ impl Default for UnifiedStorageIntegrationConfig {
             ttl_check_interval_secs: 60,
             max_scan_limit: 1_000_000,
             use_memory_backend: false,
+            durability: RocksDbBackendConfig::default(),
         }
     }
 }
@@ -118,14 +125,18 @@ impl UnifiedStorageIntegration {
         } else {
             let path = Path::new(&config.data_dir).join("unified");
             info!(
-                "[UnifiedStorage] Using RocksDB backend at {}",
-                path.display()
+                path = %path.display(),
+                sync_writes = config.durability.sync_writes,
+                wal = config.durability.enable_wal,
+                "[UnifiedStorage] Using RocksDB backend"
             );
-            Arc::new(RocksDbBackend::open(&path).map_err(|e| {
-                UnifiedStorageError::InitializationFailed(format!(
-                    "could not open the unified store: {e}"
-                ))
-            })?)
+            Arc::new(
+                RocksDbBackend::open_with(&path, &config.durability).map_err(|e| {
+                    UnifiedStorageError::InitializationFailed(format!(
+                        "could not open the unified store: {e}"
+                    ))
+                })?,
+            )
         };
 
         // Create storage configuration

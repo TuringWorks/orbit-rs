@@ -123,6 +123,13 @@ pub enum FrontendMessage {
     SASLResponse {
         data: Bytes,
     },
+    /// A GSSAPI token from the client.
+    ///
+    /// Carried by the same `'p'` message as a password, and told apart from
+    /// one only by what the server last asked for — see [`PasswordMessageKind`].
+    GSSResponse {
+        data: Bytes,
+    },
     CopyData {
         data: Bytes,
     },
@@ -287,9 +294,34 @@ pub struct FieldDescription {
     pub format: i16,
 }
 
+/// What a `'p'` message means on this connection.
+///
+/// The protocol gives password messages, SASL responses and GSSAPI tokens the
+/// same `'p'` tag, and the only thing that distinguishes them is which
+/// `Authentication` request the server sent last. Guessing from the payload
+/// shape works for the first two because both are text, but a GSSAPI token is
+/// arbitrary binary: it usually contains a zero byte, so reading it as a C
+/// string truncates it, and the truncated token is rejected by the mechanism
+/// with an error that says nothing about why.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PasswordMessageKind {
+    /// A password or a SASL response.
+    #[default]
+    Credential,
+    /// A GSSAPI token, to be taken as raw bytes.
+    GssToken,
+}
+
 impl FrontendMessage {
-    /// Parse a frontend message from bytes
+    /// Parse a frontend message from bytes.
+    ///
+    /// Equivalent to [`Self::parse_as`] with [`PasswordMessageKind::Credential`].
     pub fn parse(buf: &mut BytesMut) -> ProtocolResult<Option<Self>> {
+        Self::parse_as(buf, PasswordMessageKind::Credential)
+    }
+
+    /// Parse a frontend message, reading `'p'` as `kind`.
+    pub fn parse_as(buf: &mut BytesMut, kind: PasswordMessageKind) -> ProtocolResult<Option<Self>> {
         if buf.len() < 5 {
             return Ok(None); // Need at least type byte + length
         }
@@ -357,7 +389,12 @@ impl FrontendMessage {
             b'c' => Self::parse_copy_done(&mut cursor)?,
             b'f' => Self::parse_copy_fail(&mut cursor)?,
             b'F' => Self::parse_function_call(&mut cursor)?,
-            b'p' => Self::parse_sasl_or_password(&mut cursor)?,
+            b'p' => match kind {
+                PasswordMessageKind::Credential => Self::parse_sasl_or_password(&mut cursor)?,
+                PasswordMessageKind::GssToken => FrontendMessage::GSSResponse {
+                    data: Bytes::copy_from_slice(&msg_data),
+                },
+            },
             _ => {
                 return Err(ProtocolError::PostgresError(format!(
                     "Unknown message type: {}",
@@ -685,7 +722,26 @@ impl BackendMessage {
                         buf.put_i32(12);
                         buf.put_slice(data);
                     }
-                    _ => buf.put_i32(0), // TODO: Implement other auth types
+                    // Every remaining variant used to fall into a catch-all
+                    // that wrote 0 — and 0 is `AuthenticationOk`. Asking for
+                    // GSSAPI therefore told the client it had already
+                    // authenticated, and it proceeded as a logged-in session.
+                    // There is no arm here that is not a real request code.
+                    AuthenticationResponse::KerberosV5 => buf.put_i32(2),
+                    AuthenticationResponse::SCMCredential => buf.put_i32(6),
+                    AuthenticationResponse::GSS => buf.put_i32(7),
+                    AuthenticationResponse::GSSContinue { data } => {
+                        buf.put_i32(8);
+                        buf.put_slice(data);
+                    }
+                    AuthenticationResponse::SSPI => buf.put_i32(9),
+                    // Certificate authentication has no request code: the
+                    // certificate was presented during the TLS handshake, so
+                    // by the time this is reached the client is already
+                    // authenticated and the message really is `Ok`. Spelled
+                    // out rather than reached by falling through, because the
+                    // two differ only in intent.
+                    AuthenticationResponse::Certificate => buf.put_i32(0),
                 }
 
                 let len = buf.len() - pos;
