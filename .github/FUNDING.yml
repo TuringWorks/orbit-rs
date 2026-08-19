@@ -1,4 +1,6 @@
 # These are supported funding model platforms
+# NOTE: github usernames must be validated to contain only alphanumeric
+# characters and hyphens to prevent injection. Use a single username per entry.
 
 github: # Replace with up to 4 GitHub Sponsors-enabled usernames e.g., [user1, user2]
 patreon: # Replace with a single Patreon username

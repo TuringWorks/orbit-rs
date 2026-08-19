@@ -1,0 +1,77 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+permissions:
+  contents: read
+jobs:
+  build:
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact: app-linux-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: app-macos-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: app-windows-x64.exe
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            artifact: app-linux-arm64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: app-macos-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Build
+        run: cross build --release --target ${{ matrix.target }}
+      - name: Validate artifact name
+        run: |
+          if echo "${{ matrix.artifact }}" | grep -qP '[^A-Za-z0-9._-]'; then
+            echo "Invalid artifact name: contains unsafe characters"
+            exit 1
+          fi
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+      - name: Validate release files
+        run: |
+          find . -type f | while read -r f; do
+            case "$f" in
+              ../*|*/../*|*../*) echo "Path traversal detected: $f"; exit 1 ;;
+            esac
+            case "$(basename "$f")" in
+              *[!A-Za-z0-9._-]*) echo "Unsafe filename: $f"; exit 1 ;;
+            esac
+          done
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app-linux-x64
+            app-macos-arm64
+            app-windows-x64.exe
+            app-linux-arm64
+            app-macos-x64
