@@ -39,7 +39,7 @@ fn validate_output_dir(output_dir: &str) -> Result<PathBuf, BenchmarkError> {
         }
     }
 
-    Ok.path_buf())
+    Ok(path.to_path_buf())
 }
 
 /// Performance benchmarking framework
