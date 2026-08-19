@@ -348,12 +348,6 @@ impl Default for Observable {
     }
 }
 
-impl Default for Observable {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Observable {
     pub fn new() -> Self {
         Self {
@@ -380,12 +374,6 @@ impl Observable {
 // Simple observer implementation for testing
 pub struct EventLogger {
     events: Mutex<Vec<String>>,
-}
-
-impl Default for EventLogger {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Default for EventLogger {

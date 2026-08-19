@@ -149,12 +149,6 @@ impl Default for ConfigBuilder<Incomplete> {
     }
 }
 
-impl Default for ConfigBuilder<Incomplete> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ConfigBuilder<Incomplete> {
     pub fn new() -> Self {
         Self {
