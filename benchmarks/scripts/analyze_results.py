@@ -7,6 +7,7 @@ This script analyzes benchmark results and generates comparison reports,
 performance trends, and regression detection.
 """
 
+import html
 import json
 import os
 import sys
@@ -214,15 +215,19 @@ class BenchmarkAnalyzer:
 """
         
         for bench_name, bench_data in summary.get('benchmarks', {}).items():
+            # Escape HTML special characters in bench_name to prevent stored XSS
+            safe_bench_name = html.escape(bench_name)
             success_rate = bench_data.get('success_rate', 0) * 100
             success_class = 'success' if success_rate > 90 else 'warning' if success_rate > 70 else 'error'
+            trend = bench_data.get('performance_trend', {}).get('trend', 'Unknown')
+            safe_trend = html.escape(str(trend))
             
             html_content += f"""
         <div class="benchmark">
-            <h3>{bench_name}</h3>
+            <h3>{safe_bench_name}</h3>
             <p><strong>Success Rate:</strong> <span class="{success_class}">{success_rate:.1f}%</span></p>
             <p><strong>Total Runs:</strong> {bench_data.get('runs', 0)}</p>
-            <p><strong>Trend:</strong> {bench_data.get('performance_trend', {}).get('trend', 'Unknown')}</p>
+            <p><strong>Trend:</strong> {safe_trend}</p>
         </div>
 """
         
@@ -235,12 +240,16 @@ class BenchmarkAnalyzer:
         
         if regressions:
             for regression in regressions:
+                safe_benchmark = html.escape(regression['benchmark'])
+                safe_severity = html.escape(str(regression['severity']))
+                safe_description = html.escape(regression['description'])
+                safe_recommendation = html.escape(regression['recommendation'])
                 html_content += f"""
         <div class="regression">
-            <h4>{regression['benchmark']}</h4>
-            <p><strong>Severity:</strong> {regression['severity']}</p>
-            <p>{regression['description']}</p>
-            <p><em>Recommendation:</em> {regression['recommendation']}</p>
+            <h4>{safe_benchmark}</h4>
+            <p><strong>Severity:</strong> {safe_severity}</p>
+            <p>{safe_description}</p>
+            <p><em>Recommendation:</em> {safe_recommendation}</p>
         </div>
 """
         else:
@@ -316,7 +325,7 @@ def main():
         print("❌ No benchmark results found")
         print("💡 Run benchmarks first: cd orbit-benchmarks && ./scripts/run_benchmarks.sh")
         sys.exit(1)
-    
+
     if args.compare:
         print(f"🔍 Comparing benchmark runs: {args.compare[0]} vs {args.compare[1]}")
         comparison = analyzer.compare_runs(args.compare[0], args.compare[1])

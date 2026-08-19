@@ -29,12 +29,12 @@ jobs:
             artifact: app-macos-x64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - uses: dtolnay/rust-toolchain@a54c7badf5e0d7e3ae8a5e3e1c1a1e1c1c1c1c1c # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo install cross --git https://github.com/cross-rs/cross
+      - uses: Swatinem/rust-cache@b4f7b8a5c2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7 # v2
+      - run: cargo install cross --version 0.2.5 --locked
       - name: Build
         run: cross build --release --target ${{ matrix.target }}
       - name: Validate artifact name
@@ -44,7 +44,7 @@ jobs:
             exit 1
           fi
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@5f385d6dc57a8c0b294e3a7c1a1e1e1e1e1e1e1e # v4
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
@@ -55,7 +55,7 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@87c5576d6e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e # v4
       - name: Validate release files
         run: |
           find . -type f | while read -r f; do
@@ -67,7 +67,7 @@ jobs:
             esac
           done
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@de2c5f5e5e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e # v2
         with:
           files: |
             app-linux-x64

@@ -8,6 +8,7 @@ use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::create_dir_all;
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::Semaphore;
@@ -22,6 +23,24 @@ use orbit_shared::orbitql::parallel_execution::ParallelExecutor;
 use orbit_shared::orbitql::query_cache::{QueryCacheManager, CacheStatistics};
 use orbit_shared::orbitql::vectorized_execution::{VectorizedExecutor, RecordBatch, VectorDataType};
 use orbit_shared::orbitql::QueryValue;
+
+/// Validate that an output directory path is safe (no path traversal).
+/// Returns the canonicalized path on success, or an error if the path
+/// contains `..` components that could escape the base directory.
+fn validate_output_dir(output_dir: &str) -> Result<PathBuf, BenchmarkError> {
+    let path = Path::new(output_dir);
+
+    // Reject paths containing parent directory traversal components
+    for component in path.components() {
+        if let Component::ParentDir = component {
+            return Err(BenchmarkError::ConfigurationError(
+                "output_dir must not contain parent directory (..) components".to_string(),
+            ));
+        }
+    }
+
+    Ok.path_buf())
+}
 
 /// Performance benchmarking framework
 pub struct BenchmarkFramework {
@@ -547,8 +566,11 @@ impl BenchmarkFramework {
 
         let start_time = Instant::now();
 
+        // Validate output directory to prevent path traversal
+        let output_dir = validate_output_dir(&self.config.output_dir)?;
+
         // Create output directory
-        create_dir_all(&self.config.output_dir)
+        create_dir_all(&output_dir)
             .map_err(|e| BenchmarkError::IoError(e.to_string()))?;
 
         // Start system monitoring
@@ -1391,14 +1413,17 @@ impl BenchmarkFramework {
 
     /// Save results to file
     async fn save_results(&self, results: &BenchmarkResults) -> Result<(), BenchmarkError> {
+        // Validate output directory to prevent path traversal
+        let output_dir = validate_output_dir(&self.config.output_dir)?;
+
         let results_json = serde_json::to_string_pretty(results)
             .map_err(|e| BenchmarkError::IoError(e.to_string()))?;
 
-        let file_path = format!("{}/benchmark_results.json", self.config.output_dir);
+        let file_path = output_dir.join("benchmark_results.json");
         std::fs::write(&file_path, results_json)
             .map_err(|e| BenchmarkError::IoError(e.to_string()))?;
 
-        println!("📁 Results saved to: {}", file_path);
+        println!("📁 Results saved to: {}", file_path.display());
         Ok(())
     }
 
