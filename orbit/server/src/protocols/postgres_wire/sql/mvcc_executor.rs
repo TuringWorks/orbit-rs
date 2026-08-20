@@ -654,6 +654,7 @@ impl MvccSqlExecutor {
         let table_schema =
             schema.unwrap_or_else(
                 || crate::protocols::postgres_wire::sql::executor::TableSchema {
+                    oid: 0,
                     name: name.to_string(),
                     columns: Vec::new(),
                     constraints: Vec::new(),

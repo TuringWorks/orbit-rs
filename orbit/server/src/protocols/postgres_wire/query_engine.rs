@@ -1673,6 +1673,7 @@ impl QueryEngine {
         }
 
         let schema = TableSchema {
+            oid: 0,
             name: table.to_string(),
             columns: column_defs,
             created_at: chrono::Utc::now(),

@@ -39,6 +39,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Starting OID for user-created tables in pg_catalog queries.
+/// PostgreSQL reserves OIDs below this value for system catalogs.
+const PG_USER_TABLE_OID_START: i32 = 16384;
+
+
 /// Query execution result
 #[derive(Debug, Clone)]
 pub enum ExecutionResult {
@@ -162,6 +167,9 @@ pub enum ExecutionResult {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TableSchema {
     pub name: String, // Store as string for serialization
+    /// PostgreSQL OID assigned at table creation (stable across restarts and schema changes)
+    #[serde(default)]
+    pub oid: i32,
     pub columns: Vec<ColumnSchema>,
     pub constraints: Vec<TableConstraintSchema>,
     pub indexes: Vec<IndexSchema>,
@@ -230,6 +238,9 @@ pub struct IndexSchema {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ViewSchema {
     pub name: String, // Store as string for serialization
+    /// PostgreSQL OID assigned at view creation (stable across restarts and schema changes)
+    #[serde(default)]
+    pub oid: i32,
     pub query: String,
     pub columns: Option<Vec<String>>,
     pub materialized: bool,
@@ -621,6 +632,9 @@ pub struct SqlExecutor {
 
     // Session-level sequence state for lastval()
     sequence_last_value: Arc<std::sync::RwLock<Option<(String, i64)>>>,
+
+    // OID allocator (atomic counter for thread-safe OID assignment)
+    next_oid: Arc<std::sync::atomic::AtomicI32>,
 }
 
 impl SqlExecutor {
@@ -734,6 +748,7 @@ impl SqlExecutor {
             vector_extensions: Arc::new(RwLock::new(HashMap::new())),
             expression_evaluator: Arc::new(RwLock::new(ExpressionEvaluator::new())),
             sequence_last_value: Arc::new(std::sync::RwLock::new(None)),
+            next_oid: Arc::new(std::sync::atomic::AtomicI32::new(PG_USER_TABLE_OID_START)),
         }
     }
 
@@ -765,6 +780,40 @@ impl SqlExecutor {
             self.sequences.clone(),
             self.sequence_last_value.clone(),
         ))
+    }
+
+    /// Assign OIDs to any table/view with oid=0 (legacy data or unassigned).
+    /// Must be called with write locks held on tables and views.
+    async fn ensure_oids_assigned(&self) {
+        let mut tables = self.tables.write().await;
+        let mut views = self.views.write().await;
+
+        // Find max OID across tables and views
+        let max_oid = std::cmp::max(
+            tables.values().map(|t| t.oid).max().unwrap_or(PG_USER_TABLE_OID_START - 1),
+            views.values().map(|v| v.oid).max().unwrap_or(PG_USER_TABLE_OID_START - 1),
+        );
+
+        let mut next_oid = std::cmp::max(max_oid + 1, PG_USER_TABLE_OID_START);
+
+        // Assign OIDs to tables with oid=0
+        for table in tables.values_mut() {
+            if table.oid < PG_USER_TABLE_OID_START {
+                table.oid = next_oid;
+                next_oid += 1;
+            }
+        }
+
+        // Assign OIDs to views with oid=0
+        for view in views.values_mut() {
+            if view.oid < PG_USER_TABLE_OID_START {
+                view.oid = next_oid;
+                next_oid += 1;
+            }
+        }
+
+        // Update the atomic counter
+        self.next_oid.store(next_oid, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Set the current database context
@@ -1220,6 +1269,8 @@ impl SqlExecutor {
         if tables.contains_key(&table_name) && !stmt.if_not_exists {
             return Err(ProtocolError::already_exists("Table", &table_name));
         }
+        // Allocate OID using atomic counter (thread-safe)
+        let next_oid = self.next_oid.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         drop(tables);
 
         // Convert AST columns to schema
@@ -1324,6 +1375,7 @@ impl SqlExecutor {
 
         let table_schema = TableSchema {
             name: table_name.clone(), // Use string name
+            oid: next_oid,
             columns,
             constraints,
             indexes: Vec::new(),
@@ -1408,10 +1460,13 @@ impl SqlExecutor {
         if views.contains_key(&view_name) && !stmt.if_not_exists && !stmt.replace {
             return Err(ProtocolError::already_exists("View", &view_name));
         }
+        // Allocate OID using atomic counter (thread-safe)
+        let next_oid = self.next_oid.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         drop(views);
 
         let view_schema = ViewSchema {
             name: view_name.clone(),                    // Use string name
+            oid: next_oid,
             query: "TODO: serialize query".to_string(), // TODO: Serialize SELECT statement
             columns: stmt.columns,
             materialized: stmt.materialized,
@@ -4968,13 +5023,13 @@ impl SqlExecutor {
 
     /// Query pg_catalog.pg_class - table/index/view definitions
     async fn query_pg_class(&self, columns: &[String]) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        self.ensure_oids_assigned().await;
         let tables = self.tables.read().await;
         let views = self.views.read().await;
         let mut rows = Vec::new();
-        let mut oid = 16384; // Start OID for user tables
-
-        // Add user tables
+        // Add user tables using stored OIDs (stable across restarts and schema changes)
         for (table_name, table_schema) in tables.iter() {
+            let oid = table_schema.oid;
             let mut row_data = HashMap::new();
             row_data.insert("oid".to_string(), oid.to_string());
             row_data.insert("relname".to_string(), table_name.clone());
@@ -5013,11 +5068,11 @@ impl SqlExecutor {
                 result_row.push(Some(value));
             }
             rows.push(result_row);
-            oid += 1;
         }
 
-        // Add views
-        for (view_name, _view_schema) in views.iter() {
+        // Add views using stored OIDs
+        for (view_name, view_schema) in views.iter() {
+            let oid = view_schema.oid;
             let mut row_data = HashMap::new();
             row_data.insert("oid".to_string(), oid.to_string());
             row_data.insert("relname".to_string(), view_name.clone());
@@ -5032,7 +5087,6 @@ impl SqlExecutor {
                 result_row.push(Some(value));
             }
             rows.push(result_row);
-            oid += 1;
         }
 
         Ok(rows)
@@ -5043,11 +5097,11 @@ impl SqlExecutor {
         &self,
         columns: &[String],
     ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        self.ensure_oids_assigned().await;
         let tables = self.tables.read().await;
         let mut rows = Vec::new();
-        let mut table_oid = 16384;
-
         for (_table_name, table_schema) in tables.iter() {
+            let table_oid = table_schema.oid;
             for (attnum, column) in table_schema.columns.iter().enumerate() {
                 let mut row_data = HashMap::new();
                 row_data.insert("attrelid".to_string(), table_oid.to_string());
@@ -5088,7 +5142,6 @@ impl SqlExecutor {
                 }
                 rows.push(result_row);
             }
-            table_oid += 1;
         }
 
         Ok(rows)
@@ -5217,12 +5270,12 @@ impl SqlExecutor {
         &self,
         columns: &[String],
     ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        self.ensure_oids_assigned().await;
         let tables = self.tables.read().await;
         let mut rows = Vec::new();
         let mut oid = 30000;
-        let mut table_oid = 16384;
-
         for (_table_name, table_schema) in tables.iter() {
+            let table_oid = table_schema.oid;
             for constraint in &table_schema.constraints {
                 let mut row_data = HashMap::new();
                 row_data.insert("oid".to_string(), oid.to_string());
@@ -5266,7 +5319,6 @@ impl SqlExecutor {
                 rows.push(result_row);
                 oid += 1;
             }
-            table_oid += 1;
         }
 
         Ok(rows)
@@ -5542,12 +5594,12 @@ impl SqlExecutor {
         &self,
         columns: &[String],
     ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+        self.ensure_oids_assigned().await;
         let tables = self.tables.read().await;
         let table_data = self.table_data.read().await;
         let mut rows = Vec::new();
-        let mut relid = 16384;
-
-        for (table_name, _table_schema) in tables.iter() {
+        for (table_name, table_schema) in tables.iter() {
+            let relid = table_schema.oid;
             let row_count = table_data.get(table_name).map(|d| d.len()).unwrap_or(0);
 
             let mut row_data = HashMap::new();
@@ -5580,7 +5632,6 @@ impl SqlExecutor {
                 result_row.push(Some(value));
             }
             rows.push(result_row);
-            relid += 1;
         }
 
         Ok(rows)

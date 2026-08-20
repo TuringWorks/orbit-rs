@@ -240,8 +240,8 @@ impl AutoTieringEngine {
             }
         }
 
-        // Sort by priority
-        decisions.sort_by(|a, b| b.migration_priority.cmp(&a.migration_priority));
+        // Sort by priority (descending)
+        decisions.sort_unstable_by_key(|x| std::cmp::Reverse(x.migration_priority));
 
         info!(
             decision_count = decisions.len(),

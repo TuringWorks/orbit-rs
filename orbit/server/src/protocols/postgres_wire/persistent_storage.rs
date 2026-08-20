@@ -24,6 +24,9 @@ const CF_METADATA: &str = "pg_metadata"; // General metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TableSchema {
     pub name: String,
+    /// PostgreSQL OID (stable across restarts)
+    #[serde(default)]
+    pub oid: i32,
     pub columns: Vec<ColumnDefinition>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub row_count: i64,
