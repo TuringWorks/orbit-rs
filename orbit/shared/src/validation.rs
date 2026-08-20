@@ -193,6 +193,30 @@ where
     }
 }
 
+/// Validate a SQL identifier (table or column name) before interpolation.
+///
+/// Permits ASCII alphanumeric characters and underscores, plus dots for
+/// schema-qualified names (e.g. `public.users`). This is the single source
+/// of truth for SQL identifier validation across the codebase — all callers
+/// should delegate here rather than maintaining their own copies.
+///
+/// Returns the validated identifier on success, or a descriptive error string.
+pub fn validate_sql_identifier(ident: &str) -> Result<&str, String> {
+    if ident.is_empty() {
+        return Err("Empty SQL identifier".to_string());
+    }
+    for part in ident.split('.') {
+        if part.is_empty()
+            || !part
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Err(format!("Invalid SQL identifier: '{}'", ident));
+        }
+    }
+    Ok(ident)
+}
+
 /// Builder pattern for validation
 pub struct Validator<T> {
     value: T,
@@ -320,5 +344,18 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("MyComponent"));
         assert!(msg.contains("my_field"));
+    }
+
+    #[test]
+    fn test_validate_sql_identifier() {
+        assert!(validate_sql_identifier("users").is_ok());
+        assert!(validate_sql_identifier("public.users").is_ok());
+        assert!(validate_sql_identifier("col_1").is_ok());
+
+        assert!(validate_sql_identifier("").is_err());
+        assert!(validate_sql_identifier("users; DROP TABLE users").is_err());
+        assert!(validate_sql_identifier("col--inject").is_err());
+        assert!(validate_sql_identifier("'; --").is_err());
+        assert!(validate_sql_identifier("public.").is_err());
     }
 }

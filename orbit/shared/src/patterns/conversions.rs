@@ -4,6 +4,7 @@
 //! zero-cost abstraction patterns in Rust.
 
 use crate::error::OrbitError;
+use crate::validation::validate_sql_identifier;
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -265,6 +266,69 @@ impl From<Percentage> for f64 {
 
 // ===== Builder Pattern with Into =====
 
+/// Thin wrapper over the shared [`validate_sql_identifier`] that adapts the
+/// error type for this demo module. Keeping a single source of truth in
+/// `orbit_shared::validation` prevents the security-critical logic from
+/// drifting between copies.
+fn validate_identifier(ident: &str) -> Result<String, String> {
+    validate_sql_identifier(ident)
+        .map(|s| s.to_string())
+        .map_err(|e| e.to_string())
+}
+
+/// SQL statement keywords that must never appear in a demo filter fragment.
+/// Checked as whole words (after whitespace normalization) rather than as
+/// substrings so that column names like `updated_at` or `selection_count`
+/// are not falsely rejected.
+const FILTER_FORBIDDEN_KEYWORDS: &[&str] = &[
+    "drop",
+    "delete",
+    "update",
+    "insert",
+    "select",
+    "union",
+    "alter",
+    "create",
+    "truncate",
+    "exec",
+    "execute",
+    "merge",
+    "grant",
+    "revoke",
+];
+
+/// Reject filter fragments that contain SQL statement keywords or statement
+/// separators. Whitespace is normalized so tricks like `DROP\tTABLE` or
+/// `DROP\nTABLE` collapse to `drop table` and are caught. Keywords are
+/// matched as whole tokens (split on non-alphanumeric, non-underscore
+/// characters) so identifiers such as `updated_at` are not flagged.
+///
+/// This is a defensive check for the demonstration builder below; real query
+/// execution should parameterize values via placeholders rather than accept
+/// raw filter strings.
+fn is_safe_filter(filter: &str) -> bool {
+    // Collapse all whitespace runs to single spaces so tab/newline tricks
+    // cannot smuggle keywords past a substring check.
+    let normalized: String = filter.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lower = normalized.to_lowercase();
+
+    // Statement separators / comment introducers are always rejected.
+    let has_separator = [";", "--", "/*", "*/"]
+        .iter()
+        .any(|sep| lower.contains(sep));
+    if has_separator {
+        return false;
+    }
+
+    // Tokenize on non-identifier characters and reject forbidden keywords
+    // as whole words. This catches `drop`, `union select`, etc. while
+    // allowing `updated_at` or `select_count` columns.
+    let tokens = lower
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .filter(|t| !t.is_empty());
+    !tokens.any(|t| FILTER_FORBIDDEN_KEYWORDS.contains(&t))
+}
+
 /// Query builder that accepts flexible input types
 #[derive(Debug, Clone)]
 pub struct Query {
@@ -275,9 +339,18 @@ pub struct Query {
 }
 
 impl Query {
+    /// Create a new query builder for the given table.
+    ///
+    /// Panics with a clear message if `table` is not a valid SQL identifier.
+    /// Failing loudly here is preferable to silently producing a degenerate
+    /// builder that emits empty SQL, which would mask programming errors.
     pub fn new(table: impl Into<String>) -> Self {
+        let table = table.into();
+        validate_sql_identifier(&table).unwrap_or_else(|e| {
+            panic!("Query::new: invalid table identifier: {}", e)
+        });
         Self {
-            table: table.into(),
+            table,
             columns: Vec::new(),
             filter: None,
             limit: None,
@@ -285,12 +358,19 @@ impl Query {
     }
 
     pub fn select(mut self, columns: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.columns = columns.into_iter().map(|c| c.into()).collect();
+        self.columns = columns
+            .into_iter()
+            .map(|c| c.into())
+            .filter(|c| validate_identifier(c).is_ok())
+            .collect();
         self
     }
 
     pub fn filter(mut self, filter: impl Into<String>) -> Self {
-        self.filter = Some(filter.into());
+        let f = filter.into();
+        if is_safe_filter(&f) {
+            self.filter = Some(f);
+        }
         self
     }
 
@@ -300,13 +380,24 @@ impl Query {
     }
 
     pub fn build(self) -> String {
+        // Re-validate defensively; `new` already panics on invalid input but
+        // this guards against direct struct construction.
+        let table = match validate_identifier(&self.table) {
+            Ok(t) => t,
+            Err(_) => return String::new(),
+        };
+
         let columns = if self.columns.is_empty() {
             "*".to_string()
         } else {
-            self.columns.join(", ")
+            self.columns
+                .iter()
+                .filter_map(|c| validate_identifier(c).ok())
+                .collect::<Vec<_>>()
+                .join(", ")
         };
 
-        let mut query = format!("SELECT {} FROM {}", columns, self.table);
+        let mut query = format!("SELECT {} FROM {}", columns, table);
 
         if let Some(filter) = self.filter {
             query.push_str(&format!(" WHERE {}", filter));
@@ -492,6 +583,37 @@ mod tests {
         assert!(query.contains("FROM users"));
         assert!(query.contains("WHERE age > 18"));
         assert!(query.contains("LIMIT 10"));
+    }
+
+    #[test]
+    #[should_panic(expected = "Query::new: invalid table identifier")]
+    fn test_query_builder_rejects_invalid_table() {
+        // An invalid table identifier must fail loudly rather than silently
+        // producing a degenerate builder that emits empty SQL.
+        let _ = Query::new("users; DROP TABLE users");
+    }
+
+    #[test]
+    fn test_query_builder_rejects_injection_in_columns() {
+        // Invalid column identifiers are filtered out, not panicked on, so
+        // the query still builds with the remaining valid columns.
+        let query = Query::new("users")
+            .select(vec!["id", "name; DROP TABLE users"])
+            .build();
+        assert!(!query.contains("DROP"));
+        assert!(query.contains("id"));
+    }
+
+    #[test]
+    fn test_filter_rejects_sql_keywords_normalized() {
+        // Whitespace tricks (tab/newline) must not bypass the keyword check.
+        assert!(!is_safe_filter("age > 18; DROP\tTABLE users"));
+        assert!(!is_safe_filter("1=1\nUNION\nSELECT password"));
+        assert!(!is_safe_filter("x; -- comment"));
+        // Legitimate filters and identifier-like columns are accepted.
+        assert!(is_safe_filter("age > 18"));
+        assert!(is_safe_filter("updated_at > '2024-01-01'"));
+        assert!(is_safe_filter("select_count >= 1"));
     }
 
     #[test]

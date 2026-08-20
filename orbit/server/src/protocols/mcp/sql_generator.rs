@@ -6,8 +6,21 @@
 use crate::protocols::mcp::nlp::{
     AggregationType, ComparisonOperator, ConditionValue, QueryIntent, SqlOperation,
 };
+use orbit_shared::validation::validate_sql_identifier;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+/// Validate a SQL identifier (table or column name) before interpolation.
+///
+/// Delegates to the shared [`orbit_shared::validation::validate_sql_identifier`]
+/// so the security-critical logic lives in a single place and cannot drift
+/// between the MCP SQL generator and the pattern demo modules. Values are
+/// bound via parameterized placeholders, so only identifiers need this check.
+fn validate_identifier(ident: &str) -> Result<(), SqlGenerationError> {
+    validate_sql_identifier(ident)
+        .map(|_| ())
+        .map_err(|e| SqlGenerationError::InvalidStructure(e))
+}
 
 /// SQL Generation Engine
 pub struct SqlGenerator {
@@ -86,6 +99,11 @@ impl QueryBuilder {
         let mut sql = String::new();
         let mut parameters = Vec::new();
 
+        // Validate projection column names before interpolation
+        for p in &intent.projections {
+            validate_identifier(&p.name)?;
+        }
+
         // Build SELECT clause
         sql.push_str("SELECT ");
 
@@ -145,6 +163,9 @@ impl QueryBuilder {
             .map(|e| e.value.clone())
             .ok_or(SqlGenerationError::MissingTable)?;
 
+        // Validate table identifier before interpolation
+        validate_identifier(&table_name)?;
+
         sql.push_str(&format!(" FROM {}", table_name));
 
         // Build WHERE clause
@@ -165,6 +186,7 @@ impl QueryBuilder {
 
         // Build ORDER BY clause
         if let Some(order) = ordering {
+            validate_identifier(&order.column)?;
             sql.push_str(&format!(
                 " ORDER BY {} {}",
                 order.column,
@@ -203,6 +225,9 @@ impl QueryBuilder {
             .map(|e| e.value.clone())
             .ok_or(SqlGenerationError::MissingTable)?;
 
+        // Validate table identifier before interpolation
+        validate_identifier(&table_name)?;
+
         // Extract column-value pairs from entities
         let mut columns = Vec::new();
         let mut values = Vec::new();
@@ -213,6 +238,7 @@ impl QueryBuilder {
                 entity.entity_type,
                 crate::protocols::mcp::nlp::EntityType::Column
             ) {
+                validate_identifier(&entity.value)?;
                 columns.push(entity.value.clone());
             } else if matches!(
                 entity.entity_type,
@@ -261,6 +287,9 @@ impl QueryBuilder {
             .find(|e| matches!(e.entity_type, crate::protocols::mcp::nlp::EntityType::Table))
             .map(|e| e.value.clone())
             .ok_or(SqlGenerationError::MissingTable)?;
+
+        // Validate table identifier before interpolation
+        validate_identifier(&table_name)?;
 
         let mut sql = format!("UPDATE {} SET ", table_name);
         let mut parameters = Vec::new();
@@ -322,6 +351,9 @@ impl QueryBuilder {
             "logs".to_string()
         });
 
+        // Validate table identifier before interpolation
+        validate_identifier(&table_name)?;
+
         let mut sql = format!("DELETE FROM {}", table_name);
         let mut parameters = Vec::new();
 
@@ -362,6 +394,14 @@ impl QueryBuilder {
             .find(|e| matches!(e.entity_type, crate::protocols::mcp::nlp::EntityType::Table))
             .map(|e| e.value.clone())
             .ok_or(SqlGenerationError::MissingTable)?;
+
+        // Validate table identifier before interpolation
+        validate_identifier(&table_name)?;
+
+        // Validate projection column if present
+        if let Some(p) = intent.projections.first() {
+            validate_identifier(&p.name)?;
+        }
 
         // Generate a comprehensive analytical query
         let sql = format!(
@@ -602,3 +642,37 @@ impl std::fmt::Display for SqlGenerationError {
 }
 
 impl std::error::Error for SqlGenerationError {}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_identifier;
+
+    #[test]
+    fn test_validate_identifier_accepts_valid() {
+        assert!(validate_identifier("users").is_ok());
+        assert!(validate_identifier("public.users").is_ok());
+        assert!(validate_identifier("user_id_1").is_ok());
+        assert!(validate_identifier("col_with_underscores").is_ok());
+    }
+
+    #[test]
+    fn test_validate_identifier_rejects_empty() {
+        assert!(validate_identifier("").is_err());
+    }
+
+    #[test]
+    fn test_validate_identifier_rejects_injection() {
+        // Classic SQL injection attempts must be rejected.
+        assert!(validate_identifier("users; DROP TABLE users").is_err());
+        assert!(validate_identifier("users' OR '1'='1").is_err());
+        assert!(validate_identifier("name--inject").is_err());
+        assert!(validate_identifier("col/*comment*/").is_err());
+    }
+
+    #[test]
+    fn test_validate_identifier_rejects_dotted_edges() {
+        assert!(validate_identifier(".users").is_err());
+        assert!(validate_identifier("users.").is_err());
+        assert!(validate_identifier("public..users").is_err());
+    }
+}

@@ -3,6 +3,7 @@
 //! Separates algorithms from the objects they operate on, allowing new
 //! operations without modifying existing structures.
 
+use crate::validation::validate_sql_identifier;
 use serde::{Deserialize, Serialize};
 
 // ===== Query AST for demonstration =====
@@ -30,6 +31,18 @@ pub enum QueryNode {
         function: String,
         column: String,
     },
+}
+
+/// Validate a SQL identifier (table or column name) before interpolation.
+///
+/// Delegates to the shared [`validate_sql_identifier`] so the
+/// security-critical logic lives in one place. Returns an empty string for
+/// invalid input so generated SQL stays syntactically contained rather than
+/// echoing attacker-controlled text verbatim.
+fn sanitize_identifier(ident: &str) -> String {
+    validate_sql_identifier(ident)
+        .map(|s| s.to_string())
+        .unwrap_or_default()
 }
 
 // ===== Visitor Trait =====
@@ -92,16 +105,37 @@ impl QueryVisitor for SqlGenerator {
     type Output = String;
 
     fn visit_select(&mut self, columns: &[String], from: &QueryNode) -> String {
-        let cols = columns.join(", ");
+        // Skip invalid column identifiers entirely rather than substituting
+        // a literal like "1", which would silently change query semantics.
+        // If every column is invalid, fall back to "*" so the generated SQL
+        // remains syntactically valid rather than `SELECT  FROM ...`.
+        let cols: Vec<String> = columns
+            .iter()
+            .filter_map(|c| {
+                let s = sanitize_identifier(c);
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s)
+                }
+            })
+            .collect();
+        let cols_joined = if cols.is_empty() {
+            "*".to_string()
+        } else {
+            cols.join(", ")
+        };
         self.indent_level += 1;
         let from_sql = from.accept(self);
         self.indent_level -= 1;
 
-        format!("SELECT {}\n{}FROM {}", cols, self.indent(), from_sql)
+        format!("SELECT {}\n{}FROM {}", cols_joined, self.indent(), from_sql)
     }
 
     fn visit_table(&mut self, name: &str) -> String {
-        name.to_string()
+        // Validate the table identifier before interpolation to prevent
+        // SQL injection via attacker-controlled table names.
+        sanitize_identifier(name)
     }
 
     fn visit_filter(&mut self, source: &QueryNode, condition: &str) -> String {
@@ -133,10 +167,17 @@ impl QueryVisitor for SqlGenerator {
         let source_sql = source.accept(self);
         self.indent_level -= 1;
 
+        // Only allow known aggregate function names; validate the column.
+        let func = match function.to_uppercase().as_str() {
+            "COUNT" | "SUM" | "AVG" | "MIN" | "MAX" => function.to_uppercase(),
+            _ => "COUNT".to_string(),
+        };
+        let col = sanitize_identifier(column);
+
         format!(
             "SELECT {}({})\n{}FROM {}",
-            function,
-            column,
+            func,
+            col,
             self.indent(),
             source_sql
         )
@@ -464,6 +505,58 @@ mod tests {
 
         assert!(sql.contains("SELECT id, name"));
         assert!(sql.contains("FROM users"));
+    }
+
+    #[test]
+    fn test_sql_generator_rejects_injection() {
+        let query = QueryNode::Select {
+            columns: vec!["id".to_string()],
+            from: Box::new(QueryNode::Table {
+                name: "users; DROP TABLE users".to_string(),
+            }),
+        };
+
+        let mut generator = SqlGenerator::new();
+        let sql = query.accept(&mut generator);
+
+        assert!(!sql.contains("DROP"));
+        assert!(!sql.contains(";"));
+    }
+
+    #[test]
+    fn test_sql_generator_skips_invalid_columns() {
+        // Invalid columns are skipped; valid ones remain. When all columns
+        // are invalid the generator falls back to "*" rather than emitting
+        // a constant `1` or malformed `SELECT  FROM ...`.
+        let query = QueryNode::Select {
+            columns: vec!["id".to_string(), "name; DROP TABLE users".to_string()],
+            from: Box::new(QueryNode::Table {
+                name: "users".to_string(),
+            }),
+        };
+
+        let mut generator = SqlGenerator::new();
+        let sql = query.accept(&mut generator);
+
+        assert!(sql.contains("SELECT id"));
+        assert!(!sql.contains("DROP"));
+        assert!(!sql.contains("1,"));
+    }
+
+    #[test]
+    fn test_sql_generator_all_invalid_columns_falls_back_to_star() {
+        let query = QueryNode::Select {
+            columns: vec!["name; DROP TABLE users".to_string()],
+            from: Box::new(QueryNode::Table {
+                name: "users".to_string(),
+            }),
+        };
+
+        let mut generator = SqlGenerator::new();
+        let sql = query.accept(&mut generator);
+
+        assert!(sql.contains("SELECT *"));
+        assert!(!sql.contains("DROP"));
     }
 
     #[test]
