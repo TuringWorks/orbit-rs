@@ -277,9 +277,11 @@ fn validate_identifier(ident: &str) -> Result<String, String> {
 }
 
 /// SQL statement keywords that must never appear in a demo filter fragment.
-/// Checked as whole words (after whitespace normalization) rather than as
-/// substrings so that column names like `updated_at` or `selection_count`
-/// are not falsely rejected.
+/// Kept as a single `const` slice so the production check and the tests share
+/// one source of truth and cannot drift apart. A linear scan over 14 entries
+/// is trivially fast. The `FILTER_` prefix keeps the name scoped to this
+/// filter-validation context so a future forbidden-keyword set in the same
+/// module cannot be confused with it.
 const FILTER_FORBIDDEN_KEYWORDS: &[&str] = &[
     "drop",
     "delete",
@@ -297,6 +299,26 @@ const FILTER_FORBIDDEN_KEYWORDS: &[&str] = &[
     "revoke",
 ];
 
+/// Returns true if `token` is one of the SQL statement keywords that must
+/// never appear in a demo filter fragment. Keywords are matched as whole
+/// words (after whitespace normalization by the caller) rather than as
+/// substrings, so column names like `updated_at` or `selection_count` are
+/// not falsely rejected. Iterates over [`FILTER_FORBIDDEN_KEYWORDS`], the
+/// single source of truth for the set, so the production check and the
+/// tests can never drift apart.
+///
+/// Matching is case-insensitive (ASCII), so callers do not need to
+/// lowercase `token` beforehand; `DROP`, `Drop`, and `drop` are all
+/// flagged. This removes the previously implicit lowercasing precondition
+/// that could otherwise let a future caller accidentally bypass the
+/// check by passing un-lowercased input. The comparison is allocation-free.
+#[inline]
+fn is_forbidden_keyword(token: &str) -> bool {
+    FILTER_FORBIDDEN_KEYWORDS
+        .iter()
+        .any(|kw| kw.eq_ignore_ascii_case(token))
+}
+
 /// Reject filter fragments that contain SQL statement keywords or statement
 /// separators. Whitespace is normalized so tricks like `DROP\tTABLE` or
 /// `DROP\nTABLE` collapse to `drop table` and are caught. Keywords are
@@ -308,25 +330,30 @@ const FILTER_FORBIDDEN_KEYWORDS: &[&str] = &[
 /// raw filter strings.
 fn is_safe_filter(filter: &str) -> bool {
     // Collapse all whitespace runs to single spaces so tab/newline tricks
-    // cannot smuggle keywords past a substring check.
+    // cannot smuggle keywords past a substring check. `collect::<Vec<_>>()
+    // .join(" ")` is used deliberately: `collect::<String>()` would
+    // concatenate the tokens with NO separator (the std `FromIterator<&str>
+    // for String` impl just `push_str`s each item), which would merge
+    // `UNION` and `SELECT` into a single non-keyword token and let the
+    // `1=1\nUNION\nSELECT password` injection slip through unchecked.
     let normalized: String = filter.split_whitespace().collect::<Vec<_>>().join(" ");
-    let lower = normalized.to_lowercase();
 
     // Statement separators / comment introducers are always rejected.
     let has_separator = [";", "--", "/*", "*/"]
         .iter()
-        .any(|sep| lower.contains(sep));
+        .any(|sep| normalized.contains(sep));
     if has_separator {
         return false;
     }
 
     // Tokenize on non-identifier characters and reject forbidden keywords
     // as whole words. This catches `drop`, `union select`, etc. while
-    // allowing `updated_at` or `select_count` columns.
-    let tokens = lower
+    // allowing `updated_at` or `select_count` columns. Comparison is
+    // case-insensitive (ASCII), so no lowercasing pass is needed.
+    !normalized
         .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-        .filter(|t| !t.is_empty());
-    !tokens.any(|t| FILTER_FORBIDDEN_KEYWORDS.contains(&t))
+        .filter(|t| !t.is_empty())
+        .any(is_forbidden_keyword)
 }
 
 /// Query builder that accepts flexible input types
@@ -614,6 +641,31 @@ mod tests {
         assert!(is_safe_filter("age > 18"));
         assert!(is_safe_filter("updated_at > '2024-01-01'"));
         assert!(is_safe_filter("select_count >= 1"));
+    }
+
+    #[test]
+    fn test_is_forbidden_keyword() {
+        // Every entry of the shared `FILTER_FORBIDDEN_KEYWORDS` set must be
+        // flagged, driven by the same constant the production code uses so
+        // the two can never drift. Identifier-like tokens are not flagged.
+        for kw in FILTER_FORBIDDEN_KEYWORDS.iter().copied() {
+            assert!(
+                is_forbidden_keyword(kw),
+                "expected `{kw}` to be a forbidden keyword"
+            );
+            // Matching is case-insensitive (ASCII), so uppercase variants of
+            // each forbidden keyword are also flagged.
+            let upper = kw.to_uppercase();
+            assert!(
+                is_forbidden_keyword(&upper),
+                "`is_forbidden_keyword` should match uppercase variants, \
+                 but missed `{upper}`"
+            );
+        }
+        // Identifier-like tokens are not flagged.
+        assert!(!is_forbidden_keyword("updated_at"));
+        assert!(!is_forbidden_keyword("select_count"));
+        assert!(!is_forbidden_keyword(""));
     }
 
     #[test]
