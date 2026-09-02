@@ -180,24 +180,24 @@ If `warehouse_path` is not specified, it is automatically generated:
 │                      Orbit-RS Server                        │
 ├─────────────────────────────────────────────────────────────┤
 │  SQL Parser                                                 │
-│  ├─ AT(TIMESTAMP => ...) → TimeTravelClause::Timestamp     │
-│  ├─ AT(VERSION => ...)   → TimeTravelClause::Version       │
-│  └─ FOR SYSTEM_TIME AS OF → TimeTravelClause::SystemTime   │
+│  ├─ AT(TIMESTAMP => ...) → TimeTravelClause::Timestamp      │
+│  ├─ AT(VERSION => ...)   → TimeTravelClause::Version        │
+│  └─ FOR SYSTEM_TIME AS OF → TimeTravelClause::SystemTime    │
 ├─────────────────────────────────────────────────────────────┤
 │  MVCC Executor                                              │
-│  └─ Routes time travel queries to IcebergColdStore         │
+│  └─ Routes time travel queries to IcebergColdStore          │
 ├─────────────────────────────────────────────────────────────┤
 │  IcebergColdStore                                           │
-│  ├─ query_as_of(timestamp) → Historical data               │
-│  ├─ query_by_snapshot_id(id) → Specific version            │
-│  ├─ list_snapshots() → Available versions                  │
-│  └─ current_snapshot() → Latest version                    │
+│  ├─ query_as_of(timestamp) → Historical data                │
+│  ├─ query_by_snapshot_id(id) → Specific version             │
+│  ├─ list_snapshots() → Available versions                   │
+│  └─ current_snapshot() → Latest version                     │
 ├─────────────────────────────────────────────────────────────┤
 │  Iceberg REST Catalog                                       │
-│  └─ Manages table metadata, snapshots, and schema          │
+│  └─ Manages table metadata, snapshots, and schema           │
 ├─────────────────────────────────────────────────────────────┤
 │  Object Storage (S3/Azure/GCS/MinIO)                        │
-│  └─ Stores Parquet data files                              │
+│  └─ Stores Parquet data files                               │
 └─────────────────────────────────────────────────────────────┘
 ```
 

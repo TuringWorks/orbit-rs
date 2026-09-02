@@ -13,12 +13,12 @@
 - **[Feature Index](docs/features.md)** - Complete feature list with implementation status
 - **[Overview](docs/overview.md)** - Architecture, features, and key benefits  
 - **[Quick Start](docs/quick_start.md)** - Get up and running in minutes
-- **[Virtual Actor Persistence](docs/virtual_actor_persistence.md)** - Actor state management and lifecycle
-- **[Transaction Features](docs/features/transaction_features.md)** - Advanced distributed transactions
-- **[Protocol Adapters](docs/protocols/protocol_adapters.md)** - Redis, PostgreSQL, MCP support
-- **[Deployment](docs/kubernetes_deployment.md)** - Kubernetes, CI/CD, production setup
-- **[Development](docs/development/development.md)** - Contributing and development guide
-- **[Roadmap](docs/roadmap.md)** - Development roadmap and GitHub project
+- **[Virtual Actor Persistence](docs/content/storage/virtual_actor_persistence.md)** - Actor state management and lifecycle
+- **[Transaction Features](docs/content/server/advanced_transaction_features.md)** - Advanced distributed transactions
+- **[Protocol Adapters](docs/content/protocols/protocol_adapters.md)** - Redis, PostgreSQL, MCP support
+- **[Deployment](docs/content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Kubernetes, CI/CD, production setup
+- **[Development](docs/content/development/development.md)** - Contributing and development guide
+- **[Roadmap](docs/content/roadmap/roadmap.md)** - Development roadmap and GitHub project
 
 ## What is Orbit-RS?
 
@@ -429,7 +429,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 **Legend:** Complete | Active Development | Experimental | Planned
 
-**[View Full Roadmap](docs/roadmap.md)** | **[GitHub Project](https://github.com/orgs/TuringWorks/projects/1)**
+**[View Full Roadmap](docs/content/roadmap/roadmap.md)** | **[GitHub Project](https://github.com/orgs/TuringWorks/projects/1)**
 
 ## Development Scripts
 
@@ -459,7 +459,7 @@ Utility scripts for development are available in the `scripts/` directory:
 
 ## Contributing
 
-We welcome contributions! See our **[Development Guide](DEVELOPMENT.md)** for setup instructions and contributing guidelines.
+We welcome contributions! See our **[Development Guide](docs/content/DEVELOPMENT.md)** for setup instructions and contributing guidelines.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-new-feature`)
@@ -490,6 +490,7 @@ Choose the license that best fits your project's needs.
 - Original Orbit project by [Electronic Arts](https://www.ea.com/)
 - Rust implementation by [TuringWorks](https://github.com/TuringWorks)
 - AI development engineering by [Warp.dev](https://warp.dev) - The AI-powered terminal for modern development workflows
+- AI-assisted development with [Claude](https://claude.ai) and [Claude Code](https://www.anthropic.com/claude-code) - Anthropic's AI coding assistant
 
 ## Support
 
