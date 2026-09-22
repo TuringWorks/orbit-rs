@@ -3363,7 +3363,7 @@ impl SqlExecutor {
         source: &FromClause,
     ) -> ProtocolResult<Vec<HashMap<String, SqlValue>>> {
         match source {
-            FromClause::Table { name, alias: _, .. } => {
+            FromClause::Table { name, .. } => {
                 // Source is a table - read all rows
                 let table_name = name.full_name();
                 let table_data = self.table_data.read().await;
@@ -3405,7 +3405,7 @@ impl SqlExecutor {
                 Ok(rows)
             }
             FromClause::Subquery {
-                query, alias: _, ..
+                query, ..
             } => {
                 // Source is a subquery - execute it
                 let result = self.execute_select(*query.clone()).await?;
@@ -3756,7 +3756,7 @@ impl SqlExecutor {
             let mut valid_columns = Vec::new();
 
             match from_clause {
-                FromClause::Table { name, alias: _, .. } => {
+                FromClause::Table { name, .. } => {
                     // Handle information_schema tables
                     if let Some(schema) = &name.schema {
                         if schema.to_lowercase() == "information_schema" {
@@ -4635,7 +4635,7 @@ impl SqlExecutor {
         let tables = self.tables.read().await;
         let mut rows = Vec::new();
 
-        for (table_name, _table_schema) in tables.iter() {
+        for table_name in tables.keys() {
             let mut row_data = HashMap::new();
 
             // Standard information_schema.tables columns
@@ -5100,7 +5100,7 @@ impl SqlExecutor {
         self.ensure_oids_assigned().await;
         let tables = self.tables.read().await;
         let mut rows = Vec::new();
-        for (_table_name, table_schema) in tables.iter() {
+        for table_schema in tables.values() {
             let table_oid = table_schema.oid;
             for (attnum, column) in table_schema.columns.iter().enumerate() {
                 let mut row_data = HashMap::new();
@@ -5274,7 +5274,7 @@ impl SqlExecutor {
         let tables = self.tables.read().await;
         let mut rows = Vec::new();
         let mut oid = 30000;
-        for (_table_name, table_schema) in tables.iter() {
+        for table_schema in tables.values() {
             let table_oid = table_schema.oid;
             for constraint in &table_schema.constraints {
                 let mut row_data = HashMap::new();
@@ -5388,7 +5388,7 @@ impl SqlExecutor {
         let tables = self.tables.read().await;
         let mut rows = Vec::new();
 
-        for (table_name, _table_schema) in tables.iter() {
+        for table_name in tables.keys() {
             let mut row_data = HashMap::new();
             row_data.insert("schemaname".to_string(), "public".to_string());
             row_data.insert("tablename".to_string(), table_name.clone());

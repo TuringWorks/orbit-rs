@@ -224,8 +224,6 @@ impl WindowFunctionEvaluator {
                 }
             }
             WindowFunctionType::Lag {
-                offset: _,
-                default: _,
                 ..
             } => {
                 let offset_val: usize = 1; // Simplified - should evaluate offset expression
@@ -243,8 +241,6 @@ impl WindowFunctionEvaluator {
                 }
             }
             WindowFunctionType::Lead {
-                offset: _,
-                default: _,
                 ..
             } => {
                 let offset_val: usize = 1; // Simplified

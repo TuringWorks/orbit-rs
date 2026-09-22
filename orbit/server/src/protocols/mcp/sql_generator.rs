@@ -19,7 +19,7 @@ use std::collections::HashMap;
 fn validate_identifier(ident: &str) -> Result<(), SqlGenerationError> {
     validate_sql_identifier(ident)
         .map(|_| ())
-        .map_err(|e| SqlGenerationError::InvalidStructure(e))
+        .map_err(SqlGenerationError::InvalidStructure)
 }
 
 /// SQL Generation Engine

@@ -194,11 +194,9 @@ where
                 self.inner = None;
             }
 
-            match self.outer.next() {
-                Some(next_inner) => {
-                    self.inner = Some(next_inner.into_iter());
-                }
-                None => return None,
+            {
+                let next_inner = self.outer.next()?;
+                self.inner = Some(next_inner.into_iter());
             }
         }
     }
@@ -302,9 +300,9 @@ impl<I: Iterator> PeekableN<I> {
         I::Item: Clone,
     {
         while self.peeked.len() <= n {
-            match self.inner.next() {
-                Some(item) => self.peeked.push_back(item),
-                None => return None,
+            {
+                let item = self.inner.next()?;
+                self.peeked.push_back(item)
             }
         }
 
@@ -360,14 +358,12 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.inner.next() {
-                Some(item) => {
-                    if self.seen.insert(item.clone()) {
-                        return Some(item);
-                    }
-                    // Item was already seen, continue to next
+            {
+                let item = self.inner.next()?;
+                if self.seen.insert(item.clone()) {
+                    return Some(item);
                 }
-                None => return None,
+                // Item was already seen, continue to next
             }
         }
     }
@@ -409,9 +405,9 @@ where
     {
         let mut items = Vec::new();
         for item in self.inner.by_ref() {
-            match (self.mapper)(item) {
-                Ok(mapped) => items.push(mapped),
-                Err(e) => return Err(e),
+            {
+                let mapped = (self.mapper)(item)?;
+                items.push(mapped)
             }
         }
         Ok(items.into_iter().collect())

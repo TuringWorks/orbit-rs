@@ -148,7 +148,7 @@ impl Collection {
 
     /// Update a single document
     pub fn update_one(&mut self, filter: &Document, update: &Document) -> (i64, i64) {
-        for (_key, doc) in self.documents.iter_mut() {
+        for doc in self.documents.values_mut() {
             if matches_filter(doc, filter) {
                 let modified = if apply_update(doc, update) { 1 } else { 0 };
                 return (1, modified);
