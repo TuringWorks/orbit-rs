@@ -223,9 +223,7 @@ impl WindowFunctionEvaluator {
                     }
                 }
             }
-            WindowFunctionType::Lag {
-                ..
-            } => {
+            WindowFunctionType::Lag { .. } => {
                 let offset_val: usize = 1; // Simplified - should evaluate offset expression
                 for (idx, row) in partition.rows.iter().enumerate() {
                     let value = if idx >= offset_val {
@@ -240,9 +238,7 @@ impl WindowFunctionEvaluator {
                     results.push((row.index, value));
                 }
             }
-            WindowFunctionType::Lead {
-                ..
-            } => {
+            WindowFunctionType::Lead { .. } => {
                 let offset_val: usize = 1; // Simplified
                 for (idx, row) in partition.rows.iter().enumerate() {
                     let value = if idx + offset_val < partition.rows.len() {

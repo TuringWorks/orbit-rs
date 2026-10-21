@@ -45,6 +45,7 @@ pub mod protocol;
 #[cfg(feature = "storage-rocksdb")]
 pub mod query_engine;
 // pub mod server;  // Moved to orbit_server::protocols
+pub mod session_compat;
 pub mod sql;
 #[cfg(feature = "storage-rocksdb")]
 pub mod vector_engine;

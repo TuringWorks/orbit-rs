@@ -1,0 +1,231 @@
+//! Session-level statements issued by PostgreSQL drivers and GUI clients
+//! (pgAdmin, psycopg, JDBC) while connecting.
+//!
+//! These never touch table data, so they are answered here, before the SQL
+//! parser, from a fixed table of server settings. Everything is pure: input
+//! text in, optional result out.
+
+use super::query_engine::QueryResult;
+
+/// Server settings reported to clients, as `(name, value)`.
+const SETTINGS: &[(&str, &str)] = &[
+    ("server_version", "14.0"),
+    ("server_version_num", "140000"),
+    ("server_encoding", "UTF8"),
+    ("client_encoding", "UTF8"),
+    ("datestyle", "ISO, MDY"),
+    ("intervalstyle", "postgres"),
+    ("timezone", "UTC"),
+    ("standard_conforming_strings", "on"),
+    ("integer_datetimes", "on"),
+    ("bytea_output", "hex"),
+    ("max_identifier_length", "63"),
+    ("transaction_isolation", "read committed"),
+    ("is_superuser", "on"),
+    ("application_name", ""),
+    ("search_path", "\"$user\", public"),
+];
+
+/// Client-tunable settings whose `SET`/`RESET` is accepted and ignored.
+const SETTABLE: &[&str] = &[
+    "datestyle",
+    "intervalstyle",
+    "timezone",
+    "time zone",
+    "client_encoding",
+    "client_min_messages",
+    "extra_float_digits",
+    "application_name",
+    "statement_timeout",
+    "lock_timeout",
+    "idle_in_transaction_session_timeout",
+    "bytea_output",
+    "search_path",
+    "standard_conforming_strings",
+];
+
+/// Value reported by `SELECT version()`.
+pub const VERSION_STRING: &str = "PostgreSQL 14.0 (Orbit-RS) on orbit, compiled by rustc, 64-bit";
+
+/// Split `sql` on top-level `;`, ignoring semicolons inside quotes.
+/// Empty fragments are dropped.
+pub fn split_statements(sql: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let (mut start, mut quote) = (0, None::<char>);
+    for (i, c) in sql.char_indices() {
+        match (quote, c) {
+            (Some(q), c) if c == q => quote = None,
+            (None, '\'' | '"') => quote = Some(c),
+            (None, ';') => {
+                parts.push(&sql[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&sql[start..]);
+    parts
+        .into_iter()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect()
+}
+
+fn setting(name: &str) -> Option<&'static str> {
+    SETTINGS
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case(name))
+        .map(|(_, v)| *v)
+}
+
+fn one_value(column: &str, value: &str) -> QueryResult {
+    QueryResult::Select {
+        columns: vec![column.to_string()],
+        rows: vec![vec![Some(value.to_string())]],
+    }
+}
+
+fn unquote(s: &str) -> &str {
+    s.trim().trim_matches(|c| c == '\'' || c == '"')
+}
+
+/// Answer `stmt` (a single statement, no trailing `;`) if it is a session
+/// statement. `database` and `user` fill `current_database()` / `current_user`.
+#[must_use]
+pub fn try_handle(stmt: &str, database: &str, user: &str) -> Option<QueryResult> {
+    let norm = stmt.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lower = norm.to_ascii_lowercase();
+
+    if let Some(rest) = lower
+        .strip_prefix("set ")
+        .or_else(|| lower.strip_prefix("reset "))
+    {
+        let rest = rest
+            .strip_prefix("session ")
+            .or_else(|| rest.strip_prefix("local "))
+            .unwrap_or(rest);
+        let name = rest.split(['=', ' ']).next().unwrap_or_default();
+        let is_time_zone = rest.starts_with("time zone");
+        if SETTABLE.contains(&name) || is_time_zone {
+            let value = rest.split_once(['=', ' ']).map_or("", |(_, v)| v);
+            return Some(QueryResult::Set {
+                variable: name.to_string(),
+                value: unquote(value.trim_start_matches("to ")).to_string(),
+            });
+        }
+        return None;
+    }
+
+    if let Some(name) = lower.strip_prefix("show ") {
+        let name = unquote(name);
+        return setting(name).map(|v| one_value(name, v));
+    }
+
+    let select = lower.strip_prefix("select ")?;
+    match select {
+        "version()" | "pg_catalog.version()" => Some(one_value("version", VERSION_STRING)),
+        "current_database()" => Some(one_value("current_database", database)),
+        "current_schema()" | "current_schema" => Some(one_value("current_schema", "public")),
+        "current_user" | "session_user" | "user" => Some(one_value("current_user", user)),
+        _ => select_setting_function(select, &norm[7..]),
+    }
+}
+
+/// `current_setting('x')` and the `set_config(..) FROM pg_show_all_settings()`
+/// probe that pgAdmin runs on connect.
+fn select_setting_function(select_lower: &str, select_raw: &str) -> Option<QueryResult> {
+    if let Some(arg) = select_lower
+        .strip_prefix("current_setting(")
+        .and_then(|a| a.strip_suffix(')'))
+    {
+        let name = unquote(arg);
+        return setting(name).map(|v| one_value("current_setting", v));
+    }
+    if select_lower.starts_with("set_config(") {
+        let args = select_raw
+            .strip_prefix("set_config(")
+            .and_then(|a| a.split(')').next())?;
+        let mut args = args.split(',');
+        let name = unquote(args.next()?);
+        let value = unquote(args.next().unwrap_or_default());
+        // With `FROM pg_show_all_settings() WHERE name = ..` the row exists only
+        // for a known setting; a bare call always yields one row.
+        let known = !select_lower.contains("pg_show_all_settings") || setting(name).is_some();
+        return Some(if known {
+            one_value("set_config", value)
+        } else {
+            QueryResult::Select {
+                columns: vec!["set_config".to_string()],
+                rows: Vec::new(),
+            }
+        });
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn single(r: Option<QueryResult>) -> Option<String> {
+        match r? {
+            QueryResult::Select { rows, .. } => rows.first()?.first()?.clone(),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn splits_on_top_level_semicolons_only() {
+        let parts = split_statements("SET a=1; SELECT ';' ; ;SET b=2");
+        assert_eq!(parts, vec!["SET a=1", "SELECT ';'", "SET b=2"]);
+    }
+
+    #[test]
+    fn accepts_driver_set_statements() {
+        for sql in [
+            "SET DateStyle=ISO",
+            "SET client_min_messages=notice",
+            "SET client_encoding='UNICODE'",
+            "SET TIME ZONE 'UTC'",
+            "RESET statement_timeout",
+        ] {
+            assert!(
+                matches!(try_handle(sql, "db", "u"), Some(QueryResult::Set { .. })),
+                "{sql}"
+            );
+        }
+        assert!(try_handle("SET orbit.custom = 1", "db", "u").is_none());
+    }
+
+    #[test]
+    fn answers_show_and_functions() {
+        assert_eq!(
+            single(try_handle("SHOW server_version_num", "d", "u")).as_deref(),
+            Some("140000")
+        );
+        assert_eq!(
+            single(try_handle("select current_database()", "mydb", "u")).as_deref(),
+            Some("mydb")
+        );
+        assert_eq!(
+            single(try_handle(
+                "SELECT current_setting('server_version_num')",
+                "d",
+                "u"
+            ))
+            .as_deref(),
+            Some("140000")
+        );
+        assert_eq!(
+            single(try_handle("SELECT version()", "d", "u")).as_deref(),
+            Some(VERSION_STRING)
+        );
+        assert!(try_handle("SELECT * FROM actors", "d", "u").is_none());
+    }
+
+    #[test]
+    fn pgadmin_bytea_output_probe() {
+        let q = "SELECT set_config('bytea_output','hex',false) FROM pg_show_all_settings() WHERE name = 'bytea_output'";
+        assert_eq!(single(try_handle(q, "d", "u")).as_deref(), Some("hex"));
+    }
+}

@@ -391,24 +391,25 @@ impl PostgresWireProtocol {
 
     /// Finish authentication and unblock connection
     fn finish_authentication(&mut self, buf: &mut BytesMut) {
-        // Send parameter status
-        BackendMessage::ParameterStatus {
-            name: "server_version".to_string(),
-            value: "14.0 (Orbit-RS Protocol Adapter)".to_string(),
+        // Parameters libpq/psycopg expect to be reported at startup
+        for (name, value) in [
+            ("server_version", "14.0"),
+            ("server_encoding", "UTF8"),
+            ("client_encoding", "UTF8"),
+            ("DateStyle", "ISO, MDY"),
+            ("IntervalStyle", "postgres"),
+            ("TimeZone", "UTC"),
+            ("integer_datetimes", "on"),
+            ("standard_conforming_strings", "on"),
+            ("application_name", ""),
+            ("is_superuser", "on"),
+        ] {
+            BackendMessage::ParameterStatus {
+                name: name.to_string(),
+                value: value.to_string(),
+            }
+            .encode(buf);
         }
-        .encode(buf);
-
-        BackendMessage::ParameterStatus {
-            name: "server_encoding".to_string(),
-            value: "UTF8".to_string(),
-        }
-        .encode(buf);
-
-        BackendMessage::ParameterStatus {
-            name: "client_encoding".to_string(),
-            value: "UTF8".to_string(),
-        }
-        .encode(buf);
 
         // Send backend key data (PostgreSQL 18: supports variable-length keys)
         BackendMessage::BackendKeyData {

@@ -316,16 +316,12 @@ impl ExecutionPlanner {
                     },
                 })
             }
-            FromClause::Subquery {
-                query, ..
-            } => self.plan_select(*query),
+            FromClause::Subquery { query, .. } => self.plan_select(*query),
             FromClause::Values { values, alias: _ } => Ok(ExecutionPlan::Values {
                 estimated_rows: values.len(),
                 values,
             }),
-            FromClause::TableFunction {
-                ..
-            } => {
+            FromClause::TableFunction { .. } => {
                 // Placeholder for table functions
                 Ok(ExecutionPlan::TableScan {
                     table: "table_function".to_string(),

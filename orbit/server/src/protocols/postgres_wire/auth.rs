@@ -271,8 +271,11 @@ impl ScramAuth {
         // Generate server nonce by appending random data to client nonce
         let server_nonce_suffix: String = (0..16)
             .map(|_| {
-                let ch = rand::rng().random_range(33..127) as u8;
-                ch as char
+                // RFC 5802 nonce is printable ASCII excluding ','; draw from
+                // alphanumerics so a stray comma never corrupts server-first.
+                const ALPHABET: &[u8] =
+                    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+                ALPHABET[rand::rng().random_range(0..ALPHABET.len())] as char
             })
             .collect();
         let server_nonce = format!("{}{}", client_nonce, server_nonce_suffix);

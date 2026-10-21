@@ -43,7 +43,6 @@ use tokio::sync::RwLock;
 /// PostgreSQL reserves OIDs below this value for system catalogs.
 const PG_USER_TABLE_OID_START: i32 = 16384;
 
-
 /// Query execution result
 #[derive(Debug, Clone)]
 pub enum ExecutionResult {
@@ -790,8 +789,16 @@ impl SqlExecutor {
 
         // Find max OID across tables and views
         let max_oid = std::cmp::max(
-            tables.values().map(|t| t.oid).max().unwrap_or(PG_USER_TABLE_OID_START - 1),
-            views.values().map(|v| v.oid).max().unwrap_or(PG_USER_TABLE_OID_START - 1),
+            tables
+                .values()
+                .map(|t| t.oid)
+                .max()
+                .unwrap_or(PG_USER_TABLE_OID_START - 1),
+            views
+                .values()
+                .map(|v| v.oid)
+                .max()
+                .unwrap_or(PG_USER_TABLE_OID_START - 1),
         );
 
         let mut next_oid = std::cmp::max(max_oid + 1, PG_USER_TABLE_OID_START);
@@ -813,7 +820,8 @@ impl SqlExecutor {
         }
 
         // Update the atomic counter
-        self.next_oid.store(next_oid, std::sync::atomic::Ordering::SeqCst);
+        self.next_oid
+            .store(next_oid, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Set the current database context
@@ -1270,7 +1278,9 @@ impl SqlExecutor {
             return Err(ProtocolError::already_exists("Table", &table_name));
         }
         // Allocate OID using atomic counter (thread-safe)
-        let next_oid = self.next_oid.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let next_oid = self
+            .next_oid
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         drop(tables);
 
         // Convert AST columns to schema
@@ -1461,11 +1471,13 @@ impl SqlExecutor {
             return Err(ProtocolError::already_exists("View", &view_name));
         }
         // Allocate OID using atomic counter (thread-safe)
-        let next_oid = self.next_oid.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let next_oid = self
+            .next_oid
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         drop(views);
 
         let view_schema = ViewSchema {
-            name: view_name.clone(),                    // Use string name
+            name: view_name.clone(), // Use string name
             oid: next_oid,
             query: "TODO: serialize query".to_string(), // TODO: Serialize SELECT statement
             columns: stmt.columns,
@@ -3404,9 +3416,7 @@ impl SqlExecutor {
 
                 Ok(rows)
             }
-            FromClause::Subquery {
-                query, ..
-            } => {
+            FromClause::Subquery { query, .. } => {
                 // Source is a subquery - execute it
                 let result = self.execute_select(*query.clone()).await?;
                 match result {

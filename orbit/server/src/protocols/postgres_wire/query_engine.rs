@@ -13,6 +13,7 @@ use crate::protocols::postgres_wire::graphrag_engine::GraphRAGQueryEngine;
 use crate::protocols::postgres_wire::persistent_storage::{
     PersistentTableStorage, QueryCondition, TableRow,
 };
+use crate::protocols::postgres_wire::session_compat;
 use crate::protocols::postgres_wire::sql::{ConfigurableSqlEngine, UnifiedExecutionResult};
 use crate::protocols::postgres_wire::vector_engine::VectorQueryEngine;
 use orbit_client::OrbitClient;
@@ -203,6 +204,12 @@ impl QueryEngine {
 
     /// Execute a SQL query and return results
     pub async fn execute_query(&self, sql: &str) -> ProtocolResult<QueryResult> {
+        let database = self.get_current_database().await;
+        if let Some(result) =
+            session_compat::try_handle(sql.trim().trim_end_matches(';'), &database, "postgres")
+        {
+            return Ok(result);
+        }
         let sql_upper = sql.trim().to_uppercase();
 
         // Check if this is a GraphRAG function query
@@ -333,17 +340,19 @@ impl QueryEngine {
     pub async fn execute_multiple_queries(&self, sql: &str) -> ProtocolResult<Vec<QueryResult>> {
         use crate::protocols::postgres_wire::sql::parser::SqlParser;
 
-        let mut parser = SqlParser::new();
-        let statements = match parser.parse_multiple(sql) {
-            Ok(stmts) => stmts,
-            Err(e) => return Err(e),
-        };
-
+        let database = self.get_current_database().await;
         let mut results = Vec::new();
 
-        for stmt in statements {
-            let result = self.execute_ast_statement(stmt).await?;
-            results.push(result);
+        // Session statements (drivers' connect bootstrap) are answered directly;
+        // the rest go through the parser one statement at a time.
+        for piece in session_compat::split_statements(sql) {
+            if let Some(result) = session_compat::try_handle(piece, &database, "postgres") {
+                results.push(result);
+                continue;
+            }
+            for stmt in SqlParser::new().parse_multiple(piece)? {
+                results.push(self.execute_ast_statement(stmt).await?);
+            }
         }
 
         Ok(results)

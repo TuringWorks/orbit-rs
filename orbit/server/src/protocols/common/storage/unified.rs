@@ -1064,18 +1064,17 @@ mod tests {
 #[cfg(feature = "storage-rocksdb")]
 mod persistent_storage_impl {
     use super::*;
-    use crate::protocols::postgres_wire::sql::executor::ColumnSchema;
     use crate::protocols::postgres_wire::persistent_storage::{
         ColumnDefinition, ColumnType, PersistentTableStorage, QueryCondition, TableRow,
         TableSchema as PersistentTableSchema,
     };
+    use crate::protocols::postgres_wire::sql::executor::ColumnSchema;
     use crate::protocols::postgres_wire::sql::types::SqlType;
     use serde_json::Value as JsonValue;
 
     impl UnifiedTableStorage {
         /// Convert from PersistentTableStorage TableSchema to SQL executor TableSchema
         fn persistent_schema_to_sql_schema(schema: &PersistentTableSchema) -> TableSchema {
-
             let columns = schema
                 .columns
                 .iter()
