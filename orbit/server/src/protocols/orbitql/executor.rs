@@ -1474,7 +1474,7 @@ impl OrbitQLExecutor {
         let tables = self.tables.read().await;
 
         if let Some(table) = tables.get(table_name) {
-            for (_index_name, index) in indexes.iter_mut() {
+            for index in indexes.values_mut() {
                 if index.table == table_name {
                     // Update the index with new geometries
                     for row_idx in start_row..(start_row + count) {
@@ -1501,7 +1501,7 @@ impl OrbitQLExecutor {
     ) -> Result<(), SpatialError> {
         let mut indexes = self.spatial_indexes.write().await;
 
-        for (_, index) in indexes.iter_mut() {
+        for index in indexes.values_mut() {
             if index.table == table_name {
                 // Remove geometries for deleted rows
                 for &row_idx in deleted_indices {

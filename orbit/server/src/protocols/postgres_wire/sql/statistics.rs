@@ -421,9 +421,9 @@ impl StatisticsManager {
             }
         }
 
-        // Most common values (top 10)
+        // Most common values (top 10) - sort by frequency descending
         let mut value_freq: Vec<_> = value_counts.into_iter().collect();
-        value_freq.sort_by(|a, b| b.1.cmp(&a.1));
+        value_freq.sort_unstable_by_key(|x| std::cmp::Reverse(x.1));
         stats.most_common_values = value_freq
             .into_iter()
             .take(10)

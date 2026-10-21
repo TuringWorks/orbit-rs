@@ -1312,6 +1312,7 @@ mod persistent_storage_impl {
         }
     }
 
+    use crate::protocols::postgres_wire::sql::executor::ColumnSchema;
     use crate::protocols::postgres_wire::sql::types::SqlType;
     use serde_json::Value as JsonValue;
 
@@ -1345,8 +1346,6 @@ mod persistent_storage_impl {
     impl UnifiedTableStorage {
         /// Convert from PersistentTableStorage TableSchema to SQL executor TableSchema
         fn persistent_schema_to_sql_schema(schema: &PersistentTableSchema) -> TableSchema {
-            use crate::protocols::postgres_wire::sql::executor::ColumnSchema;
-
             let columns = schema
                 .columns
                 .iter()
@@ -1432,6 +1431,7 @@ mod persistent_storage_impl {
                 .collect();
 
             TableSchema {
+                oid: 0,
                 name: schema.name.clone(),
                 columns,
                 constraints,
@@ -1539,6 +1539,7 @@ mod persistent_storage_impl {
                 .collect();
 
             PersistentTableSchema {
+                oid: 0,
                 name: schema.name.clone(),
                 columns,
                 created_at: chrono::Utc::now(),
@@ -1856,6 +1857,7 @@ mod redis_provider_impl {
 
             // Create the table schema
             let schema = TableSchema {
+                oid: 0,
                 name: REDIS_KV_TABLE.to_string(),
                 columns: vec![
                     ColumnSchema {
@@ -2209,6 +2211,7 @@ mod aql_storage_impl {
 
             if !has_collections {
                 let schema = TableSchema {
+                    oid: 0,
                     name: AQL_COLLECTIONS_TABLE.to_string(),
                     columns: vec![
                         ColumnSchema {
@@ -2236,6 +2239,7 @@ mod aql_storage_impl {
 
             if !has_documents {
                 let schema = TableSchema {
+                    oid: 0,
                     name: AQL_DOCUMENTS_TABLE.to_string(),
                     columns: vec![
                         ColumnSchema {
@@ -2684,6 +2688,7 @@ mod cypher_storage_impl {
 
             if !has_nodes {
                 let schema = TableSchema {
+                    oid: 0,
                     name: CYPHER_NODES_TABLE.to_string(),
                     columns: vec![
                         ColumnSchema {
@@ -2719,6 +2724,7 @@ mod cypher_storage_impl {
 
             if !has_relationships {
                 let schema = TableSchema {
+                    oid: 0,
                     name: CYPHER_RELATIONSHIPS_TABLE.to_string(),
                     columns: vec![
                         ColumnSchema {

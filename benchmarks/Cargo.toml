@@ -2,7 +2,7 @@
 name = "orbit-benchmarks"
 version = "0.1.0"
 edition = "2021"
-authors = ["Ravindra Boddipalli <ravindra@turingworks.com>"]
+authors = ["Ravindra Boddipalli"]
 license = "BSD-3-Clause OR MIT"
 description = "Orbit performance benchmarks"
 

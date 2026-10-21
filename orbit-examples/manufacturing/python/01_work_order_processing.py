@@ -5,6 +5,8 @@ OrbitRS Manufacturing Examples - Work Order Processing with ML
 End-to-end work order processing with ML predictions
 """
 
+import os
+import sys
 import psycopg2
 import redis
 import json
@@ -13,23 +15,31 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import random
 
+# Import shared configuration helpers from the common example utilities.
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+)
+from orbit_utils import require_env, env_int
+
+
 class WorkOrderProcessingML:
     """Work order processing with ML-powered predictions"""
     
     def __init__(self):
-        # Connect to OrbitRS PostgreSQL
+        # Connect to OrbitRS PostgreSQL. Credentials come from environment
+        # variables; never hardcode database passwords in source code.
         self.pg_conn = psycopg2.connect(
-            host="localhost",
-            port=5432,
-            database="manufacturing",
-            user="orbit",
-            password="orbit"
+            host=os.getenv("ORBIT_PG_HOST", "localhost"),
+            port=env_int("ORBIT_PG_PORT", 5432),
+            database=os.getenv("ORBIT_PG_DB", "manufacturing"),
+            user=os.getenv("ORBIT_PG_USER", "orbit"),
+            password=require_env("ORBIT_PG_PASSWORD"),
         )
         
         # Connect to OrbitRS Redis
         self.redis_client = redis.Redis(
-            host="localhost",
-            port=6379,
+            host=os.getenv("ORBIT_REDIS_HOST", "localhost"),
+            port=env_int("ORBIT_REDIS_PORT", 6379),
             db=0,
             decode_responses=True
         )

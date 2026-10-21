@@ -268,7 +268,7 @@ impl ExecutionPlanner {
     /// Plan FROM clause (tables and joins)
     fn plan_from_clause(&mut self, from_clause: FromClause) -> ProtocolResult<ExecutionPlan> {
         match from_clause {
-            FromClause::Table { name, alias: _, .. } => {
+            FromClause::Table { name, .. } => {
                 Ok(ExecutionPlan::TableScan {
                     table: name.full_name(),
                     filter: None,
@@ -316,18 +316,12 @@ impl ExecutionPlanner {
                     },
                 })
             }
-            FromClause::Subquery {
-                query, alias: _, ..
-            } => self.plan_select(*query),
+            FromClause::Subquery { query, .. } => self.plan_select(*query),
             FromClause::Values { values, alias: _ } => Ok(ExecutionPlan::Values {
                 estimated_rows: values.len(),
                 values,
             }),
-            FromClause::TableFunction {
-                function: _,
-                alias: _,
-                ..
-            } => {
+            FromClause::TableFunction { .. } => {
                 // Placeholder for table functions
                 Ok(ExecutionPlan::TableScan {
                     table: "table_function".to_string(),

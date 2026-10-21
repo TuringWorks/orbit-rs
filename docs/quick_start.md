@@ -9,20 +9,20 @@ category: "getting-started"
 
 **One Server, All Protocols, Persistent Storage** - Get a production-ready multi-protocol database server with RocksDB persistence running in 30 seconds.
 
-## 🚀 What You'll Get
+## What You'll Get
 
 **Single `orbit-server` command gives you:**
 
-- ✅ **PostgreSQL server** (port 5432) - Full SQL with pgvector support + **RocksDB persistence**
-- ✅ **Redis server** (port 6379) - Key-value + time series + vectors + **RocksDB persistence**
-- ✅ **MySQL server** (port 3306) - MySQL wire protocol compatibility
-- ✅ **CQL server** (port 9042) - Cassandra Query Language support
-- ✅ **HTTP REST API** (port 8080) - Web-friendly JSON interface  
-- ✅ **gRPC API** (port 50051) - High-performance actor management
-- ✅ **RocksDB Storage** - LSM-tree persistent storage for all data
-- ✅ **Data Persistence** - All data survives server restarts with TTL support
+- [OK] **PostgreSQL server** (port 5432) - Full SQL with pgvector support + **RocksDB persistence**
+- [OK] **Redis server** (port 6379) - Key-value + time series + vectors + **RocksDB persistence**
+- [OK] **MySQL server** (port 3306) - MySQL wire protocol compatibility
+- [OK] **CQL server** (port 9042) - Cassandra Query Language support
+- [OK] **HTTP REST API** (port 8080) - Web-friendly JSON interface  
+- [OK] **gRPC API** (port 50051) - High-performance actor management
+- [OK] **RocksDB Storage** - LSM-tree persistent storage for all data
+- [OK] **Data Persistence** - All data survives server restarts with TTL support
 
-**🔑 Key Innovation**: Same data accessible through any protocol with instant consistency **and full persistence**!
+**[KEY] Key Innovation**: Same data accessible through any protocol with instant consistency **and full persistence**!
 
 ## Prerequisites
 
@@ -56,7 +56,7 @@ Download from [Protocol Buffers releases](https://github.com/protocolbuffers/pro
 choco install protoc
 ```
 
-## ⚡ 30-Second Quick Start
+## 30-Second Quick Start
 
 ### 1. Clone and Build
 
@@ -72,7 +72,7 @@ cargo build --release
 # Start server with all protocols enabled
 ./target/release/orbit-server --dev-mode
 
-# 🎯 Server starting with all protocols and persistent storage:
+# Server starting with all protocols and persistent storage:
 # gRPC:      localhost:50051 (Orbit clients)
 # PostgreSQL: localhost:5432  (psql, PostgreSQL clients) - PERSISTED
 # Redis:     localhost:6379  (redis-cli, Redis clients) - PERSISTED
@@ -119,7 +119,7 @@ curl http://localhost:8080/health
 grpcurl -plaintext localhost:50051 orbit.HealthService/Check
 ```
 
-## 🔄 Multi-Protocol Data Demo
+## Multi-Protocol Data Demo
 
 **The same data is accessible through all protocols** - here's how:
 
@@ -146,7 +146,7 @@ INSERT 0 1
 curl "http://localhost:8080/api/users"
 ```
 
-✨ **Same underlying data store, multiple protocol interfaces!**
+**Same underlying data store, multiple protocol interfaces!**
 
 ### Time Series Operations
 
@@ -240,7 +240,7 @@ curl http://localhost:8080/health
 curl http://localhost:8080/metrics
 ```
 
-## 📚 Basic Usage
+## Basic Usage
 
 ### Simple Actor Example
 
@@ -340,12 +340,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Execute 2-phase commit
     coordinator.commit_transaction(&tx_id).await?;
     
-    println!("✅ Transaction {} committed successfully!", tx_id);
+    println!("[OK] Transaction {} committed successfully!", tx_id);
     Ok(())
 }
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ### Development vs Production Modes
 
@@ -483,7 +483,7 @@ orbit-server \
   --seed-nodes node1:7946,node2:7946
 ```
 
-## 🛠️ Development Setup
+## Development Setup
 
 ### IDE Setup
 
@@ -538,7 +538,7 @@ cargo test -- --nocapture
 cargo test -- --ignored
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -576,47 +576,47 @@ kill -9 <PID>
 
 ### Getting Help
 
-- 📖 [Full Documentation](https://turingworks.github.io/orbit-rs/)
-- 🐛 [Issue Tracker](https://github.com/TuringWorks/orbit-rs/issues)
-- 💬 [Discussions](https://github.com/TuringWorks/orbit-rs/discussions)
+- [DOC] [Full Documentation](https://turingworks.github.io/orbit-rs/)
+- [BUG] [Issue Tracker](https://github.com/TuringWorks/orbit-rs/issues)
+- [CHAT] [Discussions](https://github.com/TuringWorks/orbit-rs/discussions)
 
-## 🎯 Next Steps
+## Next Steps
 
 Now that you have Orbit-RS multi-protocol server running, explore these guides:
 
 ### **Core Documentation**
 
-- 📋 **[Product Requirements Document](../specifications/PRD.md)** - Complete architecture and module reference
-- 🏗️ **[Project Overview](project_overview.md)** - System architecture and design
-- ⚡ **[Features Guide](features.md)** - Complete feature list
+- **[Product Requirements Document](../specifications/PRD.md)** - Complete architecture and module reference
+- **[Project Overview](project_overview.md)** - System architecture and design
+- **[Features Guide](features.md)** - Complete feature list
 
 ### **Protocol-Specific Guides**  
 
-- 🐘 **[PostgreSQL Compatibility](content/protocols/POSTGRES_WIRE_IMPLEMENTATION.md)** - SQL features and pgvector
-- 🔴 **[Redis Compatibility](content/protocols/REDIS_COMMANDS_REFERENCE.md)** - Key-value, time series, and vector operations
-- 🌐 **[REST API Reference](content/protocols/protocol_adapters.md)** - HTTP endpoints and usage
-- 🔢 **[Vector Operations Guide](content/server/vector_commands.md)** - Cross-protocol vector search
+- **[PostgreSQL Compatibility](content/protocols/POSTGRES_WIRE_IMPLEMENTATION.md)** - SQL features and pgvector
+- **[Redis Compatibility](content/protocols/REDIS_COMMANDS_REFERENCE.md)** - Key-value, time series, and vector operations
+- **[REST API Reference](content/protocols/protocol_adapters.md)** - HTTP endpoints and usage
+- **[Vector Operations Guide](content/server/vector_commands.md)** - Cross-protocol vector search
 
 ### **Advanced Features**
 
-- 💾 **[Transaction Features](planning/features/transaction_features.md)** - Distributed ACID transactions
-- 📊 **[Time Series Guide](content/server/TIMESERIES_IMPLEMENTATION_SUMMARY.md)** - Redis TimeSeries compatibility
-- ☸️ **[Kubernetes Documentation](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Production deployment
-- 🎭 **[Actor System Guide](content/storage/virtual_actor_persistence.md)** - Virtual actors and distribution
+- **[Transaction Features](content/server/advanced_transaction_features.md)** - Distributed ACID transactions
+- **[Time Series Guide](content/server/TIMESERIES_IMPLEMENTATION_SUMMARY.md)** - Redis TimeSeries compatibility
+- **[Kubernetes Documentation](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md)** - Production deployment
+- **[Actor System Guide](content/storage/virtual_actor_persistence.md)** - Virtual actors and distribution
 
 ### **Development & Operations**
 
-- 👨‍💻 **[Development Guide](contributing.md)** - Contributing to Orbit-RS
-- 🔒 **[Security Guide](content/server/SECURITY_COMPLETE_DOCUMENTATION.md)** - Authentication and authorization
-- 📈 **[Monitoring Guide](content/operations/OPERATIONS_RUNBOOK.md)** - Metrics and observability
-- 🚀 **[Performance Tuning](content/server/PETABYTE_SCALE_PERFORMANCE.md)** - Optimize for your workload
+- **[Development Guide](contributing.md)** - Contributing to Orbit-RS
+- **[Security Guide](content/server/SECURITY_COMPLETE_DOCUMENTATION.md)** - Authentication and authorization
+- **[Monitoring Guide](content/operations/OPERATIONS_RUNBOOK.md)** - Metrics and observability
+- **[Performance Tuning](content/server/PETABYTE_SCALE_PERFORMANCE.md)** - Optimize for your workload
 
 ### **Migration Guides**
 
-- 🔄 **[PostgreSQL Migration](content/migration/MIGRATION_GUIDE.md)** - Migrate from PostgreSQL
-- 🔄 **[Redis Migration](content/migration/MIGRATION_GUIDE.md)** - Migrate from Redis
-- 🔄 **[Multi-Database Migration](content/migration/MIGRATION_GUIDE.md)** - Consolidate multiple databases
+- **[PostgreSQL Migration](content/migration/MIGRATION_GUIDE.md)** - Migrate from PostgreSQL
+- **[Redis Migration](content/migration/MIGRATION_GUIDE.md)** - Migrate from Redis
+- **[Multi-Database Migration](content/migration/MIGRATION_GUIDE.md)** - Consolidate multiple databases
 
 ---
 
-**Orbit-RS: One Server, All Protocols** 🚀
+**Orbit-RS: One Server, All Protocols**

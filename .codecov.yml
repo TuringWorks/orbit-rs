@@ -23,10 +23,10 @@ coverage:
 
 ignore:
   - "**/*_test.rs"
-  - "**/tests/**"
-  - "**/examples/**"
-  - "**/benches/**"
-  - "**/target/**"
+  - "**/tests/**/*"
+  - "**/examples/**/*"
+  - "**/benches/**/*"
+  - "**/target/**/*"
 
 comment:
   layout: "reach,diff,flags,tree"

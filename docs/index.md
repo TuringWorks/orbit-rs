@@ -194,7 +194,7 @@ Powerful heterogeneous compute engine for maximum performance.
 - [**Getting Started Tutorial**](quick_start.md) - Your first Orbit-RS application
 - [**SQL Tutorial**](content/protocols/POSTGRES_WIRE_IMPLEMENTATION.md) - SQL features and vector operations
 - [**Time Series Tutorial**](content/server/TIMESERIES_IMPLEMENTATION_SUMMARY.md) - Time series data management
-- [**Transaction Programming**](planning/features/transaction_features.md) - Building with distributed transactions
+- [**Transaction Programming**](../specifications/planning/features/transaction_features.md) - Building with distributed transactions
 - [**Kubernetes Deployment**](content/server/KUBERNETES_COMPLETE_DOCUMENTATION.md) - Production deployment guide
 
 ### **Documentation**

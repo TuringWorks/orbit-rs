@@ -45,7 +45,7 @@ argon2 = "0.5"
 bcrypt = "0.15"
 axum = { version = "0.8", features = ["ws", "macros"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace"] }
+tower-http = { version = "0.7", features = ["cors", "trace"] }
 utoipa = { version = "5.4", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "8.0", features = ["axum"] }
 async-stream = "0.3"
@@ -78,7 +78,7 @@ async-trait = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2.1"
 flate2 = "1.0" # For compression
-toml = "0.9" # For configuration file support
+toml = "1.1" # For configuration file support
 # New persistence backends
 # Keep the feature set identical to orbit-engine's: cargo unifies them into one
 # build of librocksdb-sys, and a mismatch here silently changes which codecs the

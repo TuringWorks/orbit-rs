@@ -684,9 +684,9 @@ impl IndexAdvisor {
             }
         }
 
-        // Deduplicate and sort by priority
+        // Deduplicate and sort by priority (descending)
         self.deduplicate_recommendations(&mut recommendations);
-        recommendations.sort_by(|a, b| b.priority.cmp(&a.priority));
+        recommendations.sort_unstable_by_key(|x| std::cmp::Reverse(x.priority));
         recommendations.truncate(self.config.max_indexes_per_table);
 
         recommendations

@@ -7,6 +7,7 @@
 use orbit_shared::LegacyOrbitError;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock, Semaphore};
@@ -269,8 +270,8 @@ pub use orbit_shared::pooling::{
 pub struct ResourceManager {
     /// Maximum memory usage (in bytes)
     max_memory: usize,
-    /// Current memory usage estimate
-    current_memory: Arc<RwLock<usize>>,
+    /// Current memory usage estimate (atomic for synchronous updates in Drop)
+    current_memory: Arc<AtomicUsize>,
     /// Maximum number of concurrent operations
     max_concurrent: usize,
     /// Current concurrency semaphore
@@ -281,7 +282,7 @@ impl ResourceManager {
     pub fn new(max_memory: usize, max_concurrent: usize) -> Self {
         Self {
             max_memory,
-            current_memory: Arc::new(RwLock::new(0)),
+            current_memory: Arc::new(AtomicUsize::new(0)),
             max_concurrent,
             concurrency_limiter: Arc::new(Semaphore::new(max_concurrent)),
         }
@@ -295,26 +296,34 @@ impl ResourceManager {
             .await
             .map_err(|e| PerformanceError::Internal(format!("Concurrency limiter error: {}", e)))?;
 
-        // Check memory availability
-        let mut current = self.current_memory.write().await;
-        if *current + memory_estimate > self.max_memory {
-            return Err(PerformanceError::Internal(
+        // Atomically check and update memory usage using compare-exchange loop
+        let memory_result = self.current_memory.fetch_update(
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+            |current| {
+                if current + memory_estimate > self.max_memory {
+                    None // Reject - would exceed limit
+                } else {
+                    Some(current + memory_estimate)
+                }
+            },
+        );
+
+        match memory_result {
+            Ok(_) => Ok(ResourceGuard {
+                memory_estimate,
+                current_memory: Arc::clone(&self.current_memory),
+                _permit: permit,
+            }),
+            Err(_) => Err(PerformanceError::Internal(
                 "Memory limit exceeded".to_string(),
-            ));
+            )),
         }
-
-        *current += memory_estimate;
-
-        Ok(ResourceGuard {
-            memory_estimate,
-            current_memory: Arc::clone(&self.current_memory),
-            _permit: permit,
-        })
     }
 
     /// Get current resource usage
     pub async fn current_usage(&self) -> (usize, usize) {
-        let memory = *self.current_memory.read().await;
+        let memory = self.current_memory.load(Ordering::Relaxed);
         let concurrent = self.max_concurrent - self.concurrency_limiter.available_permits();
         (memory, concurrent)
     }
@@ -323,19 +332,18 @@ impl ResourceManager {
 /// RAII guard for resource usage
 pub struct ResourceGuard {
     memory_estimate: usize,
-    current_memory: Arc<RwLock<usize>>,
+    current_memory: Arc<AtomicUsize>,
     _permit: tokio::sync::OwnedSemaphorePermit,
 }
 
 impl Drop for ResourceGuard {
     fn drop(&mut self) {
-        let memory_estimate = self.memory_estimate;
-        let current_memory = Arc::clone(&self.current_memory);
-
-        tokio::spawn(async move {
-            let mut current = current_memory.write().await;
-            *current = current.saturating_sub(memory_estimate);
-        });
+        // Synchronously decrement the memory counter.
+        // Using atomic operations avoids the need for async context in Drop
+        // and eliminates the race condition where the memory limit could
+        // appear exhausted after guards are dropped.
+        self.current_memory
+            .fetch_sub(self.memory_estimate, Ordering::SeqCst);
     }
 }
 

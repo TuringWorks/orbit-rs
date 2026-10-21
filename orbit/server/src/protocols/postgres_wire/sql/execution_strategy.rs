@@ -799,6 +799,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                 }
 
                 let table_schema = TableSchema {
+                    oid: 0,
                     name: table_name.clone(),
                     columns,
                     constraints: Vec::new(), // TODO: Parse table-level constraints

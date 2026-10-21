@@ -111,7 +111,7 @@ impl MemoryTableStorage {
         size += tables.len() as u64 * 1024; // Rough estimate per table schema
 
         // Estimate data size
-        for (_, rows) in table_data.iter() {
+        for rows in table_data.values() {
             size += rows.len() as u64 * 256; // Rough estimate per row
         }
 

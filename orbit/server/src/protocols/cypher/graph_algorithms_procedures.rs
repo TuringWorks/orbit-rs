@@ -1112,7 +1112,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 (in_d + out_d, n)
             })
             .collect();
-        results.sort_by(|a, b| b.0.cmp(&a.0));
+        results.sort_unstable_by_key(|x| std::cmp::Reverse(x.0));
 
         let rows: Vec<Vec<Option<String>>> = results
             .into_iter()
@@ -1192,7 +1192,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .zip(nodes.iter())
             .map(|(&t, n)| (t, n.id.to_string()))
             .collect();
-        results.sort_by(|a, b| b.0.cmp(&a.0));
+        results.sort_unstable_by_key(|x| std::cmp::Reverse(x.0));
 
         let rows: Vec<Vec<Option<String>>> = results
             .into_iter()
@@ -1749,7 +1749,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             }
         }
 
-        predictions.sort_by(|a, b| b.2.cmp(&a.2));
+        predictions.sort_unstable_by_key(|x| std::cmp::Reverse(x.2));
         predictions.truncate(top_k);
 
         info!(
@@ -1959,7 +1959,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             }
         }
 
-        predictions.sort_by(|a, b| b.2.cmp(&a.2));
+        predictions.sort_unstable_by_key(|x| std::cmp::Reverse(x.2));
         predictions.truncate(top_k);
 
         info!(

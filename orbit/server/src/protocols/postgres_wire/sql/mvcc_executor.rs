@@ -386,7 +386,7 @@ impl MvccSqlExecutor {
         let mut updated_count = 0;
 
         // Find rows to update based on current snapshot
-        for (_row_key, versions) in table.row_versions.iter_mut() {
+        for versions in table.row_versions.values_mut() {
             // Clone the visible version data first to avoid borrowing issues
             let visible_data = if let Some(visible_version) =
                 self.find_visible_version(versions, &transaction.snapshot)
@@ -654,6 +654,7 @@ impl MvccSqlExecutor {
         let table_schema =
             schema.unwrap_or_else(
                 || crate::protocols::postgres_wire::sql::executor::TableSchema {
+                    oid: 0,
                     name: name.to_string(),
                     columns: Vec::new(),
                     constraints: Vec::new(),

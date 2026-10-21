@@ -122,6 +122,12 @@ case $BENCHMARK_TYPE in
         ;;
 esac
 
+# Validate duration format (e.g., 5m, 2h, 30s) to prevent command injection
+if [[ ! "$DURATION" =~ ^[0-9]+[smh]$ ]]; then
+    print_error "Invalid duration format: $DURATION (expected format like 5m, 2h, 30s)"
+    exit 1
+fi
+
 # Set environment variables
 export CARGO_TERM_COLOR=always
 export RUST_BACKTRACE=1
@@ -166,27 +172,25 @@ run_benchmark() {
     local bench_name="$1"
     local description="$2"
     local output_file="$OUTPUT_DIR/${bench_name}_results.json"
-    local command=""
 
     print_info "Running $description..."
 
+    # Build command as an array to avoid eval injection
+    local cmd_args=()
     if [[ "$TIMEOUT_ENABLED" == "true" ]]; then
-        command="timeout $DURATION cargo bench --bench $bench_name"
-    else
-        command="cargo bench --bench $bench_name"
+        cmd_args+=(timeout "$DURATION")
     fi
-
-    # Add JSON output if generating reports
+    cmd_args+=(cargo bench --bench "$bench_name")
     if [[ "$GENERATE_REPORT" == "true" ]]; then
-        command="$command -- --output-format json"
+        cmd_args+=(-- --output-format json)
     fi
 
-    # Execute the benchmark
+    # Execute the benchmark without eval
     if [[ "$VERBOSE" == "true" ]]; then
-        eval "$command" 2>&1 | tee "${OUTPUT_DIR}/${bench_name}_output.log"
+        "${cmd_args[@]}" 2>&1 | tee "${OUTPUT_DIR}/${bench_name}_output.log"
         local exit_code=${PIPESTATUS[0]}
     else
-        eval "$command" > "${OUTPUT_DIR}/${bench_name}_output.log" 2>&1
+        "${cmd_args[@]}" > "${OUTPUT_DIR}/${bench_name}_output.log" 2>&1
         local exit_code=$?
     fi
 

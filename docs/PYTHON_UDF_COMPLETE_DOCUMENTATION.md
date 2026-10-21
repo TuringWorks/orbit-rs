@@ -71,41 +71,41 @@ Our subprocess-based approach solves these problems by:
 
 ```text
 ┌─────────────────────────────────────┐
-│  SQL: CREATE FUNCTION ... PYTHON   │
+│  SQL: CREATE FUNCTION ... PYTHON    │
 └──────────────┬──────────────────────┘
                │
                ▼
 ┌─────────────────────────────────────┐
-│     Python UDF Handler (Rust)      │
-│  • Parses CREATE/DROP FUNCTION     │
-│  • Validates function source       │
-│  • Routes to registry              │
+│     Python UDF Handler (Rust)       │
+│  • Parses CREATE/DROP FUNCTION      │
+│  • Validates function source        │
+│  • Routes to registry               │
 └──────────────┬──────────────────────┘
                │
                ▼
 ┌─────────────────────────────────────┐
-│     Python UDF Registry (Rust)     │
-│  • Manages function metadata       │
-│  • Routes to runtime pool          │
-│  • Validates parameters            │
+│     Python UDF Registry (Rust)      │
+│  • Manages function metadata        │
+│  • Routes to runtime pool           │
+│  • Validates parameters             │
 └──────────────┬──────────────────────┘
                │
                ▼
 ┌─────────────────────────────────────┐
-│   Python Runtime Pool (Rust)       │
-│  • N worker processes              │
-│  • Round-robin load balancing      │
-│  • Health checking                 │
-│  • Auto-restart                    │
+│   Python Runtime Pool (Rust)        │
+│  • N worker processes               │
+│  • Round-robin load balancing       │
+│  • Health checking                  │
+│  • Auto-restart                     │
 └──────────────┬──────────────────────┘
                │
                ▼
 ┌─────────────────────────────────────┐
-│    Python Worker (Python)          │
-│  • Executes UDFs                   │
-│  • MessagePack communication       │
-│  • Security restrictions           │
-│  • Pre-loaded libraries            │
+│    Python Worker (Python)           │
+│  • Executes UDFs                    │
+│  • MessagePack communication        │
+│  • Security restrictions            │
+│  • Pre-loaded libraries             │
 └─────────────────────────────────────┘
 ```
 

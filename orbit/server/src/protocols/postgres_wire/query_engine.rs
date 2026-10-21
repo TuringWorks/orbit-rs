@@ -14,6 +14,7 @@ use crate::protocols::postgres_wire::persistent_storage::{
     ColumnType, PersistentTableStorage, QueryCondition, TableRow,
 };
 use crate::protocols::postgres_wire::sql::types::SqlValue;
+use crate::protocols::postgres_wire::session_compat;
 use crate::protocols::postgres_wire::sql::{ConfigurableSqlEngine, UnifiedExecutionResult};
 use crate::protocols::postgres_wire::vector_engine::VectorQueryEngine;
 use orbit_client::OrbitClient;
@@ -1224,6 +1225,26 @@ pub enum QueryResult {
         rows: Vec<Vec<Option<String>>>,
         columns: Vec<String>,
     },
+    /// Result set whose columns carry explicit PostgreSQL type OIDs, for
+    /// catalog answers where inference from text would misreport booleans.
+    Typed {
+        columns: Vec<(String, i32)>,
+        rows: Vec<Vec<Option<String>>>,
+    },
+}
+
+impl QueryResult {
+    /// Drop column type information, turning `Typed` into a plain `Select`.
+    #[must_use]
+    pub fn untyped(self) -> Self {
+        match self {
+            Self::Typed { columns, rows } => Self::Select {
+                columns: columns.into_iter().map(|(name, _)| name).collect(),
+                rows,
+            },
+            other => other,
+        }
+    }
 }
 
 /// Parsed SQL statement
@@ -2458,6 +2479,12 @@ impl QueryEngine {
         // created it.
         self.warm_domain_registry().await;
 
+        let database = self.get_current_database().await;
+        if let Some(result) =
+            session_compat::try_handle(sql.trim().trim_end_matches(';'), &database, "postgres")
+        {
+            return Ok(result);
+        }
         let sql_upper = sql.trim().to_uppercase();
 
         // Check if this is a GraphRAG function query
@@ -2700,6 +2727,9 @@ impl QueryEngine {
                     "canceling statement due to user request".to_string(),
                 ));
             }
+            // `execute_query` answers session statements (drivers' connect
+            // bootstrap) itself, so each piece takes the same route alone or
+            // in a batch.
             results.push(self.execute_query(&statement).await?);
         }
         Ok(results)
@@ -10191,6 +10221,7 @@ impl QueryEngine {
         }
 
         let schema = TableSchema {
+            oid: 0,
             name: table.to_string(),
             columns: column_defs,
             created_at: chrono::Utc::now(),

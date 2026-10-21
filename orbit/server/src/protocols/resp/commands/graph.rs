@@ -745,9 +745,9 @@ impl GraphCommands {
                 "Results | Records produced: 0, Execution time: {:.3} ms",
                 elapsed.as_secs_f64() * 1000.0
             ),
-            format!("    Project | Records produced: 0"),
-            format!("        Filter | Records produced: 0"),
-            format!("            Node By Label Scan | Records produced: 0"),
+            "    Project | Records produced: 0".to_string(),
+            "        Filter | Records produced: 0".to_string(),
+            "            Node By Label Scan | Records produced: 0".to_string(),
         ];
 
         let mut response = Vec::new();

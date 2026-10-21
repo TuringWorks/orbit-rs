@@ -16,6 +16,10 @@ use tokio::sync::Mutex;
 
 const TOMBSTONE_VALUE: &[u8] = b"__TOMBSTONE__";
 
+/// Maximum allowed record size when reading SSTable files (64 MB)
+/// Prevents unbounded memory allocation from untrusted/corrupt file content
+const MAX_RECORD_SIZE: usize = 64 * 1024 * 1024;
+
 /// LSM-Tree persistence implementation
 pub struct LsmTreePersistence {
     config: LsmConfig,
@@ -549,6 +553,16 @@ impl LsmTreePersistence {
 
         while reader.read_exact(&mut buffer).await.is_ok() {
             let record_size = u32::from_le_bytes(buffer) as usize;
+
+            // Validate record_size against a sane maximum to prevent
+            // unbounded memory allocation (DoS) from corrupt/untrusted files
+            if record_size > MAX_RECORD_SIZE {
+                return Err(PersistenceError::CorruptionError(format!(
+                    "SSTable record size {} exceeds maximum allowed {} in {}",
+                    record_size, MAX_RECORD_SIZE, path.display()
+                )));
+            }
+
             let mut record_bytes = vec![0u8; record_size];
             reader.read_exact(&mut record_bytes).await?;
 

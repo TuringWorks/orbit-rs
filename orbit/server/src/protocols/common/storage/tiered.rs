@@ -238,7 +238,7 @@ impl TableStorage for TieredTableStorage {
     async fn shutdown(&self) -> ProtocolResult<()> {
         // Flush all pending data
         let tables = self.tables.read().await;
-        for (_name, _manager) in tables.iter() {
+        for _manager in tables.values() {
             // Trigger migration if needed
             if self.config.auto_tiering {
                 // Migration happens automatically in background
@@ -646,7 +646,7 @@ impl TableStorage for TieredTableStorage {
         // Trigger migration for all tables if auto-tiering is enabled
         if self.config.auto_tiering {
             let tables = self.tables.read().await;
-            for (_name, manager) in tables.iter() {
+            for manager in tables.values() {
                 // Migration happens in background
                 let _ = manager;
             }

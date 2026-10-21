@@ -123,10 +123,14 @@ impl WorkloadSimulator {
             }
 
             // Rate limiting to maintain target ops/sec
-            let target_duration = Duration::from_nanos(1_000_000_000 / self.operations_per_second);
-            let actual_duration = operation_start.elapsed();
-            if actual_duration < target_duration {
-                sleep(target_duration - actual_duration).await;
+            // Guard against division by zero when operations_per_second is 0
+            if self.operations_per_second > 0 {
+                let target_duration =
+                    Duration::from_nanos(1_000_000_000 / self.operations_per_second);
+                let actual_duration = operation_start.elapsed();
+                if actual_duration < target_duration {
+                    sleep(target_duration - actual_duration).await;
+                }
             }
         }
 

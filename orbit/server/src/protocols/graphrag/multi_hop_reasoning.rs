@@ -574,7 +574,7 @@ impl MultiHopReasoningEngine {
         }
 
         let mut node_properties: HashMap<u64, NodeProperties> = HashMap::new();
-        for (_entity, &id) in entity_to_id.iter() {
+        for &id in entity_to_id.values() {
             node_properties.insert(
                 id,
                 NodeProperties {
@@ -725,7 +725,7 @@ impl MultiHopReasoningEngine {
         }
 
         let mut node_properties: HashMap<u64, NodeProperties> = HashMap::new();
-        for (_entity, &id) in entity_to_id.iter() {
+        for &id in entity_to_id.values() {
             node_properties.insert(
                 id,
                 NodeProperties {
