@@ -43,6 +43,26 @@ pub enum QueryResult {
         rows: Vec<Vec<Option<String>>>,
         columns: Vec<String>,
     },
+    /// Result set whose columns carry explicit PostgreSQL type OIDs, for
+    /// catalog answers where inference from text would misreport booleans.
+    Typed {
+        columns: Vec<(String, i32)>,
+        rows: Vec<Vec<Option<String>>>,
+    },
+}
+
+impl QueryResult {
+    /// Drop column type information, turning `Typed` into a plain `Select`.
+    #[must_use]
+    pub fn untyped(self) -> Self {
+        match self {
+            Self::Typed { columns, rows } => Self::Select {
+                columns: columns.into_iter().map(|(name, _)| name).collect(),
+                rows,
+            },
+            other => other,
+        }
+    }
 }
 
 /// Parsed SQL statement

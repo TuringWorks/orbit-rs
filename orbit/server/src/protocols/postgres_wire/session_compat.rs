@@ -44,6 +44,10 @@ const SETTABLE: &[&str] = &[
     "standard_conforming_strings",
 ];
 
+/// Stable synthetic OIDs for the current database and role.
+const DATABASE_OID: &str = "5";
+const ROLE_OID: &str = "10";
+
 /// Value reported by `SELECT version()`.
 pub const VERSION_STRING: &str = "PostgreSQL 14.0 (Orbit-RS) on orbit, compiled by rustc, 64-bit";
 
@@ -121,6 +125,18 @@ pub fn try_handle(stmt: &str, database: &str, user: &str) -> Option<QueryResult>
         return setting(name).map(|v| one_value(name, v));
     }
 
+    if let Some(result) = catalog_probe(&lower, database, user) {
+        return Some(result);
+    }
+
+    // pgAdmin's replication probe: standalone server, so neither BDR/PGD nor slots.
+    if lower.contains("pg_replication_slots") && lower.contains("pg_extension") {
+        return Some(QueryResult::Select {
+            columns: vec!["type".to_string()],
+            rows: vec![vec![None]],
+        });
+    }
+
     let select = lower.strip_prefix("select ")?;
     match select {
         "version()" | "pg_catalog.version()" => Some(one_value("version", VERSION_STRING)),
@@ -129,6 +145,47 @@ pub fn try_handle(stmt: &str, database: &str, user: &str) -> Option<QueryResult>
         "current_user" | "session_user" | "user" => Some(one_value("current_user", user)),
         _ => select_setting_function(select, &norm[7..]),
     }
+}
+
+fn typed(columns: &[(&str, i32)], row: Vec<&str>) -> QueryResult {
+    QueryResult::Typed {
+        columns: columns.iter().map(|(n, t)| (n.to_string(), *t)).collect(),
+        rows: vec![row.into_iter().map(|v| Some(v.to_string())).collect()],
+    }
+}
+
+/// The two catalog lookups pgAdmin makes right after connecting. Their result
+/// shape is fixed, so booleans must go out as `bool` (pgAdmin tests truthiness,
+/// and the string `'f'` is truthy).
+fn catalog_probe(lower: &str, database: &str, user: &str) -> Option<QueryResult> {
+    use super::messages::type_oids::{BOOL, INT4, TEXT};
+    if lower.contains("pg_catalog.pg_database") && lower.contains("= current_database()") {
+        return Some(typed(
+            &[
+                ("did", INT4),
+                ("datname", TEXT),
+                ("datallowconn", BOOL),
+                ("serverencoding", TEXT),
+                ("cancreate", BOOL),
+                ("datistemplate", BOOL),
+            ],
+            vec![DATABASE_OID, database, "t", "UTF8", "t", "f"],
+        ));
+    }
+    if lower.contains("pg_catalog.pg_roles") && lower.contains("rolname = current_user") {
+        return Some(typed(
+            &[
+                ("id", INT4),
+                ("name", TEXT),
+                ("is_superuser", BOOL),
+                ("can_create_role", BOOL),
+                ("can_create_db", BOOL),
+                ("can_signal_backend", BOOL),
+            ],
+            vec![ROLE_OID, user, "t", "t", "t", "t"],
+        ));
+    }
+    None
 }
 
 /// `current_setting('x')` and the `set_config(..) FROM pg_show_all_settings()`
@@ -221,6 +278,33 @@ mod tests {
             Some(VERSION_STRING)
         );
         assert!(try_handle("SELECT * FROM actors", "d", "u").is_none());
+    }
+
+    #[test]
+    fn pgadmin_replication_probe_is_null() {
+        let q = "SELECT CASE\n WHEN (SELECT count(extname) FROM pg_catalog.pg_extension WHERE extname='bdr') > 0\n THEN 'pgd'\n WHEN (SELECT COUNT(*) FROM pg_catalog.pg_replication_slots) > 0\n THEN 'log'\n ELSE NULL\nEND as type";
+        match try_handle(q, "d", "u") {
+            Some(QueryResult::Select { rows, .. }) => assert_eq!(rows, vec![vec![None]]),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pgadmin_catalog_probes_are_typed() {
+        let db = "SELECT db.oid as did, db.datname FROM pg_catalog.pg_database db WHERE db.datname = current_database()";
+        let role =
+            "SELECT roles.oid as id FROM pg_catalog.pg_roles as roles WHERE rolname = current_user";
+        for q in [db, role] {
+            match try_handle(q, "mydb", "me") {
+                Some(QueryResult::Typed { columns, rows }) => {
+                    assert_eq!(rows.len(), 1);
+                    assert!(columns
+                        .iter()
+                        .any(|(_, t)| *t == super::super::messages::type_oids::BOOL));
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+        }
     }
 
     #[test]
