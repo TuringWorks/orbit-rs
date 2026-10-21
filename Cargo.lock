@@ -7694,7 +7694,7 @@ dependencies = [
  "orbit-shared",
  "orbit-util",
  "proptest",
- "rand 0.8.8",
+ "rand 0.10.3",
  "serde",
  "serde_json",
  "tokio",
