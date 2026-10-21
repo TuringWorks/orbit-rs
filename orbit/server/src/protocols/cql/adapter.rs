@@ -335,6 +335,17 @@ impl CqlAdapter {
                     transaction_id: None,
                 },
             ),
+            crate::protocols::postgres_wire::QueryResult::Typed { columns, rows } => {
+                let row_count = rows.len();
+                Ok(
+                    crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
+                        columns: columns.into_iter().map(|(name, _)| name).collect(),
+                        rows,
+                        row_count,
+                        transaction_id: None,
+                    },
+                )
+            }
             crate::protocols::postgres_wire::QueryResult::Delete { count } => Ok(
                 crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Delete {
                     count,

@@ -789,6 +789,36 @@ impl PostgresWireProtocol {
                 }
                 .encode(buf);
             }
+            QueryResult::Typed { columns, rows } => {
+                let fields = columns
+                    .iter()
+                    .map(|(name, oid)| FieldDescription {
+                        name: name.clone(),
+                        table_oid: 0,
+                        column_id: 0,
+                        type_oid: *oid,
+                        type_size: match *oid {
+                            type_oids::BOOL => 1,
+                            type_oids::INT4 => 4,
+                            _ => -1,
+                        },
+                        type_modifier: -1,
+                        format: 0,
+                    })
+                    .collect();
+                BackendMessage::RowDescription { fields }.encode(buf);
+                for row in rows {
+                    let values = row
+                        .iter()
+                        .map(|v| v.as_ref().map(|s| bytes::Bytes::from(s.clone())))
+                        .collect();
+                    BackendMessage::DataRow { values }.encode(buf);
+                }
+                BackendMessage::CommandComplete {
+                    tag: format!("SELECT {}", rows.len()),
+                }
+                .encode(buf);
+            }
             QueryResult::Set { .. } => {
                 BackendMessage::CommandComplete {
                     tag: "SET".to_string(),
