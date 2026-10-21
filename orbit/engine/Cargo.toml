@@ -35,7 +35,7 @@ uuid = { version = "1.19", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 rand.workspace = true
 fastrand = "2.0"
-parking_lot = "0.12"
+parking_lot = "0.13"
 crossbeam = "0.8"
 md5 = "0.8"
 metrics = "0.24"
