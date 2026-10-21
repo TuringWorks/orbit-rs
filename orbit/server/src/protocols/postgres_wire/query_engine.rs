@@ -13,8 +13,8 @@ use crate::protocols::postgres_wire::graphrag_engine::GraphRAGQueryEngine;
 use crate::protocols::postgres_wire::persistent_storage::{
     ColumnType, PersistentTableStorage, QueryCondition, TableRow,
 };
-use crate::protocols::postgres_wire::sql::types::SqlValue;
 use crate::protocols::postgres_wire::session_compat;
+use crate::protocols::postgres_wire::sql::types::SqlValue;
 use crate::protocols::postgres_wire::sql::{ConfigurableSqlEngine, UnifiedExecutionResult};
 use crate::protocols::postgres_wire::vector_engine::VectorQueryEngine;
 use orbit_client::OrbitClient;
@@ -2925,6 +2925,7 @@ impl QueryEngine {
             storage
                 .create_table(TableSchema {
                     name: table.clone(),
+                    oid: 0,
                     columns: column_defs.clone(),
                     created_at: chrono::Utc::now(),
                     row_count: 0,
@@ -4271,6 +4272,7 @@ impl QueryEngine {
         storage
             .create_table(TableSchema {
                 name: CHANGE_LOG.to_string(),
+                oid: 0,
                 columns: vec![
                     ColumnDefinition {
                         name: "position".to_string(),
@@ -5521,6 +5523,7 @@ impl QueryEngine {
         storage
             .create_table(TableSchema {
                 name: VIEW_CATALOG.to_string(),
+                oid: 0,
                 columns: vec![column("name", true), column("definition", false)],
                 created_at: chrono::Utc::now(),
                 row_count: 0,

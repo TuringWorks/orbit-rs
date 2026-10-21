@@ -59,7 +59,10 @@ pub enum Denial {
     /// The ticket is from a realm this server does not accept.
     WrongRealm { got: Option<String> },
     /// The principal authenticated, but is not this user.
-    NotThisUser { principal: String, requested: String },
+    NotThisUser {
+        principal: String,
+        requested: String,
+    },
 }
 
 impl Denial {
@@ -124,7 +127,12 @@ impl NameMapping {
     #[must_use]
     pub fn from_env() -> Self {
         let include_realm = env::var("ORBIT_PG_GSS_INCLUDE_REALM")
-            .map(|value| !matches!(value.trim().to_ascii_lowercase().as_str(), "0" | "false" | "off" | "no"))
+            .map(|value| {
+                !matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "0" | "false" | "off" | "no"
+                )
+            })
             .unwrap_or(true);
         let required_realm = env::var("ORBIT_PG_GSS_KRB_REALM")
             .ok()
@@ -315,7 +323,10 @@ mod tests {
             include_realm: false,
             required_realm: None,
         };
-        assert_eq!(policy.authorize("postgres/localhost@ORBIT.TEST", "postgres/localhost"), Ok(()));
+        assert_eq!(
+            policy.authorize("postgres/localhost@ORBIT.TEST", "postgres/localhost"),
+            Ok(())
+        );
     }
 
     #[test]
@@ -335,8 +346,12 @@ mod tests {
         // Kerberos principals are case sensitive, and folding them here would
         // make `ADA` and `ada` the same login when the KDC says they are not.
         let policy = default_policy();
-        assert!(policy.authorize("ADA@ORBIT.TEST", "ada@ORBIT.TEST").is_err());
-        assert!(policy.authorize("ada@orbit.test", "ada@ORBIT.TEST").is_err());
+        assert!(policy
+            .authorize("ADA@ORBIT.TEST", "ada@ORBIT.TEST")
+            .is_err());
+        assert!(policy
+            .authorize("ada@orbit.test", "ada@ORBIT.TEST")
+            .is_err());
     }
 
     #[test]

@@ -1159,6 +1159,7 @@ mod tests {
 
         let schema = PersistentTableSchema {
             name: "survivor".to_string(),
+            oid: 0,
             columns: vec![ColumnDefinition {
                 name: "id".to_string(),
                 data_type: ColumnType::Integer,

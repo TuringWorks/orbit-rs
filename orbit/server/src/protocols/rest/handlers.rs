@@ -868,40 +868,47 @@ async fn run_sql(
     // so a truncated result is never mistaken for the whole answer.
     let limit = request.limit.unwrap_or(1000);
 
+    // Column type OIDs have no place in this JSON shape, which reports every
+    // column as text, so a typed result is shaped like the plain one.
+    let tabular = |columns: Vec<String>, rows: Vec<Vec<Option<String>>>| {
+        let total = rows.len();
+        let truncated: Vec<Vec<serde_json::Value>> = rows
+            .into_iter()
+            .take(limit)
+            .map(|row| {
+                row.into_iter()
+                    .map(|value| value.map_or(serde_json::Value::Null, serde_json::Value::String))
+                    .collect()
+            })
+            .collect();
+
+        SqlQueryResponse {
+            columns: columns
+                .into_iter()
+                .map(|name| ColumnInfo {
+                    name,
+                    // The engine holds every value as text and reports no
+                    // per-column type, so this says text rather than
+                    // guessing something narrower.
+                    data_type: "text".to_string(),
+                    nullable: true,
+                })
+                .collect(),
+            row_count: truncated.len(),
+            rows_affected: None,
+            execution_time_ms: start.elapsed().as_millis() as u64,
+            has_more: total > truncated.len(),
+            rows: truncated,
+            query_plan: None,
+        }
+    };
+
     let response = match result {
         QueryResult::Select { columns, rows } | QueryResult::Merge { columns, rows, .. } => {
-            let total = rows.len();
-            let truncated: Vec<Vec<serde_json::Value>> = rows
-                .into_iter()
-                .take(limit)
-                .map(|row| {
-                    row.into_iter()
-                        .map(|value| {
-                            value.map_or(serde_json::Value::Null, serde_json::Value::String)
-                        })
-                        .collect()
-                })
-                .collect();
-
-            SqlQueryResponse {
-                columns: columns
-                    .into_iter()
-                    .map(|name| ColumnInfo {
-                        name,
-                        // The engine holds every value as text and reports no
-                        // per-column type, so this says text rather than
-                        // guessing something narrower.
-                        data_type: "text".to_string(),
-                        nullable: true,
-                    })
-                    .collect(),
-                row_count: truncated.len(),
-                rows_affected: None,
-                execution_time_ms: start.elapsed().as_millis() as u64,
-                has_more: total > truncated.len(),
-                rows: truncated,
-                query_plan: None,
-            }
+            tabular(columns, rows)
+        }
+        QueryResult::Typed { columns, rows } => {
+            tabular(columns.into_iter().map(|(name, _)| name).collect(), rows)
         }
         QueryResult::Insert { count }
         | QueryResult::Update { count }

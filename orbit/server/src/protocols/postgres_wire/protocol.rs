@@ -1704,14 +1704,18 @@ impl PostgresWireProtocol {
     const SERVER_VERSION: &'static str = "14.0 (Orbit-RS Protocol Adapter)";
 
     /// The settings a session starts with, reported by `SHOW`.
-    fn advertised_parameters() -> [(&'static str, &'static str); 6] {
+    fn advertised_parameters() -> [(&'static str, &'static str); 10] {
         [
             ("server_version", Self::SERVER_VERSION),
             ("server_encoding", "UTF8"),
             ("client_encoding", "UTF8"),
             ("DateStyle", "ISO, MDY"),
+            ("IntervalStyle", "postgres"),
+            ("TimeZone", "UTC"),
             ("integer_datetimes", "on"),
             ("standard_conforming_strings", "on"),
+            ("application_name", ""),
+            ("is_superuser", "on"),
         ]
     }
 
@@ -1726,10 +1730,13 @@ impl PostgresWireProtocol {
             self.parameters.insert(name.to_string(), value.to_string());
         }
 
-        // Send parameter status
-        BackendMessage::ParameterStatus {
-            name: "server_version".to_string(),
-            value: Self::SERVER_VERSION.to_string(),
+        // Parameters libpq/psycopg expect to be reported at startup
+        for (name, value) in Self::advertised_parameters() {
+            BackendMessage::ParameterStatus {
+                name: name.to_string(),
+                value: value.to_string(),
+            }
+            .encode(buf);
         }
 
         // Send backend key data (PostgreSQL 18: supports variable-length keys).
