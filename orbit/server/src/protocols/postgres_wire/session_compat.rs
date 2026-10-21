@@ -172,6 +172,13 @@ fn catalog_probe(lower: &str, database: &str, user: &str) -> Option<QueryResult>
             vec![DATABASE_OID, database, "t", "UTF8", "t", "f"],
         ));
     }
+    // pgAdmin closes its cursor when this errors and then skips the roles query.
+    if lower.contains("pg_stat_gssapi") {
+        return Some(typed(
+            &[("gss_authenticated", BOOL), ("encrypted", BOOL)],
+            vec!["f", "f"],
+        ));
+    }
     if lower.contains("pg_catalog.pg_roles") && lower.contains("rolname = current_user") {
         return Some(typed(
             &[
@@ -294,7 +301,8 @@ mod tests {
         let db = "SELECT db.oid as did, db.datname FROM pg_catalog.pg_database db WHERE db.datname = current_database()";
         let role =
             "SELECT roles.oid as id FROM pg_catalog.pg_roles as roles WHERE rolname = current_user";
-        for q in [db, role] {
+        let gss = "SELECT gss_authenticated, encrypted FROM pg_catalog.pg_stat_gssapi WHERE pid = pg_backend_pid()";
+        for q in [db, role, gss] {
             match try_handle(q, "mydb", "me") {
                 Some(QueryResult::Typed { columns, rows }) => {
                     assert_eq!(rows.len(), 1);
