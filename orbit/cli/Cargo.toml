@@ -44,7 +44,7 @@ anyhow = "1.0"
 thiserror.workspace = true
 # Utilities
 chrono = "0.4"
-dirs = "5.0"
+dirs = "7.0"
 
 # Database clients
 tokio-postgres = "0.7"
