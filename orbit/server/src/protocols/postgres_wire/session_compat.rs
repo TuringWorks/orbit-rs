@@ -125,6 +125,9 @@ pub fn try_handle(stmt: &str, database: &str, user: &str) -> Option<QueryResult>
         return setting(name).map(|v| one_value(name, v));
     }
 
+    if let Some(result) = browser_probe(&lower, database, user) {
+        return Some(result);
+    }
     if let Some(result) = dashboard_probe(&lower) {
         return Some(result);
     }
@@ -258,6 +261,159 @@ fn dashboard_probe(lower: &str) -> Option<QueryResult> {
         return None;
     };
     Some(empty_text_result(columns))
+}
+
+/// Typed rows where `None` is SQL NULL.
+fn typed_rows(columns: &[(&str, i32)], rows: Vec<Vec<Option<&str>>>) -> QueryResult {
+    QueryResult::Typed {
+        columns: columns.iter().map(|(n, t)| (n.to_string(), *t)).collect(),
+        rows: rows
+            .into_iter()
+            .map(|r| r.into_iter().map(|v| v.map(str::to_string)).collect())
+            .collect(),
+    }
+}
+
+/// Built-in tablespaces of a fresh cluster, `(oid, name)`.
+const TABLESPACES: &[(&str, &str)] = &[("1663", "pg_default"), ("1664", "pg_global")];
+
+/// Planner settings pgAdmin reads for the tablespace dialog:
+/// `(name, vartype, min, max)`.
+const PLANNER_SETTINGS: &[(&str, &str, &str, &str)] = &[
+    ("seq_page_cost", "real", "0", "1.79769e+308"),
+    ("random_page_cost", "real", "0", "1.79769e+308"),
+    ("effective_io_concurrency", "integer", "0", "1000"),
+];
+
+/// Object-browser queries issued when pgAdmin expands Databases, Login/Group
+/// Roles and Tablespaces. The server has one database, one role and the two
+/// built-in tablespaces.
+fn browser_probe(lower: &str, database: &str, user: &str) -> Option<QueryResult> {
+    use super::messages::type_oids::{BOOL, INT4, TEXT};
+    if lower.contains("pg_catalog.pg_database db") && lower.contains("pg_catalog.pg_tablespace ta")
+    {
+        return Some(typed_rows(
+            &[
+                ("did", INT4),
+                ("name", TEXT),
+                ("spcname", TEXT),
+                ("datallowconn", BOOL),
+                ("is_template", BOOL),
+                ("cancreate", BOOL),
+                ("owner", INT4),
+                ("description", TEXT),
+            ],
+            vec![vec![
+                Some(DATABASE_OID),
+                Some(database),
+                Some("pg_default"),
+                Some("t"),
+                Some("f"),
+                Some("t"),
+                Some(ROLE_OID),
+                None,
+            ]],
+        ));
+    }
+    if lower.contains("from pg_catalog.pg_roles r") && lower.contains("rolcanlogin") {
+        return Some(typed_rows(
+            &[
+                ("oid", INT4),
+                ("rolname", TEXT),
+                ("rolcanlogin", BOOL),
+                ("rolsuper", BOOL),
+                ("description", TEXT),
+            ],
+            vec![vec![Some(ROLE_OID), Some(user), Some("t"), Some("t"), None]],
+        ));
+    }
+    if lower.contains("pg_catalog.pg_tablespace ts") {
+        return Some(tablespace_result(lower));
+    }
+    if lower.contains("pg_show_all_settings()") {
+        if lower.contains("log_destination") {
+            return Some(typed_rows(&[("setting", TEXT)], vec![vec![Some("stderr")]]));
+        }
+        if lower.contains("seq_page_cost") {
+            let rows = PLANNER_SETTINGS
+                .iter()
+                .map(|(n, t, lo, hi)| vec![Some(*n), Some(*t), Some(*lo), Some(*hi), None])
+                .collect();
+            return Some(typed_rows(
+                &[
+                    ("name", TEXT),
+                    ("vartype", TEXT),
+                    ("min_val", TEXT),
+                    ("max_val", TEXT),
+                    ("enumvals", TEXT),
+                ],
+                rows,
+            ));
+        }
+    }
+    // Optional extensions pgAdmin probes for; neither is installed.
+    if lower.contains("extname = 'system_stats'") {
+        return Some(typed_rows(&[("?column?", INT4)], Vec::new()));
+    }
+    if lower.contains("pgagent.pga_job") {
+        return Some(typed_rows(&[("has_priviledge", BOOL)], Vec::new()));
+    }
+    None
+}
+
+/// The three tablespace queries differ only in the columns they select.
+fn tablespace_result(lower: &str) -> QueryResult {
+    use super::messages::type_oids::{INT4, INT8, TEXT};
+    if lower.contains("pg_tablespace_size") {
+        return typed_rows(
+            &[("Name", TEXT), ("Size", INT8)],
+            TABLESPACES
+                .iter()
+                .map(|(_, n)| vec![Some(*n), Some("0")])
+                .collect(),
+        );
+    }
+    if lower.contains("spcoptions") {
+        return typed_rows(
+            &[
+                ("oid", INT4),
+                ("name", TEXT),
+                ("spcoptions", TEXT),
+                ("spcuser", TEXT),
+                ("spclocation", TEXT),
+                ("acl", TEXT),
+                ("description", TEXT),
+                ("seclabels", TEXT),
+            ],
+            TABLESPACES
+                .iter()
+                .map(|(oid, n)| {
+                    vec![
+                        Some(*oid),
+                        Some(*n),
+                        None,
+                        Some("postgres"),
+                        Some(""),
+                        None,
+                        None,
+                        None,
+                    ]
+                })
+                .collect(),
+        );
+    }
+    typed_rows(
+        &[
+            ("oid", INT4),
+            ("name", TEXT),
+            ("owner", INT4),
+            ("description", TEXT),
+        ],
+        TABLESPACES
+            .iter()
+            .map(|(oid, n)| vec![Some(*oid), Some(*n), Some(ROLE_OID), None])
+            .collect(),
+    )
 }
 
 /// The two catalog lookups pgAdmin makes right after connecting. Their result
@@ -452,6 +608,29 @@ mod tests {
             try_handle(recovery, "d", "u"),
             Some(QueryResult::Typed { .. })
         ));
+    }
+
+    #[test]
+    fn pgadmin_browser_probes() {
+        let cases = [
+            ("SELECT db.oid as did, db.datname as name, ta.spcname as spcname FROM pg_catalog.pg_database db LEFT OUTER JOIN pg_catalog.pg_tablespace ta ON db.dattablespace = ta.oid ORDER BY datname", 8, 1),
+            ("SELECT r.oid, r.rolname, r.rolcanlogin, r.rolsuper, d.description FROM pg_catalog.pg_roles r LEFT JOIN pg_catalog.pg_shdescription d ON d.objoid = r.oid ORDER BY r.rolcanlogin", 5, 1),
+            ("SELECT ts.oid, spcname AS name, spcoptions FROM pg_catalog.pg_tablespace ts ORDER BY name", 8, 2),
+            ("SELECT ts.oid AS oid, spcname AS name, spcowner as owner FROM pg_catalog.pg_tablespace ts ORDER BY name;", 4, 2),
+            ("SELECT ts.spcname AS \"Name\", pg_catalog.pg_tablespace_size(ts.oid) AS \"Size\" FROM pg_catalog.pg_tablespace ts;", 2, 2),
+            ("SELECT setting FROM pg_show_all_settings() WHERE name='log_destination'", 1, 1),
+            ("SELECT name, vartype, min_val, max_val, enumvals FROM pg_catalog.pg_show_all_settings() WHERE name IN ('seq_page_cost')", 5, 3),
+            ("SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'system_stats';", 1, 0),
+        ];
+        for (sql, width, height) in cases {
+            match try_handle(sql, "d", "u") {
+                Some(QueryResult::Typed { columns, rows }) => {
+                    assert_eq!((columns.len(), rows.len()), (width, height), "{sql}");
+                    assert!(rows.iter().all(|r| r.len() == width), "{sql}");
+                }
+                other => panic!("unexpected {other:?} for {sql}"),
+            }
+        }
     }
 
     #[test]
