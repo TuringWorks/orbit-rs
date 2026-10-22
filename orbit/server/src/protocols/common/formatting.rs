@@ -7,7 +7,7 @@
 //! - Color-coded output for different data types
 //! - Multiple output formats (table, JSON, CSV)
 
-use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
+use comfy_table::{presets::UTF8_FULL, Cell, Color, Table};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 
@@ -45,8 +45,7 @@ pub fn format_table(
 fn format_as_table(columns: &[String], rows: &[HashMap<String, SqlValue>]) -> String {
     let mut table = Table::new();
     table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
+        .load_style(UTF8_FULL.with_rounded_corners())
         .set_content_arrangement(comfy_table::ContentArrangement::Dynamic);
 
     // Add header row with colors
@@ -107,10 +106,10 @@ fn format_cell_value(value: &SqlValue) -> Cell {
         SqlValue::BigInt(n) => Cell::new(n.to_string())
             .fg(Color::Green)
             .set_alignment(comfy_table::CellAlignment::Right),
-        SqlValue::Real(f) => Cell::new(format!("{:.2}", f))
+        SqlValue::Real(f) => Cell::new(format!("{f:.2}"))
             .fg(Color::Green)
             .set_alignment(comfy_table::CellAlignment::Right),
-        SqlValue::DoublePrecision(f) => Cell::new(format!("{:.2}", f))
+        SqlValue::DoublePrecision(f) => Cell::new(format!("{f:.2}"))
             .fg(Color::Green)
             .set_alignment(comfy_table::CellAlignment::Right),
         SqlValue::Decimal(d) => Cell::new(d.to_string())
@@ -126,7 +125,7 @@ fn format_cell_value(value: &SqlValue) -> Cell {
             } else {
                 hex
             };
-            Cell::new(format!("\\x{}", display))
+            Cell::new(format!("\\x{display}"))
                 .fg(Color::Magenta)
                 .set_alignment(comfy_table::CellAlignment::Left)
         }
@@ -171,7 +170,7 @@ fn format_cell_value(value: &SqlValue) -> Cell {
                 .fg(Color::Magenta)
                 .set_alignment(comfy_table::CellAlignment::Left)
         }
-        SqlValue::Point(x, y) => Cell::new(format!("({}, {})", x, y))
+        SqlValue::Point(x, y) => Cell::new(format!("({x}, {y})"))
             .fg(Color::Cyan)
             .set_alignment(comfy_table::CellAlignment::Left),
         SqlValue::Inet(s) => Cell::new(s.to_string())
@@ -211,11 +210,9 @@ fn sql_value_to_json(value: &SqlValue) -> serde_json::Value {
         SqlValue::Integer(n) => serde_json::Value::Number((*n).into()),
         SqlValue::BigInt(n) => serde_json::Value::Number((*n).into()),
         SqlValue::Real(f) => serde_json::Number::from_f64(*f as f64)
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
+            .map_or(serde_json::Value::Null, serde_json::Value::Number),
         SqlValue::DoublePrecision(f) => serde_json::Number::from_f64(*f)
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
+            .map_or(serde_json::Value::Null, serde_json::Value::Number),
         SqlValue::Decimal(d) => serde_json::Value::String(d.to_string()),
         SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => {
             serde_json::Value::String(s.clone())
@@ -240,8 +237,7 @@ fn format_as_csv(columns: &[String], rows: &[HashMap<String, SqlValue>]) -> Stri
             .iter()
             .map(|col| {
                 row.get(col)
-                    .map(|v| escape_csv_value(&v.to_postgres_string()))
-                    .unwrap_or_else(String::new)
+                    .map_or_else(String::new, |v| escape_csv_value(&v.to_postgres_string()))
             })
             .collect();
         output.push_str(&values.join(","));
@@ -273,9 +269,10 @@ fn format_as_plain(columns: &[String], rows: &[HashMap<String, SqlValue>]) -> St
         let values: Vec<String> = columns
             .iter()
             .map(|col| {
-                row.get(col)
-                    .map(|v| v.to_postgres_string())
-                    .unwrap_or_else(|| "NULL".to_string())
+                row.get(col).map_or_else(
+                    || "NULL".to_string(),
+                    super::super::postgres_wire::sql::types::SqlValue::to_postgres_string,
+                )
             })
             .collect();
         output.push_str(&values.join("\t"));
@@ -288,7 +285,7 @@ fn format_as_plain(columns: &[String], rows: &[HashMap<String, SqlValue>]) -> St
 /// Format query timing information
 pub fn format_timing(elapsed_ms: u64) -> String {
     if elapsed_ms < 1000 {
-        format!("Time: {} ms", elapsed_ms).dimmed().to_string()
+        format!("Time: {elapsed_ms} ms").dimmed().to_string()
     } else {
         format!("Time: {:.2} s", elapsed_ms as f64 / 1000.0)
             .dimmed()
@@ -298,7 +295,7 @@ pub fn format_timing(elapsed_ms: u64) -> String {
 
 /// Format error message with color
 pub fn format_error(error: &str) -> String {
-    format!("ERROR: {}", error).red().to_string()
+    format!("ERROR: {error}").red().to_string()
 }
 
 /// Format success message with color

@@ -23,7 +23,7 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
-use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
+use comfy_table::{presets::UTF8_FULL, Cell, Color, Table};
 use orbit_server::protocols::common::formatting::{format_error, format_success, OutputFormat};
 use owo_colors::OwoColorize;
 use rustyline::error::ReadlineError;
@@ -346,7 +346,7 @@ impl ReplState {
                 self.pg_connection_handle = Some(handle);
                 Ok(())
             }
-            Err(e) => Err(anyhow::anyhow!("Failed to connect to PostgreSQL: {}", e)),
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to PostgreSQL: {e}")),
         }
     }
 
@@ -370,9 +370,9 @@ impl ReplState {
                     self.mysql_pool = Some(pool);
                     Ok(())
                 }
-                Err(e) => Err(anyhow::anyhow!("MySQL connection test failed: {}", e)),
+                Err(e) => Err(anyhow::anyhow!("MySQL connection test failed: {e}")),
             },
-            Err(e) => Err(anyhow::anyhow!("Failed to connect to MySQL: {}", e)),
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to MySQL: {e}")),
         }
     }
 
@@ -390,21 +390,21 @@ impl ReplState {
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| anyhow::anyhow!("Redis connection failed: {}", e))?;
+                    .map_err(|e| anyhow::anyhow!("Redis connection failed: {e}"))?;
 
                 let pong: String = redis::cmd("PING")
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| anyhow::anyhow!("Redis PING failed: {}", e))?;
+                    .map_err(|e| anyhow::anyhow!("Redis PING failed: {e}"))?;
 
                 if pong == "PONG" {
                     self.redis_client = Some(client);
                     Ok(())
                 } else {
-                    Err(anyhow::anyhow!("Unexpected Redis PING response: {}", pong))
+                    Err(anyhow::anyhow!("Unexpected Redis PING response: {pong}"))
                 }
             }
-            Err(e) => Err(anyhow::anyhow!("Invalid Redis URL: {}", e)),
+            Err(e) => Err(anyhow::anyhow!("Invalid Redis URL: {e}")),
         }
     }
 
@@ -422,7 +422,7 @@ impl ReplState {
                 "OrbitQL health check failed: HTTP {}",
                 response.status()
             )),
-            Err(e) => Err(anyhow::anyhow!("Failed to connect to OrbitQL: {}", e)),
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to OrbitQL: {e}")),
         }
     }
 
@@ -437,7 +437,7 @@ impl ReplState {
                 self.http_client = Some(client);
                 Ok(())
             }
-            Err(e) => Err(anyhow::anyhow!("Failed to connect to CQL endpoint: {}", e)),
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to CQL endpoint: {e}")),
         }
     }
 
@@ -476,7 +476,7 @@ impl ReplState {
                         self.format_rows(rows)?;
                         Ok(())
                     }
-                    Err(e) => Err(anyhow::anyhow!("Query execution failed: {}", e)),
+                    Err(e) => Err(anyhow::anyhow!("Query execution failed: {e}")),
                 }
             }
         }
@@ -507,20 +507,17 @@ impl ReplState {
                     // Print as table
                     if !columns.is_empty() {
                         let mut table = Table::new();
-                        table
-                            .load_preset(UTF8_FULL)
-                            .apply_modifier(UTF8_ROUND_CORNERS);
+                        table.load_style(UTF8_FULL.with_rounded_corners());
                         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
                         table.add_row(values.iter().map(Cell::new));
-                        println!("\n{}", table);
+                        println!("\n{table}");
                     }
                 }
                 tokio_postgres::SimpleQueryMessage::CommandComplete(count) => {
                     println!(
                         "{}",
                         format_success(&format!(
-                            "Query executed successfully ({} rows affected)",
-                            count
+                            "Query executed successfully ({count} rows affected)"
                         ))
                     );
                 }
@@ -545,9 +542,7 @@ impl ReplState {
             .collect();
 
         let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL)
-            .apply_modifier(UTF8_ROUND_CORNERS);
+        table.load_style(UTF8_FULL.with_rounded_corners());
         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
 
         // Add rows
@@ -565,20 +560,17 @@ impl ReplState {
                             .unwrap_or_else(|| "NULL".to_string())
                     } else if type_name == "int4" || type_name == "integer" {
                         row.get::<_, Option<i32>>(i)
-                            .map(|v| v.to_string())
-                            .unwrap_or_else(|| "NULL".to_string())
+                            .map_or_else(|| "NULL".to_string(), |v| v.to_string())
                     } else if type_name == "int8" || type_name == "bigint" {
                         row.get::<_, Option<i64>>(i)
-                            .map(|v| v.to_string())
-                            .unwrap_or_else(|| "NULL".to_string())
+                            .map_or_else(|| "NULL".to_string(), |v| v.to_string())
                     } else if type_name == "bool" || type_name == "boolean" {
                         row.get::<_, Option<bool>>(i)
-                            .map(|v| v.to_string())
-                            .unwrap_or_else(|| "NULL".to_string())
+                            .map_or_else(|| "NULL".to_string(), |v| v.to_string())
                     } else {
                         // Fallback: try to get as text
                         row.get::<_, Option<String>>(i)
-                            .unwrap_or_else(|| format!("<{}>", type_name))
+                            .unwrap_or_else(|| format!("<{type_name}>"))
                     }
                 };
                 values.push(value);
@@ -586,7 +578,7 @@ impl ReplState {
             table.add_row(values.iter().map(Cell::new));
         }
 
-        println!("\n{}", table);
+        println!("\n{table}");
         println!("{}", format_success(&format!("({} rows)", rows.len())));
         Ok(())
     }
@@ -603,13 +595,13 @@ impl ReplState {
         let mut conn = pool
             .get_conn()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to get MySQL connection: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to get MySQL connection: {e}"))?;
 
         // Execute query and get results
         let result: Vec<mysql_async::Row> = conn
             .query(query)
             .await
-            .map_err(|e| anyhow::anyhow!("MySQL query failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("MySQL query failed: {e}"))?;
 
         if result.is_empty() {
             println!("{}", format_success("Query executed successfully (0 rows)"));
@@ -624,9 +616,7 @@ impl ReplState {
             .collect();
 
         let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL)
-            .apply_modifier(UTF8_ROUND_CORNERS);
+        table.load_style(UTF8_FULL.with_rounded_corners());
         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
 
         // Add rows
@@ -639,7 +629,7 @@ impl ReplState {
             table.add_row(values.iter().map(Cell::new));
         }
 
-        println!("\n{}", table);
+        println!("\n{table}");
         println!("{}", format_success(&format!("({} rows)", result.len())));
         Ok(())
     }
@@ -654,7 +644,7 @@ impl ReplState {
         let mut conn = client
             .get_multiplexed_async_connection()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to get Redis connection: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to get Redis connection: {e}"))?;
 
         // Parse command into parts
         let parts: Vec<&str> = command.split_whitespace().collect();
@@ -674,7 +664,7 @@ impl ReplState {
         let result: redis::Value = cmd
             .query_async(&mut conn)
             .await
-            .map_err(|e| anyhow::anyhow!("Redis command failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Redis command failed: {e}"))?;
 
         // Format and display result
         self.format_redis_value(&result, 0);
@@ -685,18 +675,18 @@ impl ReplState {
     fn format_redis_value(&self, value: &redis::Value, indent: usize) {
         let prefix = "  ".repeat(indent);
         match value {
-            redis::Value::Nil => println!("{}(nil)", prefix),
-            redis::Value::Int(i) => println!("{}(integer) {}", prefix, i),
+            redis::Value::Nil => println!("{prefix}(nil)"),
+            redis::Value::Int(i) => println!("{prefix}(integer) {i}"),
             redis::Value::BulkString(data) => {
                 if let Ok(s) = String::from_utf8(data.clone()) {
-                    println!("{}\"{}\"", prefix, s);
+                    println!("{prefix}\"{s}\"");
                 } else {
                     println!("{}(binary data, {} bytes)", prefix, data.len());
                 }
             }
             redis::Value::Array(arr) => {
                 if arr.is_empty() {
-                    println!("{}(empty array)", prefix);
+                    println!("{prefix}(empty array)");
                 } else {
                     for (i, item) in arr.iter().enumerate() {
                         print!("{}{}) ", prefix, i + 1);
@@ -704,25 +694,25 @@ impl ReplState {
                     }
                 }
             }
-            redis::Value::SimpleString(s) => println!("{}{}", prefix, s),
+            redis::Value::SimpleString(s) => println!("{prefix}{s}"),
             // Handle additional RESP3 types
-            redis::Value::Double(d) => println!("{}(double) {}", prefix, d),
-            redis::Value::Boolean(b) => println!("{}(boolean) {}", prefix, b),
+            redis::Value::Double(d) => println!("{prefix}(double) {d}"),
+            redis::Value::Boolean(b) => println!("{prefix}(boolean) {b}"),
             redis::Value::Map(map) => {
                 if map.is_empty() {
-                    println!("{}(empty map)", prefix);
+                    println!("{prefix}(empty map)");
                 } else {
                     for (i, (k, v)) in map.iter().enumerate() {
                         print!("{}{}) key: ", prefix, i + 1);
                         self.format_redis_value(k, 0);
-                        print!("{}   value: ", prefix);
+                        print!("{prefix}   value: ");
                         self.format_redis_value(v, 0);
                     }
                 }
             }
             redis::Value::Set(set) => {
                 if set.is_empty() {
-                    println!("{}(empty set)", prefix);
+                    println!("{prefix}(empty set)");
                 } else {
                     for (i, item) in set.iter().enumerate() {
                         print!("{}{}) ", prefix, i + 1);
@@ -730,8 +720,8 @@ impl ReplState {
                     }
                 }
             }
-            redis::Value::Okay => println!("{}OK", prefix),
-            _ => println!("{}(unsupported redis type)", prefix),
+            redis::Value::Okay => println!("{prefix}OK"),
+            _ => println!("{prefix}(unsupported redis type)"),
         }
     }
 
@@ -754,18 +744,18 @@ impl ReplState {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("OrbitQL request failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("OrbitQL request failed: {e}"))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("OrbitQL error (HTTP {}): {}", status, body));
+            return Err(anyhow::anyhow!("OrbitQL error (HTTP {status}): {body}"));
         }
 
         let result: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse OrbitQL response: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse OrbitQL response: {e}"))?;
 
         // Display result based on structure
         if let Some(data) = result.get("data") {
@@ -787,9 +777,7 @@ impl ReplState {
                 }
 
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
 
                 if !columns.is_empty() {
                     table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -809,14 +797,14 @@ impl ReplState {
                     }
                 }
 
-                println!("\n{}", table);
+                println!("\n{table}");
                 println!("{}", format_success(&format!("({} rows)", rows.len())));
             } else {
                 // Non-tabular result, just print JSON
                 println!("{}", serde_json::to_string_pretty(&data)?);
             }
         } else if let Some(error) = result.get("error") {
-            return Err(anyhow::anyhow!("OrbitQL error: {}", error));
+            return Err(anyhow::anyhow!("OrbitQL error: {error}"));
         } else {
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
@@ -843,18 +831,18 @@ impl ReplState {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("CQL request failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("CQL request failed: {e}"))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("CQL error (HTTP {}): {}", status, body));
+            return Err(anyhow::anyhow!("CQL error (HTTP {status}): {body}"));
         }
 
         let result: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse CQL response: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse CQL response: {e}"))?;
 
         // Display result (same format as OrbitQL for now)
         println!("{}", serde_json::to_string_pretty(&result)?);
@@ -899,16 +887,13 @@ impl ReplState {
                             "Cypher authentication failed: HTTP {}",
                             r.status()
                         )),
-                        Err(e) => Err(anyhow::anyhow!("Cypher connection failed: {}", e)),
+                        Err(e) => Err(anyhow::anyhow!("Cypher connection failed: {e}")),
                     }
                 } else {
-                    Err(anyhow::anyhow!("Cypher connection failed: HTTP {}", status))
+                    Err(anyhow::anyhow!("Cypher connection failed: HTTP {status}"))
                 }
             }
-            Err(e) => Err(anyhow::anyhow!(
-                "Failed to connect to Cypher endpoint: {}",
-                e
-            )),
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to Cypher endpoint: {e}")),
         }
     }
 
@@ -935,18 +920,18 @@ impl ReplState {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("Cypher request failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Cypher request failed: {e}"))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("Cypher error (HTTP {}): {}", status, body));
+            return Err(anyhow::anyhow!("Cypher error (HTTP {status}): {body}"));
         }
 
         let result: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse Cypher response: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse Cypher response: {e}"))?;
 
         // Check for errors in response
         if let Some(errors) = result.get("errors").and_then(|e| e.as_array()) {
@@ -956,7 +941,7 @@ impl ReplState {
                     .filter_map(|e| e.get("message").and_then(|m| m.as_str()))
                     .collect::<Vec<_>>()
                     .join("; ");
-                return Err(anyhow::anyhow!("Cypher error: {}", error_msg));
+                return Err(anyhow::anyhow!("Cypher error: {error_msg}"));
             }
         }
 
@@ -983,9 +968,7 @@ impl ReplState {
                     }
 
                     let mut table = Table::new();
-                    table
-                        .load_preset(UTF8_FULL)
-                        .apply_modifier(UTF8_ROUND_CORNERS);
+                    table.load_style(UTF8_FULL.with_rounded_corners());
 
                     if !columns.is_empty() {
                         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -1007,7 +990,7 @@ impl ReplState {
                         }
                     }
 
-                    println!("\n{}", table);
+                    println!("\n{table}");
                     println!("{}", format_success(&format!("({} rows)", data.len())));
                 }
             }
@@ -1041,7 +1024,7 @@ impl ReplState {
                 "AQL connection failed: HTTP {}",
                 r.status()
             )),
-            Err(e) => Err(anyhow::anyhow!("Failed to connect to AQL endpoint: {}", e)),
+            Err(e) => Err(anyhow::anyhow!("Failed to connect to AQL endpoint: {e}")),
         }
     }
 
@@ -1071,27 +1054,27 @@ impl ReplState {
         let response = request
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("AQL request failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("AQL request failed: {e}"))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("AQL error (HTTP {}): {}", status, body));
+            return Err(anyhow::anyhow!("AQL error (HTTP {status}): {body}"));
         }
 
         let result: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse AQL response: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse AQL response: {e}"))?;
 
         // Check for errors
-        if let Some(error) = result.get("error").and_then(|e| e.as_bool()) {
+        if let Some(error) = result.get("error").and_then(serde_json::Value::as_bool) {
             if error {
                 let error_msg = result
                     .get("errorMessage")
                     .and_then(|m| m.as_str())
                     .unwrap_or("Unknown error");
-                return Err(anyhow::anyhow!("AQL error: {}", error_msg));
+                return Err(anyhow::anyhow!("AQL error: {error_msg}"));
             }
         }
 
@@ -1114,9 +1097,7 @@ impl ReplState {
                     .unwrap_or_default();
 
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
 
                 if !columns.is_empty() {
                     table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -1127,27 +1108,26 @@ impl ReplState {
                         let values: Vec<String> = columns
                             .iter()
                             .map(|col| {
-                                obj.get(col)
-                                    .map(|v| match v {
+                                obj.get(col).map_or_else(
+                                    || "NULL".to_string(),
+                                    |v| match v {
                                         serde_json::Value::Null => "NULL".to_string(),
                                         serde_json::Value::String(s) => s.clone(),
                                         _ => v.to_string(),
-                                    })
-                                    .unwrap_or_else(|| "NULL".to_string())
+                                    },
+                                )
                             })
                             .collect();
                         table.add_row(values.iter().map(Cell::new));
                     }
                 }
 
-                println!("\n{}", table);
+                println!("\n{table}");
                 println!("{}", format_success(&format!("({} rows)", data.len())));
             } else {
                 // Scalar results - display as single column
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
                 table.set_header(vec![Cell::new("result").fg(Color::Cyan)]);
 
                 for item in data {
@@ -1159,7 +1139,7 @@ impl ReplState {
                     table.add_row(vec![Cell::new(value)]);
                 }
 
-                println!("\n{}", table);
+                println!("\n{table}");
                 println!("{}", format_success(&format!("({} rows)", data.len())));
             }
         }
@@ -1175,7 +1155,7 @@ impl ReplState {
         let endpoint = format!("http://{}:{}", self.host, self.port);
 
         // Try to connect by checking the health endpoint or a simple handshake
-        let health_url = format!("{}/health", endpoint);
+        let health_url = format!("{endpoint}/health");
 
         match client.get(&health_url).send().await {
             Ok(response) if response.status().is_success() || response.status().as_u16() == 404 => {
@@ -1188,8 +1168,7 @@ impl ReplState {
                 response.status()
             )),
             Err(e) => Err(anyhow::anyhow!(
-                "Failed to connect to Flight SQL server: {}",
-                e
+                "Failed to connect to Flight SQL server: {e}"
             )),
         }
     }
@@ -1224,13 +1203,12 @@ impl ReplState {
                             Err(anyhow::anyhow!("Invalid OrbitWire handshake response"))
                         }
                     }
-                    Ok(Err(e)) => Err(anyhow::anyhow!("OrbitWire handshake failed: {}", e)),
+                    Ok(Err(e)) => Err(anyhow::anyhow!("OrbitWire handshake failed: {e}")),
                     Err(_) => Err(anyhow::anyhow!("OrbitWire handshake timed out")),
                 }
             }
             Err(e) => Err(anyhow::anyhow!(
-                "Failed to connect to OrbitWire server: {}",
-                e
+                "Failed to connect to OrbitWire server: {e}"
             )),
         }
     }
@@ -1256,22 +1234,18 @@ impl ReplState {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("Flight SQL request failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Flight SQL request failed: {e}"))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!(
-                "Flight SQL error (HTTP {}): {}",
-                status,
-                body
-            ));
+            return Err(anyhow::anyhow!("Flight SQL error (HTTP {status}): {body}"));
         }
 
         let result: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse Flight SQL response: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse Flight SQL response: {e}"))?;
 
         // Display result (Arrow Flight returns columnar data)
         if let Some(data) = result.get("data") {
@@ -1293,9 +1267,7 @@ impl ReplState {
                 }
 
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
 
                 if !columns.is_empty() {
                     table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -1315,13 +1287,13 @@ impl ReplState {
                     }
                 }
 
-                println!("\n{}", table);
+                println!("\n{table}");
                 println!("{}", format_success(&format!("({} rows)", rows.len())));
             } else {
                 println!("{}", serde_json::to_string_pretty(&data)?);
             }
         } else if let Some(error) = result.get("error") {
-            return Err(anyhow::anyhow!("Flight SQL error: {}", error));
+            return Err(anyhow::anyhow!("Flight SQL error: {error}"));
         } else {
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
@@ -1350,22 +1322,18 @@ impl ReplState {
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("OrbitWire request failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("OrbitWire request failed: {e}"))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!(
-                "OrbitWire error (HTTP {}): {}",
-                status,
-                body
-            ));
+            return Err(anyhow::anyhow!("OrbitWire error (HTTP {status}): {body}"));
         }
 
         let result: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse OrbitWire response: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse OrbitWire response: {e}"))?;
 
         // Display result
         if let Some(data) = result.get("data") {
@@ -1387,9 +1355,7 @@ impl ReplState {
                 }
 
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
 
                 if !columns.is_empty() {
                     table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -1409,13 +1375,13 @@ impl ReplState {
                     }
                 }
 
-                println!("\n{}", table);
+                println!("\n{table}");
                 println!("{}", format_success(&format!("({} rows)", rows.len())));
             } else {
                 println!("{}", serde_json::to_string_pretty(&data)?);
             }
         } else if let Some(error) = result.get("error") {
-            return Err(anyhow::anyhow!("OrbitWire error: {}", error));
+            return Err(anyhow::anyhow!("OrbitWire error: {error}"));
         } else {
             println!("{}", serde_json::to_string_pretty(&result)?);
         }
@@ -1514,7 +1480,7 @@ async fn execute_single_command(cli: &Cli, query: &str) -> Result<()> {
             println!("{}", format_success("Connected successfully!"));
         }
         Err(e) => {
-            return Err(anyhow::anyhow!("Connection failed: {}", e));
+            return Err(anyhow::anyhow!("Connection failed: {e}"));
         }
     }
 
@@ -1554,7 +1520,7 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
             println!("{}", format_success("Connected successfully!"));
         }
         Err(e) => {
-            return Err(anyhow::anyhow!("Connection failed: {}", e));
+            return Err(anyhow::anyhow!("Connection failed: {e}"));
         }
     }
 
@@ -1587,7 +1553,7 @@ async fn execute_file(cli: &Cli, file_path: &PathBuf) -> Result<()> {
                 // Success - results already printed
             }
             Err(e) => {
-                println!("{}", format_error(&format!("Error: {}", e)));
+                println!("{}", format_error(&format!("Error: {e}")));
             }
         }
     }
@@ -1620,7 +1586,7 @@ fn prompt_for_protocol(editor: &mut DefaultEditor) -> Result<Protocol> {
                 } else {
                     println!(
                         "{}",
-                        format_error(&format!("Unknown protocol: '{}'. Please try again.", input))
+                        format_error(&format!("Unknown protocol: '{input}'. Please try again."))
                     );
                 }
             }
@@ -1632,7 +1598,7 @@ fn prompt_for_protocol(editor: &mut DefaultEditor) -> Result<Protocol> {
                 return Err(anyhow::anyhow!("EOF"));
             }
             Err(err) => {
-                return Err(anyhow::anyhow!("Error reading input: {}", err));
+                return Err(anyhow::anyhow!("Error reading input: {err}"));
             }
         }
     }
@@ -1665,7 +1631,7 @@ fn prompt_for_database(editor: &mut DefaultEditor, protocol: &Protocol) -> Resul
                 let input = line.trim();
                 if input.is_empty() {
                     if !default_db.is_empty() {
-                        println!("{}", format!("Using default: {}", default_db).dimmed());
+                        println!("{}", format!("Using default: {default_db}").dimmed());
                         return Ok(default_db.to_string());
                     } else {
                         println!("{}", "Please enter a database name.".dimmed());
@@ -1685,7 +1651,7 @@ fn prompt_for_database(editor: &mut DefaultEditor, protocol: &Protocol) -> Resul
                 return Err(anyhow::anyhow!("EOF"));
             }
             Err(err) => {
-                return Err(anyhow::anyhow!("Error reading input: {}", err));
+                return Err(anyhow::anyhow!("Error reading input: {err}"));
             }
         }
     }
@@ -1723,7 +1689,7 @@ async fn run_repl(cli: &Cli) -> Result<()> {
             println!("{}", format_success("Connected successfully!"));
         }
         Err(e) => {
-            println!("{}", format_error(&format!("Connection failed: {}", e)));
+            println!("{}", format_error(&format!("Connection failed: {e}")));
             println!(
                 "{}",
                 "Continuing in offline mode - queries will not execute.".dimmed()
@@ -1732,12 +1698,13 @@ async fn run_repl(cli: &Cli) -> Result<()> {
     }
 
     // Load history
-    let history_file = dirs::home_dir()
-        .map(|mut p| {
+    let history_file = dirs::home_dir().map_or_else(
+        || PathBuf::from(".orbit_history"),
+        |mut p| {
             p.push(".orbit_history");
             p
-        })
-        .unwrap_or_else(|| PathBuf::from(".orbit_history"));
+        },
+    );
 
     if editor.load_history(&history_file).is_err() {
         info!("No previous history found");
@@ -1780,7 +1747,7 @@ async fn run_repl(cli: &Cli) -> Result<()> {
                     match state.execute_query(trimmed).await {
                         Ok(()) => {}
                         Err(e) => {
-                            println!("\n{}", format_error(&format!("Error: {}", e)));
+                            println!("\n{}", format_error(&format!("Error: {e}")));
                         }
                     }
                 } else {
@@ -1813,7 +1780,7 @@ async fn run_repl(cli: &Cli) -> Result<()> {
                                 // Success - results already printed
                             }
                             Err(e) => {
-                                println!("\n{}", format_error(&format!("Error: {}", e)));
+                                println!("\n{}", format_error(&format!("Error: {e}")));
                             }
                         }
 
@@ -1832,7 +1799,7 @@ async fn run_repl(cli: &Cli) -> Result<()> {
             }
             Err(err) => {
                 error!("Error reading line: {:?}", err);
-                println!("{}", format_error(&format!("Error: {}", err)));
+                println!("{}", format_error(&format!("Error: {err}")));
                 break;
             }
         }
@@ -1898,7 +1865,7 @@ async fn handle_meta_command(
                             );
                         }
                         Err(e) => {
-                            println!("{}", format_error(&format!("Connection failed: {}", e)));
+                            println!("{}", format_error(&format!("Connection failed: {e}")));
                             println!(
                                 "{}",
                                 "Protocol switched but running in offline mode.".dimmed()
@@ -1908,7 +1875,7 @@ async fn handle_meta_command(
                 } else {
                     println!(
                         "{}",
-                        format_error(&format!("Unknown protocol: '{}'", protocol_arg))
+                        format_error(&format!("Unknown protocol: '{protocol_arg}'"))
                     );
                     print_protocol_list();
                 }
@@ -1931,7 +1898,7 @@ async fn handle_meta_command(
                 let format_str = parts[1];
                 println!(
                     "{}",
-                    format_success(&format!("Output format set to: {}", format_str))
+                    format_success(&format!("Output format set to: {format_str}"))
                 );
                 // TODO: Update state.format
             } else {
@@ -1942,7 +1909,7 @@ async fn handle_meta_command(
             println!("{}", format_success("Timing display toggled"));
         }
         _ => {
-            println!("{}", format_error(&format!("Unknown command: {}", command)));
+            println!("{}", format_error(&format!("Unknown command: {command}")));
             println!("{}", "Type \\? for help".dimmed());
         }
     }
@@ -1967,9 +1934,7 @@ fn print_protocol_list() {
 /// Print welcome banner
 fn print_banner(state: &ReplState) {
     let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS);
+    table.load_style(UTF8_FULL.with_rounded_corners());
 
     table.add_row(vec![
         Cell::new("Orbit CLI").fg(Color::Cyan),
@@ -1991,7 +1956,7 @@ fn print_banner(state: &ReplState) {
         Cell::new(format!("{:?}", state.format)),
     ]);
 
-    println!("\n{}", table);
+    println!("\n{table}");
     println!("{}", "Type \\? for help, \\q to quit".dimmed());
 }
 
