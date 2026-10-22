@@ -731,7 +731,9 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
             .bind(&transaction_id.id)
             .execute(&self.pool)
             .await
-            .map_err(|e| EngineError::internal(format!("Failed to delete recovery checkpoint: {e}")))?;
+            .map_err(|e| {
+                EngineError::internal(format!("Failed to delete recovery checkpoint: {e}"))
+            })?;
         Ok(())
     }
 
@@ -739,7 +741,9 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         let rows = sqlx::query("SELECT state FROM transaction_recovery")
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| EngineError::internal(format!("Failed to load recovery checkpoints: {e}")))?;
+            .map_err(|e| {
+                EngineError::internal(format!("Failed to load recovery checkpoints: {e}"))
+            })?;
         rows.into_iter()
             .map(|row| {
                 let state: String = row.get("state");

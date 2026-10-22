@@ -734,37 +734,37 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_ref()
         .is_none_or(|config| config.enabled)
     {
-    let cypher_bind_addr = format!("{}:7687", args.bind);
-    let cypher_storage: Arc<dyn CypherStorageProvider> = if unified_storage_enabled {
-        // Use unified storage for cross-protocol data access
-        if let StorageMode::Unified { cypher_unified, .. } = &storage_mode {
-            info!("[Cypher] Using unified storage for cross-protocol data access");
-            cypher_unified.clone()
+        let cypher_bind_addr = format!("{}:7687", args.bind);
+        let cypher_storage: Arc<dyn CypherStorageProvider> = if unified_storage_enabled {
+            // Use unified storage for cross-protocol data access
+            if let StorageMode::Unified { cypher_unified, .. } = &storage_mode {
+                info!("[Cypher] Using unified storage for cross-protocol data access");
+                cypher_unified.clone()
+            } else {
+                // Fallback to isolated storage
+                let cypher_data_dir = args.data_dir.join("cypher");
+                let storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
+                storage.initialize().await?;
+                storage
+            }
         } else {
-            // Fallback to isolated storage
+            // Use isolated per-protocol storage
             let cypher_data_dir = args.data_dir.join("cypher");
             let storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
             storage.initialize().await?;
             storage
-        }
-    } else {
-        // Use isolated per-protocol storage
-        let cypher_data_dir = args.data_dir.join("cypher");
-        let storage = Arc::new(CypherGraphStorage::new(cypher_data_dir));
-        storage.initialize().await?;
-        storage
-    };
+        };
 
-    let cypher_server = CypherServer::new_with_storage(cypher_bind_addr, cypher_storage)
-        .with_tls_config(toml_config.server.tls.clone());
-    let cypher_handle = tokio::spawn(async move {
-        cypher_server
-            .run()
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
-    });
-    protocol_handles.push(cypher_handle);
-    info!("[Cypher] Cypher/Neo4j protocol adapter started on port 7687");
+        let cypher_server = CypherServer::new_with_storage(cypher_bind_addr, cypher_storage)
+            .with_tls_config(toml_config.server.tls.clone());
+        let cypher_handle = tokio::spawn(async move {
+            cypher_server
+                .run()
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        });
+        protocol_handles.push(cypher_handle);
+        info!("[Cypher] Cypher/Neo4j protocol adapter started on port 7687");
     }
 
     // Start AQL/ArangoDB protocol adapter (port 8529)
@@ -774,37 +774,37 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_ref()
         .is_none_or(|config| config.enabled)
     {
-    let aql_bind_addr = format!("{}:8529", args.bind);
-    let aql_storage: Arc<dyn AqlStorageProvider> = if unified_storage_enabled {
-        // Use unified storage for cross-protocol data access
-        if let StorageMode::Unified { aql_unified, .. } = &storage_mode {
-            info!("[AQL] Using unified storage for cross-protocol data access");
-            aql_unified.clone()
+        let aql_bind_addr = format!("{}:8529", args.bind);
+        let aql_storage: Arc<dyn AqlStorageProvider> = if unified_storage_enabled {
+            // Use unified storage for cross-protocol data access
+            if let StorageMode::Unified { aql_unified, .. } = &storage_mode {
+                info!("[AQL] Using unified storage for cross-protocol data access");
+                aql_unified.clone()
+            } else {
+                // Fallback to isolated storage
+                let aql_data_dir = args.data_dir.join("aql");
+                let storage = Arc::new(AqlStorage::new(aql_data_dir));
+                storage.initialize().await?;
+                storage
+            }
         } else {
-            // Fallback to isolated storage
+            // Use isolated per-protocol storage
             let aql_data_dir = args.data_dir.join("aql");
             let storage = Arc::new(AqlStorage::new(aql_data_dir));
             storage.initialize().await?;
             storage
-        }
-    } else {
-        // Use isolated per-protocol storage
-        let aql_data_dir = args.data_dir.join("aql");
-        let storage = Arc::new(AqlStorage::new(aql_data_dir));
-        storage.initialize().await?;
-        storage
-    };
+        };
 
-    let aql_server = AqlServer::new_with_storage(aql_bind_addr, aql_storage)
-        .with_tls_config(toml_config.server.tls.clone());
-    let aql_handle = tokio::spawn(async move {
-        aql_server
-            .run()
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
-    });
-    protocol_handles.push(aql_handle);
-    debug!("[AQL] AQL/ArangoDB protocol adapter started on port 8529");
+        let aql_server = AqlServer::new_with_storage(aql_bind_addr, aql_storage)
+            .with_tls_config(toml_config.server.tls.clone());
+        let aql_handle = tokio::spawn(async move {
+            aql_server
+                .run()
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        });
+        protocol_handles.push(aql_handle);
+        debug!("[AQL] AQL/ArangoDB protocol adapter started on port 8529");
     }
 
     // Start REST API server (port 8080 by default)
@@ -835,8 +835,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("[REST] REST API server started on port {}", args.http_port);
 
     // Start MongoDB server (port 27017)
-    let mongodb_bind = std::env::var("ORBIT_MONGODB_BIND")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let mongodb_bind =
+        std::env::var("ORBIT_MONGODB_BIND").unwrap_or_else(|_| "127.0.0.1".to_string());
     let mongodb_bind_addr = format!("{mongodb_bind}:27017");
     let mongodb_server =
         MongoDbServer::new(mongodb_bind_addr).with_tls_config(toml_config.server.tls.clone());
@@ -1140,8 +1140,8 @@ async fn start_prometheus_metrics_exporter(port: u16) -> Result<(), Box<dyn Erro
         .map_err(|e| format!("Failed to install Prometheus recorder: {}", e))?;
 
     // Start HTTP server for metrics endpoint
-    let metrics_bind = std::env::var("ORBIT_METRICS_BIND")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let metrics_bind =
+        std::env::var("ORBIT_METRICS_BIND").unwrap_or_else(|_| "127.0.0.1".to_string());
     let addr: std::net::SocketAddr = format!("{metrics_bind}:{port}")
         .parse()
         .map_err(|error| format!("Invalid metrics bind address: {error}"))?;

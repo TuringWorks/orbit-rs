@@ -1,14 +1,14 @@
 //! REST API server implementation
 
+use axum::extract::Request;
+use axum::http::StatusCode;
+use axum::middleware::Next;
+use axum::response::Response;
 use axum::{
     middleware,
     routing::{delete, get, post, put},
     Router,
 };
-use axum::extract::Request;
-use axum::http::StatusCode;
-use axum::middleware::Next;
-use axum::response::Response;
 use orbit_client::OrbitClient;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
@@ -217,8 +217,8 @@ impl RestApiServer {
 }
 
 async fn require_api_token(request: Request, next: Next) -> Result<Response, StatusCode> {
-    let configured = std::env::var("ORBIT_API_TOKEN")
-        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let configured =
+        std::env::var("ORBIT_API_TOKEN").map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     let supplied = request
         .headers()
         .get("authorization")
