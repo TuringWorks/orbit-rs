@@ -369,10 +369,13 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
             // Flush if buffer is full
             if buffer.len() >= self.config.batch_size {
                 let entries = buffer.clone();
-                buffer.clear();
                 drop(buffer); // Release lock before async call
 
                 self.write_batch_internal(&entries).await?;
+
+                let mut buffer = self.write_buffer.lock().await;
+                let committed = entries.len().min(buffer.len());
+                buffer.drain(..committed);
             }
         }
 
