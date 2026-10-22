@@ -125,6 +125,9 @@ pub fn try_handle(stmt: &str, database: &str, user: &str) -> Option<QueryResult>
         return setting(name).map(|v| one_value(name, v));
     }
 
+    if let Some(result) = dashboard_probe(&lower) {
+        return Some(result);
+    }
     if let Some(result) = catalog_probe(&lower, database, user) {
         return Some(result);
     }
@@ -152,6 +155,109 @@ fn typed(columns: &[(&str, i32)], row: Vec<&str>) -> QueryResult {
         columns: columns.iter().map(|(n, t)| (n.to_string(), *t)).collect(),
         rows: vec![row.into_iter().map(|v| Some(v.to_string())).collect()],
     }
+}
+
+/// Dashboard charts as `(chart name, JSON keys)`, in the order pgAdmin unions them.
+const DASHBOARD_CHARTS: &[(&str, &[&str])] = &[
+    ("session_stats", &["Total", "Active", "Idle"]),
+    ("tps_stats", &["Transactions", "Commits", "Rollbacks"]),
+    ("ti_stats", &["Inserts", "Updates", "Deletes"]),
+    ("to_stats", &["Fetched", "Returned"]),
+    ("bio_stats", &["Reads", "Hits"]),
+];
+
+const ACTIVITY_COLUMNS: &[&str] = &[
+    "pid",
+    "datname",
+    "usename",
+    "application_name",
+    "client_addr",
+    "backend_start",
+    "state",
+    "wait_event",
+    "blocking_pids",
+    "query",
+    "state_change",
+    "query_start",
+    "xact_start",
+    "backend_type",
+    "active_since",
+];
+const LOCKS_COLUMNS: &[&str] = &[
+    "pid",
+    "locktype",
+    "datname",
+    "relation",
+    "page",
+    "tuple",
+    "transactionid",
+    "classid",
+    "objid",
+    "objsubid",
+    "virtualtransaction",
+    "mode",
+    "granted",
+    "fastpath",
+];
+const PREPARED_COLUMNS: &[&str] = &["gid", "database", "owner", "transaction", "prepared"];
+
+fn empty_text_result(columns: &[&str]) -> QueryResult {
+    QueryResult::Typed {
+        columns: columns
+            .iter()
+            .map(|name| (name.to_string(), super::messages::type_oids::TEXT))
+            .collect(),
+        rows: Vec::new(),
+    }
+}
+
+/// pgAdmin's dashboard (`/*pga4dash*/` queries). The server keeps no activity or
+/// lock statistics, so the charts report zero and the tables are empty.
+fn dashboard_probe(lower: &str) -> Option<QueryResult> {
+    use super::messages::type_oids::{BOOL, JSON, TEXT};
+    if !lower.starts_with("/*pga4dash*/") {
+        if lower.contains("pg_is_in_recovery()") && lower.contains("pg_catalog.pg_user") {
+            return Some(typed(
+                &[("inrecovery", BOOL), ("isreplaypaused", BOOL)],
+                vec!["f", "f"],
+            ));
+        }
+        return None;
+    }
+    let charts: Vec<_> = DASHBOARD_CHARTS
+        .iter()
+        .filter(|(name, _)| lower.contains(&format!("'{name}' as chart_name")))
+        .collect();
+    if !charts.is_empty() {
+        let rows = charts
+            .iter()
+            .map(|(name, keys)| {
+                let body = keys
+                    .iter()
+                    .map(|k| format!("\"{k}\": 0"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                vec![Some(name.to_string()), Some(format!("{{{body}}}"))]
+            })
+            .collect();
+        return Some(QueryResult::Typed {
+            columns: vec![
+                ("chart_name".to_string(), TEXT),
+                ("chart_data".to_string(), JSON),
+            ],
+            rows,
+        });
+    }
+    let columns = if lower.contains("pg_stat_activity") {
+        ACTIVITY_COLUMNS
+    } else if lower.contains("pg_locks") {
+        LOCKS_COLUMNS
+    } else if lower.contains("pg_prepared_xacts") {
+        PREPARED_COLUMNS
+    } else {
+        return None;
+    };
+    Some(empty_text_result(columns))
 }
 
 /// The two catalog lookups pgAdmin makes right after connecting. Their result
@@ -313,6 +419,39 @@ mod tests {
                 other => panic!("unexpected {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn pgadmin_dashboard_probes() {
+        let charts = "/*pga4dash*/\nSELECT 'session_stats' AS chart_name, row_to_json(t) AS chart_data FROM (SELECT 1) t\nUNION ALL\nSELECT 'tps_stats' AS chart_name, row_to_json(t) AS chart_data FROM (SELECT 1) t";
+        match try_handle(charts, "d", "u") {
+            Some(QueryResult::Typed { rows, .. }) => {
+                let names: Vec<_> = rows
+                    .iter()
+                    .map(|r| r[0].clone().unwrap_or_default())
+                    .collect();
+                assert_eq!(names, ["session_stats", "tps_stats"]);
+                assert_eq!(
+                    rows[0][1].as_deref(),
+                    Some("{\"Total\": 0, \"Active\": 0, \"Idle\": 0}")
+                );
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        let sessions =
+            "/*pga4dash*/\nSELECT pid, datname FROM pg_catalog.pg_stat_activity ORDER BY pid";
+        match try_handle(sessions, "d", "u") {
+            Some(QueryResult::Typed { columns, rows }) => {
+                assert_eq!(columns.len(), ACTIVITY_COLUMNS.len());
+                assert!(rows.is_empty());
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        let recovery = "SELECT CASE WHEN usesuper THEN pg_catalog.pg_is_in_recovery() ELSE FALSE END as inrecovery FROM pg_catalog.pg_user WHERE usename=current_user";
+        assert!(matches!(
+            try_handle(recovery, "d", "u"),
+            Some(QueryResult::Typed { .. })
+        ));
     }
 
     #[test]

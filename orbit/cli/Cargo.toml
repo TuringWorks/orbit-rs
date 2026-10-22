@@ -28,7 +28,7 @@ nu-ansi-term = "0.50"  # ANSI color codes
 syntect = "5.3"
 
 # Table formatting (re-exported from protocols, but listing for clarity)
-comfy-table = "7.1"
+comfy-table = "8.0"
 owo-colors = "4.1"
 
 # Serialization
@@ -44,7 +44,7 @@ anyhow = "1.0"
 thiserror.workspace = true
 # Utilities
 chrono = "0.4"
-dirs = "5.0"
+dirs = "7.0"
 
 # Database clients
 tokio-postgres = "0.7"

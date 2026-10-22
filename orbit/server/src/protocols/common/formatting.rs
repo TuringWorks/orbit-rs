@@ -7,7 +7,7 @@
 //! - Color-coded output for different data types
 //! - Multiple output formats (table, JSON, CSV)
 
-use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
+use comfy_table::{presets::UTF8_FULL, Cell, Color, Table};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 
@@ -45,8 +45,7 @@ pub fn format_table(
 fn format_as_table(columns: &[String], rows: &[HashMap<String, SqlValue>]) -> String {
     let mut table = Table::new();
     table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS)
+        .load_style(UTF8_FULL.with_rounded_corners())
         .set_content_arrangement(comfy_table::ContentArrangement::Dynamic);
 
     // Add header row with colors

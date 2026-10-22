@@ -23,7 +23,7 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
-use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, Color, Table};
+use comfy_table::{presets::UTF8_FULL, Cell, Color, Table};
 use orbit_server::protocols::common::formatting::{format_error, format_success, OutputFormat};
 use owo_colors::OwoColorize;
 use rustyline::error::ReadlineError;
@@ -507,9 +507,7 @@ impl ReplState {
                     // Print as table
                     if !columns.is_empty() {
                         let mut table = Table::new();
-                        table
-                            .load_preset(UTF8_FULL)
-                            .apply_modifier(UTF8_ROUND_CORNERS);
+                        table.load_style(UTF8_FULL.with_rounded_corners());
                         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
                         table.add_row(values.iter().map(Cell::new));
                         println!("\n{}", table);
@@ -545,9 +543,7 @@ impl ReplState {
             .collect();
 
         let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL)
-            .apply_modifier(UTF8_ROUND_CORNERS);
+        table.load_style(UTF8_FULL.with_rounded_corners());
         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
 
         // Add rows
@@ -624,9 +620,7 @@ impl ReplState {
             .collect();
 
         let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL)
-            .apply_modifier(UTF8_ROUND_CORNERS);
+        table.load_style(UTF8_FULL.with_rounded_corners());
         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
 
         // Add rows
@@ -787,9 +781,7 @@ impl ReplState {
                 }
 
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
 
                 if !columns.is_empty() {
                     table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -983,9 +975,7 @@ impl ReplState {
                     }
 
                     let mut table = Table::new();
-                    table
-                        .load_preset(UTF8_FULL)
-                        .apply_modifier(UTF8_ROUND_CORNERS);
+                    table.load_style(UTF8_FULL.with_rounded_corners());
 
                     if !columns.is_empty() {
                         table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -1114,9 +1104,7 @@ impl ReplState {
                     .unwrap_or_default();
 
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
 
                 if !columns.is_empty() {
                     table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -1145,9 +1133,7 @@ impl ReplState {
             } else {
                 // Scalar results - display as single column
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
                 table.set_header(vec![Cell::new("result").fg(Color::Cyan)]);
 
                 for item in data {
@@ -1293,9 +1279,7 @@ impl ReplState {
                 }
 
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
 
                 if !columns.is_empty() {
                     table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -1387,9 +1371,7 @@ impl ReplState {
                 }
 
                 let mut table = Table::new();
-                table
-                    .load_preset(UTF8_FULL)
-                    .apply_modifier(UTF8_ROUND_CORNERS);
+                table.load_style(UTF8_FULL.with_rounded_corners());
 
                 if !columns.is_empty() {
                     table.set_header(columns.iter().map(|c| Cell::new(c).fg(Color::Cyan)));
@@ -1967,9 +1949,7 @@ fn print_protocol_list() {
 /// Print welcome banner
 fn print_banner(state: &ReplState) {
     let mut table = Table::new();
-    table
-        .load_preset(UTF8_FULL)
-        .apply_modifier(UTF8_ROUND_CORNERS);
+    table.load_style(UTF8_FULL.with_rounded_corners());
 
     table.add_row(vec![
         Cell::new("Orbit CLI").fg(Color::Cyan),
