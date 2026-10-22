@@ -819,6 +819,10 @@ impl PostgresWireProtocol {
                 }
                 .encode(buf);
             }
+            QueryResult::Command { tag } => match tag.strip_prefix("ERROR: ") {
+                Some(message) => self.send_error(buf, message),
+                None => BackendMessage::CommandComplete { tag: tag.clone() }.encode(buf),
+            },
             QueryResult::Set { .. } => {
                 BackendMessage::CommandComplete {
                     tag: "SET".to_string(),

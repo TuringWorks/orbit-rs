@@ -125,6 +125,15 @@ impl OrbitMcpIntegration {
                 }],
                 row_count: 1,
             }),
+            PgQueryResult::Command { tag } => Ok(McpQueryResult {
+                columns: vec!["command".to_string()],
+                rows: vec![{
+                    let mut row = Row::new();
+                    row.insert("command".to_string(), serde_json::Value::String(tag));
+                    row
+                }],
+                row_count: 1,
+            }),
             PgQueryResult::Set { variable, value } => Ok(McpQueryResult {
                 columns: vec!["variable".to_string(), "value".to_string()],
                 rows: vec![{

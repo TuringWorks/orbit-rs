@@ -6,6 +6,23 @@
 //! text in, optional result out.
 
 use super::query_engine::QueryResult;
+use std::sync::Mutex;
+
+/// A role created through `CREATE ROLE`/`CREATE USER`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Role {
+    name: String,
+    login: bool,
+    superuser: bool,
+}
+
+/// Roles created in this process. Catalog tables do not exist in the engine,
+/// so this is the only record pgAdmin's tree can list; it is not persisted and
+/// does not create a login credential.
+static ROLES: Mutex<Vec<Role>> = Mutex::new(Vec::new());
+
+/// First OID handed to a user-created role (PostgreSQL's first user OID).
+const FIRST_USER_OID: usize = 16384;
 
 /// Server settings reported to clients, as `(name, value)`.
 const SETTINGS: &[(&str, &str)] = &[
@@ -45,11 +62,101 @@ const SETTABLE: &[&str] = &[
 ];
 
 /// Stable synthetic OIDs for the current database and role.
+/// Catalog tables behind pgAdmin tree nodes the engine has no objects for.
+const EMPTY_CATALOGS: &[&str] = &[
+    "pg_catalog.pg_cast",
+    "pg_catalog.pg_event_trigger",
+    "pg_catalog.pg_foreign_data_wrapper",
+    "pg_catalog.pg_language",
+    "pg_catalog.pg_subscription",
+    "pg_catalog.pg_foreign_server",
+    "pg_catalog.pg_auth_members",
+];
+
 const DATABASE_OID: &str = "5";
 const ROLE_OID: &str = "10";
 
 /// Value reported by `SELECT version()`.
 pub const VERSION_STRING: &str = "PostgreSQL 14.0 (Orbit-RS) on orbit, compiled by rustc, 64-bit";
+
+/// The connecting role followed by every created role, as `(oid, name, login, super)`.
+fn role_table(user: &str) -> Vec<(String, String, bool, bool)> {
+    let created = ROLES.lock().map(|r| r.clone()).unwrap_or_default();
+    std::iter::once((ROLE_OID.to_string(), user.to_string(), true, true))
+        .chain(created.into_iter().enumerate().map(|(i, r)| {
+            ((FIRST_USER_OID + i).to_string(), r.name, r.login, r.superuser)
+        }))
+        .collect()
+}
+
+fn flag(b: bool) -> &'static str {
+    if b {
+        "t"
+    } else {
+        "f"
+    }
+}
+
+/// Handle `CREATE|ALTER|DROP ROLE|USER` against the in-process role list.
+fn role_command(lower: &str) -> Option<QueryResult> {
+    let words: Vec<&str> = lower.trim_end_matches(';').split_whitespace().collect();
+    let [verb, kind, rest @ ..] = words.as_slice() else {
+        return None;
+    };
+    if !matches!(*kind, "role" | "user") || !matches!(*verb, "create" | "alter" | "drop") {
+        return None;
+    }
+    let tag = format!("{} ROLE", verb.to_ascii_uppercase());
+    let mut roles = ROLES.lock().ok()?;
+    let if_exists = rest.starts_with(&["if", "exists"]);
+    let name = rest
+        .iter()
+        .skip(if if_exists { 2 } else { 0 })
+        .next()
+        .map(|n| n.trim_matches('"').to_string())?;
+    let pos = roles.iter().position(|r| r.name == name);
+    match (*verb, pos) {
+        ("create", None) => {
+            let mut role = Role { name, login: *kind == "user", superuser: false };
+            apply_role_options(&mut role, rest);
+            roles.push(role);
+        }
+        ("create", Some(_)) => {
+            return Some(QueryResult::Command {
+                tag: format!("ERROR: role \"{name}\" already exists"),
+            })
+        }
+        ("alter", Some(i)) => {
+            if let Some(new) = rest.iter().position(|w| *w == "rename").and_then(|k| rest.get(k + 2)) {
+                roles[i].name = new.trim_matches(['"', ';']).to_string();
+            } else {
+                apply_role_options(&mut roles[i], rest);
+            }
+        }
+        ("drop", Some(i)) => {
+            roles.remove(i);
+        }
+        ("alter" | "drop", None) if !if_exists => {
+            return Some(QueryResult::Command {
+                tag: format!("ERROR: role \"{name}\" does not exist"),
+            })
+        }
+        _ => {}
+    }
+    Some(QueryResult::Command { tag })
+}
+
+fn apply_role_options(role: &mut Role, words: &[&str]) {
+    for w in words {
+        match *w {
+            "login" => role.login = true,
+            "nologin" => role.login = false,
+            "superuser" => role.superuser = true,
+            "nosuperuser" => role.superuser = false,
+            _ => {}
+        }
+    }
+}
 
 /// Split `sql` on top-level `;`, ignoring semicolons inside quotes.
 /// Empty fragments are dropped.
@@ -125,6 +232,9 @@ pub fn try_handle(stmt: &str, database: &str, user: &str) -> Option<QueryResult>
         return setting(name).map(|v| one_value(name, v));
     }
 
+    if let Some(result) = role_command(&lower) {
+        return Some(result);
+    }
     if let Some(result) = browser_probe(&lower, database, user) {
         return Some(result);
     }
@@ -316,6 +426,13 @@ fn browser_probe(lower: &str, database: &str, user: &str) -> Option<QueryResult>
         ));
     }
     if lower.contains("from pg_catalog.pg_roles r") && lower.contains("rolcanlogin") {
+        let table = role_table(user);
+        let rows = table
+            .iter()
+            .map(|(oid, name, login, sup)| {
+                vec![Some(oid.as_str()), Some(name.as_str()), Some(flag(*login)), Some(flag(*sup)), None]
+            })
+            .collect();
         return Some(typed_rows(
             &[
                 ("oid", INT4),
@@ -324,8 +441,36 @@ fn browser_probe(lower: &str, database: &str, user: &str) -> Option<QueryResult>
                 ("rolsuper", BOOL),
                 ("description", TEXT),
             ],
-            vec![vec![Some(ROLE_OID), Some(user), Some("t"), Some("t"), None]],
+            rows,
         ));
+    }
+    if lower.contains("pg_catalog.pg_namespace nsp") && lower.contains("has_schema_privilege") {
+        // The Schemas node excludes system schemas; the Catalogs node lists them.
+        let rows: Vec<Vec<Option<&str>>> = if lower.contains("nspname not like") {
+            vec![vec![Some("2200"), Some("public"), Some("t"), Some("t"), None]]
+        } else {
+            vec![
+                vec![Some("11"), Some("pg_catalog"), Some("f"), Some("t"), None],
+                vec![Some("13000"), Some("information_schema"), Some("f"), Some("t"), None],
+            ]
+        };
+        return Some(typed_rows(
+            &[
+                ("oid", INT4),
+                ("name", TEXT),
+                ("can_create", BOOL),
+                ("has_usage", BOOL),
+                ("description", TEXT),
+            ],
+            rows,
+        ));
+    }
+    if lower.contains("pg_catalog.pg_publication") || lower.contains("pg_available_extensions()")
+    {
+        return Some(typed_rows(&[("oid", INT4), ("name", TEXT)], Vec::new()));
+    }
+    if EMPTY_CATALOGS.iter().any(|t| lower.contains(t)) {
+        return Some(typed_rows(&[("oid", INT4), ("name", TEXT)], Vec::new()));
     }
     if lower.contains("pg_catalog.pg_tablespace ts") {
         return Some(tablespace_result(lower));
@@ -621,6 +766,8 @@ mod tests {
             ("SELECT setting FROM pg_show_all_settings() WHERE name='log_destination'", 1, 1),
             ("SELECT name, vartype, min_val, max_val, enumvals FROM pg_catalog.pg_show_all_settings() WHERE name IN ('seq_page_cost')", 5, 3),
             ("SELECT 1 FROM pg_catalog.pg_extension WHERE extname = 'system_stats';", 1, 0),
+            ("SELECT nsp.oid, nsp.nspname as name, pg_catalog.has_schema_privilege(nsp.oid, 'CREATE') as can_create, pg_catalog.has_schema_privilege(nsp.oid, 'USAGE') as has_usage, des.description FROM pg_catalog.pg_namespace nsp LEFT OUTER JOIN pg_catalog.pg_description des ON (des.objoid=nsp.oid) WHERE nspname NOT LIKE E'pg\\\\_%' ORDER BY nspname;", 5, 1),
+            ("SELECT oid , pubname AS name FROM pg_catalog.pg_publication", 2, 0),
         ];
         for (sql, width, height) in cases {
             match try_handle(sql, "d", "u") {
@@ -637,5 +784,24 @@ mod tests {
     fn pgadmin_bytea_output_probe() {
         let q = "SELECT set_config('bytea_output','hex',false) FROM pg_show_all_settings() WHERE name = 'bytea_output'";
         assert_eq!(single(try_handle(q, "d", "u")).as_deref(), Some("hex"));
+    }
+
+    #[test]
+    fn role_commands_update_the_roles_tree() {
+        let tag = |sql| match try_handle(sql, "d", "u") {
+            Some(QueryResult::Command { tag }) => tag,
+            other => panic!("unexpected {other:?}"),
+        };
+        assert_eq!(tag("CREATE ROLE zz_test WITH LOGIN SUPERUSER"), "CREATE ROLE");
+        assert!(tag("CREATE ROLE zz_test").starts_with("ERROR:"));
+        let tree = "SELECT r.oid, r.rolname, r.rolcanlogin, r.rolsuper, d.description FROM pg_catalog.pg_roles r";
+        match try_handle(tree, "d", "u") {
+            Some(QueryResult::Typed { rows, .. }) => {
+                assert!(rows.iter().any(|r| r[1].as_deref() == Some("zz_test")))
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        assert_eq!(tag("DROP ROLE zz_test"), "DROP ROLE");
+        assert!(tag("DROP ROLE zz_test").starts_with("ERROR:"));
     }
 }

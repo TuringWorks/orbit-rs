@@ -61,6 +61,9 @@ pub struct TableRow {
     pub values: HashMap<String, JsonValue>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Internal RocksDB row identifier, omitted from serialized row data.
+    #[serde(skip)]
+    pub row_id: Option<String>,
 }
 
 /// Query condition for WHERE clauses
@@ -453,8 +456,12 @@ impl PersistentTableStorage for RocksDbTableStorage {
             }
             updated_row.updated_at = now;
 
-            // Generate key and store updated row
-            let row_id = self.generate_row_id(table_name);
+            // Preserve the existing row key so updates do not create stale duplicates.
+            let row_id = updated_row.row_id.clone().ok_or_else(|| {
+                ProtocolError::PostgresError(
+                    "Stored row is missing its internal row identifier".to_string(),
+                )
+            })?;
             let key = self.table_row_key(table_name, &row_id);
 
             let row_json = serde_json::to_vec(&updated_row).map_err(|e| {
@@ -559,6 +566,8 @@ impl PersistentTableStorage for RocksDbTableStorage {
                         .all(|condition| self.matches_condition(&row, condition));
 
                 if matches {
+                    row.row_id = key_str.strip_prefix(&data_prefix).map(ToOwned::to_owned);
+
                     // Filter columns if specified
                     if !columns.is_empty() {
                         let mut filtered_values = HashMap::new();

@@ -352,6 +352,13 @@ impl CqlAdapter {
                     transaction_id: None,
                 },
             ),
+            crate::protocols::postgres_wire::QueryResult::Command { tag } => Ok(
+                crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Set {
+                    variable: "command".to_string(),
+                    value: tag,
+                    transaction_id: None,
+                },
+            ),
             crate::protocols::postgres_wire::QueryResult::Set { variable, value } => Ok(
                 crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Set {
                     variable,
@@ -697,8 +704,9 @@ impl CqlAdapter {
             // Simple password verification (in production, use hashing)
             password == *expected_password
         } else {
-            // No password configured, accept any password (for testing)
-            true
+            // An enabled authenticator without a configured password must fail
+            // closed rather than accept arbitrary credentials.
+            false
         };
 
         if !password_valid {

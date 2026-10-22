@@ -2188,7 +2188,7 @@ impl Default for CqlConfig {
             max_connections: 1000,
             connection_timeout_secs: 30,
             protocol_version: 4,
-            authentication_enabled: false,
+            authentication_enabled: true,
         }
     }
 }
@@ -2201,7 +2201,7 @@ impl Default for MySqlConfig {
             max_connections: 1000,
             connection_timeout_secs: 30,
             server_version: "8.0.0-Orbit".to_string(),
-            authentication_enabled: false,
+            authentication_enabled: true,
         }
     }
 }

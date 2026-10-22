@@ -637,13 +637,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_ref()
         .is_none_or(|c| c.enabled)
     {
+        let mysql_protocol_config = toml_config.protocols.mysql.as_ref();
+        let mysql_authentication_enabled =
+            mysql_protocol_config.is_some_and(|config| config.authentication_enabled);
+        let mysql_username = std::env::var("ORBIT_MYSQL_USERNAME").ok();
+        let mysql_password = std::env::var("ORBIT_MYSQL_PASSWORD").ok();
+        if mysql_authentication_enabled && (mysql_username.is_none() || mysql_password.is_none()) {
+            return Err("MySQL authentication is enabled but ORBIT_MYSQL_USERNAME or ORBIT_MYSQL_PASSWORD is missing".into());
+        }
         let mysql_config = MySqlConfig {
             listen_addr: format!("{}:{}", args.bind, args.mysql_port).parse()?,
             max_connections: 1000,
-            authentication_enabled: false,
+            authentication_enabled: mysql_authentication_enabled,
             server_version: format!("8.0.27-Orbit-DB-{}", env!("CARGO_PKG_VERSION")),
-            username: None,
-            password: None,
+            username: mysql_username,
+            password: mysql_password,
         };
 
         // Use unified storage if available for cross-protocol data sharing
@@ -675,13 +683,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Start CQL protocol adapter (port 9042)
     if toml_config.protocols.cql.as_ref().is_none_or(|c| c.enabled) {
+        let cql_protocol_config = toml_config.protocols.cql.as_ref();
+        let cql_authentication_enabled =
+            cql_protocol_config.is_some_and(|config| config.authentication_enabled);
+        let cql_username = std::env::var("ORBIT_CQL_USERNAME").ok();
+        let cql_password = std::env::var("ORBIT_CQL_PASSWORD").ok();
+        if cql_authentication_enabled && (cql_username.is_none() || cql_password.is_none()) {
+            return Err("CQL authentication is enabled but ORBIT_CQL_USERNAME or ORBIT_CQL_PASSWORD is missing".into());
+        }
         let cql_config = CqlConfig {
             listen_addr: format!("{}:{}", args.bind, args.cql_port).parse()?,
             max_connections: 1000,
-            authentication_enabled: false,
+            authentication_enabled: cql_authentication_enabled,
             protocol_version: 4,
-            username: None,
-            password: None,
+            username: cql_username,
+            password: cql_password,
         };
 
         // Use unified storage if available for cross-protocol data sharing
@@ -712,6 +728,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     // Start Cypher/Neo4j protocol adapter (port 7687)
+    if toml_config
+        .protocols
+        .cypher
+        .as_ref()
+        .is_none_or(|config| config.enabled)
+    {
     let cypher_bind_addr = format!("{}:7687", args.bind);
     let cypher_storage: Arc<dyn CypherStorageProvider> = if unified_storage_enabled {
         // Use unified storage for cross-protocol data access
@@ -743,8 +765,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
     protocol_handles.push(cypher_handle);
     info!("[Cypher] Cypher/Neo4j protocol adapter started on port 7687");
+    }
 
     // Start AQL/ArangoDB protocol adapter (port 8529)
+    if toml_config
+        .protocols
+        .aql
+        .as_ref()
+        .is_none_or(|config| config.enabled)
+    {
     let aql_bind_addr = format!("{}:8529", args.bind);
     let aql_storage: Arc<dyn AqlStorageProvider> = if unified_storage_enabled {
         // Use unified storage for cross-protocol data access
@@ -776,6 +805,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
     protocol_handles.push(aql_handle);
     debug!("[AQL] AQL/ArangoDB protocol adapter started on port 8529");
+    }
 
     // Start REST API server (port 8080 by default)
     let rest_bind_addr = format!("{}:{}", args.bind, args.http_port);
@@ -805,7 +835,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("[REST] REST API server started on port {}", args.http_port);
 
     // Start MongoDB server (port 27017)
-    let mongodb_bind_addr = format!("{}:27017", args.bind);
+    let mongodb_bind = std::env::var("ORBIT_MONGODB_BIND")
+        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let mongodb_bind_addr = format!("{mongodb_bind}:27017");
     let mongodb_server =
         MongoDbServer::new(mongodb_bind_addr).with_tls_config(toml_config.server.tls.clone());
     let mongodb_handle = tokio::spawn(async move {
@@ -815,7 +847,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
     });
     protocol_handles.push(mongodb_handle);
-    info!("[MongoDB] MongoDB protocol server started on port 27017");
+    info!("[MongoDB] MongoDB protocol server started on {mongodb_bind_addr}");
 
     info!("=========================================");
     info!("    Orbit Server Ready!");
@@ -1108,7 +1140,11 @@ async fn start_prometheus_metrics_exporter(port: u16) -> Result<(), Box<dyn Erro
         .map_err(|e| format!("Failed to install Prometheus recorder: {}", e))?;
 
     // Start HTTP server for metrics endpoint
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+    let metrics_bind = std::env::var("ORBIT_METRICS_BIND")
+        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let addr: std::net::SocketAddr = format!("{metrics_bind}:{port}")
+        .parse()
+        .map_err(|error| format!("Invalid metrics bind address: {error}"))?;
 
     // Bind the listener before spawning to catch port binding errors early
     use tokio::net::TcpListener;

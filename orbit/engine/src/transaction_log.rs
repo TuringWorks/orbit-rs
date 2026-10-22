@@ -2,6 +2,7 @@ use crate::error::{EngineError, EngineResult};
 use crate::transactions::{TransactionEvent, TransactionId, TransactionLogEntry};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::{sqlite::SqlitePool, Row};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -218,6 +219,19 @@ pub trait PersistentTransactionLogger: Send + Sync {
         &self,
         transaction_id: &TransactionId,
     ) -> EngineResult<Option<TransactionEvent>>;
+
+    /// Persist a serialized transaction recovery checkpoint.
+    async fn save_recovery_checkpoint(
+        &self,
+        transaction_id: &TransactionId,
+        checkpoint: &Value,
+    ) -> EngineResult<()>;
+
+    /// Remove a persisted transaction recovery checkpoint.
+    async fn delete_recovery_checkpoint(&self, transaction_id: &TransactionId) -> EngineResult<()>;
+
+    /// Load all persisted transaction recovery checkpoints.
+    async fn load_recovery_checkpoints(&self) -> EngineResult<Vec<Value>>;
 }
 
 /// SQLite-based persistent transaction logger
@@ -384,17 +398,18 @@ impl SqliteTransactionLogger {
     /// Flush buffered entries to database
     async fn flush_buffer(&self) -> EngineResult<()> {
         let entries = {
-            let mut buffer = self.write_buffer.lock().await;
+            let buffer = self.write_buffer.lock().await;
             if buffer.is_empty() {
                 return Ok(());
             }
-            let entries = buffer.clone();
-            buffer.clear();
-            entries
+            buffer.clone()
         };
 
         if !entries.is_empty() {
             self.write_batch_internal(&entries).await?;
+            let mut buffer = self.write_buffer.lock().await;
+            let committed = entries.len().min(buffer.len());
+            buffer.drain(..committed);
             debug!("Flushed {} buffered log entries", entries.len());
         }
 
@@ -505,10 +520,13 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
             // Flush if buffer is full
             if buffer.len() >= self.config.batch_size {
                 let entries = buffer.clone();
-                buffer.clear();
                 drop(buffer); // Release lock before async call
 
                 self.write_batch_internal(&entries).await?;
+
+                let mut buffer = self.write_buffer.lock().await;
+                let committed = entries.len().min(buffer.len());
+                buffer.drain(..committed);
             }
         }
 
@@ -681,6 +699,55 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
         } else {
             Ok(None)
         }
+    }
+
+    async fn save_recovery_checkpoint(
+        &self,
+        transaction_id: &TransactionId,
+        checkpoint: &Value,
+    ) -> EngineResult<()> {
+        let serialized = serde_json::to_string(checkpoint)
+            .map_err(|e| EngineError::internal(format!("Failed to serialize checkpoint: {e}")))?;
+        let now = chrono::Utc::now().timestamp_millis();
+        sqlx::query(
+            "INSERT INTO transaction_recovery
+                (transaction_id, coordinator_node, state, participants, operations, timeout_seconds, created_at, updated_at)
+             VALUES (?, ?, ?, '[]', '[]', 0, ?, ?)
+             ON CONFLICT(transaction_id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at",
+        )
+        .bind(&transaction_id.id)
+        .bind(transaction_id.coordinator_node.to_string())
+        .bind(serialized)
+        .bind(transaction_id.created_at)
+        .bind(now)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| EngineError::internal(format!("Failed to persist recovery checkpoint: {e}")))?;
+        Ok(())
+    }
+
+    async fn delete_recovery_checkpoint(&self, transaction_id: &TransactionId) -> EngineResult<()> {
+        sqlx::query("DELETE FROM transaction_recovery WHERE transaction_id = ?")
+            .bind(&transaction_id.id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| EngineError::internal(format!("Failed to delete recovery checkpoint: {e}")))?;
+        Ok(())
+    }
+
+    async fn load_recovery_checkpoints(&self) -> EngineResult<Vec<Value>> {
+        let rows = sqlx::query("SELECT state FROM transaction_recovery")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| EngineError::internal(format!("Failed to load recovery checkpoints: {e}")))?;
+        rows.into_iter()
+            .map(|row| {
+                let state: String = row.get("state");
+                serde_json::from_str(&state).map_err(|e| {
+                    EngineError::internal(format!("Failed to deserialize recovery checkpoint: {e}"))
+                })
+            })
+            .collect()
     }
 }
 

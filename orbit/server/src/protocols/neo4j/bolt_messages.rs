@@ -124,7 +124,26 @@ impl BoltMessageHandler {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        // For now, accept all authentication (TODO: implement proper auth)
+        let credentials = auth_token.get("credentials").and_then(Value::as_str);
+        let configured_username = std::env::var("ORBIT_BOLT_USERNAME").ok();
+        let configured_password = std::env::var("ORBIT_BOLT_PASSWORD").ok();
+        let authenticated = configured_username
+            .as_deref()
+            .zip(configured_password.as_deref())
+            .is_some_and(|(expected_user, expected_password)| {
+                principal.as_deref() == Some(expected_user)
+                    && credentials == Some(expected_password)
+            });
+        if !authenticated {
+            return protocol
+                .send_failure(
+                    stream,
+                    "Neo.ClientError.Security.Unauthorized",
+                    "Invalid credentials",
+                )
+                .await;
+        }
+
         state.auth_state.authenticated = true;
         state.auth_state.principal = principal.clone();
         state.auth_state.scheme = Some(scheme.to_string());
@@ -166,6 +185,26 @@ impl BoltMessageHandler {
             .get("principal")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+
+        let credentials = auth_token.get("credentials").and_then(Value::as_str);
+        let configured_username = std::env::var("ORBIT_BOLT_USERNAME").ok();
+        let configured_password = std::env::var("ORBIT_BOLT_PASSWORD").ok();
+        let authenticated = configured_username
+            .as_deref()
+            .zip(configured_password.as_deref())
+            .is_some_and(|(expected_user, expected_password)| {
+                principal.as_deref() == Some(expected_user)
+                    && credentials == Some(expected_password)
+            });
+        if !authenticated {
+            return protocol
+                .send_failure(
+                    stream,
+                    "Neo.ClientError.Security.Unauthorized",
+                    "Invalid credentials",
+                )
+                .await;
+        }
 
         // Update authentication state
         state.auth_state.authenticated = true;

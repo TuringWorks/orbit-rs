@@ -38,6 +38,11 @@ pub enum QueryResult {
         variable: String,
         value: String,
     },
+    /// Statement acknowledged with a bare command tag (e.g. `CREATE ROLE`).
+    /// A tag starting with `ERROR: ` is reported as an error instead.
+    Command {
+        tag: String,
+    },
     Merge {
         count: usize,
         rows: Vec<Vec<Option<String>>>,
@@ -1534,6 +1539,7 @@ impl QueryEngine {
                 values: row_values,
                 created_at: now,
                 updated_at: now,
+                row_id: None,
             };
 
             // Insert the row

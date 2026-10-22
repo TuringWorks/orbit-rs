@@ -11,6 +11,14 @@ permalink: /PRD.html
 > **Architecture Reference**: See [`docs/content/architecture/ORBIT_ARCHITECTURE.md`](content/architecture/ORBIT_ARCHITECTURE.md) for detailed architecture patterns, transaction layer (MVCC, 2PC, Saga), query execution (vectorized, SIMD), network layer (gRPC, Protocol Buffers), and hybrid storage architecture.
 > **Protocol Analysis**: See [`protocols/PROTOCOL_COMPLETION_ANALYSIS.md`](protocols/PROTOCOL_COMPLETION_ANALYSIS.md) for detailed protocol implementation status and gaps.
 
+## Security and Durability Baseline (October 21, 2026)
+
+- MySQL and CQL authentication are enabled by default in the reference configuration and require credentials from environment variables.
+- Redis refuses non-loopback binding without `ORBIT_REDIS_PASSWORD`; REST API routes require `Authorization: Bearer` using `ORBIT_API_TOKEN`.
+- Prometheus metrics bind to loopback by default and may be explicitly relocated with `ORBIT_METRICS_BIND`.
+- Unified storage uses the durable RocksDB backend unless the test-only memory backend is explicitly selected.
+- Unified RocksDB writes use synchronous write options; transaction-log buffers retain entries when a flush fails.
+
 ---
 
 ## Table of Contents

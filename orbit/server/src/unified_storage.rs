@@ -40,7 +40,8 @@
 
 use orbit_engine::unified::{
     AdapterFactory, CqlAdapter, GraphAdapter, MemoryBackend, Protocol, RedisAdapter, RestAdapter,
-    SchemaRegistry, SqlAdapter, UnifiedStorage, UnifiedStorageBackend, UnifiedStorageConfig,
+    RocksDbBackend, SchemaRegistry, SqlAdapter, UnifiedStorage, UnifiedStorageBackend,
+    UnifiedStorageConfig, UnifiedStorageError,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -106,15 +107,16 @@ impl UnifiedStorageIntegration {
         );
 
         // Create storage backend
-        let backend: Arc<dyn UnifiedStorageBackend> = if config.use_memory_backend {
-            info!("[UnifiedStorage] Using in-memory backend");
-            Arc::new(MemoryBackend::new())
-        } else {
-            // For now, use memory backend. RocksDB backend can be added later.
-            // TODO: Add RocksDB backend option
-            info!("[UnifiedStorage] Using in-memory backend (persistent backend pending)");
-            Arc::new(MemoryBackend::new())
-        };
+        let backend: Arc<dyn UnifiedStorageBackend> =
+            if config.use_memory_backend {
+                info!("[UnifiedStorage] Using in-memory backend");
+                Arc::new(MemoryBackend::new())
+            } else {
+                info!("[UnifiedStorage] Using durable RocksDB backend");
+                Arc::new(RocksDbBackend::open(&config.data_dir).map_err(|error| {
+                    UnifiedStorageError::InitializationFailed(error.to_string())
+                })?)
+            };
 
         // Create storage configuration
         let storage_config = UnifiedStorageConfig {
