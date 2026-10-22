@@ -3379,11 +3379,7 @@ mod tests {
         let query = "CALL orbit.graph.pagerank({iterations: 20, minNodes: 5})";
         let result = parser.parse(query);
 
-        if result.is_err() {
-            eprintln!("Parse error: {:?}", result.as_ref().unwrap_err());
-        }
-        assert!(result.is_ok());
-        let parsed = result.unwrap();
+        let parsed = result.unwrap_or_else(|e| panic!("Parse error: {e:?}"));
         assert_eq!(parsed.clauses.len(), 1);
 
         match &parsed.clauses[0] {

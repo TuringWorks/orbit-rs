@@ -995,7 +995,7 @@ async fn initialize_rocksdb_storage(
         .persistence
         .as_ref()
         .and_then(|p| p.rocksdb.as_ref())
-        .map_or(true, |r| r.enable_wal);
+        .is_none_or(|r| r.enable_wal);
 
     info!(
         "[RocksDB] Opening RocksDB at: {:?} (WAL: {})",
@@ -1025,9 +1025,9 @@ fn configure_tiered_storage(
 
     let warm_to_cold_days = tiered_config.map_or(30, |t| t.warm_to_cold_threshold_days);
 
-    let auto_tiering = tiered_config.map_or(true, |t| t.auto_tiering);
+    let auto_tiering = tiered_config.is_none_or(|t| t.auto_tiering);
 
-    let background_migration = tiered_config.map_or(true, |t| t.background_migration);
+    let background_migration = tiered_config.is_none_or(|t| t.background_migration);
 
     HybridStorageConfig {
         hot_to_warm_threshold: Duration::from_secs(hot_to_warm_hours * 60 * 60),

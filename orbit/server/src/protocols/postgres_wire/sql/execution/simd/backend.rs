@@ -182,12 +182,9 @@ impl SimdBackend for ScalarBackend {
             .enumerate()
             .filter_map(|(i, &v)| null_bitmap.is_valid(i).then_some(v))
             .sum();
-        Some(sum).filter(|_| {
-            values
-                .iter()
-                .enumerate()
-                .any(|(i, _)| null_bitmap.is_valid(i))
-        })
+        (0..values.len())
+            .any(|i| null_bitmap.is_valid(i))
+            .then_some(sum)
     }
 
     fn min_i64(&self, values: &[i64], null_bitmap: &NullBitmap) -> Option<i64> {
@@ -238,12 +235,9 @@ impl SimdBackend for ScalarBackend {
             .enumerate()
             .filter_map(|(i, &v)| null_bitmap.is_valid(i).then_some(v))
             .sum();
-        Some(sum).filter(|_| {
-            values
-                .iter()
-                .enumerate()
-                .any(|(i, _)| null_bitmap.is_valid(i))
-        })
+        (0..values.len())
+            .any(|i| null_bitmap.is_valid(i))
+            .then_some(sum)
     }
 
     fn min_f32(&self, values: &[f32], null_bitmap: &NullBitmap) -> Option<f32> {
@@ -316,12 +310,9 @@ impl SimdBackend for ScalarBackend {
             .enumerate()
             .filter_map(|(i, &v)| null_bitmap.is_valid(i).then_some(v))
             .sum();
-        Some(sum).filter(|_| {
-            values
-                .iter()
-                .enumerate()
-                .any(|(i, _)| null_bitmap.is_valid(i))
-        })
+        (0..values.len())
+            .any(|i| null_bitmap.is_valid(i))
+            .then_some(sum)
     }
 
     fn min_f64(&self, values: &[f64], null_bitmap: &NullBitmap) -> Option<f64> {
