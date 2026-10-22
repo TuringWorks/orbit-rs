@@ -6,6 +6,7 @@
 //! - Windows APIs for power management and thermal monitoring
 //! - DirectX/DXGI for GPU monitoring
 
+use orbit_util::RwLockExt;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::time::interval;
@@ -692,7 +693,7 @@ impl WindowsSystemMonitor {
 
             // Check if monitoring should continue
             {
-                let active = monitoring_active.read().unwrap();
+                let active = monitoring_active.read_recover();
                 if !*active {
                     info!("Windows system monitoring stopped");
                     break;

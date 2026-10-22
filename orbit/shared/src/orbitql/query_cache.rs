@@ -4,6 +4,7 @@
 //! result caching, plan caching, metadata caching, cache invalidation,
 //! and distributed cache coordination. Implements Phase 9.6 of the optimization plan.
 
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -598,7 +599,7 @@ impl QueryCacheManager {
         }
 
         let query_hash = self.calculate_query_hash(query);
-        let mut cache = self.result_cache.write().unwrap();
+        let mut cache = self.result_cache.write_recover();
 
         if let Some(entry) = cache.entries.get(&query_hash) {
             // Check TTL
@@ -650,7 +651,7 @@ impl QueryCacheManager {
         }
 
         let query_hash = self.calculate_query_hash(query);
-        let mut cache = self.result_cache.write().unwrap();
+        let mut cache = self.result_cache.write_recover();
 
         // Create cache entry
         let entry = CacheEntry {
@@ -674,7 +675,7 @@ impl QueryCacheManager {
         cache.frequency_tracker.insert(query_hash, 1);
 
         // Register dependencies
-        let mut deps = self.invalidator.dependencies.write().unwrap();
+        let mut deps = self.invalidator.dependencies.write_recover();
         for table in &result.metadata.tables_accessed {
             deps.entry(table.clone()).or_default().insert(query_hash);
         }
@@ -689,7 +690,7 @@ impl QueryCacheManager {
         }
 
         let query_hash = self.calculate_query_hash(query);
-        let mut cache = self.plan_cache.write().unwrap();
+        let mut cache = self.plan_cache.write_recover();
 
         if let Some(entry) = cache.entries.get(&query_hash) {
             // Check TTL
@@ -733,7 +734,7 @@ impl QueryCacheManager {
         }
 
         let query_hash = self.calculate_query_hash(query);
-        let mut cache = self.plan_cache.write().unwrap();
+        let mut cache = self.plan_cache.write_recover();
 
         // Estimate plan size
         let estimated_size = std::mem::size_of_val(&plan);
@@ -767,7 +768,7 @@ impl QueryCacheManager {
             return None;
         }
 
-        let mut cache = self.metadata_cache.write().unwrap();
+        let mut cache = self.metadata_cache.write_recover();
 
         if let Some(entry) = cache.table_metadata.get_mut(table_name) {
             // Check TTL
@@ -799,7 +800,7 @@ impl QueryCacheManager {
             return Ok(());
         }
 
-        let mut cache = self.metadata_cache.write().unwrap();
+        let mut cache = self.metadata_cache.write_recover();
         let estimated_size = std::mem::size_of_val(&metadata);
 
         let entry = CacheEntry {
@@ -819,14 +820,14 @@ impl QueryCacheManager {
 
     /// Add invalidation rule
     pub async fn add_invalidation_rule(&self, rule: InvalidationRule) {
-        let mut rules = self.invalidator.rules.write().unwrap();
+        let mut rules = self.invalidator.rules.write_recover();
         rules.push(rule);
         rules.sort_by_key(|r| r.priority);
     }
 
     /// Invalidate cache entries
     pub async fn invalidate(&self, trigger: InvalidationTrigger) -> Result<usize, CacheError> {
-        let rules = self.invalidator.rules.read().unwrap().clone();
+        let rules = self.invalidator.rules.read_recover().clone();
         let mut invalidated_count = 0;
 
         for rule in &rules {
@@ -856,26 +857,26 @@ impl QueryCacheManager {
 
     /// Get cache statistics
     pub fn get_statistics(&self) -> CacheStatistics {
-        self.stats.read().unwrap().clone()
+        self.stats.read_recover().clone()
     }
 
     /// Clear all caches
     pub async fn clear_all(&self) -> Result<(), CacheError> {
         if self.config.enable_result_cache {
-            let mut result_cache = self.result_cache.write().unwrap();
+            let mut result_cache = self.result_cache.write_recover();
             result_cache.entries.clear();
             result_cache.lru_tracker.clear();
             result_cache.frequency_tracker.clear();
         }
 
         if self.config.enable_plan_cache {
-            let mut plan_cache = self.plan_cache.write().unwrap();
+            let mut plan_cache = self.plan_cache.write_recover();
             plan_cache.entries.clear();
             plan_cache.lru_tracker.clear();
         }
 
         if self.config.enable_metadata_cache {
-            let mut metadata_cache = self.metadata_cache.write().unwrap();
+            let mut metadata_cache = self.metadata_cache.write_recover();
             metadata_cache.table_metadata.clear();
             metadata_cache.index_metadata.clear();
             metadata_cache.statistics.clear();
@@ -971,9 +972,9 @@ impl QueryCacheManager {
                 for table in tables {
                     // Invalidate entries related to this table
                     if let Some(query_hashes) =
-                        self.invalidator.dependencies.read().unwrap().get(table)
+                        self.invalidator.dependencies.read_recover().get(table)
                     {
-                        let mut result_cache = self.result_cache.write().unwrap();
+                        let mut result_cache = self.result_cache.write_recover();
                         for &hash in query_hashes {
                             if result_cache.entries.remove(&hash).is_some() {
                                 result_cache.lru_tracker.retain(|&h| h != hash);
@@ -1047,7 +1048,7 @@ impl DistributedCacheCoordinator {
     }
 
     pub async fn add_peer(&self, peer: PeerNode) {
-        let mut peers = self.peers.write().unwrap();
+        let mut peers = self.peers.write_recover();
         peers.insert(peer.id.clone(), peer);
     }
 

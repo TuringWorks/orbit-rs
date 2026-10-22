@@ -4,6 +4,7 @@
 //! Orbit components for use in testing. The mocks can be configured to simulate various
 //! scenarios including success, failure, and edge cases.
 
+use crate::sync::MutexExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -336,7 +337,7 @@ impl MockOrbitClient {
             node_id: self.node_id.clone(),
             active_actors,
             total_actors,
-            connection_count: *self.connection_count.lock().unwrap(),
+            connection_count: *self.connection_count.lock_recover(),
         }
     }
 
@@ -394,7 +395,7 @@ impl MockOrbitServer {
 
     /// Register an actor type
     pub async fn register_actor_type(&self, actor_type: &str) -> Result<(), String> {
-        let mut types = self.registered_types.lock().unwrap();
+        let mut types = self.registered_types.lock_recover();
         if !types.contains(&actor_type.to_string()) {
             types.push(actor_type.to_string());
 
@@ -411,7 +412,7 @@ impl MockOrbitServer {
             return Err("Mock failure: Server startup failed".to_string());
         }
 
-        *self.is_running.lock().unwrap() = true;
+        *self.is_running.lock_recover() = true;
 
         if self.config.verbose_logging {
             eprintln!("🚀 Mock: OrbitServer started on port {}", self.port);
@@ -422,7 +423,7 @@ impl MockOrbitServer {
 
     /// Stop the mock server
     pub async fn stop(&self) -> Result<(), String> {
-        *self.is_running.lock().unwrap() = false;
+        *self.is_running.lock_recover() = false;
 
         if self.config.verbose_logging {
             eprintln!("🛑 Mock: OrbitServer stopped");
@@ -433,13 +434,13 @@ impl MockOrbitServer {
 
     /// Check if server is running
     pub fn is_running(&self) -> bool {
-        *self.is_running.lock().unwrap()
+        *self.is_running.lock_recover()
     }
 
     /// Get server statistics
     pub async fn get_stats(&self) -> MockServerStats {
         let registry = self.actor_registry.read().await;
-        let types = self.registered_types.lock().unwrap();
+        let types = self.registered_types.lock_recover();
 
         MockServerStats {
             port: self.port,

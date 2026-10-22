@@ -1,5 +1,6 @@
 pub mod metrics_ext;
 pub mod misc;
+pub mod sync;
 pub mod time;
 
 pub mod mocks;
@@ -8,6 +9,7 @@ pub mod test_config;
 pub mod test_utils;
 
 pub use misc::RngUtils;
+pub use sync::{MutexExt, RwLockExt};
 pub use time::TimeUtils;
 
 #[cfg(test)]

@@ -274,11 +274,7 @@ impl SetCommands {
         let result = self
             .base
             .local_registry
-            .execute_set(
-                &key,
-                "sismember",
-                &[serde_json::json!(member)],
-            )
+            .execute_set(&key, "sismember", &[serde_json::json!(member)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 

@@ -313,10 +313,7 @@ impl ListCommands {
             .execute_list(
                 &key,
                 "lrange",
-                &[
-                    serde_json::json!(start),
-                    serde_json::json!(stop),
-                ],
+                &[serde_json::json!(start), serde_json::json!(stop)],
             )
             .await;
 
@@ -339,10 +336,7 @@ impl ListCommands {
                     if let Ok(remote_items) = actor_ref
                         .invoke::<Vec<String>>(
                             "lrange",
-                            vec![
-                                serde_json::json!(start),
-                                serde_json::json!(stop),
-                            ],
+                            vec![serde_json::json!(start), serde_json::json!(stop)],
                         )
                         .await
                     {
@@ -390,10 +384,7 @@ impl ListCommands {
                 if let Ok(remote_items) = actor_ref
                     .invoke::<Vec<String>>(
                         "lrange",
-                        vec![
-                            serde_json::json!(start),
-                            serde_json::json!(stop),
-                        ],
+                        vec![serde_json::json!(start), serde_json::json!(stop)],
                     )
                     .await
                 {
@@ -540,10 +531,7 @@ impl ListCommands {
             if let Err(e) = actor_ref
                 .invoke::<bool>(
                     "lset",
-                    vec![
-                        serde_json::json!(index),
-                        serde_json::json!(value),
-                    ],
+                    vec![serde_json::json!(index), serde_json::json!(value)],
                 )
                 .await
             {
@@ -597,10 +585,7 @@ impl ListCommands {
             if let Err(e) = actor_ref
                 .invoke::<usize>(
                     "lrem",
-                    vec![
-                        serde_json::json!(count),
-                        serde_json::json!(element),
-                    ],
+                    vec![serde_json::json!(count), serde_json::json!(element)],
                 )
                 .await
             {
@@ -643,10 +628,7 @@ impl ListCommands {
             if let Err(e) = actor_ref
                 .invoke::<()>(
                     "ltrim",
-                    vec![
-                        serde_json::json!(start),
-                        serde_json::json!(stop),
-                    ],
+                    vec![serde_json::json!(start), serde_json::json!(stop)],
                 )
                 .await
             {

@@ -12,6 +12,7 @@ use base64::{engine::general_purpose, Engine as _};
 use fastbloom_rs::{BloomFilter, FilterBuilder, Membership};
 use orbit_shared::mesh::{NodeInfo, NodeLease, NodeStatus};
 use orbit_shared::{AddressableLease, AddressableReference, NodeId};
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -287,7 +288,7 @@ impl LsmTreeAddressableProvider {
         }
 
         let sstable_count = {
-            let sstables = self.sstables.read().unwrap();
+            let sstables = self.sstables.read_recover();
             sstables.len()
         };
 
@@ -320,7 +321,7 @@ impl LsmTreeAddressableProvider {
 
     async fn search_sstables(&self, key: &str) -> OrbitResult<Option<Vec<u8>>> {
         let sstables = {
-            let sstables_guard = self.sstables.read().unwrap();
+            let sstables_guard = self.sstables.read_recover();
             sstables_guard.clone()
         };
 
@@ -433,7 +434,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
 
         // Write to active memtable
         let is_full = {
-            let mut memtable = self.active_memtable.write().unwrap();
+            let mut memtable = self.active_memtable.write_recover();
             memtable.insert(key, value);
             memtable.is_full(self.config.memtable_size_limit)
         };
@@ -442,12 +443,12 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
         if is_full {
             // Move to immutable and create new active
             let old_memtable = {
-                let mut memtable = self.active_memtable.write().unwrap();
+                let mut memtable = self.active_memtable.write_recover();
                 std::mem::replace(&mut *memtable, MemTable::new())
             };
 
             {
-                let mut immutable = self.immutable_memtables.write().unwrap();
+                let mut immutable = self.immutable_memtables.write_recover();
                 immutable.push(old_memtable);
             }
 
@@ -468,7 +469,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
 
         // Search in active memtable
         let active_result = {
-            let active = self.active_memtable.read().unwrap();
+            let active = self.active_memtable.read_recover();
             active.get(&key)
         };
 
@@ -481,7 +482,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
 
         // Search in immutable memtables
         let immutable_result = {
-            let immutable = self.immutable_memtables.read().unwrap();
+            let immutable = self.immutable_memtables.read_recover();
             let mut result = None;
             for memtable in immutable.iter().rev() {
                 if let Some(data) = memtable.get(&key) {
@@ -527,7 +528,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
         }
 
         let removed = {
-            let mut memtable = self.active_memtable.write().unwrap();
+            let mut memtable = self.active_memtable.write_recover();
             memtable.remove(&key)
         };
 
@@ -545,7 +546,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
 
         // Scan active memtable
         {
-            let active = self.active_memtable.read().unwrap();
+            let active = self.active_memtable.read_recover();
             for (key, data) in &active.data {
                 if !key.starts_with("__TOMBSTONE__") {
                     if let Ok(lease) = serde_json::from_slice::<AddressableLease>(data) {
@@ -567,7 +568,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
 
         // Scan active memtable
         {
-            let active = self.active_memtable.read().unwrap();
+            let active = self.active_memtable.read_recover();
             for (key, data) in &active.data {
                 if !key.starts_with("__TOMBSTONE__") {
                     if let Ok(lease) = serde_json::from_slice::<AddressableLease>(data) {
@@ -692,7 +693,7 @@ impl ClusterNodeProvider for LsmTreeClusterProvider {
 
         self.wal.lock().await.append(&key, &value, "INSERT").await?;
 
-        let mut memtable = self.active_memtable.write().unwrap();
+        let mut memtable = self.active_memtable.write_recover();
         memtable.insert(key, value);
 
         Ok(())
@@ -701,7 +702,7 @@ impl ClusterNodeProvider for LsmTreeClusterProvider {
     async fn get_node(&self, node_id: &NodeId) -> OrbitResult<Option<NodeInfo>> {
         let key = node_id.to_string();
 
-        if let Some(data) = self.active_memtable.read().unwrap().get(&key) {
+        if let Some(data) = self.active_memtable.read_recover().get(&key) {
             let node = serde_json::from_slice(&data)
                 .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
             return Ok(Some(node));
@@ -719,7 +720,7 @@ impl ClusterNodeProvider for LsmTreeClusterProvider {
 
         self.wal.lock().await.append(&key, b"", "DELETE").await?;
 
-        let mut memtable = self.active_memtable.write().unwrap();
+        let mut memtable = self.active_memtable.write_recover();
         let removed = memtable.remove(&key);
 
         Ok(removed)
@@ -728,7 +729,7 @@ impl ClusterNodeProvider for LsmTreeClusterProvider {
     async fn list_active_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
         let mut nodes = Vec::new();
 
-        let active = self.active_memtable.read().unwrap();
+        let active = self.active_memtable.read_recover();
         for (key, data) in &active.data {
             if !key.starts_with("__TOMBSTONE__") {
                 if let Ok(node) = serde_json::from_slice::<NodeInfo>(data) {
@@ -745,7 +746,7 @@ impl ClusterNodeProvider for LsmTreeClusterProvider {
     async fn list_all_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
         let mut nodes = Vec::new();
 
-        let active = self.active_memtable.read().unwrap();
+        let active = self.active_memtable.read_recover();
         for (key, data) in &active.data {
             if !key.starts_with("__TOMBSTONE__") {
                 if let Ok(node) = serde_json::from_slice::<NodeInfo>(data) {

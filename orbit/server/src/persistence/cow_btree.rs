@@ -10,6 +10,7 @@ use super::{
 use orbit_shared::{
     AddressableLease, AddressableReference, NodeId, NodeInfo, NodeLease, NodeStatus,
 };
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -473,7 +474,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
 
         // Insert into B+ tree
         let success = {
-            let mut root = self.root.write().unwrap();
+            let mut root = self.root.write_recover();
             root.insert_addressable_lease(key, lease.clone())
         };
 
@@ -489,7 +490,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let key = Self::reference_to_key(reference);
 
         let result = {
-            let root = self.root.read().unwrap();
+            let root = self.root.read_recover();
             match root.find_key_index(&key) {
                 Ok(idx) => root.addressable_values[idx].clone(),
                 Err(_) => None,
@@ -518,7 +519,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
 
         // Update in B+ tree
         {
-            let mut root = self.root.write().unwrap();
+            let mut root = self.root.write_recover();
             root.insert_addressable_lease(key, lease.clone());
         }
 
@@ -541,7 +542,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
 
         // Remove from B+ tree
         let removed = {
-            let mut root = self.root.write().unwrap();
+            let mut root = self.root.write_recover();
             match root.find_key_index(&key) {
                 Ok(idx) => {
                     root.keys.remove(idx);
@@ -561,7 +562,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let start = Instant::now();
 
         let leases = {
-            let root = self.root.read().unwrap();
+            let root = self.root.read_recover();
             let mut leases = Vec::new();
             for lease in root.addressable_values.iter().flatten() {
                 if &lease.node_id == node_id {
@@ -579,7 +580,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let start = Instant::now();
 
         let leases = {
-            let root = self.root.read().unwrap();
+            let root = self.root.read_recover();
             root.addressable_values
                 .iter()
                 .filter_map(std::clone::Clone::clone)
@@ -595,7 +596,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let now = chrono::Utc::now();
 
         let count = {
-            let mut root = self.root.write().unwrap();
+            let mut root = self.root.write_recover();
             let mut indices_to_remove = Vec::new();
             let mut count = 0;
 
@@ -721,14 +722,14 @@ impl PersistenceProvider for CowBTreeClusterProvider {
 impl ClusterNodeProvider for CowBTreeClusterProvider {
     async fn store_node(&self, node: &NodeInfo) -> OrbitResult<()> {
         let key = node.id.to_string();
-        let mut root = self.root.write().unwrap();
+        let mut root = self.root.write_recover();
         root.insert_node_info(key, node.clone());
         Ok(())
     }
 
     async fn get_node(&self, node_id: &NodeId) -> OrbitResult<Option<NodeInfo>> {
         let key = node_id.to_string();
-        let root = self.root.read().unwrap();
+        let root = self.root.read_recover();
         let result = match root.find_key_index(&key) {
             Ok(idx) => root.node_values[idx].clone(),
             Err(_) => None,
@@ -742,7 +743,7 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
 
     async fn remove_node(&self, node_id: &NodeId) -> OrbitResult<bool> {
         let key = node_id.to_string();
-        let mut root = self.root.write().unwrap();
+        let mut root = self.root.write_recover();
         let removed = match root.find_key_index(&key) {
             Ok(idx) => {
                 root.keys.remove(idx);
@@ -755,7 +756,7 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
     }
 
     async fn list_active_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
-        let root = self.root.read().unwrap();
+        let root = self.root.read_recover();
         let nodes: Vec<NodeInfo> = root
             .node_values
             .iter()
@@ -766,7 +767,7 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
     }
 
     async fn list_all_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
-        let root = self.root.read().unwrap();
+        let root = self.root.read_recover();
         let nodes: Vec<NodeInfo> = root
             .node_values
             .iter()
@@ -777,7 +778,7 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
 
     async fn cleanup_expired_nodes(&self) -> OrbitResult<u64> {
         let mut count = 0;
-        let mut root = self.root.write().unwrap();
+        let mut root = self.root.write_recover();
         let mut indices_to_remove = Vec::new();
 
         for (i, value) in root.node_values.iter().enumerate() {
@@ -801,7 +802,7 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
 
     async fn renew_node_lease(&self, node_id: &NodeId, lease: &NodeLease) -> OrbitResult<()> {
         let key = node_id.to_string();
-        let mut root = self.root.write().unwrap();
+        let mut root = self.root.write_recover();
 
         if let Ok(idx) = root.find_key_index(&key) {
             if let Some(node) = &mut root.node_values[idx] {

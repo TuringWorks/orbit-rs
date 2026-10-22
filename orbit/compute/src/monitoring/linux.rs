@@ -6,6 +6,7 @@
 //! - Linux-specific APIs for GPU monitoring and power management
 //! - Hardware abstraction for different CPU and GPU vendors
 
+use orbit_util::RwLockExt;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -1194,7 +1195,7 @@ impl LinuxSystemMonitor {
 
             // Check if monitoring should continue
             {
-                let active = monitoring_active.read().unwrap();
+                let active = monitoring_active.read_recover();
                 if !*active {
                     info!("Linux system monitoring stopped");
                     break;

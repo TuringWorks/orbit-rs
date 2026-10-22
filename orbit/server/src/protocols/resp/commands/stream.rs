@@ -171,11 +171,7 @@ impl StreamCommands {
         let result = self
             .base
             .local_registry
-            .execute_stream(
-                &key,
-                "xadd",
-                &[id_value, serde_json::json!(fields)],
-            )
+            .execute_stream(&key, "xadd", &[id_value, serde_json::json!(fields)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
 
@@ -232,10 +228,7 @@ impl StreamCommands {
             None
         };
 
-        let mut rpc_args = vec![
-            serde_json::json!(start),
-            serde_json::json!(end),
-        ];
+        let mut rpc_args = vec![serde_json::json!(start), serde_json::json!(end)];
         if let Some(c) = count {
             rpc_args.push(serde_json::json!(c));
         }
@@ -283,10 +276,7 @@ impl StreamCommands {
             None
         };
 
-        let mut rpc_args = vec![
-            serde_json::json!(end),
-            serde_json::json!(start),
-        ];
+        let mut rpc_args = vec![serde_json::json!(end), serde_json::json!(start)];
         if let Some(c) = count {
             rpc_args.push(serde_json::json!(c));
         }
@@ -456,10 +446,7 @@ impl StreamCommands {
             .execute_stream(
                 &key,
                 "xtrim",
-                &[
-                    serde_json::json!(max_len),
-                    serde_json::json!(approximate),
-                ],
+                &[serde_json::json!(max_len), serde_json::json!(approximate)],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
@@ -565,10 +552,7 @@ impl StreamCommands {
                     .execute_stream(
                         &key,
                         "xgroup_create",
-                        &[
-                            serde_json::json!(group_name),
-                            serde_json::json!(start_id),
-                        ],
+                        &[serde_json::json!(group_name), serde_json::json!(start_id)],
                     )
                     .await
                     .map_err(|e| ProtocolError::RespError(format!("{e}")))?;
@@ -589,11 +573,7 @@ impl StreamCommands {
                 let result = self
                     .base
                     .local_registry
-                    .execute_stream(
-                        &key,
-                        "xgroup_destroy",
-                        &[serde_json::json!(group_name)],
-                    )
+                    .execute_stream(&key, "xgroup_destroy", &[serde_json::json!(group_name)])
                     .await
                     .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
 
@@ -760,10 +740,7 @@ impl StreamCommands {
             .execute_stream(
                 &key,
                 "xack",
-                &[
-                    serde_json::json!(group_name),
-                    serde_json::json!(ids),
-                ],
+                &[serde_json::json!(group_name), serde_json::json!(ids)],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("{e}")))?;
@@ -788,11 +765,7 @@ impl StreamCommands {
         let result = self
             .base
             .local_registry
-            .execute_stream(
-                &key,
-                "xpending",
-                &[serde_json::json!(group_name)],
-            )
+            .execute_stream(&key, "xpending", &[serde_json::json!(group_name)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("{e}")))?;
 

@@ -2,6 +2,7 @@
 
 use super::config::{PythonConfig, PythonWorkerConfig};
 use super::types::{PythonError, PythonResult, PythonValue};
+use orbit_util::MutexExt;
 use serde::{Deserialize, Serialize};
 use std::io::{BufReader, Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -123,7 +124,7 @@ impl PythonWorker {
     ) -> PythonResult<PythonValue> {
         // Increment execution count
         {
-            let mut count = self.execution_count.lock().unwrap();
+            let mut count = self.execution_count.lock_recover();
             *count += 1;
         }
 
@@ -230,7 +231,7 @@ impl PythonWorker {
 
     /// Get execution count
     pub fn execution_count(&self) -> usize {
-        *self.execution_count.lock().unwrap()
+        *self.execution_count.lock_recover()
     }
 
     /// Check if worker should be restarted
@@ -248,7 +249,7 @@ impl PythonWorker {
 
         // Write request
         {
-            let mut stdin = self.stdin.lock().unwrap();
+            let mut stdin = self.stdin.lock_recover();
             writeln!(stdin, "{request_json}")
                 .map_err(|e| PythonError::CommunicationError(format!("Write error: {e}")))?;
             stdin
@@ -258,7 +259,7 @@ impl PythonWorker {
 
         // Read response
         let response_line = {
-            let mut stdout = self.stdout.lock().unwrap();
+            let mut stdout = self.stdout.lock_recover();
             let mut line = String::new();
             std::io::BufRead::read_line(&mut *stdout, &mut line)
                 .map_err(|e| PythonError::CommunicationError(format!("Read error: {e}")))?;
@@ -277,7 +278,7 @@ impl PythonWorker {
 
         // Write request
         {
-            let mut stdin = self.stdin.lock().unwrap();
+            let mut stdin = self.stdin.lock_recover();
             stdin
                 .write_all(&packed)
                 .map_err(|e| PythonError::CommunicationError(format!("Write error: {e}")))?;
@@ -289,7 +290,7 @@ impl PythonWorker {
         // Read length prefix (4 bytes)
         let mut length_bytes = [0u8; 4];
         {
-            let mut stdout = self.stdout.lock().unwrap();
+            let mut stdout = self.stdout.lock_recover();
             stdout
                 .read_exact(&mut length_bytes)
                 .map_err(|e| PythonError::CommunicationError(format!("Read length error: {e}")))?;
@@ -300,7 +301,7 @@ impl PythonWorker {
         // Read response data
         let mut response_bytes = vec![0u8; length];
         {
-            let mut stdout = self.stdout.lock().unwrap();
+            let mut stdout = self.stdout.lock_recover();
             stdout
                 .read_exact(&mut response_bytes)
                 .map_err(|e| PythonError::CommunicationError(format!("Read data error: {e}")))?;
@@ -368,7 +369,7 @@ impl PythonRuntimePool {
         let func_name = func_name.to_string();
 
         tokio::task::spawn_blocking(move || {
-            let worker_guard = worker.lock().unwrap();
+            let worker_guard = worker.lock_recover();
             worker_guard.execute(&func_source, &func_name, args)
         })
         .await
@@ -383,7 +384,7 @@ impl PythonRuntimePool {
         let worker = self.get_next_worker().await?;
 
         tokio::task::spawn_blocking(move || {
-            let worker_guard = worker.lock().unwrap();
+            let worker_guard = worker.lock_recover();
             worker_guard.execute_batch(requests)
         })
         .await
@@ -399,7 +400,7 @@ impl PythonRuntimePool {
 
         // Round-robin selection
         let worker_idx = {
-            let mut next = self.next_worker.lock().unwrap();
+            let mut next = self.next_worker.lock_recover();
             let idx = *next;
             *next = (*next + 1) % workers.len();
             idx
@@ -409,7 +410,7 @@ impl PythonRuntimePool {
 
         // Check if worker should be restarted (drop guard before any await)
         let should_restart = {
-            let worker_guard = worker.lock().unwrap();
+            let worker_guard = worker.lock_recover();
             worker_guard.should_restart()
         };
 
@@ -443,7 +444,7 @@ impl PythonRuntimePool {
         let mut results = Vec::new();
 
         for worker in workers.iter() {
-            let worker_guard = worker.lock().unwrap();
+            let worker_guard = worker.lock_recover();
             let healthy = worker_guard.ping().is_ok();
             results.push(healthy);
         }
@@ -478,7 +479,7 @@ impl PythonRuntime {
         let func_name = func_name.to_string();
 
         tokio::task::spawn_blocking(move || {
-            let worker_guard = worker.lock().unwrap();
+            let worker_guard = worker.lock_recover();
             worker_guard.execute(&func_source, &func_name, args)
         })
         .await

@@ -3,6 +3,7 @@
 //! This module provides ML/AI workload optimization, adaptive query optimization,
 //! workload pattern recognition, and auto-tuning capabilities for the OrbitQL query engine.
 
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
@@ -2195,11 +2196,11 @@ impl MLCostEstimator {
     }
 
     pub async fn predict_cost(&self, features: &QueryFeatures) -> Result<f64, AnalyticsError> {
-        let active_model = self.active_model.read().unwrap().clone();
+        let active_model = self.active_model.read_recover().clone();
 
         match active_model {
             ModelType::LinearRegression => {
-                let model = self.linear_model.read().unwrap();
+                let model = self.linear_model.read_recover();
                 if model.is_trained {
                     Ok(model.predict(features))
                 } else {
@@ -2207,7 +2208,7 @@ impl MLCostEstimator {
                 }
             }
             ModelType::RandomForest => {
-                let model = self.forest_model.read().unwrap();
+                let model = self.forest_model.read_recover();
                 if model.is_trained {
                     Ok(model.predict(features))
                 } else {
@@ -2215,7 +2216,7 @@ impl MLCostEstimator {
                 }
             }
             ModelType::NeuralNetwork => {
-                let model = self.neural_model.read().unwrap();
+                let model = self.neural_model.read_recover();
                 if model.is_trained {
                     Ok(model.predict(features))
                 } else {
@@ -2223,7 +2224,7 @@ impl MLCostEstimator {
                 }
             }
             ModelType::GradientBoosting => {
-                let model = self.gradient_boosting_model.read().unwrap();
+                let model = self.gradient_boosting_model.read_recover();
                 if model.is_trained {
                     Ok(model.predict(features))
                 } else {
@@ -2231,7 +2232,7 @@ impl MLCostEstimator {
                 }
             }
             ModelType::AdaBoost => {
-                let model = self.adaboost_model.read().unwrap();
+                let model = self.adaboost_model.read_recover();
                 if model.is_trained {
                     Ok(model.predict(features))
                 } else {
@@ -2239,7 +2240,7 @@ impl MLCostEstimator {
                 }
             }
             ModelType::LightGBM => {
-                let model = self.lightgbm_model.read().unwrap();
+                let model = self.lightgbm_model.read_recover();
                 if model.is_trained {
                     Ok(model.predict(features))
                 } else {
@@ -2247,7 +2248,7 @@ impl MLCostEstimator {
                 }
             }
             ModelType::CatBoost => {
-                let model = self.catboost_model.read().unwrap();
+                let model = self.catboost_model.read_recover();
                 if model.is_trained {
                     Ok(model.predict(features))
                 } else {
@@ -2255,7 +2256,7 @@ impl MLCostEstimator {
                 }
             }
             ModelType::XGBoost => {
-                let model = self.xgboost_model.read().unwrap();
+                let model = self.xgboost_model.read_recover();
                 if model.is_trained {
                     Ok(model.predict(features))
                 } else {
@@ -2263,7 +2264,7 @@ impl MLCostEstimator {
                 }
             }
             ModelType::Ensemble => {
-                let ensemble = self.boosting_ensemble.read().unwrap();
+                let ensemble = self.boosting_ensemble.read_recover();
                 if ensemble.is_trained {
                     Ok(ensemble.predict(features))
                 } else {
@@ -2278,7 +2279,7 @@ impl MLCostEstimator {
         example: TrainingExample,
     ) -> Result<(), AnalyticsError> {
         let should_retrain = {
-            let mut data = self.training_data.write().unwrap();
+            let mut data = self.training_data.write_recover();
             data.push(example);
             data.len() >= 100
         };
@@ -2292,18 +2293,18 @@ impl MLCostEstimator {
     }
 
     async fn retrain_models(&self) -> Result<(), AnalyticsError> {
-        let data = self.training_data.read().unwrap();
+        let data = self.training_data.read_recover();
 
         // Train linear model
-        let mut linear_model = self.linear_model.write().unwrap();
+        let mut linear_model = self.linear_model.write_recover();
         linear_model.train(&data)?;
 
         Ok(())
     }
 
     pub async fn get_model_statistics(&self) -> Result<ModelStatistics, AnalyticsError> {
-        let metadata = self.model_metadata.read().unwrap();
-        let training_count = self.training_data.read().unwrap().len();
+        let metadata = self.model_metadata.read_recover();
+        let training_count = self.training_data.read_recover().len();
 
         Ok(ModelStatistics {
             models_trained: 3,
@@ -2432,7 +2433,7 @@ impl AdaptiveOptimizer {
     }
 
     async fn initialize_default_rules(&self) -> Result<(), AnalyticsError> {
-        let mut rules = self.optimization_rules.write().unwrap();
+        let mut rules = self.optimization_rules.write_recover();
 
         rules.insert(
             "join_reorder".to_string(),
@@ -2455,13 +2456,13 @@ impl AdaptiveOptimizer {
         &self,
         _query_hash: u64,
     ) -> Result<Vec<OptimizationRule>, AnalyticsError> {
-        let rules = self.optimization_rules.read().unwrap();
+        let rules = self.optimization_rules.read_recover();
         Ok(rules.values().cloned().collect())
     }
 
     pub async fn get_statistics(&self) -> Result<OptimizationStatistics, AnalyticsError> {
-        let rules = self.optimization_rules.read().unwrap();
-        let history = self.execution_history.read().unwrap();
+        let rules = self.optimization_rules.read_recover();
+        let history = self.execution_history.read_recover();
 
         Ok(OptimizationStatistics {
             rules_applied: rules.len(),
@@ -2539,7 +2540,7 @@ impl WorkloadPatternAnalyzer {
     }
 
     async fn initialize_patterns(&self) -> Result<(), AnalyticsError> {
-        let mut patterns = self.patterns.write().unwrap();
+        let mut patterns = self.patterns.write_recover();
 
         patterns.insert(
             "oltp_pattern".to_string(),
@@ -2577,12 +2578,12 @@ impl WorkloadPatternAnalyzer {
         &self,
         _queries: &[QuerySignature],
     ) -> Result<Vec<WorkloadPattern>, AnalyticsError> {
-        let patterns = self.patterns.read().unwrap();
+        let patterns = self.patterns.read_recover();
         Ok(patterns.values().cloned().collect())
     }
 
     pub async fn get_statistics(&self) -> Result<PatternStatistics, AnalyticsError> {
-        let patterns = self.patterns.read().unwrap();
+        let patterns = self.patterns.read_recover();
 
         Ok(PatternStatistics {
             patterns_identified: patterns.len(),
@@ -2711,7 +2712,7 @@ impl AutoTuner {
     }
 
     pub async fn get_recommendations(&self) -> Result<SystemConfiguration, AnalyticsError> {
-        let config = self.current_config.read().unwrap().clone();
+        let config = self.current_config.read_recover().clone();
         Ok(config)
     }
 

@@ -3,6 +3,7 @@
 //! This module provides schema discovery, caching, and analysis capabilities
 //! for intelligent SQL generation.
 
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -42,7 +43,7 @@ impl SchemaAnalyzer {
     pub async fn get_table_schema(&self, table_name: &str) -> Option<TableSchema> {
         // Check cache first
         {
-            let cache = self.schema_cache.read().unwrap();
+            let cache = self.schema_cache.read_recover();
             if let Some(schema) = cache.tables.get(table_name) {
                 // Check if cache is still valid (not expired)
                 if cache.is_valid() {
@@ -58,7 +59,7 @@ impl SchemaAnalyzer {
 
     /// Update schema cache with discovered schema
     pub fn update_schema(&self, schema: TableSchema) {
-        let mut cache = self.schema_cache.write().unwrap();
+        let mut cache = self.schema_cache.write_recover();
         let old_schema = cache.tables.insert(schema.name.clone(), schema.clone());
         cache.last_updated = SystemTime::now();
 
@@ -72,13 +73,13 @@ impl SchemaAnalyzer {
 
     /// Get cache statistics
     pub fn get_cache_stats(&self) -> (usize, SystemTime) {
-        let cache = self.schema_cache.read().unwrap();
+        let cache = self.schema_cache.read_recover();
         (cache.tables.len(), cache.last_updated)
     }
 
     /// Get all cached table schemas
     pub fn list_tables(&self) -> Vec<String> {
-        let cache = self.schema_cache.read().unwrap();
+        let cache = self.schema_cache.read_recover();
         cache.tables.keys().cloned().collect()
     }
 
@@ -88,7 +89,7 @@ impl SchemaAnalyzer {
         table_name: &str,
         column_name: &str,
     ) -> Option<ColumnStatistics> {
-        let cache = self.schema_cache.read().unwrap();
+        let cache = self.schema_cache.read_recover();
         cache
             .statistics
             .get(&format!("{table_name}.{column_name}"))
@@ -129,7 +130,7 @@ impl SchemaAnalyzer {
                 .await
                 .map_err(|e| SchemaError::DiscoveryError(e.to_string()))?;
 
-            let mut cache = self.schema_cache.write().unwrap();
+            let mut cache = self.schema_cache.write_recover();
             for pg_schema in schemas {
                 let mcp_schema = self.convert_pg_schema_to_mcp(pg_schema);
                 cache.tables.insert(mcp_schema.name.clone(), mcp_schema);
@@ -137,7 +138,7 @@ impl SchemaAnalyzer {
             cache.last_updated = SystemTime::now();
             Ok(())
         } else {
-            let mut cache = self.schema_cache.write().unwrap();
+            let mut cache = self.schema_cache.write_recover();
             cache.last_updated = SystemTime::now();
             Ok(())
         }

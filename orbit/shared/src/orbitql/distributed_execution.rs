@@ -4,6 +4,7 @@
 //! cluster management, distributed query planning, network communication,
 //! fault tolerance, and cross-node data shuffling.
 
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
@@ -899,7 +900,7 @@ impl DistributedExecutor {
 
     /// Update execution statistics
     async fn update_stats(&self, execution_time: Duration) {
-        let mut stats = self.stats.write().unwrap();
+        let mut stats = self.stats.write_recover();
         stats.queries_executed += 1;
 
         // Update average latency
@@ -910,7 +911,7 @@ impl DistributedExecutor {
 
     /// Get cluster statistics
     pub async fn get_stats(&self) -> DistributedStats {
-        self.stats.read().unwrap().clone()
+        self.stats.read_recover().clone()
     }
 }
 
@@ -936,7 +937,7 @@ impl ClusterManager {
 
     pub async fn register_node(&self, node: NodeInfo) -> Result<(), DistributedError> {
         {
-            let mut nodes = self.nodes.write().unwrap();
+            let mut nodes = self.nodes.write_recover();
             nodes.insert(node.node_id.clone(), node.clone());
         }
 
@@ -945,7 +946,7 @@ impl ClusterManager {
     }
 
     pub async fn get_active_nodes(&self) -> Result<Vec<NodeInfo>, DistributedError> {
-        let nodes = self.nodes.read().unwrap();
+        let nodes = self.nodes.read_recover();
         let active_nodes: Vec<NodeInfo> = nodes
             .values()
             .filter(|node| matches!(node.status, NodeStatus::Active))
@@ -993,7 +994,7 @@ impl LeaderElection {
     }
 
     pub async fn get_current_leader(&self) -> Option<String> {
-        self.leader_id.read().unwrap().clone()
+        self.leader_id.read_recover().clone()
     }
 }
 
