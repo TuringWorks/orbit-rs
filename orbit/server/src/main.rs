@@ -44,7 +44,9 @@ use orbit_server::protocols::postgres_wire::sql::execution::hybrid::HybridStorag
 use orbit_server::protocols::postgres_wire::{QueryEngine, RocksDbTableStorage};
 use orbit_server::protocols::rest::{server::RestApiConfig, RestApiServer};
 use orbit_server::protocols::{CqlServer, MySqlServer, PostgresServer, RespServer};
-use orbit_server::unified_storage::{UnifiedStorageIntegration, UnifiedStorageIntegrationConfig};
+use orbit_server::unified_storage::{
+    Compression, RocksDbBackendConfig, UnifiedStorageIntegration, UnifiedStorageIntegrationConfig,
+};
 use orbit_server::OrbitServerBuilder;
 
 /// Storage mode for protocol servers
@@ -224,6 +226,20 @@ struct Args {
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
+    // rustls 0.23 requires a process-level crypto provider, and only picks one
+    // automatically when exactly one provider feature is enabled anywhere in
+    // the dependency graph. Something in the tree pulls in a second, so the
+    // choice is made explicitly here. Without this, every TLS listener panics
+    // on its first use — enabling `[server.tls]` took the whole server down at
+    // startup.
+    if rustls::crypto::ring::default_provider()
+        .install_default()
+        .is_err()
+    {
+        // Already installed by another initialiser; that is fine.
+        tracing::debug!("rustls crypto provider was already installed");
+    }
+
     // Initialize logging
     let log_level = if args.dev_mode {
         "debug,orbit_server=trace,orbit_shared=debug,orbit_proto=debug,orbit_protocols=debug"
@@ -363,12 +379,37 @@ async fn main() -> Result<(), Box<dyn Error>> {
             data_dir
         );
 
+        // The warm-tier block used to be read by nothing: every one of its
+        // knobs, `sync_wal` included, was parsed and discarded, so an operator
+        // who turned on sync-on-write got no fsync and no warning.
+        let warm_tier = &unified_config.warm_tier;
+        let durability = RocksDbBackendConfig {
+            sync_writes: warm_tier.sync_wal,
+            enable_wal: warm_tier.enable_wal,
+            compression: if warm_tier.enable_compression {
+                warm_tier.compression_algorithm.parse().map_err(|e| {
+                    Box::new(std::io::Error::other(format!(
+                        "unified_storage.warm_tier.compression_algorithm: {e}"
+                    ))) as Box<dyn Error>
+                })?
+            } else {
+                Compression::None
+            },
+            block_cache_mb: warm_tier.block_cache_mb,
+            write_buffer_mb: warm_tier.write_buffer_mb,
+            max_write_buffers: warm_tier.max_write_buffers,
+            bloom_bits_per_key: warm_tier
+                .enable_bloom_filters
+                .then_some(warm_tier.bloom_bits_per_key),
+        };
+
         let integration_config = UnifiedStorageIntegrationConfig {
             data_dir: data_dir.clone(),
             enable_ttl_expiration: unified_config.ttl.enabled,
             ttl_check_interval_secs: unified_config.ttl.check_interval_secs,
-            max_scan_limit: 10000,
+            max_scan_limit: 1_000_000,
             use_memory_backend: false, // Use persistent backend
+            durability,
         };
 
         let integration = UnifiedStorageIntegration::with_config(integration_config)
@@ -583,6 +624,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             rocksdb_storage.clone(),
             unified_postgres,
             toml_config.server.tls.clone(),
+            toml_config
+                .protocols
+                .postgresql
+                .as_ref()
+                .map_or(100_000, |postgres| postgres.max_slot_change_backlog),
         )
         .await?;
         protocol_handles.push(postgres_handle);
@@ -794,7 +840,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
     let rest_orbit_client = orbit_client::OrbitClient::new_offline(rest_client_config).await?;
 
-    let rest_server = RestApiServer::new(rest_orbit_client, rest_config);
+    // The REST SQL endpoint must read and write the *same* store as the
+    // PostgreSQL protocol, so this mirrors exactly the choice made for the
+    // PostgreSQL server below. Handing REST its own RocksDB handle while
+    // PostgreSQL used unified storage produced two databases behind one name:
+    // a table created over HTTP was invisible to psql.
+    let rest_sql_storage: Arc<
+        dyn orbit_server::protocols::postgres_wire::persistent_storage::PersistentTableStorage,
+    > = match &storage_mode {
+        StorageMode::Unified {
+            postgres_unified, ..
+        } => postgres_unified.clone(),
+        StorageMode::Isolated { .. } => rocksdb_storage.clone(),
+    };
+    let rest_query_engine = Arc::new(QueryEngine::new_with_persistent_storage(rest_sql_storage));
+
+    orbit_server::protocols::rest::handlers::mark_process_start();
+
+    let rest_server =
+        RestApiServer::new(rest_orbit_client, rest_config).with_query_engine(rest_query_engine);
     let rest_handle = tokio::spawn(async move {
         rest_server
             .run()
@@ -1304,6 +1368,7 @@ async fn start_postgresql_server(
     rocksdb: Arc<RocksDbTableStorage>,
     unified_storage: Option<Arc<UnifiedTableStorage>>,
     tls_config: Option<orbit_server::config::TlsConfig>,
+    max_slot_change_backlog: u64,
 ) -> Result<JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>, Box<dyn Error>> {
     use orbit_server::protocols::postgres_wire::persistent_storage::PersistentTableStorage;
 
@@ -1317,9 +1382,28 @@ async fn start_postgresql_server(
         QueryEngine::new_with_persistent_storage(rocksdb)
     };
 
+    // Reclaim superseded row versions in the background, so a long-lived
+    // server does not accumulate them until someone runs VACUUM by hand.
+    let query_engine = std::sync::Arc::new(query_engine);
+    // Continue the change stream where the last run left off, so a replica's
+    // recorded position still means what it meant before the restart.
+    // The replication backlog bound comes from configuration, so an operator
+    // can trade log growth against how long a slow subscriber is tolerated.
+    orbit_server::protocols::postgres_wire::query_engine::set_max_slot_backlog(
+        max_slot_change_backlog,
+    );
+
+    match query_engine.resume_change_positions().await {
+        Ok(0) => {}
+        Ok(position) => info!("[PostgreSQL] replication resumes at position {position}"),
+        Err(e) => warn!("[PostgreSQL] could not read the change log: {e}"),
+    }
+    let _autovacuum =
+        QueryEngine::start_autovacuum(query_engine.clone(), std::time::Duration::from_secs(60));
+
     // Create PostgreSQL server with query engine
-    let postgres_server =
-        PostgresServer::new_with_query_engine(bind_addr, query_engine).with_tls_config(tls_config);
+    let postgres_server = PostgresServer::new_with_query_engine_arc(bind_addr, query_engine)
+        .with_tls_config(tls_config);
 
     let handle = tokio::spawn(async move {
         postgres_server

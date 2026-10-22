@@ -1,10 +1,15 @@
-// Type definitions for Orbit Desktop
+// Type definitions for Orbit Desktop.
+//
+// These mirror the Tauri command payloads in `src-tauri/src`. Keep them in step
+// with `connections.rs`, `queries.rs` and `cluster.rs` — there is no codegen
+// between the two, so a rename on one side is a silent break on the other.
 
 export interface Connection {
   id: string;
   info: ConnectionInfo;
   status: ConnectionStatus;
-  created_at: string;
+  /** Null when the persisted record carried no readable timestamp. */
+  created_at: string | null;
   last_used: string | null;
   query_count: number;
 }
@@ -14,39 +19,64 @@ export interface ConnectionInfo {
   connection_type: ConnectionType;
   host: string;
   port: number;
-  database?: string;
-  username?: string;
-  password?: string;
-  ssl_mode?: string;
-  connection_timeout?: number;
+  database?: string | null;
+  username?: string | null;
+  password?: string | null;
+  ssl_mode?: string | null;
+  /** Connect/handshake timeout in milliseconds. */
+  connection_timeout?: number | null;
   additional_params: Record<string, string>;
 }
 
 export enum ConnectionType {
   PostgreSQL = 'PostgreSQL',
-  OrbitQL = 'OrbitQL',
-  Redis = 'Redis',
   MySQL = 'MySQL',
+  Redis = 'Redis',
   CQL = 'CQL',
+  OrbitQL = 'OrbitQL',
   Cypher = 'Cypher',
   AQL = 'AQL',
+  FlightSQL = 'FlightSQL',
+  OrbitWire = 'OrbitWire',
 }
 
-export enum ConnectionStatus {
-  Connected = 'Connected',
-  Disconnected = 'Disconnected',
-  Connecting = 'Connecting',
-  Error = 'Error',
+/**
+ * Serde's external tagging: unit variants arrive as bare strings, the error
+ * variant as `{ Error: "..." }`.
+ */
+export type ConnectionStatus =
+  | 'Connected'
+  | 'Disconnected'
+  | { Error: string };
+
+export const isConnected = (status: ConnectionStatus): boolean =>
+  status === 'Connected';
+
+export const connectionStatusError = (status: ConnectionStatus): string | null =>
+  typeof status === 'object' && status !== null && 'Error' in status
+    ? status.Error
+    : null;
+
+/** A connection type as offered by the backend, with its default port. */
+export interface ConnectionTypeInfo {
+  id: ConnectionType;
+  default_port: number;
+  /**
+   * False for the HTTP-backed protocols. Their handlers in orbit-server still
+   * return fixed example rows, so results are a protocol check, not data.
+   */
+  native_wire_protocol: boolean;
 }
 
 export interface QueryRequest {
   connection_id: string;
   query: string;
-  query_type: QueryType;
-  parameters?: Record<string, any>;
-  timeout?: number;
+  /** Statement timeout in milliseconds; the backend defaults to 30s. */
+  timeout_ms?: number | null;
 }
 
+/** Which language the editor highlights. Presentation only — execution
+ *  dispatches on the connection's protocol, not on this. */
 export enum QueryType {
   SQL = 'SQL',
   OrbitQL = 'OrbitQL',
@@ -57,70 +87,127 @@ export enum QueryType {
   AQL = 'AQL',
 }
 
+/**
+ * What a statement did. `returned` and `affected` are different facts and are
+ * kept apart deliberately.
+ */
+export type StatementOutcome =
+  | { kind: 'returned'; rows: number }
+  | { kind: 'affected'; rows: number }
+  | { kind: 'completed' };
+
+export const describeOutcome = (outcome: StatementOutcome): string => {
+  switch (outcome.kind) {
+    case 'returned':
+      return `${outcome.rows} row${outcome.rows === 1 ? '' : 's'} returned`;
+    case 'affected':
+      return `${outcome.rows} row${outcome.rows === 1 ? '' : 's'} affected`;
+    case 'completed':
+      return 'Completed';
+  }
+};
+
 export interface QueryResult {
   success: boolean;
-  data?: QueryResultData;
-  error?: string;
-  execution_time: number;
-  rows_affected?: number;
-  timestamp?: string;
+  data?: QueryResultData | null;
+  error?: string | null;
+  execution_time_ms: number;
+  /** A caveat the grid alone cannot convey, e.g. a mocked server endpoint. */
+  notice?: string | null;
 }
 
 export interface QueryResultData {
   columns: Column[];
   rows: Row[];
-  metadata?: Record<string, any>;
+  outcome: StatementOutcome;
 }
 
 export interface Column {
   name: string;
+  /** The server's own type name. */
   type: string;
-  nullable: boolean;
 }
 
 export type Row = Record<string, any>;
 
-// ML Model types
+export interface QueryHistoryEntry {
+  id: string;
+  connection_id: string;
+  query: string;
+  executed_at: string;
+  execution_time_ms: number;
+  success: boolean;
+  error?: string | null;
+  outcome?: StatementOutcome | null;
+}
+
+// ---------------------------------------------------------------------------
+// Cluster lifecycle
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether a node's process is alive. `Exited` means a pid file exists but that
+ * process is gone — a crash or an unclean stop.
+ */
+export type ProcessState =
+  | { state: 'running'; pid: number; uptime_seconds: number }
+  | { state: 'exited'; pid: number };
+
+export interface Endpoint {
+  protocol: string;
+  port: number;
+  /** Whether the port accepted a TCP connection at `checked_at`. */
+  reachable: boolean;
+}
+
+export interface ClusterNode {
+  node_id: string;
+  process: ProcessState;
+  /** Read from the live process's command line. Empty when it is not running:
+   *  the ports it would use are a guess, not an observation. */
+  endpoints: Endpoint[];
+  log_file: string;
+}
+
+export interface ClusterStatus {
+  root: string;
+  /** False when no cluster has ever been started in this checkout. */
+  initialized: boolean;
+  nodes: ClusterNode[];
+  running_nodes: number;
+  /** Nodes that are both alive and answering on at least one port. */
+  serving_nodes: number;
+  checked_at: string;
+}
+
+// ML types — these mirror `models.rs`.
+
 export interface ModelInfo {
+  id: string;
   name: string;
-  algorithm: string;
-  accuracy: number;
-  training_samples: number;
-  feature_count: number;
-  size_bytes: number;
+  model_type: string;
   status: ModelStatus;
+  accuracy?: number | null;
   created_at: string;
-  updated_at: string;
-  version: string;
-  description?: string;
+  last_trained?: string | null;
+  features: string[];
+  target?: string | null;
+  metadata: Record<string, any>;
 }
 
 export enum ModelStatus {
   Training = 'Training',
   Ready = 'Ready',
   Error = 'Error',
-  Deprecated = 'Deprecated',
+  Deleted = 'Deleted',
 }
 
 export interface MLFunctionInfo {
   name: string;
+  category: string;
   description: string;
-  category: MLFunctionCategory;
   parameters: MLParameter[];
-  return_type: string;
-  examples: string[];
-}
-
-export enum MLFunctionCategory {
-  ModelManagement = 'ModelManagement',
-  Statistical = 'Statistical',
-  SupervisedLearning = 'SupervisedLearning',
-  UnsupervisedLearning = 'UnsupervisedLearning',
-  BoostingAlgorithms = 'BoostingAlgorithms',
-  FeatureEngineering = 'FeatureEngineering',
-  VectorOperations = 'VectorOperations',
-  TimeSeries = 'TimeSeries',
-  NLP = 'NLP',
+  example: string;
 }
 
 export interface MLParameter {
@@ -128,7 +215,6 @@ export interface MLParameter {
   param_type: string;
   required: boolean;
   description: string;
-  default_value?: any;
 }
 
 // API Response wrapper
@@ -189,7 +275,9 @@ export interface ChartConfig {
   type: 'line' | 'bar' | 'pie' | 'scatter' | 'area';
   title: string;
   x_axis: string;
-  y_axis: string | string[];
+  /** A single column. Multi-series charts are not built here, and the union
+   *  that allowed for them only ever produced invalid row-index expressions. */
+  y_axis: string;
   color_scheme: string[];
   show_legend: boolean;
   show_grid: boolean;

@@ -1,0 +1,30 @@
+[package]
+name = "orbit-llm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Provider-agnostic LLM and embedding layer for Orbit: registry, router, fallback, and cost accounting"
+repository.workspace = true
+
+[dependencies]
+orbit-shared = { path = "../shared" }
+
+tokio = { workspace = true }
+async-trait.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+reqwest = { version = "0.12", features = ["json"] }
+fastrand = "2.0"
+toml = "0.9"
+
+[dev-dependencies]
+tokio-test.workspace = true
+
+[lib]
+name = "orbit_llm"
+path = "src/lib.rs"

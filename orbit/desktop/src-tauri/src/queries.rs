@@ -1,810 +1,496 @@
+//! Statement execution and history.
+//!
+//! The executor is deliberately thin: it resolves a connection to a live
+//! session, applies the caller's timeout, times the call and records what
+//! happened. Everything protocol-specific — how a statement is sent and how a
+//! response becomes rows — lives with the session in [`crate::connections`].
+
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::time::Instant;
-use tracing::{error, info, warn};
+use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant};
 
-use crate::connections::{Connection, ConnectionError, ConnectionManager, ConnectionType};
+use crate::connections::{ConnectionError, ConnectionManager};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+/// Upper bound on retained history entries, so a long session cannot grow the
+/// executor without limit.
+const MAX_HISTORY_ENTRIES: usize = 500;
+
+/// Timeout applied when the caller does not specify one.
+const DEFAULT_STATEMENT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// One statement to run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryRequest {
     pub connection_id: String,
     pub query: String,
-    pub query_type: QueryType,
-    pub timeout: u64,
+    /// Statement timeout in milliseconds. Falls back to 30s when absent.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct QueryResult {
-    pub success: bool,
-    pub data: Option<QueryResultData>,
-    pub error: Option<String>,
-    pub execution_time: f64,
-    pub rows_affected: Option<u64>,
+impl QueryRequest {
+    fn timeout(&self) -> Duration {
+        self.timeout_ms
+            .filter(|ms| *ms > 0)
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT_STATEMENT_TIMEOUT)
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct QueryResultData {
-    pub columns: Vec<ColumnInfo>,
-    pub rows: Vec<HashMap<String, serde_json::Value>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+/// A result set column.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnInfo {
     pub name: String,
+    /// The server's own type name, not a guess derived from a Debug rendering.
     #[serde(rename = "type")]
     pub column_type: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum QueryType {
-    SQL,
-    OrbitQL,
-    Redis,
-    MySQL,
-    CQL,
-    Cypher,
-    AQL,
-}
-
-impl Default for QueryResult {
-    fn default() -> Self {
-        QueryResult {
-            success: false,
-            data: None,
-            error: None,
-            execution_time: 0.0,
-            rows_affected: None,
+impl ColumnInfo {
+    pub fn new(name: impl Into<String>, column_type: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            column_type: column_type.into(),
         }
     }
 }
 
-// Query executor for handling database queries
+/// What a statement did.
+///
+/// Kept distinct because "10 rows came back" and "10 rows were modified" are
+/// different facts, and a single `rows_affected` field cannot tell them apart.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum StatementOutcome {
+    /// A result set of `rows` rows was returned.
+    Returned { rows: u64 },
+    /// `rows` rows were inserted, updated or deleted.
+    Affected { rows: u64 },
+    /// Completed with no row count of either kind (DDL, `SET`, Redis replies).
+    Completed,
+}
+
+/// Rows and columns produced by one statement.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryPayload {
+    pub columns: Vec<ColumnInfo>,
+    pub rows: Vec<HashMap<String, serde_json::Value>>,
+    pub outcome: StatementOutcome,
+}
+
+impl QueryPayload {
+    /// A statement that returned a result set.
+    pub fn returned(
+        columns: Vec<ColumnInfo>,
+        rows: Vec<HashMap<String, serde_json::Value>>,
+    ) -> Self {
+        let count = rows.len() as u64;
+        Self {
+            columns,
+            rows,
+            outcome: StatementOutcome::Returned { rows: count },
+        }
+    }
+
+    /// A statement that modified rows without returning any.
+    pub fn affected(rows: u64) -> Self {
+        Self {
+            columns: Vec::new(),
+            rows: Vec::new(),
+            outcome: StatementOutcome::Affected { rows },
+        }
+    }
+
+    /// A single scalar reply rendered as a one-cell grid.
+    pub fn single_value(
+        column: &str,
+        column_type: &str,
+        value: serde_json::Value,
+    ) -> Self {
+        let row = std::iter::once((column.to_string(), value)).collect();
+        Self {
+            columns: vec![ColumnInfo::new(column, column_type)],
+            rows: vec![row],
+            outcome: StatementOutcome::Completed,
+        }
+    }
+
+    /// Shape a JSON response from an HTTP-backed protocol.
+    ///
+    /// Handles the two layouts Orbit's REST surface and the ArangoDB/Neo4j
+    /// compatible endpoints use: `data.rows` as positional arrays alongside
+    /// `data.columns`, or a plain array of objects under `data`/`result`.
+    pub fn from_json(payload: &serde_json::Value) -> Self {
+        let body = payload
+            .get("data")
+            .or_else(|| payload.get("result"))
+            .unwrap_or(payload);
+
+        if let Some(rows) = body.as_array() {
+            return Self::from_object_array(rows);
+        }
+
+        let columns: Vec<ColumnInfo> = body
+            .get("columns")
+            .and_then(|c| c.as_array())
+            .map(|columns| {
+                columns
+                    .iter()
+                    .map(|column| {
+                        let name = column
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .unwrap_or_default();
+                        let ty = column
+                            .get("type")
+                            .or_else(|| column.get("data_type"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("unknown");
+                        ColumnInfo::new(name, ty)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let Some(rows) = body.get("rows").and_then(|r| r.as_array()) else {
+            return Self {
+                columns,
+                rows: Vec::new(),
+                outcome: StatementOutcome::Completed,
+            };
+        };
+
+        // Positional rows need the column list to be named; objects carry their
+        // own keys and are taken as-is.
+        let shaped: Vec<HashMap<String, serde_json::Value>> = rows
+            .iter()
+            .map(|row| match row {
+                serde_json::Value::Array(values) => values
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| {
+                        let name = columns
+                            .get(index)
+                            .map(|c| c.name.clone())
+                            .unwrap_or_else(|| format!("column_{index}"));
+                        (name, value.clone())
+                    })
+                    .collect(),
+                serde_json::Value::Object(fields) => {
+                    fields.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+                }
+                other => std::iter::once(("result".to_string(), other.clone())).collect(),
+            })
+            .collect();
+
+        Self::returned(columns, shaped)
+    }
+
+    fn from_object_array(rows: &[serde_json::Value]) -> Self {
+        // Column order follows first appearance across all rows, so a key that
+        // only shows up in a later row still gets a column.
+        let mut columns: Vec<ColumnInfo> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        for row in rows {
+            if let Some(fields) = row.as_object() {
+                for key in fields.keys() {
+                    if seen.insert(key.clone()) {
+                        columns.push(ColumnInfo::new(key.clone(), "unknown"));
+                    }
+                }
+            }
+        }
+
+        if columns.is_empty() {
+            columns.push(ColumnInfo::new("result", "unknown"));
+        }
+
+        let shaped = rows
+            .iter()
+            .map(|row| match row.as_object() {
+                Some(fields) => fields.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                None => std::iter::once(("result".to_string(), row.clone())).collect(),
+            })
+            .collect();
+
+        Self::returned(columns, shaped)
+    }
+}
+
+/// The outcome of one execution, as sent to the UI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryResult {
+    pub success: bool,
+    pub data: Option<QueryPayload>,
+    pub error: Option<String>,
+    /// Wall-clock time for the statement, in milliseconds.
+    pub execution_time_ms: f64,
+    /// Set when the result needs a caveat the grid alone cannot convey.
+    pub notice: Option<String>,
+}
+
+impl QueryResult {
+    fn failure(error: String, elapsed: Duration) -> Self {
+        Self {
+            success: false,
+            data: None,
+            error: Some(error),
+            execution_time_ms: elapsed.as_secs_f64() * 1000.0,
+            notice: None,
+        }
+    }
+}
+
+/// One past execution, retained for the history panel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryHistoryEntry {
+    pub id: String,
+    pub connection_id: String,
+    pub query: String,
+    pub executed_at: DateTime<Utc>,
+    pub execution_time_ms: f64,
+    pub success: bool,
+    pub error: Option<String>,
+    pub outcome: Option<StatementOutcome>,
+}
+
+/// Runs statements and remembers what was run.
 #[derive(Default)]
 pub struct QueryExecutor {
-    history: Vec<QueryRequest>,
+    history: VecDeque<QueryHistoryEntry>,
 }
 
 impl QueryExecutor {
+    #[must_use]
     pub fn new() -> Self {
-        QueryExecutor {
-            history: Vec::new(),
-        }
+        Self::default()
     }
 
-    pub async fn execute_query(
+    /// Execute one statement against the request's connection.
+    ///
+    /// A failing statement is reported as an unsuccessful [`QueryResult`], not
+    /// an `Err`: the UI needs the timing and the message either way. `Err` is
+    /// reserved for not being able to reach the connection at all.
+    ///
+    /// # Errors
+    /// Returns the connection failure when no session could be opened.
+    pub async fn execute(
         &mut self,
         request: QueryRequest,
-        connection_manager: &ConnectionManager,
-    ) -> Result<QueryResult, String> {
-        let start_time = Instant::now();
+        connections: &ConnectionManager,
+    ) -> Result<QueryResult, ConnectionError> {
+        let session = connections.session(&request.connection_id).await?;
+        let connection_type = session.lock().await.connection_type();
+        let timeout = request.timeout();
 
-        // Get connection info
-        let connection = connection_manager
-            .get_connection(&request.connection_id)
-            .await
-            .ok_or_else(|| "Connection not found".to_string())?;
-
-        let result = match connection.info.connection_type {
-            ConnectionType::PostgreSQL => {
-                self.execute_postgresql_query(&request, &connection).await
-            }
-            ConnectionType::OrbitQL => self.execute_orbitql_query(&request, &connection).await,
-            ConnectionType::Redis => self.execute_redis_query(&request, &connection).await,
-            ConnectionType::MySQL => self.execute_mysql_query(&request, &connection).await,
-            ConnectionType::CQL => self.execute_cql_query(&request, &connection).await,
-            ConnectionType::Cypher => self.execute_cypher_query(&request, &connection).await,
-            ConnectionType::AQL => self.execute_aql_query(&request, &connection).await,
-            ConnectionType::FlightSQL => self.execute_flightsql_query(&request, &connection).await,
-            ConnectionType::OrbitWire => self.execute_orbitwire_query(&request, &connection).await,
+        let started = Instant::now();
+        let outcome = {
+            let mut guard = session.lock().await;
+            tokio::time::timeout(timeout, guard.execute(&request.query)).await
         };
+        let elapsed = started.elapsed();
 
-        let execution_time = start_time.elapsed().as_secs_f64() * 1000.0; // Convert to milliseconds
+        connections.record_use(&request.connection_id).await;
 
-        // Store in history
-        self.history.push(request.clone());
-        if self.history.len() > 1000 {
-            self.history.remove(0);
-        }
-
-        match result {
-            Ok(mut res) => {
-                res.execution_time = execution_time;
-                Ok(res)
-            }
-            Err(e) => Ok(QueryResult {
-                success: false,
-                data: None,
-                error: Some(e),
-                execution_time,
-                rows_affected: None,
-            }),
-        }
-    }
-
-    async fn execute_postgresql_query(
-        &self,
-        request: &QueryRequest,
-        connection: &crate::connections::Connection,
-    ) -> Result<QueryResult, String> {
-        use crate::connections::PostgreSQLConnection;
-
-        // Create connection
-        let pg_conn = PostgreSQLConnection::new(&connection.info)
-            .await
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        // Execute query
-        let rows = pg_conn
-            .execute_query(&request.query)
-            .await
-            .map_err(|e| format!("Query execution failed: {}", e))?;
-
-        if rows.is_empty() {
-            return Ok(QueryResult {
+        let result = match outcome {
+            Ok(Ok(payload)) => QueryResult {
                 success: true,
-                data: Some(QueryResultData {
-                    columns: vec![],
-                    rows: vec![],
+                execution_time_ms: elapsed.as_secs_f64() * 1000.0,
+                // Results that came from a server endpoint known to answer with
+                // canned rows are labelled, so example data is never mistaken
+                // for the contents of the database.
+                notice: (!connection_type.is_native_wire_protocol()).then(|| {
+                    format!(
+                        "{connection_type} runs over the REST API, whose SQL and catalog \
+                         handlers in orbit-server still return fixed example rows. Treat these \
+                         results as a protocol check, not as data."
+                    )
                 }),
+                data: Some(payload),
                 error: None,
-                execution_time: 0.0,
-                rows_affected: Some(0),
-            });
-        }
-
-        // Extract column information from first row
-        let columns: Vec<ColumnInfo> = rows[0]
-            .columns()
-            .iter()
-            .map(|col| ColumnInfo {
-                name: col.name().to_string(),
-                column_type: format!("{:?}", col.type_()),
-            })
-            .collect();
-
-        // Convert rows to JSON
-        let mut result_rows = Vec::new();
-        for row in rows {
-            let mut row_map = HashMap::new();
-            for col in &columns {
-                // Try to extract value based on type
-                let value = if col.column_type.contains("Int4") || col.column_type.contains("Int8")
-                {
-                    // Try i64 first, then i32
-                    row.try_get::<_, i64>(col.name.as_str())
-                        .map(|v| serde_json::Value::Number(v.into()))
-                        .or_else(|_| {
-                            row.try_get::<_, i32>(col.name.as_str())
-                                .map(|v| serde_json::Value::Number(v.into()))
-                        })
-                        .unwrap_or(serde_json::Value::Null)
-                } else if col.column_type.contains("Float4") || col.column_type.contains("Float8") {
-                    row.try_get::<_, f64>(col.name.as_str())
-                        .map(|v| {
-                            serde_json::Number::from_f64(v)
-                                .map(serde_json::Value::Number)
-                                .unwrap_or(serde_json::Value::Null)
-                        })
-                        .unwrap_or(serde_json::Value::Null)
-                } else if col.column_type.contains("Bool") {
-                    row.try_get::<_, bool>(col.name.as_str())
-                        .map(serde_json::Value::Bool)
-                        .unwrap_or(serde_json::Value::Null)
-                } else {
-                    // Default to string
-                    row.try_get::<_, String>(col.name.as_str())
-                        .map(serde_json::Value::String)
-                        .unwrap_or(serde_json::Value::Null)
-                };
-                row_map.insert(col.name.clone(), value);
-            }
-            result_rows.push(row_map);
-        }
-
-        let rows_count = result_rows.len();
-        Ok(QueryResult {
-            success: true,
-            data: Some(QueryResultData {
-                columns,
-                rows: result_rows,
-            }),
-            error: None,
-            execution_time: 0.0,
-            rows_affected: Some(rows_count as u64),
-        })
-    }
-
-    async fn execute_orbitql_query(
-        &self,
-        request: &QueryRequest,
-        connection: &crate::connections::Connection,
-    ) -> Result<QueryResult, String> {
-        use crate::connections::OrbitQLConnection;
-
-        // Create connection
-        let orbit_conn = OrbitQLConnection::new(&connection.info)
-            .await
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        // Execute query
-        let result = orbit_conn
-            .execute_orbitql(&request.query)
-            .await
-            .map_err(|e| format!("Query execution failed: {}", e))?;
-
-        // Parse result
-        if let Some(data) = result.get("data") {
-            if let Some(rows) = data.as_array() {
-                let columns = if let Some(first_row) = rows.first().and_then(|r| r.as_object()) {
-                    first_row
-                        .keys()
-                        .map(|k| ColumnInfo {
-                            name: k.clone(),
-                            column_type: "unknown".to_string(),
-                        })
-                        .collect()
-                } else {
-                    vec![]
-                };
-
-                let result_rows: Vec<HashMap<String, serde_json::Value>> = rows
-                    .iter()
-                    .filter_map(|r| r.as_object().map(|o| o.clone().into_iter().collect()))
-                    .collect();
-
-                Ok(QueryResult {
-                    success: true,
-                    data: Some(QueryResultData {
-                        columns,
-                        rows: result_rows,
-                    }),
-                    error: None,
-                    execution_time: 0.0,
-                    rows_affected: Some(rows.len() as u64),
-                })
-            } else {
-                Ok(QueryResult {
-                    success: true,
-                    data: Some(QueryResultData {
-                        columns: vec![],
-                        rows: vec![],
-                    }),
-                    error: None,
-                    execution_time: 0.0,
-                    rows_affected: Some(0),
-                })
-            }
-        } else {
-            Err("Invalid response format".to_string())
-        }
-    }
-
-    async fn execute_redis_query(
-        &self,
-        request: &QueryRequest,
-        connection: &crate::connections::Connection,
-    ) -> Result<QueryResult, String> {
-        use crate::connections::RedisConnection;
-
-        // Create connection
-        let redis_conn = RedisConnection::new(&connection.info)
-            .await
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        // Parse Redis command
-        let parts: Vec<&str> = request.query.trim().split_whitespace().collect();
-        if parts.is_empty() {
-            return Err("Empty Redis command".to_string());
-        }
-
-        let cmd = parts[0].to_uppercase();
-        let args: Vec<&str> = parts[1..].to_vec();
-
-        // Execute command
-        let value = redis_conn
-            .execute_redis_command(&cmd, &args)
-            .await
-            .map_err(|e| format!("Redis command failed: {}", e))?;
-
-        // Convert Redis value to JSON
-        let json_value = match value {
-            redis::Value::Nil => serde_json::Value::Null,
-            redis::Value::Int(i) => serde_json::Value::Number(i.into()),
-            redis::Value::Data(data) => String::from_utf8(data)
-                .map(serde_json::Value::String)
-                .unwrap_or(serde_json::Value::Null),
-            redis::Value::Bulk(arr) => serde_json::Value::Array(
-                arr.into_iter()
-                    .map(|v| match v {
-                        redis::Value::Int(i) => serde_json::Value::Number(i.into()),
-                        redis::Value::Data(d) => String::from_utf8(d)
-                            .map(serde_json::Value::String)
-                            .unwrap_or(serde_json::Value::Null),
-                        _ => serde_json::Value::String(format!("{:?}", v)),
-                    })
-                    .collect(),
+            },
+            Ok(Err(e)) => QueryResult::failure(e.to_string(), elapsed),
+            Err(_) => QueryResult::failure(
+                format!("Statement timed out after {timeout:?}"),
+                elapsed,
             ),
-            redis::Value::Status(s) => serde_json::Value::String(s),
-            redis::Value::Okay => serde_json::Value::String("OK".to_string()),
         };
 
-        let mut row = HashMap::new();
-        row.insert("result".to_string(), json_value);
-
-        Ok(QueryResult {
-            success: true,
-            data: Some(QueryResultData {
-                columns: vec![ColumnInfo {
-                    name: "result".to_string(),
-                    column_type: "redis_value".to_string(),
-                }],
-                rows: vec![row],
-            }),
-            error: None,
-            execution_time: 0.0,
-            rows_affected: Some(1),
-        })
+        self.record(&request, &result);
+        Ok(result)
     }
 
-    async fn execute_mysql_query(
-        &self,
-        request: &QueryRequest,
-        connection: &Connection,
-    ) -> Result<QueryResult, String> {
-        use crate::connections::MySQLConnection;
-
-        // Create connection
-        let mysql_conn = MySQLConnection::new(&connection.info)
-            .await
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        // Execute query
-        let rows = mysql_conn
-            .execute_query(&request.query)
-            .await
-            .map_err(|e| format!("Query execution failed: {}", e))?;
-
-        if rows.is_empty() {
-            return Ok(QueryResult {
-                success: true,
-                data: Some(QueryResultData {
-                    columns: vec![],
-                    rows: vec![],
-                }),
-                error: None,
-                execution_time: 0.0,
-                rows_affected: Some(0),
-            });
-        }
-
-        // Extract column information and convert rows
-        // MySQL rows need to be converted to JSON format
-        let mut result_rows = Vec::new();
-        let mut columns = Vec::new();
-
-        // Get column info from first row
-        if let Some(first_row) = rows.first() {
-            // MySQL rows have columns accessible via index
-            // We'll need to extract column names from the row structure
-            for i in 0..first_row.len() {
-                columns.push(ColumnInfo {
-                    name: format!("column_{}", i),
-                    column_type: "unknown".to_string(),
-                });
-            }
-        }
-
-        // Convert rows to JSON
-        for row in rows {
-            let mut row_map = HashMap::new();
-            for (i, col) in columns.iter().enumerate() {
-                // Try to extract value as string first
-                let value = if let Some(val) = row.get::<String, _>(i) {
-                    serde_json::Value::String(val)
-                } else if let Some(val) = row.get::<i64, _>(i) {
-                    serde_json::Value::Number(val.into())
-                } else if let Some(val) = row.get::<f64, _>(i) {
-                    serde_json::Number::from_f64(val)
-                        .map(serde_json::Value::Number)
-                        .unwrap_or(serde_json::Value::Null)
-                } else if let Some(val) = row.get::<bool, _>(i) {
-                    serde_json::Value::Bool(val)
-                } else {
-                    serde_json::Value::Null
-                };
-                row_map.insert(col.name.clone(), value);
-            }
-            result_rows.push(row_map);
-        }
-
-        let rows_count = result_rows.len();
-        Ok(QueryResult {
-            success: true,
-            data: Some(QueryResultData {
-                columns,
-                rows: result_rows,
-            }),
-            error: None,
-            execution_time: 0.0,
-            rows_affected: Some(rows_count as u64),
-        })
-    }
-
-    async fn execute_cql_query(
-        &self,
-        request: &QueryRequest,
-        connection: &Connection,
-    ) -> Result<QueryResult, String> {
-        use crate::connections::CQLConnection;
-
-        // Create connection
-        let cql_conn = CQLConnection::new(&connection.info)
-            .await
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        // Execute query
-        let result = cql_conn
-            .execute_cql(&request.query)
-            .await
-            .map_err(|e| format!("Query execution failed: {}", e))?;
-
-        // Parse CQL result
-        if let Some(data) = result.get("data") {
-            if let Some(rows) = data.as_array() {
-                let columns = if let Some(first_row) = rows.first().and_then(|r| r.as_object()) {
-                    first_row
-                        .keys()
-                        .map(|k| ColumnInfo {
-                            name: k.clone(),
-                            column_type: "unknown".to_string(),
-                        })
-                        .collect()
-                } else {
-                    vec![]
-                };
-
-                let result_rows: Vec<HashMap<String, serde_json::Value>> = rows
-                    .iter()
-                    .filter_map(|r| r.as_object().map(|o| o.clone().into_iter().collect()))
-                    .collect();
-
-                Ok(QueryResult {
-                    success: true,
-                    data: Some(QueryResultData {
-                        columns,
-                        rows: result_rows,
-                    }),
-                    error: None,
-                    execution_time: 0.0,
-                    rows_affected: Some(rows.len() as u64),
-                })
-            } else {
-                Ok(QueryResult {
-                    success: true,
-                    data: Some(QueryResultData {
-                        columns: vec![],
-                        rows: vec![],
-                    }),
-                    error: None,
-                    execution_time: 0.0,
-                    rows_affected: Some(0),
-                })
-            }
-        } else {
-            Err("Invalid CQL response format".to_string())
-        }
-    }
-
-    async fn execute_cypher_query(
-        &self,
-        request: &QueryRequest,
-        connection: &Connection,
-    ) -> Result<QueryResult, String> {
-        use crate::connections::CypherConnection;
-
-        // Create connection
-        let cypher_conn = CypherConnection::new(&connection.info)
-            .await
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        // Execute query
-        let result = cypher_conn
-            .execute_cypher(&request.query)
-            .await
-            .map_err(|e| format!("Query execution failed: {}", e))?;
-
-        // Parse Cypher result
-        if let Some(results) = result.get("results").and_then(|r| r.as_array()) {
-            if let Some(first_result) = results.first() {
-                if let Some(data) = first_result.get("data").and_then(|d| d.as_array()) {
-                    let mut result_rows = Vec::new();
-                    let mut columns = Vec::new();
-
-                    for row_data in data {
-                        if let Some(row) = row_data.get("row").and_then(|r| r.as_array()) {
-                            let mut row_map = HashMap::new();
-                            for (i, value) in row.iter().enumerate() {
-                                let col_name = format!("column_{}", i);
-                                if !columns.iter().any(|c: &ColumnInfo| c.name == col_name) {
-                                    columns.push(ColumnInfo {
-                                        name: col_name.clone(),
-                                        column_type: "unknown".to_string(),
-                                    });
-                                }
-                                row_map.insert(col_name, value.clone());
-                            }
-                            result_rows.push(row_map);
-                        }
-                    }
-
-                    let rows_count = result_rows.len();
-                    Ok(QueryResult {
-                        success: true,
-                        data: Some(QueryResultData {
-                            columns,
-                            rows: result_rows,
-                        }),
-                        error: None,
-                        execution_time: 0.0,
-                        rows_affected: Some(rows_count as u64),
-                    })
-                } else {
-                    Ok(QueryResult {
-                        success: true,
-                        data: Some(QueryResultData {
-                            columns: vec![],
-                            rows: vec![],
-                        }),
-                        error: None,
-                        execution_time: 0.0,
-                        rows_affected: Some(0),
-                    })
-                }
-            } else {
-                Ok(QueryResult {
-                    success: true,
-                    data: Some(QueryResultData {
-                        columns: vec![],
-                        rows: vec![],
-                    }),
-                    error: None,
-                    execution_time: 0.0,
-                    rows_affected: Some(0),
-                })
-            }
-        } else {
-            Err("Invalid Cypher response format".to_string())
-        }
-    }
-
-    async fn execute_aql_query(
-        &self,
-        request: &QueryRequest,
-        connection: &Connection,
-    ) -> Result<QueryResult, String> {
-        use crate::connections::AQLConnection;
-
-        // Create connection
-        let aql_conn = AQLConnection::new(&connection.info)
-            .await
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        // Execute query
-        let result = aql_conn
-            .execute_aql(&request.query)
-            .await
-            .map_err(|e| format!("Query execution failed: {}", e))?;
-
-        // Parse AQL result
-        if let Some(result_array) = result.get("result").and_then(|r| r.as_array()) {
-            let mut result_rows = Vec::new();
-            let mut columns = Vec::new();
-
-            for (idx, row_value) in result_array.iter().enumerate() {
-                if let Some(row_obj) = row_value.as_object() {
-                    let mut row_map = HashMap::new();
-                    for (key, value) in row_obj {
-                        if !columns.iter().any(|c: &ColumnInfo| &c.name == key) {
-                            columns.push(ColumnInfo {
-                                name: key.clone(),
-                                column_type: "unknown".to_string(),
-                            });
-                        }
-                        row_map.insert(key.clone(), value.clone());
-                    }
-                    result_rows.push(row_map);
-                } else {
-                    // Single value result
-                    let col_name = "result".to_string();
-                    if idx == 0 && columns.is_empty() {
-                        columns.push(ColumnInfo {
-                            name: col_name.clone(),
-                            column_type: "unknown".to_string(),
-                        });
-                    }
-                    let mut row_map = HashMap::new();
-                    row_map.insert(col_name, row_value.clone());
-                    result_rows.push(row_map);
-                }
-            }
-
-            let rows_count = result_rows.len();
-            Ok(QueryResult {
-                success: true,
-                data: Some(QueryResultData {
-                    columns,
-                    rows: result_rows,
-                }),
-                error: None,
-                execution_time: 0.0,
-                rows_affected: Some(rows_count as u64),
-            })
-        } else {
-            Ok(QueryResult {
-                success: true,
-                data: Some(QueryResultData {
-                    columns: vec![],
-                    rows: vec![],
-                }),
-                error: None,
-                execution_time: 0.0,
-                rows_affected: Some(0),
-            })
-        }
-    }
-
-    async fn execute_flightsql_query(
-        &self,
-        request: &QueryRequest,
-        connection: &Connection,
-    ) -> Result<QueryResult, String> {
-        use crate::connections::FlightSQLConnection;
-
-        // Create connection
-        let flight_conn = FlightSQLConnection::new(&connection.info)
-            .await
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        // Execute query
-        let result = flight_conn
-            .execute_query(&request.query)
-            .await
-            .map_err(|e| format!("Query execution failed: {}", e))?;
-
-        // Parse result
-        self.parse_json_result(result)
-    }
-
-    async fn execute_orbitwire_query(
-        &self,
-        request: &QueryRequest,
-        connection: &Connection,
-    ) -> Result<QueryResult, String> {
-        use crate::connections::OrbitWireConnection;
-
-        // Create connection
-        let wire_conn = OrbitWireConnection::new(&connection.info)
-            .await
-            .map_err(|e| format!("Failed to connect: {}", e))?;
-
-        // Execute query
-        let result = wire_conn
-            .execute_query(&request.query)
-            .await
-            .map_err(|e| format!("Query execution failed: {}", e))?;
-
-        // Parse result
-        self.parse_json_result(result)
-    }
-
-    fn parse_json_result(&self, result: serde_json::Value) -> Result<QueryResult, String> {
-        if let Some(data) = result.get("data") {
-            let mut columns = Vec::new();
-            let mut result_rows = Vec::new();
-
-            // Extract columns
-            if let Some(cols) = data.get("columns").and_then(|c| c.as_array()) {
-                for col in cols {
-                    if let Some(name) = col.get("name").and_then(|n| n.as_str()) {
-                        columns.push(ColumnInfo {
-                            name: name.to_string(),
-                            column_type: col
-                                .get("type")
-                                .and_then(|t| t.as_str())
-                                .unwrap_or("unknown")
-                                .to_string(),
-                        });
-                    }
-                }
-            }
-
-            // Extract rows
-            if let Some(rows) = data.get("rows").and_then(|r| r.as_array()) {
-                for row in rows {
-                    if let Some(row_arr) = row.as_array() {
-                        let mut row_map = std::collections::HashMap::new();
-                        for (i, value) in row_arr.iter().enumerate() {
-                            let col_name = columns
-                                .get(i)
-                                .map(|c| c.name.clone())
-                                .unwrap_or_else(|| format!("column_{}", i));
-                            row_map.insert(col_name, value.clone());
-                        }
-                        result_rows.push(row_map);
-                    }
-                }
-            }
-
-            let rows_count = result_rows.len();
-            Ok(QueryResult {
-                success: true,
-                data: Some(QueryResultData {
-                    columns,
-                    rows: result_rows,
-                }),
-                error: None,
-                execution_time: 0.0,
-                rows_affected: Some(rows_count as u64),
-            })
-        } else if let Some(error) = result.get("error") {
-            Err(error.to_string())
-        } else {
-            Ok(QueryResult {
-                success: true,
-                data: Some(QueryResultData {
-                    columns: vec![],
-                    rows: vec![],
-                }),
-                error: None,
-                execution_time: 0.0,
-                rows_affected: Some(0),
-            })
-        }
-    }
-
-    pub async fn explain_query(
+    /// Ask the server for a plan without running the statement.
+    ///
+    /// Plain `EXPLAIN` — not `EXPLAIN ANALYZE`, which would execute the
+    /// statement and so could delete rows the user only wanted to inspect.
+    /// `analyze` opts into that behaviour explicitly.
+    ///
+    /// # Errors
+    /// Returns the connection failure when no session could be opened.
+    pub async fn explain(
         &mut self,
         request: QueryRequest,
-        connection_manager: &ConnectionManager,
-    ) -> Result<QueryResult, String> {
-        // For PostgreSQL, prepend EXPLAIN ANALYZE
-        let connection = connection_manager
-            .get_connection(&request.connection_id)
-            .await
-            .ok_or_else(|| "Connection not found".to_string())?;
+        analyze: bool,
+        connections: &ConnectionManager,
+    ) -> Result<QueryResult, ConnectionError> {
+        use crate::connections::ConnectionType;
 
-        match connection.info.connection_type {
-            ConnectionType::PostgreSQL | ConnectionType::MySQL => {
-                let explain_query = format!("EXPLAIN ANALYZE {}", request.query);
-                let mut explain_request = request;
-                explain_request.query = explain_query;
-                self.execute_query(explain_request, connection_manager)
-                    .await
-            }
-            _ => Ok(QueryResult {
-                success: false,
-                data: None,
-                error: Some("EXPLAIN not supported for this connection type".to_string()),
-                execution_time: 0.0,
-                rows_affected: None,
-            }),
+        let session = connections.session(&request.connection_id).await?;
+        let connection_type = session.lock().await.connection_type();
+
+        if !matches!(
+            connection_type,
+            ConnectionType::PostgreSQL | ConnectionType::MySQL
+        ) {
+            return Ok(QueryResult::failure(
+                format!("EXPLAIN is not supported for {connection_type} connections"),
+                Duration::ZERO,
+            ));
         }
+
+        let prefix = if analyze { "EXPLAIN ANALYZE" } else { "EXPLAIN" };
+        self.execute(
+            QueryRequest {
+                query: format!("{prefix} {}", request.query),
+                ..request
+            },
+            connections,
+        )
+        .await
     }
 
-    pub async fn get_history(
-        &self,
-        connection_id: &str,
-        limit: usize,
-    ) -> Result<Vec<QueryRequest>, String> {
-        let filtered: Vec<QueryRequest> = self
-            .history
+    /// Most recent entries for a connection, newest first.
+    pub fn history(&self, connection_id: &str, limit: usize) -> Vec<QueryHistoryEntry> {
+        self.history
             .iter()
-            .filter(|q| q.connection_id == connection_id)
             .rev()
+            .filter(|entry| entry.connection_id == connection_id)
             .take(limit)
             .cloned()
-            .collect();
+            .collect()
+    }
 
-        Ok(filtered)
+    fn record(&mut self, request: &QueryRequest, result: &QueryResult) {
+        if self.history.len() >= MAX_HISTORY_ENTRIES {
+            self.history.pop_front();
+        }
+
+        self.history.push_back(QueryHistoryEntry {
+            id: uuid::Uuid::new_v4().to_string(),
+            connection_id: request.connection_id.clone(),
+            query: request.query.clone(),
+            executed_at: Utc::now(),
+            execution_time_ms: result.execution_time_ms,
+            success: result.success,
+            error: result.error.clone(),
+            outcome: result.data.as_ref().map(|d| d.outcome.clone()),
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(connection_id: &str, query: &str) -> QueryRequest {
+        QueryRequest {
+            connection_id: connection_id.to_string(),
+            query: query.to_string(),
+            timeout_ms: None,
+        }
+    }
+
+    fn ok_result() -> QueryResult {
+        QueryResult {
+            success: true,
+            data: Some(QueryPayload::affected(3)),
+            error: None,
+            execution_time_ms: 1.0,
+            notice: None,
+        }
+    }
+
+    #[test]
+    fn timeout_falls_back_to_the_default_and_ignores_zero() {
+        assert_eq!(request("c", "SELECT 1").timeout(), DEFAULT_STATEMENT_TIMEOUT);
+
+        let mut req = request("c", "SELECT 1");
+        req.timeout_ms = Some(0);
+        assert_eq!(req.timeout(), DEFAULT_STATEMENT_TIMEOUT);
+
+        req.timeout_ms = Some(1500);
+        assert_eq!(req.timeout(), Duration::from_millis(1500));
+    }
+
+    #[test]
+    fn returned_and_affected_row_counts_stay_distinguishable() {
+        let returned = QueryPayload::returned(
+            vec![ColumnInfo::new("id", "int4")],
+            vec![std::iter::once(("id".to_string(), serde_json::json!(1))).collect()],
+        );
+        assert_eq!(returned.outcome, StatementOutcome::Returned { rows: 1 });
+        assert_eq!(
+            QueryPayload::affected(7).outcome,
+            StatementOutcome::Affected { rows: 7 }
+        );
+    }
+
+    #[test]
+    fn history_is_bounded_and_filtered_by_connection() {
+        let mut executor = QueryExecutor::new();
+        for i in 0..(MAX_HISTORY_ENTRIES + 25) {
+            executor.record(&request("a", &format!("SELECT {i}")), &ok_result());
+        }
+        executor.record(&request("b", "SELECT 'other'"), &ok_result());
+
+        assert_eq!(executor.history.len(), MAX_HISTORY_ENTRIES);
+        assert_eq!(executor.history("b", 10).len(), 1);
+
+        let newest = executor.history("a", 3);
+        assert_eq!(newest.len(), 3);
+        // Newest first: the last statement recorded for "a" leads.
+        assert_eq!(
+            newest[0].query,
+            format!("SELECT {}", MAX_HISTORY_ENTRIES + 24)
+        );
+    }
+
+    #[test]
+    fn positional_json_rows_are_named_from_the_column_list() {
+        let payload = QueryPayload::from_json(&serde_json::json!({
+            "data": {
+                "columns": [
+                    { "name": "id", "data_type": "integer" },
+                    { "name": "label", "type": "varchar" }
+                ],
+                "rows": [[1, "one"], [2, "two"]]
+            }
+        }));
+
+        assert_eq!(payload.columns.len(), 2);
+        assert_eq!(payload.columns[0].column_type, "integer");
+        assert_eq!(payload.outcome, StatementOutcome::Returned { rows: 2 });
+        assert_eq!(payload.rows[1].get("label"), Some(&serde_json::json!("two")));
+    }
+
+    #[test]
+    fn arrays_of_objects_keep_every_key_as_a_column() {
+        let payload = QueryPayload::from_json(&serde_json::json!({
+            "result": [ { "a": 1 }, { "a": 2, "b": 3 } ]
+        }));
+
+        let names: Vec<&str> = payload.columns.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, vec!["a", "b"]);
+        assert_eq!(payload.outcome, StatementOutcome::Returned { rows: 2 });
+    }
+
+    #[test]
+    fn a_response_with_no_rows_reports_completion_not_an_empty_result_set() {
+        let payload = QueryPayload::from_json(&serde_json::json!({ "data": { "ok": true } }));
+        assert_eq!(payload.outcome, StatementOutcome::Completed);
+        assert!(payload.rows.is_empty());
     }
 }

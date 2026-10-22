@@ -5,11 +5,13 @@
 //!
 //! ## Modules
 //!
+//! - `cancel`: Cancelling a statement that is already running
 //! - `formatting`: Common formatting utilities for query results
 //! - `fts`: Shared full-text search engine with SIMD/GPU acceleration
 //! - `graph_algorithms`: Shared graph algorithms (BFS, DFS, Dijkstra, PageRank, etc.)
 //! - `storage`: Common storage abstractions
 
+pub mod cancel;
 pub mod formatting;
 #[cfg(feature = "fts")]
 pub mod fts;

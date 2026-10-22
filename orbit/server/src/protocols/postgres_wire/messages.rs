@@ -67,6 +67,14 @@ pub enum FrontendMessage {
     Query {
         query: String,
     },
+    /// Cancel the query running on the connection with this key.
+    ///
+    /// Arrives on a connection of its own, in the startup packet's shape
+    /// rather than as a tagged message, which is why it is parsed separately.
+    CancelRequest {
+        process_id: i32,
+        secret_key: Vec<u8>,
+    },
     /// Parse (prepared statement)
     Parse {
         statement_name: String,
@@ -115,6 +123,13 @@ pub enum FrontendMessage {
     SASLResponse {
         data: Bytes,
     },
+    /// A GSSAPI token from the client.
+    ///
+    /// Carried by the same `'p'` message as a password, and told apart from
+    /// one only by what the server last asked for — see [`PasswordMessageKind`].
+    GSSResponse {
+        data: Bytes,
+    },
     CopyData {
         data: Bytes,
     },
@@ -128,6 +143,10 @@ pub enum FrontendMessage {
     FunctionCall {
         oid: i32,
         args: Vec<Option<Bytes>>,
+        /// Format of each argument: 0 text, 1 binary.
+        arg_formats: Vec<i16>,
+        /// Format wanted for the result.
+        result_format: i16,
     },
 }
 
@@ -227,6 +246,11 @@ pub enum BackendMessage {
         format: i8,
         column_formats: Vec<i16>,
     },
+    /// Both directions at once, which is how replication streams.
+    CopyBothResponse {
+        format: i8,
+        column_formats: Vec<i16>,
+    },
     CopyData {
         data: Bytes,
     },
@@ -270,9 +294,34 @@ pub struct FieldDescription {
     pub format: i16,
 }
 
+/// What a `'p'` message means on this connection.
+///
+/// The protocol gives password messages, SASL responses and GSSAPI tokens the
+/// same `'p'` tag, and the only thing that distinguishes them is which
+/// `Authentication` request the server sent last. Guessing from the payload
+/// shape works for the first two because both are text, but a GSSAPI token is
+/// arbitrary binary: it usually contains a zero byte, so reading it as a C
+/// string truncates it, and the truncated token is rejected by the mechanism
+/// with an error that says nothing about why.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PasswordMessageKind {
+    /// A password or a SASL response.
+    #[default]
+    Credential,
+    /// A GSSAPI token, to be taken as raw bytes.
+    GssToken,
+}
+
 impl FrontendMessage {
-    /// Parse a frontend message from bytes
+    /// Parse a frontend message from bytes.
+    ///
+    /// Equivalent to [`Self::parse_as`] with [`PasswordMessageKind::Credential`].
     pub fn parse(buf: &mut BytesMut) -> ProtocolResult<Option<Self>> {
+        Self::parse_as(buf, PasswordMessageKind::Credential)
+    }
+
+    /// Parse a frontend message, reading `'p'` as `kind`.
+    pub fn parse_as(buf: &mut BytesMut, kind: PasswordMessageKind) -> ProtocolResult<Option<Self>> {
         if buf.len() < 5 {
             return Ok(None); // Need at least type byte + length
         }
@@ -285,8 +334,18 @@ impl FrontendMessage {
             if len >= 8 && buf.len() >= len {
                 // Check if this looks like a startup message
                 let protocol_version = (&buf[4..8]).get_i32();
-                if protocol_version == 196608 || protocol_version == 80877103 {
-                    // Valid startup or SSL request
+                // Every packet in the startup shape: a protocol-3 startup, and
+                // the SSL, GSS-encryption and cancel requests. Listing only
+                // two of them left a cancel request to be read as a tagged
+                // message, where its first length byte became the type byte
+                // and the packet was silently discarded.
+                let major = protocol_version >> 16;
+                use crate::protocols::postgres_server::pre_startup;
+                if major == 3
+                    || protocol_version == pre_startup::CANCEL_REQUEST
+                    || protocol_version == pre_startup::SSL_REQUEST
+                    || protocol_version == pre_startup::GSSENC_REQUEST
+                {
                     return Self::parse_startup(buf);
                 }
             }
@@ -330,7 +389,12 @@ impl FrontendMessage {
             b'c' => Self::parse_copy_done(&mut cursor)?,
             b'f' => Self::parse_copy_fail(&mut cursor)?,
             b'F' => Self::parse_function_call(&mut cursor)?,
-            b'p' => Self::parse_sasl_or_password(&mut cursor)?,
+            b'p' => match kind {
+                PasswordMessageKind::Credential => Self::parse_sasl_or_password(&mut cursor)?,
+                PasswordMessageKind::GssToken => FrontendMessage::GSSResponse {
+                    data: Bytes::copy_from_slice(&msg_data),
+                },
+            },
             _ => {
                 return Err(ProtocolError::PostgresError(format!(
                     "Unknown message type: {}",
@@ -357,6 +421,19 @@ impl FrontendMessage {
             buf.advance(len);
             // Return SSL request message
             return Ok(Some(FrontendMessage::SSLRequest));
+        }
+
+        // A cancel request has the startup packet's shape but carries a key
+        // rather than parameters. Reading it as a startup message would have
+        // produced a connection with no user and no database.
+        if protocol_version == crate::protocols::postgres_server::pre_startup::CANCEL_REQUEST {
+            let process_id = cursor.get_i32();
+            let secret_key = buf[12..len].to_vec();
+            buf.advance(len);
+            return Ok(Some(FrontendMessage::CancelRequest {
+                process_id,
+                secret_key,
+            }));
         }
 
         let mut parameters = HashMap::new();
@@ -474,28 +551,74 @@ impl FrontendMessage {
     }
 
     /// Parse function call
+    ///
+    /// The message carries an argument *format code* array between the OID and
+    /// the arguments, and a result format code after them. Reading the
+    /// argument count where the format count sits — as this used to — misreads
+    /// every call a real client sends.
     fn parse_function_call(cursor: &mut Cursor<&[u8]>) -> ProtocolResult<Self> {
         let oid = cursor.get_i32();
-        let num_args = cursor.get_i16();
 
+        let num_formats = cursor.get_i16();
+        if num_formats < 0 {
+            return Err(ProtocolError::PostgresError(
+                "negative format count in FunctionCall".to_string(),
+            ));
+        }
+        let mut arg_formats = Vec::with_capacity(num_formats as usize);
+        for _ in 0..num_formats {
+            if cursor.remaining() < 2 {
+                return Err(ProtocolError::PostgresError(
+                    "Unexpected EOF in FunctionCall format codes".to_string(),
+                ));
+            }
+            arg_formats.push(cursor.get_i16());
+        }
+
+        let num_args = cursor.get_i16();
+        if num_args < 0 {
+            return Err(ProtocolError::PostgresError(
+                "negative argument count in FunctionCall".to_string(),
+            ));
+        }
         let mut args = Vec::with_capacity(num_args as usize);
         for _ in 0..num_args {
+            if cursor.remaining() < 4 {
+                return Err(ProtocolError::PostgresError(
+                    "Unexpected EOF in FunctionCall args".to_string(),
+                ));
+            }
             let arg_len = cursor.get_i32();
             if arg_len == -1 {
                 args.push(None);
-            } else {
-                let mut arg_data = vec![0u8; arg_len as usize];
-                if cursor.remaining() < arg_len as usize {
-                    return Err(ProtocolError::PostgresError(
-                        "Unexpected EOF in FunctionCall args".to_string(),
-                    ));
-                }
-                cursor.copy_to_slice(&mut arg_data);
-                args.push(Some(Bytes::from(arg_data)));
+                continue;
             }
+            let wanted = usize::try_from(arg_len).map_err(|_| {
+                ProtocolError::PostgresError("negative argument length".to_string())
+            })?;
+            if cursor.remaining() < wanted {
+                return Err(ProtocolError::PostgresError(
+                    "Unexpected EOF in FunctionCall args".to_string(),
+                ));
+            }
+            let mut arg_data = vec![0u8; wanted];
+            cursor.copy_to_slice(&mut arg_data);
+            args.push(Some(Bytes::from(arg_data)));
         }
 
-        Ok(FrontendMessage::FunctionCall { oid, args })
+        // A client that omits the trailing result format means text.
+        let result_format = if cursor.remaining() >= 2 {
+            cursor.get_i16()
+        } else {
+            0
+        };
+
+        Ok(FrontendMessage::FunctionCall {
+            oid,
+            args,
+            arg_formats,
+            result_format,
+        })
     }
 
     /// Parse password or SASL response
@@ -599,7 +722,26 @@ impl BackendMessage {
                         buf.put_i32(12);
                         buf.put_slice(data);
                     }
-                    _ => buf.put_i32(0), // TODO: Implement other auth types
+                    // Every remaining variant used to fall into a catch-all
+                    // that wrote 0 — and 0 is `AuthenticationOk`. Asking for
+                    // GSSAPI therefore told the client it had already
+                    // authenticated, and it proceeded as a logged-in session.
+                    // There is no arm here that is not a real request code.
+                    AuthenticationResponse::KerberosV5 => buf.put_i32(2),
+                    AuthenticationResponse::SCMCredential => buf.put_i32(6),
+                    AuthenticationResponse::GSS => buf.put_i32(7),
+                    AuthenticationResponse::GSSContinue { data } => {
+                        buf.put_i32(8);
+                        buf.put_slice(data);
+                    }
+                    AuthenticationResponse::SSPI => buf.put_i32(9),
+                    // Certificate authentication has no request code: the
+                    // certificate was presented during the TLS handshake, so
+                    // by the time this is reached the client is already
+                    // authenticated and the message really is `Ok`. Spelled
+                    // out rather than reached by falling through, because the
+                    // two differ only in intent.
+                    AuthenticationResponse::Certificate => buf.put_i32(0),
                 }
 
                 let len = buf.len() - pos;
@@ -799,6 +941,19 @@ impl BackendMessage {
                 let len = buf.len() - pos;
                 buf[pos..pos + 4].copy_from_slice(&(len as i32).to_be_bytes());
             }
+            BackendMessage::CopyBothResponse {
+                format,
+                column_formats,
+            } => {
+                buf.put_u8(b'W');
+                let length = 4 + 1 + 2 + column_formats.len() * 2;
+                buf.put_i32(length as i32);
+                buf.put_i8(*format);
+                buf.put_i16(column_formats.len() as i16);
+                for column_format in column_formats {
+                    buf.put_i16(*column_format);
+                }
+            }
             BackendMessage::CopyOutResponse {
                 format,
                 column_formats,
@@ -870,6 +1025,10 @@ pub mod type_oids {
     pub const INT2: i32 = 21;
     pub const INT4: i32 = 23;
     pub const TEXT: i32 = 25;
+    pub const NUMERIC: i32 = 1700;
+    pub const BPCHAR: i32 = 1042;
+    pub const DATE: i32 = 1082;
+    pub const TIME: i32 = 1083;
     pub const FLOAT4: i32 = 700;
     pub const FLOAT8: i32 = 701;
     pub const JSON: i32 = 114;
@@ -892,4 +1051,49 @@ pub mod type_oids {
     pub const VECTOR: i32 = 16385; // vector type
     pub const HALFVEC: i32 = 16386; // halfvec type (half precision)
     pub const SPARSEVEC: i32 = 16387; // sparsevec type
+}
+
+#[cfg(test)]
+mod fastpath_message_tests {
+    use super::*;
+
+    #[test]
+    fn a_function_call_keeps_its_formats_and_result_format() {
+        // oid, one format code (binary), one argument of 4 bytes, result
+        // format binary.
+        let mut body = Vec::new();
+        body.extend_from_slice(&7i32.to_be_bytes());
+        body.extend_from_slice(&1i16.to_be_bytes());
+        body.extend_from_slice(&1i16.to_be_bytes());
+        body.extend_from_slice(&1i16.to_be_bytes());
+        body.extend_from_slice(&4i32.to_be_bytes());
+        body.extend_from_slice(&42i32.to_be_bytes());
+        body.extend_from_slice(&1i16.to_be_bytes());
+
+        let mut framed = vec![b'F'];
+        framed.extend_from_slice(&((body.len() + 4) as i32).to_be_bytes());
+        framed.extend_from_slice(&body);
+
+        match FrontendMessage::parse(&mut BytesMut::from(&framed[..]))
+            .expect("parses")
+            .expect("a message")
+        {
+            FrontendMessage::FunctionCall {
+                oid,
+                args,
+                arg_formats,
+                result_format,
+            } => {
+                assert_eq!(oid, 7);
+                assert_eq!(arg_formats, vec![1]);
+                assert_eq!(args.len(), 1);
+                assert_eq!(
+                    &args[0].as_ref().expect("an argument")[..],
+                    &42i32.to_be_bytes()
+                );
+                assert_eq!(result_format, 1, "the result format was dropped");
+            }
+            other => panic!("expected a FunctionCall, got {other:?}"),
+        }
+    }
 }

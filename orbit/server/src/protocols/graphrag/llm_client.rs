@@ -1,348 +1,227 @@
-//! LLM Client for GraphRAG
+//! GraphRAG's adapter onto the shared LLM runtime.
 //!
-//! This module provides LLM client implementations for various providers
-//! including OpenAI, Anthropic, Ollama, and local LLM APIs.
+//! This module used to carry three hand-rolled HTTP clients (OpenAI, Ollama, and a generic local
+//! endpoint), an Anthropic branch that returned `Err("Anthropic client not yet implemented")`, and
+//! a factory that accepted `temperature`/`max_tokens` and discarded them. All of that now lives in
+//! [`orbit_llm`], which additionally provides the timeouts, retries, circuit breaking, fallback,
+//! connection pooling, and cost accounting the hand-rolled clients had none of.
+//!
+//! What remains here is the translation between GraphRAG's request vocabulary and the router's.
 
+use crate::llm::runtime;
+use orbit_llm::{ChatRequest, GenerationParams, Message, ModelProfile, Router};
 use orbit_shared::graphrag::LLMProvider;
 use orbit_shared::{OrbitError, OrbitResult};
 use serde::{Deserialize, Serialize};
 
-/// LLM generation request
-#[derive(Debug, Clone)]
+/// A GraphRAG generation request.
+#[derive(Debug, Clone, Default)]
 pub struct LLMGenerationRequest {
-    /// Prompt text
+    /// Prompt text.
     pub prompt: String,
-    /// Maximum tokens to generate
+    /// Upper bound on generated tokens; falls back to the profile's setting.
     pub max_tokens: Option<u32>,
-    /// Temperature for generation
+    /// Sampling temperature; falls back to the profile's setting.
     pub temperature: Option<f32>,
-    /// System message (optional)
+    /// System message, when the caller frames the exchange.
     pub system_message: Option<String>,
 }
 
-/// LLM generation response
+/// A GraphRAG generation response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LLMGenerationResponse {
-    /// Generated text
+    /// Generated text.
     pub text: String,
-    /// Tokens used
+    /// Tokens used, when the provider reported them.
+    ///
+    /// Stays `None` for providers that do not report counts. A zero here would assert the request
+    /// was free.
     pub tokens_used: Option<u32>,
-    /// Finish reason
+    /// Why generation stopped, when reported.
     pub finish_reason: Option<String>,
-    /// Model used
+    /// Model that answered, as reported by the provider.
     pub model: String,
+    /// Profile that served the request.
+    ///
+    /// Differs from the requested profile when a fallback fired, so a caller can tell that its
+    /// answer came from the backup model.
+    pub profile: String,
 }
 
-/// LLM client trait
-#[async_trait::async_trait]
-pub trait LLMClient: Send + Sync {
-    /// Generate text from a prompt
-    async fn generate(&self, request: LLMGenerationRequest) -> OrbitResult<LLMGenerationResponse>;
+impl From<LLMGenerationRequest> for ChatRequest {
+    fn from(request: LLMGenerationRequest) -> Self {
+        let messages = request
+            .system_message
+            .map(Message::system)
+            .into_iter()
+            .chain(std::iter::once(Message::user(request.prompt)))
+            .collect();
 
-    /// Get the model name
-    fn model_name(&self) -> &str;
-}
-
-/// OpenAI LLM client
-pub struct OpenAIClient {
-    api_key: String,
-    model: String,
-    base_url: String,
-    default_temperature: f32,
-    default_max_tokens: u32,
-}
-
-impl OpenAIClient {
-    pub fn new(api_key: String, model: String) -> Self {
-        Self {
-            api_key,
-            model,
-            base_url: "https://api.openai.com/v1".to_string(),
-            default_temperature: 0.7,
-            default_max_tokens: 2048,
+        ChatRequest {
+            messages,
+            params: GenerationParams {
+                temperature: request.temperature,
+                max_tokens: request.max_tokens,
+                ..Default::default()
+            },
         }
     }
 }
 
-#[async_trait::async_trait]
-impl LLMClient for OpenAIClient {
-    async fn generate(&self, request: LLMGenerationRequest) -> OrbitResult<LLMGenerationResponse> {
-        use reqwest::Client;
+/// Generate through a named profile in the shared runtime.
+///
+/// `profile` names a registered model; `None` uses the runtime default. The router applies the
+/// profile's timeout, retry policy, circuit breaker, and fallback chain.
+///
+/// # Errors
+///
+/// Returns [`OrbitError`] when no model is configured, the named profile is unknown, or every
+/// profile in the fallback chain failed.
+pub async fn generate(
+    profile: Option<&str>,
+    request: LLMGenerationRequest,
+) -> OrbitResult<LLMGenerationResponse> {
+    generate_with_router(runtime().router(), profile, request).await
+}
 
-        let client = Client::new();
-        let url = format!("{}/chat/completions", self.base_url);
+/// Generate through an explicitly supplied router.
+///
+/// The seam that lets GraphRAG be exercised against a test router instead of the process-wide one.
+///
+/// # Errors
+///
+/// As [`generate`].
+pub async fn generate_with_router(
+    router: &Router,
+    profile: Option<&str>,
+    request: LLMGenerationRequest,
+) -> OrbitResult<LLMGenerationResponse> {
+    let response = router
+        .generate(profile, request.into())
+        .await
+        .map_err(OrbitError::from)?;
 
-        let mut messages = Vec::new();
-        if let Some(system_msg) = request.system_message {
-            messages.push(serde_json::json!({
-                "role": "system",
-                "content": system_msg
-            }));
-        }
-        messages.push(serde_json::json!({
-            "role": "user",
-            "content": request.prompt
-        }));
+    Ok(LLMGenerationResponse {
+        text: response.text,
+        tokens_used: response.usage.total(),
+        finish_reason: response
+            .finish_reason
+            .map(|reason| reason.as_wire().to_string()),
+        model: response.model,
+        profile: response.profile,
+    })
+}
 
-        let body = serde_json::json!({
-            "model": self.model,
-            "messages": messages,
-            "temperature": request.temperature.unwrap_or(self.default_temperature),
-            "max_tokens": request.max_tokens.unwrap_or(self.default_max_tokens),
-        });
+/// Register a legacy provider description into the shared runtime, returning its profile name.
+///
+/// GraphRAG actors carry `LLMProvider` values in their serialized state. Registering one makes it
+/// routable without changing that representation.
+///
+/// # Errors
+///
+/// Returns [`OrbitError`] if the provider is not usable — most often a missing credential.
+pub fn register_legacy_provider(name: &str, provider: &LLMProvider) -> OrbitResult<String> {
+    let profile: ModelProfile =
+        orbit_llm::profile_from_legacy(name, provider).map_err(OrbitError::from)?;
+    let profile_name = profile.name.clone();
+    runtime()
+        .registry()
+        .register(profile)
+        .map_err(OrbitError::from)?;
+    Ok(profile_name)
+}
 
-        let response = client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| OrbitError::internal(format!("OpenAI API request failed: {}", e)))?;
+/// Whether a profile is registered in the shared runtime.
+///
+/// Lets a caller degrade cleanly — skipping an optional LLM step — instead of issuing a request
+/// that is certain to fail.
+#[must_use]
+pub fn profile_is_available(name: &str) -> bool {
+    runtime().registry().contains(name)
+}
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(OrbitError::internal(format!(
-                "OpenAI API error ({}): {}",
-                status, error_text
-            )));
-        }
+/// Resolve which profile a GraphRAG call should use.
+///
+/// Prefers, in order: the profile the query names, a legacy provider the actor carries under that
+/// name (registered on demand), and finally the runtime default.
+///
+/// # Errors
+///
+/// Returns [`OrbitError`] when a named provider cannot be registered.
+pub fn resolve_profile(
+    requested: Option<&str>,
+    legacy_providers: &std::collections::HashMap<String, LLMProvider>,
+) -> OrbitResult<Option<String>> {
+    let Some(name) = requested else {
+        return Ok(None);
+    };
 
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| OrbitError::internal(format!("Failed to parse OpenAI response: {}", e)))?;
-
-        let text = json["choices"][0]["message"]["content"]
-            .as_str()
-            .ok_or_else(|| OrbitError::internal("Invalid OpenAI response format"))?
-            .to_string();
-
-        let tokens_used = json["usage"]["total_tokens"].as_u64().map(|v| v as u32);
-
-        Ok(LLMGenerationResponse {
-            text,
-            tokens_used,
-            finish_reason: json["choices"][0]["finish_reason"]
-                .as_str()
-                .map(|s| s.to_string()),
-            model: self.model.clone(),
-        })
+    if runtime().registry().contains(name) {
+        return Ok(Some(name.to_string()));
     }
 
-    fn model_name(&self) -> &str {
-        &self.model
+    match legacy_providers.get(name) {
+        Some(provider) => register_legacy_provider(name, provider).map(Some),
+        // Not registered and not carried by the actor: hand the name to the router so the error
+        // names the profile the caller actually asked for.
+        None => Ok(Some(name.to_string())),
     }
 }
 
-/// Ollama LLM client
-pub struct OllamaClient {
-    model: String,
-    base_url: String,
-    default_temperature: f32,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use orbit_llm::{ChatRequest as _ChatRequest, Role};
 
-impl OllamaClient {
-    pub fn new(model: String) -> Self {
-        Self {
-            model,
-            base_url: "http://localhost:11434".to_string(),
-            default_temperature: 0.7,
+    fn request() -> LLMGenerationRequest {
+        LLMGenerationRequest {
+            prompt: "what is orbit?".into(),
+            max_tokens: Some(256),
+            temperature: Some(0.3),
+            system_message: Some("answer from the graph".into()),
         }
     }
 
-    pub fn with_endpoint(model: String, endpoint: String) -> Self {
-        Self {
-            model,
-            base_url: endpoint,
-            default_temperature: 0.7,
-        }
-    }
-}
+    #[test]
+    fn a_graphrag_request_becomes_a_two_turn_chat() {
+        let chat: _ChatRequest = request().into();
 
-#[async_trait::async_trait]
-impl LLMClient for OllamaClient {
-    async fn generate(&self, request: LLMGenerationRequest) -> OrbitResult<LLMGenerationResponse> {
-        use reqwest::Client;
-
-        let client = Client::new();
-        let url = format!("{}/api/generate", self.base_url);
-
-        let mut prompt = request.prompt;
-        if let Some(system_msg) = request.system_message {
-            prompt = format!("{}\n\n{}", system_msg, prompt);
-        }
-
-        let body = serde_json::json!({
-            "model": self.model,
-            "prompt": prompt,
-            "stream": false,
-            "options": {
-                "temperature": request.temperature.unwrap_or(self.default_temperature),
-                "num_predict": request.max_tokens.unwrap_or(2048),
-            }
-        });
-
-        let response = client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| OrbitError::internal(format!("Ollama API request failed: {}", e)))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(OrbitError::internal(format!(
-                "Ollama API error ({}): {}",
-                status, error_text
-            )));
-        }
-
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| OrbitError::internal(format!("Failed to parse Ollama response: {}", e)))?;
-
-        let text = json["response"]
-            .as_str()
-            .ok_or_else(|| OrbitError::internal("Invalid Ollama response format"))?
-            .to_string();
-
-        Ok(LLMGenerationResponse {
-            text,
-            tokens_used: None,
-            finish_reason: Some("stop".to_string()),
-            model: self.model.clone(),
-        })
+        assert_eq!(chat.messages.len(), 2);
+        assert_eq!(chat.messages[0].role, Role::System);
+        assert_eq!(chat.messages[0].content, "answer from the graph");
+        assert_eq!(chat.messages[1].role, Role::User);
+        assert_eq!(chat.messages[1].content, "what is orbit?");
     }
 
-    fn model_name(&self) -> &str {
-        &self.model
-    }
-}
-
-/// Local LLM client (generic HTTP API)
-pub struct LocalLLMClient {
-    endpoint: String,
-    model: String,
-    default_temperature: f32,
-    default_max_tokens: u32,
-}
-
-impl LocalLLMClient {
-    pub fn new(endpoint: String, model: String) -> Self {
-        Self {
-            endpoint,
-            model,
-            default_temperature: 0.7,
-            default_max_tokens: 2048,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl LLMClient for LocalLLMClient {
-    async fn generate(&self, request: LLMGenerationRequest) -> OrbitResult<LLMGenerationResponse> {
-        use reqwest::Client;
-
-        let client = Client::new();
-
-        let mut prompt = request.prompt;
-        if let Some(system_msg) = request.system_message {
-            prompt = format!("{}\n\n{}", system_msg, prompt);
-        }
-
-        // Try OpenAI-compatible format first
-        let body = serde_json::json!({
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "temperature": request.temperature.unwrap_or(self.default_temperature),
-            "max_tokens": request.max_tokens.unwrap_or(self.default_max_tokens),
-        });
-
-        let response = client
-            .post(&self.endpoint)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| OrbitError::internal(format!("Local LLM API request failed: {}", e)))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(OrbitError::internal(format!(
-                "Local LLM API error ({}): {}",
-                status, error_text
-            )));
-        }
-
-        let json: serde_json::Value = response.json().await.map_err(|e| {
-            OrbitError::internal(format!("Failed to parse local LLM response: {}", e))
-        })?;
-
-        // Try OpenAI-compatible format
-        let text = if let Some(text) = json["choices"][0]["message"]["content"].as_str() {
-            text.to_string()
-        } else if let Some(text) = json["response"].as_str() {
-            text.to_string()
-        } else if let Some(text) = json["text"].as_str() {
-            text.to_string()
-        } else {
-            return Err(OrbitError::internal("Invalid local LLM response format"));
-        };
-
-        Ok(LLMGenerationResponse {
-            text,
-            tokens_used: json["usage"]["total_tokens"].as_u64().map(|v| v as u32),
-            finish_reason: json["choices"][0]["finish_reason"]
-                .as_str()
-                .map(|s| s.to_string()),
-            model: self.model.clone(),
-        })
+    #[test]
+    fn generation_parameters_reach_the_request_instead_of_being_dropped() {
+        let chat: _ChatRequest = request().into();
+        assert_eq!(chat.params.temperature, Some(0.3));
+        assert_eq!(chat.params.max_tokens, Some(256));
     }
 
-    fn model_name(&self) -> &str {
-        &self.model
-    }
-}
-
-/// Create LLM client from provider configuration
-pub fn create_llm_client(provider: &LLMProvider) -> OrbitResult<Box<dyn LLMClient>> {
-    match provider {
-        LLMProvider::OpenAI {
-            api_key,
-            model,
-            temperature: _,
-            max_tokens: _,
-        } => Ok(Box::new(OpenAIClient::new(api_key.clone(), model.clone()))),
-        LLMProvider::Ollama {
-            model,
-            temperature: _,
-        } => Ok(Box::new(OllamaClient::new(model.clone()))),
-        LLMProvider::Local {
-            endpoint,
-            model,
-            temperature: _,
-            max_tokens: _,
-        } => Ok(Box::new(LocalLLMClient::new(
-            endpoint.clone(),
-            model.clone(),
-        ))),
-        LLMProvider::Anthropic {
-            api_key: _,
-            model: _,
-            temperature: _,
-            max_tokens: _,
-        } => {
-            // TODO: Implement Anthropic client
-            Err(OrbitError::internal("Anthropic client not yet implemented"))
+    #[test]
+    fn an_absent_system_message_produces_a_single_turn() {
+        let chat: _ChatRequest = LLMGenerationRequest {
+            prompt: "hi".into(),
+            system_message: None,
+            ..Default::default()
         }
+        .into();
+
+        assert_eq!(chat.messages.len(), 1);
+        assert_eq!(chat.messages[0].role, Role::User);
+    }
+
+    #[test]
+    fn unset_parameters_stay_unset_so_the_profile_can_supply_them() {
+        let chat: _ChatRequest = LLMGenerationRequest {
+            prompt: "hi".into(),
+            ..Default::default()
+        }
+        .into();
+
+        assert_eq!(chat.params.temperature, None);
+        assert_eq!(chat.params.max_tokens, None);
     }
 }

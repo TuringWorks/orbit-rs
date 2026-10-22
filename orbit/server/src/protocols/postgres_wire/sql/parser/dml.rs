@@ -14,10 +14,11 @@ use crate::protocols::postgres_wire::sql::{
         Assignment, AssignmentTarget, ColumnRef, ConflictAction, ConflictTarget, CopyDirection,
         CopyFormat, CopyHeaderOption, CopyOnError, CopyOption, CopySource, CopyStatement,
         CopyTarget, DeleteStatement, DistinctClause, Expression, FromClause, InsertSource,
-        InsertStatement, JsonTable, JsonTableColumn, LimitClause, MergeAction, MergeInsert,
-        MergeInsertValues, MergeStatement, MergeUpdate, MergeWhenClause, NullsOrder,
-        OnConflictClause, OrderByItem, SelectItem, SelectStatement, SetOperation, SetOperator,
-        SortDirection, Statement, TableAlias, TraverseClause, TraverseDirection, UpdateStatement,
+        InsertStatement, JoinCondition, JoinType, JsonTable, JsonTableColumn, LimitClause,
+        MergeAction, MergeInsert, MergeInsertValues, MergeStatement, MergeUpdate, MergeWhenClause,
+        NullsOrder, OnConflictClause, OrderByItem, SelectItem, SelectStatement, SetOperation,
+        SetOperator, SortDirection, Statement, TableAlias, TraverseClause, TraverseDirection,
+        UpdateStatement,
     },
     lexer::Token,
     types::SqlValue,
@@ -66,10 +67,42 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     parser.expect(Token::Select)?;
 
-    // Parse DISTINCT clause
+    // Parse DISTINCT clause, including `DISTINCT ON (expr, ...)`.
     let distinct = if parser.matches(&[Token::Distinct]) {
         parser.advance()?;
-        Some(DistinctClause::Distinct)
+        if parser.matches(&[Token::On]) {
+            parser.advance()?;
+            if !parser.matches(&[Token::LeftParen]) {
+                return Err(ParseError {
+                    message: "Expected '(' after DISTINCT ON".to_string(),
+                    position: parser.position,
+                    expected: vec!["(".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+            parser.advance()?;
+            let mut keys = Vec::new();
+            loop {
+                keys.push(parse_expression_with_parser(parser)?);
+                if parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                } else {
+                    break;
+                }
+            }
+            if !parser.matches(&[Token::RightParen]) {
+                return Err(ParseError {
+                    message: "Expected ')' after DISTINCT ON list".to_string(),
+                    position: parser.position,
+                    expected: vec![")".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+            parser.advance()?;
+            Some(DistinctClause::DistinctOn(keys))
+        } else {
+            Some(DistinctClause::Distinct)
+        }
     } else {
         None
     };
@@ -164,7 +197,22 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
     // Parse FROM clause
     let from_clause = if parser.matches(&[Token::From]) {
         parser.advance()?;
-        Some(parse_from_clause(parser)?)
+        // `FROM a, b` is a cross join written with a comma, and
+        // `FROM a, LATERAL (...)` is how a lateral subquery is usually
+        // spelled. Parsing only one item left the comma as the start of a new
+        // statement.
+        let mut from = parse_from_clause(parser)?;
+        while parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+            let right = parse_from_clause(parser)?;
+            from = FromClause::Join {
+                left: Box::new(from),
+                join_type: JoinType::Cross,
+                right: Box::new(right),
+                condition: JoinCondition::On(Expression::Literal(SqlValue::Boolean(true))),
+            };
+        }
+        Some(from)
     } else {
         None
     };
@@ -701,6 +749,23 @@ fn parse_select_inner(parser: &mut SqlParser) -> ParseResult<SelectStatement> {
 
 /// Parse FROM clause
 fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
+    // `LATERAL (SELECT ...) alias`: the keyword marks a subquery that may read
+    // the rows to its left. Without it here the parser looked for a table name
+    // and reported "Expected table name".
+    let lateral = parser.matches(&[Token::Lateral]);
+    if lateral {
+        parser.advance()?;
+        let mut from = parse_from_clause(parser)?;
+        if let FromClause::Subquery {
+            lateral: ref mut flag,
+            ..
+        } = from
+        {
+            *flag = true;
+        }
+        return Ok(from);
+    }
+
     // Check for JSON_TABLE
     if let Some(Token::Identifier(name)) = &parser.current_token {
         if name.to_uppercase() == "JSON_TABLE" {
@@ -821,12 +886,21 @@ fn is_join_keyword(parser: &SqlParser) -> bool {
             | Some(Token::Right)
             | Some(Token::Full)
             | Some(Token::Cross)
+            | Some(Token::Natural)
     )
 }
 
 /// Parse a JOIN clause
 fn parse_join(parser: &mut SqlParser, left: FromClause) -> ParseResult<FromClause> {
     use crate::protocols::postgres_wire::sql::ast::{JoinCondition, JoinType};
+
+    // `NATURAL JOIN` takes no ON or USING: the columns both sides share are
+    // the condition. Without this the keyword ended the FROM clause and the
+    // rest of the statement was read as a new one.
+    let natural = parser.matches(&[Token::Natural]);
+    if natural {
+        parser.advance()?;
+    }
 
     // Determine join type
     let join_type = match &parser.current_token {
@@ -871,6 +945,8 @@ fn parse_join(parser: &mut SqlParser, left: FromClause) -> ParseResult<FromClaus
             parser.expect(Token::Join)?;
             JoinType::Cross
         }
+        // `NATURAL JOIN` with no INNER/LEFT/... in front is an inner join.
+        _ if natural => JoinType::Inner,
         _ => {
             return Err(ParseError {
                 message: "Expected JOIN keyword".to_string(),
@@ -898,7 +974,9 @@ fn parse_join(parser: &mut SqlParser, left: FromClause) -> ParseResult<FromClaus
     };
 
     // Parse join condition (ON or USING)
-    let condition = if join_type == JoinType::Cross {
+    let condition = if natural {
+        JoinCondition::Natural
+    } else if join_type == JoinType::Cross {
         // CROSS JOIN has no condition
         JoinCondition::Natural // Use Natural as a placeholder for no condition
     } else if parser.matches(&[Token::On]) {
@@ -1160,28 +1238,31 @@ fn parse_order_by_clause(parser: &mut SqlParser) -> ParseResult<Vec<OrderByItem>
             _ => None,
         };
 
-        // Parse optional NULLS FIRST/LAST
-        let nulls = if let Some(Token::Identifier(nulls_kw)) = &parser.current_token {
-            if nulls_kw.to_uppercase() == "NULLS" {
-                parser.advance()?;
-                if let Some(Token::Identifier(order)) = &parser.current_token {
-                    match order.to_uppercase().as_str() {
-                        "FIRST" => {
-                            parser.advance()?;
-                            Some(NullsOrder::First)
-                        }
-                        "LAST" => {
-                            parser.advance()?;
-                            Some(NullsOrder::Last)
-                        }
-                        _ => None,
-                    }
-                } else {
-                    None
+        // Parse optional NULLS FIRST/LAST.
+        //
+        // The lexer emits `NULLS`, `FIRST` and `LAST` as keyword tokens, so
+        // matching them as identifiers — which this did — never fired, and
+        // `ORDER BY x NULLS FIRST` failed to parse at all.
+        let is_nulls = matches!(&parser.current_token, Some(Token::Nulls))
+            || matches!(&parser.current_token, Some(Token::Identifier(word))
+                if word.eq_ignore_ascii_case("NULLS"));
+        let nulls = if is_nulls {
+            parser.advance()?;
+            let order = match &parser.current_token {
+                Some(Token::First) => Some(NullsOrder::First),
+                Some(Token::Last) => Some(NullsOrder::Last),
+                Some(Token::Identifier(word)) if word.eq_ignore_ascii_case("FIRST") => {
+                    Some(NullsOrder::First)
                 }
-            } else {
-                None
+                Some(Token::Identifier(word)) if word.eq_ignore_ascii_case("LAST") => {
+                    Some(NullsOrder::Last)
+                }
+                _ => None,
+            };
+            if order.is_some() {
+                parser.advance()?;
             }
+            order
         } else {
             None
         };

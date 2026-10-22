@@ -12,7 +12,7 @@ use orbit_client::OrbitClient;
 use orbit_shared::graphrag::{
     ContextItem, ContextSourceType, LLMProvider, RAGResponse, SearchStrategy,
 };
-use orbit_shared::{Addressable, OrbitError, OrbitResult};
+use orbit_shared::{Addressable, OrbitResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -631,17 +631,16 @@ impl GraphRAGActor {
         query: &GraphRAGQuery,
         context_items: &[ContextItem],
     ) -> OrbitResult<RAGResponse> {
-        use crate::protocols::graphrag::llm_client::{create_llm_client, LLMGenerationRequest};
+        use crate::protocols::graphrag::llm_client::{self, LLMGenerationRequest};
 
-        let llm_provider_name = query
+        // Prefer the profile the query names, then the actor's default; `None` lets the shared
+        // runtime pick its own default, so a deployment that configures one model needs no
+        // per-actor wiring at all.
+        let requested_profile = query
             .llm_provider
-            .as_ref()
-            .or(self.default_llm_provider.as_ref())
-            .ok_or_else(|| OrbitError::internal("No LLM provider configured"))?;
-
-        let llm_provider = self.llm_providers.get(llm_provider_name).ok_or_else(|| {
-            OrbitError::internal(format!("LLM provider '{llm_provider_name}' not found"))
-        })?;
+            .as_deref()
+            .or(self.default_llm_provider.as_deref());
+        let profile = llm_client::resolve_profile(requested_profile, &self.llm_providers)?;
 
         // Build context text from context items
         let context_text = if context_items.is_empty() {
@@ -667,31 +666,18 @@ impl GraphRAGActor {
             context_text, query.query_text
         );
 
-        // Create LLM client and generate response
-        let llm_client = create_llm_client(llm_provider)?;
-
+        // Generation parameters are left unset here: they live on the model profile, and the
+        // router merges them in. The previous code re-derived them by matching the provider enum a
+        // second time because the client factory discarded the ones it was given.
         let generation_request = LLMGenerationRequest {
             prompt,
-            max_tokens: match llm_provider {
-                LLMProvider::OpenAI { max_tokens, .. } => *max_tokens,
-                LLMProvider::Anthropic { max_tokens, .. } => *max_tokens,
-                LLMProvider::Local { max_tokens, .. } => *max_tokens,
-                LLMProvider::Ollama { .. } => Some(2048),
-            },
-            temperature: match llm_provider {
-                LLMProvider::OpenAI { temperature, .. } => *temperature,
-                LLMProvider::Anthropic { temperature, .. } => *temperature,
-                LLMProvider::Local { temperature, .. } => *temperature,
-                LLMProvider::Ollama { temperature, .. } => *temperature,
-            },
+            max_tokens: None,
+            temperature: None,
             system_message,
         };
 
         let start_time = std::time::Instant::now();
-        let llm_response = llm_client
-            .generate(generation_request)
-            .await
-            .map_err(|e| OrbitError::internal(format!("LLM generation failed: {}", e)))?;
+        let llm_response = llm_client::generate(profile.as_deref(), generation_request).await?;
         let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
         let citations = context_items
@@ -714,6 +700,12 @@ impl GraphRAGActor {
 
         let mut metadata = HashMap::new();
         metadata.insert("model".to_string(), serde_json::json!(llm_response.model));
+        // The profile that actually served the request, which differs from the one asked for when
+        // a fallback fired. A failover nobody can see is an outage nobody can see.
+        metadata.insert(
+            "llm_profile".to_string(),
+            serde_json::json!(llm_response.profile),
+        );
         if let Some(tokens) = llm_response.tokens_used {
             metadata.insert("tokens_used".to_string(), serde_json::json!(tokens));
         }

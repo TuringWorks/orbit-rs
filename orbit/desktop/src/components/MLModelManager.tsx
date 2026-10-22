@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { 
-  ModelInfo, 
-  MLFunctionInfo, 
-  Connection, 
-  ModelStatus, 
-  MLFunctionCategory 
+import {
+  ModelInfo,
+  MLFunctionInfo,
+  Connection,
+  ModelStatus,
 } from '@/types';
 import { TauriService } from '@/services/tauri';
 
@@ -135,7 +134,7 @@ const StatusIndicator = styled.div<{ status: ModelStatus }>`
       case ModelStatus.Ready: return '#107c10';
       case ModelStatus.Training: return '#ff8c00';
       case ModelStatus.Error: return '#d13438';
-      case ModelStatus.Deprecated: return '#5a5a5a';
+      case ModelStatus.Deleted: return '#5a5a5a';
       default: return '#5a5a5a';
     }
   }};
@@ -215,18 +214,22 @@ const CategoryCard = styled.div`
   overflow: hidden;
 `;
 
-const CategoryHeader = styled.div<{ category: MLFunctionCategory }>`
+/**
+ * Colours for the categories the backend currently emits. The category is a
+ * free-form string there, so anything unrecognised falls back to grey rather
+ * than being dropped.
+ */
+const CATEGORY_COLORS: Record<string, string> = {
+  Boosting: '#0078d4',
+  ModelManagement: '#107c10',
+  Statistical: '#d83b01',
+  FeatureEngineering: '#5c2d91',
+  VectorOperations: '#e81123',
+};
+
+const CategoryHeader = styled.div<{ category: string }>`
   padding: 12px 16px;
-  background: ${props => {
-    switch (props.category) {
-      case MLFunctionCategory.BoostingAlgorithms: return '#0078d4';
-      case MLFunctionCategory.ModelManagement: return '#107c10';
-      case MLFunctionCategory.Statistical: return '#d83b01';
-      case MLFunctionCategory.FeatureEngineering: return '#5c2d91';
-      case MLFunctionCategory.VectorOperations: return '#e81123';
-      default: return '#5a5a5a';
-    }
-  }};
+  background: ${props => CATEGORY_COLORS[props.category] ?? '#5a5a5a'};
   color: white;
   font-weight: 600;
   font-size: 14px;
@@ -346,54 +349,31 @@ export const MLModelManager: React.FC<MLModelManagerProps> = ({
     }
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  const formatAccuracy = (accuracy: number) => `${(accuracy * 100).toFixed(1)}%`;
+
+  /**
+   * Bucket functions by whatever category the backend reported.
+   *
+   * Built from the data rather than from a fixed list: a hardcoded set of
+   * categories silently dropped every function whose category was not in it.
+   */
+  const groupFunctionsByCategory = (): Record<string, MLFunctionInfo[]> =>
+    mlFunctions.reduce<Record<string, MLFunctionInfo[]>>((groups, func) => {
+      (groups[func.category] ??= []).push(func);
+      return groups;
+    }, {});
+
+  /** Prettier labels for the categories we know; others show as sent. */
+  const CATEGORY_LABELS: Record<string, string> = {
+    Boosting: 'Boosting Algorithms',
+    ModelManagement: 'Model Management',
+    Statistical: 'Statistical Functions',
+    FeatureEngineering: 'Feature Engineering',
+    VectorOperations: 'Vector Operations',
   };
 
-  const formatAccuracy = (accuracy: number) => {
-    return (accuracy * 100).toFixed(1) + '%';
-  };
-
-  const groupFunctionsByCategory = () => {
-    const groups: Record<MLFunctionCategory, MLFunctionInfo[]> = {
-      [MLFunctionCategory.ModelManagement]: [],
-      [MLFunctionCategory.Statistical]: [],
-      [MLFunctionCategory.SupervisedLearning]: [],
-      [MLFunctionCategory.UnsupervisedLearning]: [],
-      [MLFunctionCategory.BoostingAlgorithms]: [],
-      [MLFunctionCategory.FeatureEngineering]: [],
-      [MLFunctionCategory.VectorOperations]: [],
-      [MLFunctionCategory.TimeSeries]: [],
-      [MLFunctionCategory.NLP]: [],
-    };
-
-    for (const func of mlFunctions) {
-      groups[func.category].push(func);
-    }
-
-    return groups;
-  };
-
-  // Category display name mapping to reduce cognitive complexity
-  const categoryDisplayNames: Record<MLFunctionCategory, string> = {
-    [MLFunctionCategory.ModelManagement]: 'Model Management',
-    [MLFunctionCategory.Statistical]: 'Statistical Functions',
-    [MLFunctionCategory.SupervisedLearning]: 'Supervised Learning',
-    [MLFunctionCategory.UnsupervisedLearning]: 'Unsupervised Learning',
-    [MLFunctionCategory.BoostingAlgorithms]: 'Boosting Algorithms',
-    [MLFunctionCategory.FeatureEngineering]: 'Feature Engineering',
-    [MLFunctionCategory.VectorOperations]: 'Vector Operations',
-    [MLFunctionCategory.TimeSeries]: 'Time Series ML',
-    [MLFunctionCategory.NLP]: 'Natural Language Processing',
-  };
-
-  const getCategoryDisplayName = (category: MLFunctionCategory) => {
-    return categoryDisplayNames[category] || category;
-  };
+  const getCategoryDisplayName = (category: string) =>
+    CATEGORY_LABELS[category] ?? category;
 
   return (
     <Container className={className}>
@@ -456,36 +436,41 @@ export const MLModelManager: React.FC<MLModelManagerProps> = ({
             ) : (
               <ModelsGrid>
                 {models.map((model) => (
-                  <ModelCard key={model.name}>
+                  <ModelCard key={model.id || model.name}>
                     <ModelName>{model.name}</ModelName>
-                    
+
                     <ModelMeta>
-                      <ModelAlgorithm>{model.algorithm}</ModelAlgorithm>
+                      <ModelAlgorithm>{model.model_type}</ModelAlgorithm>
                       <StatusIndicator status={model.status} title={model.status} />
                     </ModelMeta>
 
                     <ModelStats>
                       <StatItem>
                         <span className="label">Accuracy</span>
-                        <span className="value">{formatAccuracy(model.accuracy)}</span>
+                        {/* An untrained model has no accuracy; "unknown" beats 0%. */}
+                        <span className="value">
+                          {model.accuracy === null || model.accuracy === undefined
+                            ? '—'
+                            : formatAccuracy(model.accuracy)}
+                        </span>
                       </StatItem>
                       <StatItem>
                         <span className="label">Features</span>
-                        <span className="value">{model.feature_count}</span>
+                        <span className="value">{model.features.length}</span>
                       </StatItem>
                       <StatItem>
-                        <span className="label">Training Samples</span>
-                        <span className="value">{model.training_samples.toLocaleString()}</span>
+                        <span className="label">Target</span>
+                        <span className="value">{model.target ?? '—'}</span>
                       </StatItem>
                       <StatItem>
-                        <span className="label">Size</span>
-                        <span className="value">{formatBytes(model.size_bytes)}</span>
+                        <span className="label">Last trained</span>
+                        <span className="value">
+                          {model.last_trained
+                            ? new Date(model.last_trained).toLocaleDateString()
+                            : 'never'}
+                        </span>
                       </StatItem>
                     </ModelStats>
-
-                    <div style={{ fontSize: '11px', color: '#888888', marginBottom: '8px' }}>
-                      Updated: {new Date(model.updated_at).toLocaleDateString()}
-                    </div>
 
                     <ModelActions>
                       <ActionButton>📊 View Details</ActionButton>
@@ -515,8 +500,8 @@ export const MLModelManager: React.FC<MLModelManagerProps> = ({
                   
                   return (
                     <CategoryCard key={category}>
-                      <CategoryHeader category={category as MLFunctionCategory}>
-                        {getCategoryDisplayName(category as MLFunctionCategory)} ({functions.length})
+                      <CategoryHeader category={category}>
+                        {getCategoryDisplayName(category)} ({functions.length})
                       </CategoryHeader>
                       <FunctionList>
                         {functions.map((func) => (

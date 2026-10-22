@@ -107,6 +107,7 @@ impl SqlParser {
             Some(Token::Insert) => self.parse_insert_statement(),
             Some(Token::Update) => self.parse_update_statement(),
             Some(Token::Delete) => self.parse_delete_statement(),
+            Some(Token::Explain) => self.parse_explain_statement(),
             Some(Token::Merge) => self.parse_merge_statement(),
             Some(Token::Copy) => self.parse_copy_statement(),
 
@@ -115,7 +116,11 @@ impl SqlParser {
             Some(Token::Revoke) => self.parse_revoke_statement(),
 
             // TCL Statements
-            Some(Token::Begin) => self.parse_begin_statement(),
+            // `START TRANSACTION` is the SQL-standard spelling of BEGIN, and is
+            // what several drivers send to open a transaction — tokio-postgres
+            // among them, so without it the driver's transaction API fails on
+            // its first call.
+            Some(Token::Begin) | Some(Token::Start) => self.parse_begin_statement(),
             Some(Token::Commit) => self.parse_commit_statement(),
             Some(Token::Rollback) => self.parse_rollback_statement(),
             Some(Token::Savepoint) => self.parse_savepoint_statement(),
@@ -804,6 +809,58 @@ impl SqlParser {
         dcl::parse_revoke(self)
     }
 
+    /// Parse `EXPLAIN [ANALYZE] [VERBOSE] <statement>`.
+    ///
+    /// The options are recorded but the plan is descriptive: this engine has no
+    /// cost model, so EXPLAIN reports what it will do rather than an estimate it
+    /// cannot compute.
+    fn parse_explain_statement(&mut self) -> ParseResult<Statement> {
+        use crate::protocols::postgres_wire::sql::ast::{ExplainFormat, ExplainStatement};
+
+        self.expect(Token::Explain)?;
+
+        let mut analyze = false;
+        let mut verbose = false;
+
+        // Both the bare form (`EXPLAIN ANALYZE ...`) and the parenthesised one
+        // (`EXPLAIN (ANALYZE, VERBOSE) ...`) are accepted.
+        if self.matches(&[Token::LeftParen]) {
+            self.advance()?;
+            while !self.matches(&[Token::RightParen]) && self.peek().is_some() {
+                match self.peek() {
+                    Some(Token::Analyze) => analyze = true,
+                    Some(Token::Verbose) => verbose = true,
+                    // Any other option is accepted and ignored rather than
+                    // failing the statement.
+                    _ => {}
+                }
+                self.advance()?;
+            }
+            self.expect(Token::RightParen)?;
+        } else {
+            if self.matches(&[Token::Analyze]) {
+                analyze = true;
+                self.advance()?;
+            }
+            if self.matches(&[Token::Verbose]) {
+                verbose = true;
+                self.advance()?;
+            }
+        }
+
+        let statement = self.parse_statement()?;
+
+        Ok(Statement::Explain(ExplainStatement {
+            analyze,
+            verbose,
+            costs: false,
+            buffers: false,
+            timing: false,
+            format: ExplainFormat::Text,
+            statement: Box::new(statement),
+        }))
+    }
+
     fn parse_begin_statement(&mut self) -> ParseResult<Statement> {
         tcl::parse_begin(self)
     }
@@ -907,5 +964,32 @@ impl SqlParser {
 impl Default for SqlParser {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod parse_shape_tests {
+    use super::SqlParser;
+
+    /// Statements the conformance harness found the parser rejecting.
+    #[test]
+    fn parses_the_clauses_a_client_writes() {
+        for sql in [
+            "SELECT id FROM t ORDER BY id NULLS FIRST",
+            "SELECT id FROM t ORDER BY id DESC NULLS LAST",
+            "SELECT id FROM t ORDER BY name NULLS FIRST",
+            "SELECT id FROM t WHERE id NOT IN (1, 2)",
+            "SELECT id FROM t ORDER BY 1 DESC",
+            "SELECT amount AS a FROM t ORDER BY a DESC",
+            "SELECT REPLACE('abc', 'b', 'X')",
+            "SELECT CAST(amount AS TEXT) FROM t",
+            "SELECT NULLIF(1, 1)",
+        ] {
+            assert!(
+                SqlParser::new().parse(sql).is_ok(),
+                "failed to parse: {sql} -> {:?}",
+                SqlParser::new().parse(sql).err()
+            );
+        }
     }
 }

@@ -35,15 +35,26 @@
 pub mod auth;
 #[cfg(feature = "fts")]
 // pub mod fts;  // Temporarily disabled - needs API update
+pub mod domains;
+pub mod fastpath;
 pub mod graphrag_engine;
+/// GSSAPI/Kerberos authentication. Absent when the `gssapi` feature is off,
+/// which is also the only way to build without a GSSAPI library to link to.
+#[cfg(feature = "gssapi")]
+pub mod gssapi;
 pub mod jsonb;
 pub mod messages;
 #[cfg(feature = "storage-rocksdb")]
-pub mod persistent_storage;
+pub mod notifications;
 #[cfg(feature = "storage-rocksdb")]
+pub mod persistent_storage;
+pub mod plpgsql;
+pub mod plpgsql_function;
 pub mod protocol;
 #[cfg(feature = "storage-rocksdb")]
 pub mod query_engine;
+pub mod sqlstate;
+pub mod stored_functions;
 // pub mod server;  // Moved to orbit_server::protocols
 pub mod session_compat;
 pub mod sql;

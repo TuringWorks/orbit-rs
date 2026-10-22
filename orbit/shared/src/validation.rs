@@ -206,11 +206,7 @@ pub fn validate_sql_identifier(ident: &str) -> Result<&str, String> {
         return Err("Empty SQL identifier".to_string());
     }
     for part in ident.split('.') {
-        if part.is_empty()
-            || !part
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
+        if part.is_empty() || !part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             return Err(format!("Invalid SQL identifier: '{}'", ident));
         }
     }

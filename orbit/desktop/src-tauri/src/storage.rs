@@ -5,13 +5,12 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::api::path::app_data_dir;
 use tauri::Config;
-use tracing::{error, info, warn};
+use tracing::info;
 
-use crate::connections::{Connection, ConnectionInfo};
-use crate::queries::QueryRequest;
+use crate::connections::Connection;
 
 /// Application data storage
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,8 +27,13 @@ pub struct AppStorage {
 pub struct StoredConnection {
     pub id: String,
     pub info: StoredConnectionInfo,
-    pub created_at: String,
+    /// RFC 3339. Absent for records written before this field existed, and for
+    /// records whose stamp could not be read back.
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
     pub last_used: Option<String>,
+    #[serde(default)]
     pub query_count: u64,
 }
 
@@ -61,6 +65,11 @@ pub struct AppSettings {
     pub word_wrap: bool,
     pub max_query_history: usize,
     pub connection_timeout: u64,
+    /// Orbit-RS checkout whose local cluster the cluster panel manages.
+    ///
+    /// `None` means "look for one next to the working directory".
+    #[serde(default)]
+    pub cluster_root: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -75,6 +84,7 @@ impl Default for AppSettings {
             word_wrap: false,
             max_query_history: 1000,
             connection_timeout: 5000,
+            cluster_root: None,
         }
     }
 }
@@ -104,8 +114,8 @@ impl Default for AppStorage {
 }
 
 /// Storage manager for persisting application data
+#[derive(Clone)]
 pub struct StorageManager {
-    storage_dir: PathBuf,
     storage_file: PathBuf,
 }
 
@@ -115,19 +125,18 @@ impl StorageManager {
         let app_name = config
             .package
             .product_name
-            .as_ref()
-            .map(|s| s.as_str())
+            .as_deref()
             .unwrap_or("orbit-desktop");
 
         let storage_dir = app_data_dir(config)
             .ok_or_else(|| {
-                StorageError::ConfigError("Could not determine app data directory".to_string())
+                StorageError::Config("Could not determine app data directory".to_string())
             })?
             .join(app_name);
 
         // Create directory if it doesn't exist
         std::fs::create_dir_all(&storage_dir).map_err(|e| {
-            StorageError::IoError(format!("Failed to create storage directory: {}", e))
+            StorageError::Io(format!("Failed to create storage directory: {}", e))
         })?;
 
         let storage_file = storage_dir.join("storage.json");
@@ -135,10 +144,7 @@ impl StorageManager {
         info!("Storage directory: {:?}", storage_dir);
         info!("Storage file: {:?}", storage_file);
 
-        Ok(Self {
-            storage_dir,
-            storage_file,
-        })
+        Ok(Self { storage_file })
     }
 
     /// Load application storage from disk
@@ -151,10 +157,10 @@ impl StorageManager {
         }
 
         let content = std::fs::read_to_string(&self.storage_file)
-            .map_err(|e| StorageError::IoError(format!("Failed to read storage file: {}", e)))?;
+            .map_err(|e| StorageError::Io(format!("Failed to read storage file: {}", e)))?;
 
         let storage: AppStorage = serde_json::from_str(&content).map_err(|e| {
-            StorageError::ParseError(format!("Failed to parse storage file: {}", e))
+            StorageError::Parse(format!("Failed to parse storage file: {}", e))
         })?;
 
         info!(
@@ -169,16 +175,16 @@ impl StorageManager {
     /// Save application storage to disk
     pub fn save(&self, storage: &AppStorage) -> Result<(), StorageError> {
         let content = serde_json::to_string_pretty(storage).map_err(|e| {
-            StorageError::SerializeError(format!("Failed to serialize storage: {}", e))
+            StorageError::Serialize(format!("Failed to serialize storage: {}", e))
         })?;
 
         // Write to temporary file first, then rename (atomic write)
         let temp_file = self.storage_file.with_extension("tmp");
         std::fs::write(&temp_file, content)
-            .map_err(|e| StorageError::IoError(format!("Failed to write storage file: {}", e)))?;
+            .map_err(|e| StorageError::Io(format!("Failed to write storage file: {}", e)))?;
 
         std::fs::rename(&temp_file, &self.storage_file)
-            .map_err(|e| StorageError::IoError(format!("Failed to rename storage file: {}", e)))?;
+            .map_err(|e| StorageError::Io(format!("Failed to rename storage file: {}", e)))?;
 
         info!(
             "Saved storage with {} connections and {} query history entries",
@@ -188,35 +194,28 @@ impl StorageManager {
 
         Ok(())
     }
-
-    /// Get storage directory path
-    pub fn storage_dir(&self) -> &Path {
-        &self.storage_dir
-    }
-
-    /// Get storage file path
-    pub fn storage_file(&self) -> &Path {
-        &self.storage_file
-    }
 }
 
 /// Storage errors
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
     #[error("IO error: {0}")]
-    IoError(String),
+    Io(String),
     #[error("Parse error: {0}")]
-    ParseError(String),
+    Parse(String),
     #[error("Serialize error: {0}")]
-    SerializeError(String),
+    Serialize(String),
     #[error("Config error: {0}")]
-    ConfigError(String),
+    Config(String),
 }
 
-/// Helper functions for converting between storage and runtime types
+// Conversions between the persisted and runtime representations.
 
 impl StoredConnection {
     /// Convert to Connection with password decryption
+    /// # Errors
+    /// Returns [`StorageError::Parse`] when the stored protocol name is
+    /// not one this build knows.
     pub fn to_connection(
         &self,
         enc_manager: &crate::encryption::EncryptionManager,
@@ -224,33 +223,37 @@ impl StoredConnection {
         use crate::connections::{ConnectionInfo, ConnectionStatus, ConnectionType};
         use chrono::DateTime;
 
-        // Decrypt password if present
-        let password = if let Some(encrypted) = &self.info.password_encrypted {
+        // A password that will not decrypt is dropped rather than guessed at;
+        // the connection is still usable for endpoints that need no password.
+        let password = self.info.password_encrypted.as_ref().and_then(|encrypted| {
             enc_manager
                 .decrypt(encrypted)
-                .map_err(|e| StorageError::ParseError(format!("Failed to decrypt password: {}", e)))
+                .map_err(|e| tracing::warn!("could not decrypt password for {}: {e}", self.id))
                 .ok()
-        } else {
-            None
-        };
+        });
 
-        let connection_type = match self.info.connection_type.as_str() {
-            "PostgreSQL" => ConnectionType::PostgreSQL,
-            "OrbitQL" => ConnectionType::OrbitQL,
-            "Redis" => ConnectionType::Redis,
-            "MySQL" => ConnectionType::MySQL,
-            "CQL" => ConnectionType::CQL,
-            "Cypher" => ConnectionType::Cypher,
-            "AQL" => ConnectionType::AQL,
-            "FlightSQL" => ConnectionType::FlightSQL,
-            "OrbitWire" => ConnectionType::OrbitWire,
-            _ => {
-                return Err(StorageError::ParseError(format!(
-                    "Unknown connection type: {}",
-                    self.info.connection_type
-                )))
-            }
-        };
+        let connection_type: ConnectionType = self
+            .info
+            .connection_type
+            .parse()
+            .map_err(|e| StorageError::Parse(format!("{e}")))?;
+
+        /// Parse an RFC 3339 stamp, reporting `None` instead of substituting
+        /// the current time for one that will not parse.
+        fn timestamp(raw: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+            DateTime::parse_from_rfc3339(raw)
+                .ok()
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+        }
+
+        let created_at = self.created_at.as_deref().and_then(timestamp);
+        if created_at.is_none() && self.created_at.is_some() {
+            tracing::warn!(
+                "connection {} has an unreadable created_at ({:?}); reporting it as unknown",
+                self.id,
+                self.created_at
+            );
+        }
 
         Ok(Connection {
             id: self.id.clone(),
@@ -267,14 +270,8 @@ impl StoredConnection {
                 additional_params: self.info.additional_params.clone(),
             },
             status: ConnectionStatus::Disconnected,
-            created_at: DateTime::parse_from_rfc3339(&self.created_at)
-                .map(|dt| dt.with_timezone(&chrono::Utc))
-                .unwrap_or_else(|_| chrono::Utc::now()),
-            last_used: self
-                .last_used
-                .as_ref()
-                .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-                .map(|dt| dt.with_timezone(&chrono::Utc)),
+            created_at,
+            last_used: self.last_used.as_deref().and_then(timestamp),
             query_count: self.query_count,
         })
     }
@@ -289,29 +286,19 @@ impl Connection {
         // Encrypt password if present
         let password_encrypted = if let Some(password) = &self.info.password {
             Some(enc_manager.encrypt(password).map_err(|e| {
-                StorageError::SerializeError(format!("Failed to encrypt password: {}", e))
+                StorageError::Serialize(format!("Failed to encrypt password: {}", e))
             })?)
         } else {
             None
-        };
-
-        let connection_type = match self.info.connection_type {
-            crate::connections::ConnectionType::PostgreSQL => "PostgreSQL",
-            crate::connections::ConnectionType::OrbitQL => "OrbitQL",
-            crate::connections::ConnectionType::Redis => "Redis",
-            crate::connections::ConnectionType::MySQL => "MySQL",
-            crate::connections::ConnectionType::CQL => "CQL",
-            crate::connections::ConnectionType::Cypher => "Cypher",
-            crate::connections::ConnectionType::AQL => "AQL",
-            crate::connections::ConnectionType::FlightSQL => "FlightSQL",
-            crate::connections::ConnectionType::OrbitWire => "OrbitWire",
         };
 
         Ok(StoredConnection {
             id: self.id.clone(),
             info: StoredConnectionInfo {
                 name: self.info.name.clone(),
-                connection_type: connection_type.to_string(),
+                // Same table as `to_connection` reads back, via Display/FromStr,
+                // so the two directions cannot drift apart.
+                connection_type: self.info.connection_type.to_string(),
                 host: self.info.host.clone(),
                 port: self.info.port,
                 database: self.info.database.clone(),
@@ -321,7 +308,7 @@ impl Connection {
                 connection_timeout: self.info.connection_timeout,
                 additional_params: self.info.additional_params.clone(),
             },
-            created_at: self.created_at.to_rfc3339(),
+            created_at: self.created_at.map(|dt| dt.to_rfc3339()),
             last_used: self.last_used.map(|dt| dt.to_rfc3339()),
             query_count: self.query_count,
         })

@@ -543,6 +543,11 @@ pub struct Lexer {
     keywords: HashMap<String, Token>,
 }
 
+/// Reverse map from keyword token to the word it was lexed from.
+static KEYWORD_TEXT: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashMap<String, String>>,
+> = std::sync::OnceLock::new();
+
 impl Lexer {
     /// Create a new lexer with SQL input
     pub fn new(input: &str) -> Self {
@@ -558,6 +563,24 @@ impl Lexer {
 
         lexer.init_keywords();
         lexer
+    }
+
+    /// The word a keyword token was lexed from, if it is a keyword at all.
+    ///
+    /// PostgreSQL reserves only a minority of its keywords; the rest are legal
+    /// column names. Without this, `INSERT INTO t (id, label)` failed to parse
+    /// because `LABEL` is a keyword token — a legal statement rejected.
+    #[must_use]
+    pub fn keyword_text(token: &Token) -> Option<String> {
+        // Populating the map needs one lexer to have been built, which every
+        // parse does before it asks.
+        let _ = Lexer::new("");
+        KEYWORD_TEXT
+            .get()?
+            .lock()
+            .ok()?
+            .get(&format!("{token:?}"))
+            .cloned()
     }
 
     /// Initialize keyword mapping
@@ -995,6 +1018,17 @@ impl Lexer {
         ];
 
         for (keyword, token) in keywords.iter() {
+            // The reverse map is what lets an unreserved keyword be used as a
+            // column name: it gives the exact word the lexer turned into this
+            // token, with no guessing from the variant's name.
+            KEYWORD_TEXT
+                .get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+                .lock()
+                .map(|mut map| {
+                    map.entry(format!("{token:?}"))
+                        .or_insert_with(|| (*keyword).to_string());
+                })
+                .ok();
             self.keywords.insert(keyword.to_string(), token.clone());
         }
     }

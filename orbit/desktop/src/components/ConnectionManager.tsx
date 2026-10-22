@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { Connection, ConnectionInfo } from '@/types';
-import { TauriService } from '@/services/tauri';
+import { Connection, connectionStatusError, isConnected } from '@/types';
+import { TauriService, handleTauriError } from '@/services/tauri';
 import { ConnectionDialog } from './ConnectionDialog';
 
 interface ConnectionManagerProps {
@@ -111,18 +111,23 @@ const ActionButton = styled.button<{ variant?: 'danger' }>`
   }
 `;
 
-const StatusIndicator = styled.span<{ status: string }>`
+type StatusTone = 'connected' | 'error' | 'idle';
+
+const StatusIndicator = styled.span<{ tone: StatusTone }>`
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: ${props => 
-    props.status === 'Connected' ? '#107c10' :
-    props.status === 'Connecting' ? '#ff8c00' :
-    props.status === 'Error' ? '#d13438' :
-    '#666666'
-  };
+  background: ${props =>
+    props.tone === 'connected' ? '#107c10' : props.tone === 'error' ? '#d13438' : '#666666'};
   margin-right: 6px;
+`;
+
+const ErrorNote = styled.div`
+  color: #f2a3a5;
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.4;
 `;
 
 const EmptyState = styled.div`
@@ -139,6 +144,46 @@ export const ConnectionManager: React.FC<ConnectionManagerProps> = ({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingConnection, setEditingConnection] = useState<Connection | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  /** Per-connection failure from the most recent connect attempt. */
+  const [attemptErrors, setAttemptErrors] = useState<Record<string, string>>({});
+
+  const setAttemptError = (id: string, message: string | null) =>
+    setAttemptErrors(prev => {
+      const next = { ...prev };
+      if (message === null) {
+        delete next[id];
+      } else {
+        next[id] = message;
+      }
+      return next;
+    });
+
+  /** Open a session now so the user finds out here, not on their first query. */
+  const handleConnect = async (connectionId: string) => {
+    setBusyId(connectionId);
+    setAttemptError(connectionId, null);
+    try {
+      await TauriService.connect(connectionId);
+      onConnectionsChange();
+    } catch (err) {
+      setAttemptError(connectionId, handleTauriError(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDisconnect = async (connectionId: string) => {
+    setBusyId(connectionId);
+    try {
+      await TauriService.disconnect(connectionId);
+      onConnectionsChange();
+    } catch (err) {
+      setAttemptError(connectionId, handleTauriError(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const handleCreate = () => {
     setEditingConnection(null);
@@ -192,34 +237,61 @@ export const ConnectionManager: React.FC<ConnectionManagerProps> = ({
         </EmptyState>
       ) : (
         <ConnectionList>
-          {connections.map(conn => (
-            <ConnectionItem key={conn.id}>
-              <ConnectionHeader>
-                <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                  <StatusIndicator status={conn.status} />
-                  <ConnectionName>{conn.info.name}</ConnectionName>
-                </div>
-                <ConnectionType>{conn.info.connection_type}</ConnectionType>
-                <ConnectionActions>
-                  <ActionButton onClick={() => handleEdit(conn)}>
-                    Edit
-                  </ActionButton>
-                  <ActionButton
-                    variant="danger"
-                    onClick={() => handleDelete(conn.id)}
-                    disabled={deleting === conn.id}
-                  >
-                    {deleting === conn.id ? 'Deleting...' : 'Delete'}
-                  </ActionButton>
-                </ConnectionActions>
-              </ConnectionHeader>
-              <ConnectionDetails>
-                {conn.info.host}:{conn.info.port}
-                {conn.info.database && ` • ${conn.info.database}`}
-                {conn.query_count > 0 && ` • ${conn.query_count} queries`}
-              </ConnectionDetails>
-            </ConnectionItem>
-          ))}
+          {connections.map(conn => {
+            const connected = isConnected(conn.status);
+            // A stored status error and a failed click are different events;
+            // show whichever is more recent, preferring the click.
+            const failure = attemptErrors[conn.id] ?? connectionStatusError(conn.status);
+            const tone: StatusTone = connected ? 'connected' : failure ? 'error' : 'idle';
+
+            return (
+              <ConnectionItem key={conn.id}>
+                <ConnectionHeader>
+                  <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                    <StatusIndicator
+                      tone={tone}
+                      title={connected ? 'Session open' : failure ?? 'No session open'}
+                    />
+                    <ConnectionName>{conn.info.name}</ConnectionName>
+                  </div>
+                  <ConnectionType>{conn.info.connection_type}</ConnectionType>
+                  <ConnectionActions>
+                    {connected ? (
+                      <ActionButton
+                        onClick={() => handleDisconnect(conn.id)}
+                        disabled={busyId === conn.id}
+                      >
+                        Disconnect
+                      </ActionButton>
+                    ) : (
+                      <ActionButton
+                        onClick={() => handleConnect(conn.id)}
+                        disabled={busyId === conn.id}
+                      >
+                        {busyId === conn.id ? 'Connecting…' : 'Connect'}
+                      </ActionButton>
+                    )}
+                    <ActionButton onClick={() => handleEdit(conn)}>
+                      Edit
+                    </ActionButton>
+                    <ActionButton
+                      variant="danger"
+                      onClick={() => handleDelete(conn.id)}
+                      disabled={deleting === conn.id}
+                    >
+                      {deleting === conn.id ? 'Deleting...' : 'Delete'}
+                    </ActionButton>
+                  </ConnectionActions>
+                </ConnectionHeader>
+                <ConnectionDetails>
+                  {conn.info.host}:{conn.info.port}
+                  {conn.info.database && ` • ${conn.info.database}`}
+                  {conn.query_count > 0 && ` • ${conn.query_count} queries`}
+                </ConnectionDetails>
+                {!connected && failure && <ErrorNote>{failure}</ErrorNote>}
+              </ConnectionItem>
+            );
+          })}
         </ConnectionList>
       )}
 

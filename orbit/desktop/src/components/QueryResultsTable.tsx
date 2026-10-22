@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { QueryResult } from '@/types';
+import { QueryResult, QueryResultData, describeOutcome } from '@/types';
 
 const ExportButton = styled.button`
   padding: 6px 12px;
@@ -85,7 +85,7 @@ const createUniqueRowKey = (row: any, rowIndex: number): string => {
   return `${keyValue}-${rowIndex}`;
 };
 
-const exportToCSV = (data: QueryResult['data']) => {
+const exportToCSV = (data: QueryResultData | null | undefined) => {
   if (!data || !data.columns.length || !data.rows.length) return;
 
   const headers = data.columns.map(col => col.name).join(',');
@@ -112,7 +112,7 @@ const exportToCSV = (data: QueryResult['data']) => {
   URL.revokeObjectURL(url);
 };
 
-const exportToJSON = (data: QueryResult['data']) => {
+const exportToJSON = (data: QueryResultData | null | undefined) => {
   if (!data) return;
 
   const json = JSON.stringify(data, null, 2);
@@ -144,38 +144,37 @@ const QueryResultsTable: React.FC<QueryResultsTableProps> = ({ result }) => {
     );
   }
 
-  const hasData = result.data.rows.length > 0;
+  // Bound to a local so TypeScript can narrow it inside the callbacks below.
+  const data = result.data;
+  const hasData = data.rows.length > 0;
 
   return (
     <Container>
       <ButtonGroup>
         <MetaInfo>
-          Execution time: {result.execution_time?.toFixed(2) || 0}ms
-          {result.rows_affected !== undefined && (
-            <> • Rows: {result.rows_affected}</>
-          )}
-          {hasData && (
-            <> • Showing {result.data.rows.length} row{result.data.rows.length !== 1 ? 's' : ''}</>
-          )}
+          Execution time: {result.execution_time_ms.toFixed(2)}ms
+          {/* "returned" and "affected" are reported as the server distinguished
+              them, rather than collapsed into one ambiguous row count. */}
+          {' • '}{describeOutcome(data.outcome)}
         </MetaInfo>
         {hasData && (
           <>
-            <ExportButton onClick={() => exportToCSV(result.data)}>
+            <ExportButton onClick={() => exportToCSV(data)}>
               📥 Export CSV
             </ExportButton>
-            <ExportButton onClick={() => exportToJSON(result.data)}>
+            <ExportButton onClick={() => exportToJSON(data)}>
               📥 Export JSON
             </ExportButton>
           </>
         )}
       </ButtonGroup>
-      
+
       {hasData ? (
         <TableContainer>
           <Table>
             <thead>
               <tr>
-                {result.data.columns.map(col => (
+                {data.columns.map(col => (
                   <TableHeader key={col.name}>
                     {col.name}
                     <ColumnType>{col.type}</ColumnType>
@@ -184,16 +183,16 @@ const QueryResultsTable: React.FC<QueryResultsTableProps> = ({ result }) => {
               </tr>
             </thead>
             <tbody>
-              {result.data.rows.map((row, rowIndex) => (
+              {data.rows.map((row, rowIndex) => (
                 <TableRow key={createUniqueRowKey(row, rowIndex)} isEven={rowIndex % 2 === 0}>
-                  {result.data.columns.map(col => {
+                  {data.columns.map(col => {
                     const value = row[col.name];
-                    const displayValue = value === null || value === undefined 
+                    const displayValue = value === null || value === undefined
                       ? <span style={{ color: '#666666', fontStyle: 'italic' }}>NULL</span>
                       : typeof value === 'object'
                       ? JSON.stringify(value)
                       : String(value);
-                    
+
                     return (
                       <TableCell key={col.name} title={typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}>
                         {displayValue}
@@ -207,7 +206,9 @@ const QueryResultsTable: React.FC<QueryResultsTableProps> = ({ result }) => {
         </TableContainer>
       ) : (
         <SuccessMessage style={{ padding: '40px', textAlign: 'center' }}>
-          Query executed successfully but returned no rows
+          {data.outcome.kind === 'affected'
+            ? `Statement completed: ${describeOutcome(data.outcome)}.`
+            : 'Statement completed and returned no rows.'}
         </SuccessMessage>
       )}
     </Container>

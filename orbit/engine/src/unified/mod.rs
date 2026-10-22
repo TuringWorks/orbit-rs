@@ -69,6 +69,8 @@ pub mod actor_tier_placement;
 pub mod adapters;
 pub mod index;
 pub mod operations;
+#[cfg(feature = "storage-rocksdb")]
+pub mod rocksdb_backend;
 pub mod s3_backend;
 pub mod schema;
 pub mod storage;
@@ -106,6 +108,9 @@ pub use index::{IndexEntry, IndexStats, SecondaryIndexManager};
 
 // Re-export S3 backend
 pub use s3_backend::{S3Backend, S3BackendConfig};
+
+#[cfg(feature = "storage-rocksdb")]
+pub use rocksdb_backend::RocksDbBackend;
 
 // Future modules (to be implemented)
 // pub mod backend;     // RocksDB persistent backend

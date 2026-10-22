@@ -63,12 +63,12 @@ impl ExpressionParser {
         tokens: &[Token],
         pos: &mut usize,
     ) -> ProtocolResult<Expression> {
-        let mut left = self.parse_equality_expression(tokens, pos)?;
+        let mut left = self.parse_not_expression(tokens, pos)?;
 
         while *pos < tokens.len() {
             if matches!(tokens[*pos], Token::And) {
                 *pos += 1;
-                let right = self.parse_equality_expression(tokens, pos)?;
+                let right = self.parse_not_expression(tokens, pos)?;
                 left = Expression::Binary {
                     left: Box::new(left),
                     operator: BinaryOperator::And,
@@ -80,6 +80,27 @@ impl ExpressionParser {
         }
 
         Ok(left)
+    }
+
+    /// Parse `NOT <predicate>`.
+    ///
+    /// `NOT` binds looser than every comparison, so `NOT a = 1` is
+    /// `NOT (a = 1)` and not `(NOT a) = 1`. Parsing it as a unary prefix of a
+    /// value expression gets that backwards and makes the operand a bare
+    /// column, which is not a boolean.
+    fn parse_not_expression(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Expression> {
+        if *pos < tokens.len() && matches!(tokens[*pos], Token::Not) {
+            *pos += 1;
+            return Ok(Expression::Unary {
+                operator: UnaryOperator::Not,
+                operand: Box::new(self.parse_not_expression(tokens, pos)?),
+            });
+        }
+        self.parse_equality_expression(tokens, pos)
     }
 
     /// Parse equality expressions (=, !=, <>, IS, IS NOT)
@@ -110,7 +131,24 @@ impl ExpressionParser {
                 *pos += 1;
             }
 
-            let right = self.parse_comparison_expression(tokens, pos)?;
+            // `= ANY(...)` and `<> ALL(...)` are quantified comparisons, the
+            // same as the `<`/`>` forms the comparison level already handles.
+            // Missing here, `x = ANY(ARRAY[...])` parsed as a call to a
+            // function named `ANY` — the most common form of the construct was
+            // the one that did not work.
+            let right = if *pos < tokens.len()
+                && matches!(&tokens[*pos], Token::Any | Token::Some | Token::All)
+            {
+                let quantifier = tokens[*pos].clone();
+                *pos += 1;
+                let sub = self.parse_primary_expression(tokens, pos)?;
+                match quantifier {
+                    Token::All => Expression::All(Box::new(sub)),
+                    _ => Expression::Any(Box::new(sub)),
+                }
+            } else {
+                self.parse_comparison_expression(tokens, pos)?
+            };
             left = Expression::Binary {
                 left: Box::new(left),
                 operator,
@@ -130,17 +168,36 @@ impl ExpressionParser {
         let mut left = self.parse_additive_expression(tokens, pos)?;
 
         while *pos < tokens.len() {
-            if matches!(&tokens[*pos], Token::In) {
-                // Handle IN operator specially to support both value lists and subqueries
-                *pos += 1; // consume IN
-
-                // Check for NOT IN
-                let negated = if *pos < tokens.len() && matches!(&tokens[*pos], Token::Not) {
-                    *pos += 1;
-                    true
-                } else {
-                    false
+            // `x [NOT] BETWEEN low AND high`. The bounds are parsed at additive
+            // level so the separating AND is not swallowed as a conjunction.
+            let between_negated = matches!(&tokens[*pos], Token::Not)
+                && *pos + 1 < tokens.len()
+                && matches!(&tokens[*pos + 1], Token::Between);
+            if between_negated || matches!(&tokens[*pos], Token::Between) {
+                *pos += if between_negated { 2 } else { 1 };
+                let low = self.parse_additive_expression(tokens, pos)?;
+                if *pos >= tokens.len() || !matches!(&tokens[*pos], Token::And) {
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected AND after BETWEEN lower bound".to_string(),
+                    ));
+                }
+                *pos += 1;
+                let high = self.parse_additive_expression(tokens, pos)?;
+                left = Expression::Between {
+                    expr: Box::new(left),
+                    low: Box::new(low),
+                    high: Box::new(high),
+                    negated: between_negated,
                 };
+            } else if matches!(&tokens[*pos], Token::In)
+                || (matches!(&tokens[*pos], Token::Not)
+                    && *pos + 1 < tokens.len()
+                    && matches!(&tokens[*pos + 1], Token::In))
+            {
+                // `NOT` precedes `IN` — `x NOT IN (...)`. Looking for it after
+                // `IN` never matched, so `NOT IN` failed to parse.
+                let negated = matches!(&tokens[*pos], Token::Not);
+                *pos += if negated { 2 } else { 1 };
 
                 // Parse IN list or subquery
                 if *pos >= tokens.len() {
@@ -837,106 +894,13 @@ impl ExpressionParser {
     }
 
     /// Extract identifier string from token (handles both Identifier and keyword tokens used as names)
+    /// Extract an identifier string from a token.
+    ///
+    /// Delegates to the shared table rather than keeping a second copy: the
+    /// two had already drifted, so a keyword added to one was still rejected
+    /// by the other.
     fn token_to_identifier_name(&self, token: &Token) -> Option<String> {
-        match token {
-            Token::Identifier(name) => Some(name.clone()),
-            // Data type keywords that can be used as identifiers
-            Token::Text => Some("text".to_string()),
-            Token::Integer => Some("integer".to_string()),
-            Token::Boolean => Some("boolean".to_string()),
-            Token::Date => Some("date".to_string()),
-            Token::Time => Some("time".to_string()),
-            Token::Timestamp => Some("timestamp".to_string()),
-            Token::Interval => Some("interval".to_string()),
-            Token::Decimal => Some("decimal".to_string()),
-            Token::Numeric => Some("numeric".to_string()),
-            Token::Real => Some("real".to_string()),
-            Token::Char => Some("char".to_string()),
-            Token::Varchar => Some("varchar".to_string()),
-            Token::Json => Some("json".to_string()),
-            Token::Jsonb => Some("jsonb".to_string()),
-            Token::Uuid => Some("uuid".to_string()),
-            Token::Bytea => Some("bytea".to_string()),
-            Token::Vector => Some("vector".to_string()),
-            // Other keywords that can be used as identifiers
-            Token::Sequence => Some("sequence".to_string()),
-            Token::Key => Some("key".to_string()),
-            // PostgreSQL 18 - OLD/NEW table references in RETURNING clause
-            Token::Old => Some("OLD".to_string()),
-            Token::New => Some("NEW".to_string()),
-            // Extended DDL keywords that can be used as identifiers
-            Token::Type => Some("type".to_string()),
-            Token::Domain => Some("domain".to_string()),
-            Token::Role => Some("role".to_string()),
-            Token::User => Some("user".to_string()),
-            Token::Tablespace => Some("tablespace".to_string()),
-            Token::Policy => Some("policy".to_string()),
-            Token::Rule => Some("rule".to_string()),
-            Token::Aggregate => Some("aggregate".to_string()),
-            Token::Operator => Some("operator".to_string()),
-            Token::Collation => Some("collation".to_string()),
-            Token::Conversion => Some("conversion".to_string()),
-            Token::Statistics => Some("statistics".to_string()),
-            Token::Publication => Some("publication".to_string()),
-            Token::Subscription => Some("subscription".to_string()),
-            // Security/Role keywords that can be used as identifiers
-            Token::Login => Some("login".to_string()),
-            Token::NoLogin => Some("nologin".to_string()),
-            Token::SuperUser => Some("superuser".to_string()),
-            Token::NoSuperUser => Some("nosuperuser".to_string()),
-            Token::CreateDb => Some("createdb".to_string()),
-            Token::NoCreateDb => Some("nocreatedb".to_string()),
-            Token::CreateRole => Some("createrole".to_string()),
-            Token::NoCreateRole => Some("nocreaterole".to_string()),
-            Token::Inherit => Some("inherit".to_string()),
-            Token::NoInherit => Some("noinherit".to_string()),
-            Token::Replication => Some("replication".to_string()),
-            Token::NoReplication => Some("noreplication".to_string()),
-            Token::BypassRls => Some("bypassrls".to_string()),
-            Token::NoBypassRls => Some("nobypassrls".to_string()),
-            Token::ConnectionLimit => Some("connection".to_string()),
-            Token::ValidUntil => Some("valid".to_string()),
-            Token::Password => Some("password".to_string()),
-            Token::Encrypted => Some("encrypted".to_string()),
-            // Policy keywords
-            Token::Permissive => Some("permissive".to_string()),
-            Token::Restrictive => Some("restrictive".to_string()),
-            // Type keywords
-            Token::Enum => Some("enum".to_string()),
-            Token::Composite => Some("composite".to_string()),
-            // Window Functions
-            Token::Rank => Some("rank".to_string()),
-            Token::RowNumber => Some("row_number".to_string()),
-            Token::DenseRank => Some("dense_rank".to_string()),
-            Token::PercentRank => Some("percent_rank".to_string()),
-            Token::CumeDist => Some("cume_dist".to_string()),
-            Token::Ntile => Some("ntile".to_string()),
-            Token::Lag => Some("lag".to_string()),
-            Token::Lead => Some("lead".to_string()),
-            Token::FirstValue => Some("first_value".to_string()),
-            Token::LastValue => Some("last_value".to_string()),
-            Token::NthValue => Some("nth_value".to_string()),
-            // Other keywords
-            Token::Exists => Some("exists".to_string()),
-            Token::With => Some("with".to_string()),
-            Token::Group => Some("group".to_string()),
-            Token::Order => Some("order".to_string()),
-            Token::By => Some("by".to_string()),
-            Token::Window => Some("window".to_string()),
-            Token::Index => Some("index".to_string()),
-            // JSON tokens
-            Token::JsonQuery => Some("json_query".to_string()),
-            Token::JsonValue => Some("json_value".to_string()),
-            Token::JsonExists => Some("json_exists".to_string()),
-            Token::JsonTable => Some("json_table".to_string()),
-            Token::JsonScalar => Some("json_scalar".to_string()),
-            Token::JsonSerialize => Some("json_serialize".to_string()),
-            Token::JsonArray => Some("json_array".to_string()),
-            Token::JsonObject => Some("json_object".to_string()),
-            Token::JsonArrayAgg => Some("json_arrayagg".to_string()),
-            Token::JsonObjectAgg => Some("json_objectagg".to_string()),
-            _ => None,
-        }
+        crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name(token)
     }
 
     /// Parse optional precision for date/time functions
@@ -993,6 +957,28 @@ impl ExpressionParser {
         // Parse arguments
         if *pos < tokens.len() && !matches!(tokens[*pos], Token::RightParen) {
             loop {
+                // `EXTRACT(field FROM source)` names its field with a bare
+                // word: `EXTRACT(YEAR FROM d)`. It is a field name, not a
+                // column, so it is read as text — otherwise it resolved to a
+                // column that does not exist.
+                let extracts = matches!(func_name.to_uppercase().as_str(), "EXTRACT" | "DATE_PART");
+                if extracts && args.is_empty() {
+                    if let Some(field) = tokens
+                        .get(*pos)
+                        .and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name)
+                    {
+                        if tokens.get(*pos + 1).is_some_and(|next| matches!(next, Token::From)) {
+                            // Consume the field and its `FROM`; the source
+                            // expression is the next argument.
+                            *pos += 2;
+                            args.push(Expression::Literal(
+                                crate::protocols::postgres_wire::sql::types::SqlValue::Text(field),
+                            ));
+                            continue;
+                        }
+                    }
+                }
+
                 // Handle special case for COUNT(*)
                 if func_name.to_uppercase() == "COUNT" && matches!(tokens[*pos], Token::Multiply) {
                     *pos += 1;
@@ -1000,6 +986,14 @@ impl ExpressionParser {
                         table: None,
                         name: "*".to_string(),
                     }));
+                } else if func_name.eq_ignore_ascii_case("POSITION") && args.is_empty() {
+                    // `POSITION(sub IN str)` is the standard spelling, and the
+                    // `IN` in it separates two arguments. Parsed at the usual
+                    // level the comparison rules take it first and build an
+                    // `IN` expression, leaving the call malformed — so the
+                    // needle is read below that level, where `IN` is not an
+                    // operator.
+                    args.push(self.parse_additive_expression(tokens, pos)?);
                 } else {
                     args.push(self.parse_expression(tokens, pos)?);
                 }
@@ -1018,7 +1012,16 @@ impl ExpressionParser {
                     }
                 }
 
-                if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
+                // `FROM` and `FOR` separate arguments in `EXTRACT(f FROM s)`
+                // and `SUBSTRING(s FROM a FOR b)`, where a comma would be a
+                // syntax error; `IN` does the same in `POSITION(sub IN str)`.
+                if *pos < tokens.len()
+                    && (matches!(tokens[*pos], Token::From | Token::For)
+                        || (func_name.eq_ignore_ascii_case("POSITION")
+                            && matches!(tokens[*pos], Token::In)))
+                {
+                    *pos += 1;
+                } else if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
                     // Lookahead for ORDER or SEPARATOR after comma (invalid but sometimes users type it?)
                     // Actually comma MUST separate args.
                     *pos += 1; // consume ','
@@ -1821,6 +1824,46 @@ impl ExpressionParser {
                 *pos += 1;
                 Ok(SqlType::Text)
             }
+            // These are types this server stores and compares, but they were
+            // missing from the *cast target* list, so `'1.5'::NUMERIC` and
+            // `'{"a":1}'::json` were parse errors while `'x'::VARCHAR(10)`
+            // worked. A type you can declare a column as must also be a type
+            // you can cast to.
+            Token::Numeric | Token::Decimal => {
+                let decimal = matches!(tokens[*pos], Token::Decimal);
+                *pos += 1;
+                let (precision, scale) = Self::parse_precision_and_scale(tokens, pos)?;
+                Ok(if decimal {
+                    SqlType::Decimal { precision, scale }
+                } else {
+                    SqlType::Numeric { precision, scale }
+                })
+            }
+            Token::Json => {
+                *pos += 1;
+                Ok(SqlType::Json)
+            }
+            Token::Jsonb => {
+                *pos += 1;
+                Ok(SqlType::Jsonb)
+            }
+            Token::Interval => {
+                *pos += 1;
+                Ok(SqlType::Interval)
+            }
+            Token::Bytea => {
+                *pos += 1;
+                Ok(SqlType::Bytea)
+            }
+            Token::Uuid => {
+                *pos += 1;
+                Ok(SqlType::Uuid)
+            }
+            Token::Char => {
+                *pos += 1;
+                let (length, _) = Self::parse_precision_and_scale(tokens, pos)?;
+                Ok(SqlType::Char(length.map(u32::from)))
+            }
             Token::Varchar => {
                 *pos += 1;
                 // Check for optional length specification
@@ -1934,6 +1977,58 @@ impl ExpressionParser {
                 tokens[*pos]
             ))),
         }
+    }
+
+    /// Read an optional `(precision)` or `(precision, scale)` after a type.
+    ///
+    /// Absent parentheses are not an error: `NUMERIC` and `NUMERIC(10,2)` are
+    /// both valid, and so is `NUMERIC(10)`.
+    fn parse_precision_and_scale(
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<(Option<u8>, Option<u8>)> {
+        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::LeftParen) {
+            return Ok((None, None));
+        }
+        *pos += 1;
+
+        // A free function rather than a closure: a closure capturing `pos`
+        // holds the borrow for the rest of the block.
+        fn read(tokens: &[Token], pos: &mut usize) -> Option<u8> {
+            let Some(Token::NumericLiteral(text)) = tokens.get(*pos) else {
+                return None;
+            };
+            let parsed = text.parse::<u8>().ok()?;
+            *pos += 1;
+            Some(parsed)
+        }
+
+        let precision = read(tokens, pos);
+        if precision.is_none() {
+            return Err(crate::protocols::error::ProtocolError::ParseError(
+                "Invalid precision specification".to_string(),
+            ));
+        }
+        let scale = if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
+            *pos += 1;
+            let scale = read(tokens, pos);
+            if scale.is_none() {
+                return Err(crate::protocols::error::ProtocolError::ParseError(
+                    "Invalid scale specification".to_string(),
+                ));
+            }
+            scale
+        } else {
+            None
+        };
+
+        if *pos < tokens.len() && matches!(tokens[*pos], Token::RightParen) {
+            *pos += 1;
+            return Ok((precision, scale));
+        }
+        Err(crate::protocols::error::ProtocolError::ParseError(
+            "Unterminated precision specification".to_string(),
+        ))
     }
 
     /// Check for array suffix [] and wrap base type in Array if present

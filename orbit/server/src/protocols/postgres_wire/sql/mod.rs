@@ -59,6 +59,7 @@ pub mod parser;
 pub mod plan_cache;
 pub mod query_cache;
 pub mod query_engine;
+pub mod select_pipeline;
 pub mod statistics;
 pub mod types;
 

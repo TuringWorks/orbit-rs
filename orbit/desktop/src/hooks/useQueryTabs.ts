@@ -15,6 +15,8 @@ interface UseQueryTabsReturn {
   activeTabIndex: number;
   setActiveTabIndex: (index: number) => void;
   createNewTab: (queryType?: QueryType) => void;
+  /** Open a new tab pre-filled with `query` and focus it. */
+  openTab: (query: string, queryType: QueryType, name?: string) => void;
   closeTab: (index: number) => void;
   updateTabQuery: (index: number, query: string) => void;
   updateTabState: (index: number, updates: Partial<QueryTab>) => void;
@@ -34,18 +36,30 @@ export const useQueryTabs = (): UseQueryTabsReturn => {
   ]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
 
-  const createNewTab = (queryType: QueryType = QueryType.OrbitQL) => {
-    const newTab: QueryTab = {
-      id: Date.now().toString(),
-      name: `Query ${queryTabs.length + 1}`,
-      query: queryType === QueryType.Redis ? 'PING' : 'SELECT 1;',
-      query_type: queryType,
-      unsaved_changes: false,
-      is_executing: false,
-    };
+  /** Append a tab and focus it, deriving both from the list's current length. */
+  const appendTab = (query: string, queryType: QueryType, name?: string) => {
+    setQueryTabs(prev => {
+      setActiveTabIndex(prev.length);
+      return [
+        ...prev,
+        {
+          id: `${Date.now()}-${prev.length}`,
+          name: name ?? `Query ${prev.length + 1}`,
+          query,
+          query_type: queryType,
+          unsaved_changes: false,
+          is_executing: false,
+        },
+      ];
+    });
+  };
 
-    setQueryTabs(prev => [...prev, newTab]);
-    setActiveTabIndex(queryTabs.length);
+  const createNewTab = (queryType: QueryType = QueryType.OrbitQL) => {
+    appendTab(queryType === QueryType.Redis ? 'PING' : 'SELECT 1;', queryType);
+  };
+
+  const openTab = (query: string, queryType: QueryType, name?: string) => {
+    appendTab(query, queryType, name);
   };
 
   const closeTab = (index: number) => {
@@ -91,6 +105,7 @@ export const useQueryTabs = (): UseQueryTabsReturn => {
     activeTabIndex,
     setActiveTabIndex,
     createNewTab,
+    openTab,
     closeTab,
     updateTabQuery,
     updateTabState,

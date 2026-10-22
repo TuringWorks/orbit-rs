@@ -246,11 +246,6 @@ export const DataVisualization: React.FC<DataVisualizationProps> = ({
     );
   };
 
-  const isDateColumn = (columnName: string) => {
-    const column = data.columns.find(col => col.name === columnName);
-    return column && (column.type.includes('date') || column.type.includes('time'));
-  };
-
   const processChartData = () => {
     if (!data.rows.length) return null;
 

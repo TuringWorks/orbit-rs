@@ -30,6 +30,61 @@ pub struct TableSchema {
     pub columns: Vec<ColumnDefinition>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub row_count: i64,
+    /// Foreign keys declared on the table.
+    ///
+    /// Held here rather than per column so a composite key is one constraint
+    /// checked as a whole, which is what `FOREIGN KEY (a, b) REFERENCES t(c, d)`
+    /// means: the pair must match a row, not each column separately.
+    #[serde(default)]
+    pub foreign_keys: Vec<ForeignKey>,
+}
+
+/// A foreign key constraint.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ForeignKey {
+    /// Columns of this table, in order.
+    pub columns: Vec<String>,
+    /// The table they refer to.
+    pub table: String,
+    /// Columns of that table, in the same order. Empty means its key.
+    pub referenced: Vec<String>,
+    /// What to do when a referenced row is deleted.
+    pub on_delete: ReferentialAction,
+    /// What to do when a referenced row's key changes.
+    pub on_update: ReferentialAction,
+    /// Whether the check may be postponed to the end of the transaction.
+    pub deferrable: bool,
+    /// How a partly-NULL key is treated.
+    #[serde(default)]
+    pub match_type: MatchType,
+}
+
+/// How a foreign key with some NULL columns is treated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum MatchType {
+    /// Any NULL part satisfies the constraint. PostgreSQL's default.
+    #[default]
+    Simple,
+    /// Either every part is NULL or none is.
+    Full,
+    /// Non-NULL parts must match some row.
+    Partial,
+}
+
+/// What a foreign key does when the row it refers to changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ReferentialAction {
+    /// Refuse the change while a row still refers to it.
+    #[default]
+    NoAction,
+    /// Same as `NoAction` here: the check is not deferred.
+    Restrict,
+    /// Delete or update the referring rows too.
+    Cascade,
+    /// Clear the referring column.
+    SetNull,
+    /// Put the referring column back to its declared default.
+    SetDefault,
 }
 
 /// Column definition
@@ -39,6 +94,28 @@ pub struct ColumnDefinition {
     pub data_type: ColumnType,
     pub nullable: bool,
     pub default_value: Option<JsonValue>,
+    /// Whether the column is a primary key or is declared `UNIQUE`.
+    ///
+    /// Defaulted on read so schemas written before this field existed still
+    /// deserialize; they simply carry no uniqueness constraint.
+    #[serde(default)]
+    pub unique: bool,
+    /// The predicate of a `CHECK` constraint, as written.
+    ///
+    /// Kept as text because it is evaluated against each row at insert time by
+    /// the same expression evaluator that runs a `WHERE` clause.
+    #[serde(default)]
+    pub check: Option<String>,
+    /// The `table.column` a `REFERENCES` clause points at.
+    #[serde(default)]
+    pub references: Option<(String, String)>,
+    /// The domain the column was declared with, if any.
+    ///
+    /// Kept so `ALTER DOMAIN` reaches tables that already use it: the check
+    /// is read from the domain at write time rather than copied at
+    /// `CREATE TABLE`.
+    #[serde(default)]
+    pub domain: Option<String>,
 }
 
 /// Supported column types (subset of PostgreSQL types)
@@ -53,6 +130,18 @@ pub enum ColumnType {
     Json,         // JSON data
     Timestamp,    // Timestamp with timezone
     Double,       // Double precision float
+    /// Exact decimal, with the precision and scale it was declared with.
+    ///
+    /// Without this a `NUMERIC(10,2)` column was stored as a `Double`: the
+    /// declared scale was lost, so `10.50` read back as `10.5`, and a value
+    /// that cannot be represented in binary floating point was rounded to one
+    /// that can. `NUMERIC` exists to avoid exactly that.
+    Numeric {
+        /// Total digits, when declared.
+        precision: Option<u8>,
+        /// Digits after the point, when declared.
+        scale: Option<u8>,
+    },
 }
 
 /// Row data for a table

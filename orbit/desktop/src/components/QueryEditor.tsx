@@ -8,8 +8,8 @@ import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import styled from 'styled-components';
-import { QueryType, QueryRequest, QueryResult, Connection } from '@/types';
-import { TauriService } from '@/services/tauri';
+import { QueryType, Connection } from '@/types';
+import { collapseWhitespace, safeFormatQuery } from '@/utils/queryFormatter';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { orbitqlKeywords, redisCommands, mysqlKeywords, cqlKeywords, cypherKeywords, aqlKeywords } from '@/constants/queryKeywords';
 
@@ -327,69 +327,13 @@ export const QueryEditor: React.FC<QueryEditorProps> = ({
     }
   };
 
-  // ReDoS-safe formatter utility with input size limits and timeout protection
-  const safeFormatQuery = (input: string): string => {
-    // Prevent DoS by limiting input size (typical large queries are < 100KB)
-    const MAX_QUERY_SIZE = 1024 * 100; // 100KB limit
-    if (input.length > MAX_QUERY_SIZE) {
-      throw new Error(`Query too large for formatting (${input.length} chars, max: ${MAX_QUERY_SIZE})`);
-    }
-
-    // Use timeout wrapper to prevent infinite regex execution
-    const formatWithTimeout = (text: string, timeoutMs: number = 5000): string => {
-      const start = Date.now();
-      
-      // Check timeout before each regex operation
-      const checkTimeout = () => {
-        if (Date.now() - start > timeoutMs) {
-          throw new Error('Query formatting timeout - potential ReDoS detected');
-        }
-      };
-
-      // ReDoS-safe regex patterns with linear time complexity O(n)
-      let result = text;
-      
-      checkTimeout();
-      // Safe: atomic group prevents backtracking on whitespace sequences
-      result = result.replace(/(?:[ \t\r\n])+/g, ' ');
-      
-      checkTimeout();
-      // Safe: limited quantifiers with character classes
-      result = result.replace(/[ \t]*,[ \t]*/g, ',\n  ');
-      
-      // Safe: individual keyword replacements avoid alternation backtracking
-      const keywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT'];
-      for (const keyword of keywords) {
-        checkTimeout();
-        // Safe: exact word boundary matches, no nested quantifiers
-        const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-        result = result.replace(regex, `\n${keyword}`);
-      }
-      
-      checkTimeout();
-      // Safe: anchored pattern with character class, no backtracking
-      result = result.replace(/^[ \t]+/gm, '  ');
-      
-      return result.trim();
-    };
-
-    return formatWithTimeout(input);
-  };
-
   const handleFormat = () => {
     if (queryType === QueryType.SQL || queryType === QueryType.OrbitQL || queryType === QueryType.MySQL || queryType === QueryType.CQL) {
       try {
-        const formatted = safeFormatQuery(value);
-        onChange(formatted);
+        onChange(safeFormatQuery(value));
       } catch (error) {
         console.error('Query formatting failed:', error);
-        // Graceful fallback - just clean up basic whitespace without regex
-        const basicFormatted = value
-          .split(/\s+/)
-          .filter(word => word.length > 0)
-          .join(' ')
-          .trim();
-        onChange(basicFormatted);
+        onChange(collapseWhitespace(value));
       }
     }
   };

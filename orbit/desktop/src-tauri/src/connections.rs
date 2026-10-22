@@ -1,34 +1,43 @@
-//! Connection management for Orbit Desktop
+//! Connection management for Orbit Desktop.
 //!
-//! This module handles connections to various database types including:
-//! - PostgreSQL (standard SQL)
-//! - OrbitQL (native Orbit protocol)
-//! - Redis (key-value operations)
-//! - Arrow Flight SQL (high-performance columnar protocol)
-//! - OrbitWire (native binary protocol)
+//! Two things are deliberately kept apart:
+//!
+//! * A [`Connection`] is the saved *description* of an endpoint — host, port,
+//!   credentials, protocol. Descriptions are persisted by [`crate::storage`] and
+//!   survive restarts.
+//! * A [`DatabaseSession`] is a *live* handle opened from a description. Sessions
+//!   never outlive the process.
+//!
+//! [`ConnectionManager`] owns both and opens sessions lazily, so a connection
+//! saved in a previous run is usable on the next query without the user having
+//! to recreate it. Because a session is held open across queries, protocol-level
+//! session state (`SET`, temporary tables, open transactions, `USE <db>`,
+//! `SELECT <n>` on Redis) behaves the way the user expects.
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
-/// Connection information provided by user
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectionInfo {
-    pub name: String,
-    pub connection_type: ConnectionType,
-    pub host: String,
-    pub port: u16,
-    pub database: Option<String>,
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub ssl_mode: Option<String>,
-    pub connection_timeout: Option<u64>,
-    pub additional_params: HashMap<String, String>,
-}
+use crate::queries::{ColumnInfo, QueryPayload};
 
-/// Types of database connections supported
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// How long to wait for a TCP connect / handshake when the user has not said.
+const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Types of database endpoints the desktop app can talk to.
+///
+/// The acronym spellings are deliberate: these names are the serialized
+/// contract. They appear verbatim in `storage.json`, in the `ConnectionType`
+/// enum in `src/types/index.ts`, and on the IPC boundary between them. Renaming
+/// `CQL` to `Cql` would orphan every saved connection of that type.
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ConnectionType {
     PostgreSQL,
     OrbitQL,
@@ -41,1253 +50,1920 @@ pub enum ConnectionType {
     OrbitWire,
 }
 
-/// Connection status
+impl ConnectionType {
+    /// Every variant, in the order the connection dialog should offer them.
+    pub const ALL: [ConnectionType; 9] = [
+        ConnectionType::PostgreSQL,
+        ConnectionType::MySQL,
+        ConnectionType::Redis,
+        ConnectionType::CQL,
+        ConnectionType::OrbitQL,
+        ConnectionType::Cypher,
+        ConnectionType::AQL,
+        ConnectionType::FlightSQL,
+        ConnectionType::OrbitWire,
+    ];
+
+    /// The port Orbit-RS listens on for this protocol by default.
+    pub fn default_port(self) -> u16 {
+        match self {
+            ConnectionType::PostgreSQL => 5432,
+            ConnectionType::MySQL => 3306,
+            ConnectionType::Redis => 6379,
+            ConnectionType::CQL => 9042,
+            ConnectionType::OrbitQL
+            | ConnectionType::Cypher
+            | ConnectionType::AQL
+            | ConnectionType::FlightSQL
+            | ConnectionType::OrbitWire => 8080,
+        }
+    }
+
+    /// Stable identifier used in persisted files and on the IPC boundary.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ConnectionType::PostgreSQL => "PostgreSQL",
+            ConnectionType::OrbitQL => "OrbitQL",
+            ConnectionType::Redis => "Redis",
+            ConnectionType::MySQL => "MySQL",
+            ConnectionType::CQL => "CQL",
+            ConnectionType::Cypher => "Cypher",
+            ConnectionType::AQL => "AQL",
+            ConnectionType::FlightSQL => "FlightSQL",
+            ConnectionType::OrbitWire => "OrbitWire",
+        }
+    }
+
+    /// Whether this protocol is served by Orbit-RS's native wire implementation.
+    ///
+    /// The HTTP-backed protocols currently reach `orbit-server`'s REST API,
+    /// whose SQL and catalog handlers still return canned example rows. The UI
+    /// uses this to label those results rather than presenting them as data.
+    pub fn is_native_wire_protocol(self) -> bool {
+        matches!(
+            self,
+            ConnectionType::PostgreSQL
+                | ConnectionType::MySQL
+                | ConnectionType::Redis
+                | ConnectionType::CQL
+        )
+    }
+}
+
+impl fmt::Display for ConnectionType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for ConnectionType {
+    type Err = ConnectionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        ConnectionType::ALL
+            .into_iter()
+            .find(|candidate| candidate.as_str().eq_ignore_ascii_case(s))
+            .ok_or_else(|| {
+                ConnectionError::InvalidConfiguration(format!("unknown connection type: {s}"))
+            })
+    }
+}
+
+/// Everything needed to open a session, as supplied by the user.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionInfo {
+    pub name: String,
+    pub connection_type: ConnectionType,
+    pub host: String,
+    pub port: u16,
+    pub database: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub ssl_mode: Option<String>,
+    /// Connect/handshake timeout in milliseconds.
+    pub connection_timeout: Option<u64>,
+    #[serde(default)]
+    pub additional_params: HashMap<String, String>,
+}
+
+impl ConnectionInfo {
+    fn connect_timeout(&self) -> Duration {
+        self.connection_timeout
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT_CONNECT_TIMEOUT)
+    }
+
+    fn http_base_url(&self) -> String {
+        format!("http://{}:{}", self.host, self.port)
+    }
+
+    fn socket_addr(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
+
+    /// How this connection should treat transport encryption.
+    ///
+    /// # Errors
+    /// Returns [`ConnectionError::InvalidConfiguration`] for an `ssl_mode` that
+    /// is not recognised, rather than guessing and possibly connecting in the
+    /// clear when the user asked for encryption.
+    fn ssl_mode(&self) -> Result<SslMode, ConnectionError> {
+        let mode = match self.ssl_mode.as_deref().map(str::trim) {
+            None | Some("") => return Ok(SslMode::Disable),
+            Some(mode) => mode,
+        };
+
+        match mode.to_ascii_lowercase().as_str() {
+            "disable" | "disabled" | "off" | "none" => Ok(SslMode::Disable),
+            // `prefer` is deliberately treated as `require`. PostgreSQL's own
+            // `prefer` silently falls back to plaintext, which means a
+            // misconfigured server downgrades the connection without anyone
+            // noticing; a client that has TLS available should use it.
+            "prefer" | "allow" | "require" => Ok(SslMode::Require),
+            "verify-ca" | "verify_ca" | "verify-full" | "verify_full" => Ok(SslMode::VerifyFull),
+            other => Err(ConnectionError::InvalidConfiguration(format!(
+                "unknown ssl_mode '{other}'; expected one of disable, prefer, require, \
+                 verify-ca, verify-full"
+            ))),
+        }
+    }
+}
+
+/// What transport security to use for a connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SslMode {
+    /// Plain TCP.
+    Disable,
+    /// TLS, without checking the server's certificate chain or hostname.
+    ///
+    /// This encrypts the connection but does not authenticate the peer, so it
+    /// stops passive eavesdropping and not an active attacker. It is what
+    /// PostgreSQL's own `require` means.
+    Require,
+    /// TLS with full chain and hostname verification against the system roots.
+    VerifyFull,
+}
+
+impl SslMode {
+    fn is_encrypted(self) -> bool {
+        !matches!(self, SslMode::Disable)
+    }
+}
+
+/// Certificate verifier that accepts any chain.
+///
+/// Used only for [`SslMode::Require`], where the user asked for encryption
+/// without authentication — typically a development server with a self-signed
+/// certificate. Never reachable from `verify-ca`/`verify-full`.
+#[derive(Debug)]
+struct AcceptAnyCertificate(Arc<rustls::crypto::CryptoProvider>);
+
+impl rustls::client::danger::ServerCertVerifier for AcceptAnyCertificate {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.0.signature_verification_algorithms.supported_schemes()
+    }
+}
+
+/// Install the process-wide rustls crypto provider.
+///
+/// The `redis` crate builds its TLS configuration internally and relies on the
+/// process default, which rustls only picks automatically when exactly one
+/// provider feature is enabled across the whole dependency graph. More than one
+/// is, so without this every `rediss://` connection panics inside rustls.
+///
+/// Idempotent: a second call, or one after another component has installed a
+/// provider, is a no-op.
+pub fn install_crypto_provider() {
+    if rustls::crypto::ring::default_provider()
+        .install_default()
+        .is_err()
+    {
+        tracing::debug!("rustls crypto provider was already installed");
+    }
+}
+
+/// Build the rustls configuration for `mode`.
+fn tls_config(mode: SslMode) -> Result<rustls::ClientConfig, ConnectionError> {
+    // The PostgreSQL path names its provider explicitly, but installing the
+    // process default here too keeps the two paths consistent.
+    install_crypto_provider();
+    let provider = rustls::crypto::ring::default_provider();
+
+    match mode {
+        SslMode::Disable => Err(ConnectionError::InvalidConfiguration(
+            "TLS configuration requested for a plaintext connection".to_string(),
+        )),
+        SslMode::VerifyFull => {
+            let mut roots = rustls::RootCertStore::empty();
+            let native = rustls_native_certs::load_native_certs();
+            for certificate in native.certs {
+                // A single unparseable system certificate should not disable
+                // verification; the rest of the store still applies.
+                let _ = roots.add(certificate);
+            }
+            if roots.is_empty() {
+                roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            }
+            if roots.is_empty() {
+                return Err(ConnectionError::InvalidConfiguration(
+                    "no trusted root certificates are available, so the server's certificate \
+                     cannot be verified"
+                        .to_string(),
+                ));
+            }
+
+            rustls::ClientConfig::builder_with_provider(Arc::new(provider))
+                .with_safe_default_protocol_versions()
+                .map_err(|e| ConnectionError::InvalidConfiguration(e.to_string()))
+                .map(|builder| builder.with_root_certificates(roots).with_no_client_auth())
+        }
+        SslMode::Require => {
+            let provider = Arc::new(provider);
+            rustls::ClientConfig::builder_with_provider(Arc::clone(&provider))
+                .with_safe_default_protocol_versions()
+                .map_err(|e| ConnectionError::InvalidConfiguration(e.to_string()))
+                .map(|builder| {
+                    builder
+                        .dangerous()
+                        .with_custom_certificate_verifier(Arc::new(AcceptAnyCertificate(provider)))
+                        .with_no_client_auth()
+                })
+        }
+    }
+}
+
+/// Whether a saved connection currently has a live session behind it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConnectionStatus {
     Connected,
     Disconnected,
-    Connecting,
     Error(String),
 }
 
-/// A managed database connection
+/// A saved connection plus the usage counters shown in the UI.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Connection {
     pub id: String,
     pub info: ConnectionInfo,
     pub status: ConnectionStatus,
-    pub created_at: DateTime<Utc>,
+    /// `None` when a persisted record carried a timestamp that would not parse.
+    ///
+    /// Deliberately not defaulted to "now": that would stamp every unreadable
+    /// record with the time the app happened to start, which reads as a real
+    /// creation date and is one nobody measured.
+    pub created_at: Option<DateTime<Utc>>,
     pub last_used: Option<DateTime<Utc>>,
     pub query_count: u64,
 }
 
-/// Connection manager handles all database connections
-#[derive(Default)]
-pub struct ConnectionManager {
-    connections: HashMap<String, Connection>,
-    active_connections: HashMap<String, Box<dyn DatabaseConnection>>,
+/// Render an error together with everything that caused it.
+///
+/// Drivers routinely put the useful part in the source chain: `tokio_postgres`
+/// reports a missing password as the top-level string "invalid configuration",
+/// which tells the user nothing about what to change. The chain says
+/// "invalid configuration: password missing".
+fn describe(error: &dyn std::error::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        let text = cause.to_string();
+        // Drivers often repeat the outer message in the first source.
+        if !message.contains(&text) {
+            message.push_str(": ");
+            message.push_str(&text);
+        }
+        source = cause.source();
+    }
+    message
 }
 
-/// Trait for database connections
-pub trait DatabaseConnection: Send + Sync {
-    fn connection_type(&self) -> ConnectionType;
-    fn is_connected(&self) -> bool;
-    fn disconnect(&mut self) -> Result<(), ConnectionError>;
-}
-
-/// Connection errors
+/// Failures opening or using a connection.
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectionError {
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
-    #[error("Authentication failed: {0}")]
-    AuthenticationFailed(String),
     #[error("Network error: {0}")]
     NetworkError(String),
     #[error("Invalid configuration: {0}")]
     InvalidConfiguration(String),
     #[error("Connection not found: {0}")]
     ConnectionNotFound(String),
-    #[error("Connection timeout")]
-    Timeout,
+    #[error("Query failed: {0}")]
+    QueryFailed(String),
+    #[error("Timed out after {0:?}")]
+    Timeout(Duration),
+}
+
+/// A live handle to one endpoint.
+///
+/// Implementations own whatever the protocol needs to keep a session alive and
+/// are responsible for turning a raw response into a [`QueryPayload`].
+#[async_trait]
+pub trait DatabaseSession: Send + Sync {
+    fn connection_type(&self) -> ConnectionType;
+
+    /// Run one statement and shape the response for the results grid.
+    ///
+    /// # Errors
+    /// Returns [`ConnectionError::QueryFailed`] when the server rejects the
+    /// statement, or a transport variant when the session has dropped.
+    async fn execute(&mut self, statement: &str) -> Result<QueryPayload, ConnectionError>;
+
+    /// Cheap liveness probe used to decide whether a cached session is reusable.
+    async fn ping(&mut self) -> Result<(), ConnectionError>;
+}
+
+/// A session shared between the manager and whoever is currently querying it.
+///
+/// The inner [`Mutex`] serialises statements on a single session — which is
+/// what a database session requires — while leaving other connections free to
+/// run concurrently.
+pub type SessionHandle = Arc<Mutex<Box<dyn DatabaseSession>>>;
+
+/// Owns saved connections and their live sessions.
+#[derive(Default)]
+pub struct ConnectionManager {
+    connections: RwLock<HashMap<String, Connection>>,
+    sessions: RwLock<HashMap<String, SessionHandle>>,
 }
 
 impl ConnectionManager {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Create a new connection
+    /// Add a connection description without contacting the server.
+    ///
+    /// This is the startup path: descriptions restored from disk become
+    /// queryable immediately, and the session opens on first use.
+    pub async fn register(&self, connection: Connection) {
+        self.connections
+            .write()
+            .await
+            .insert(connection.id.clone(), connection);
+    }
+
+    /// Create a connection, verifying it can actually be opened first.
+    ///
+    /// # Errors
+    /// Propagates whatever prevented the session from opening; nothing is
+    /// stored when the endpoint is unreachable.
     pub async fn create_connection(
-        &mut self,
+        &self,
         info: ConnectionInfo,
     ) -> Result<String, ConnectionError> {
-        let connection_id = Uuid::new_v4().to_string();
-
-        // Test the connection first
-        let status = self.test_connection(&info).await?;
+        let session = open_session(&info).await?;
+        let id = Uuid::new_v4().to_string();
 
         let connection = Connection {
-            id: connection_id.clone(),
-            info: info.clone(),
-            status,
-            created_at: Utc::now(),
+            id: id.clone(),
+            info,
+            status: ConnectionStatus::Connected,
+            created_at: Some(Utc::now()),
             last_used: None,
             query_count: 0,
         };
 
-        // Store the connection
-        self.connections.insert(connection_id.clone(), connection);
+        self.connections
+            .write()
+            .await
+            .insert(id.clone(), connection);
+        self.sessions
+            .write()
+            .await
+            .insert(id.clone(), Arc::new(Mutex::new(session)));
 
-        // Create the actual database connection
-        let db_connection = self.create_database_connection(&info).await?;
-        self.active_connections
-            .insert(connection_id.clone(), db_connection);
-
-        Ok(connection_id)
+        Ok(id)
     }
 
-    /// Test a connection without storing it
-    pub async fn test_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        match info.connection_type {
-            ConnectionType::PostgreSQL => self.test_postgresql_connection(info).await,
-            ConnectionType::OrbitQL => self.test_orbitql_connection(info).await,
-            ConnectionType::Redis => self.test_redis_connection(info).await,
-            ConnectionType::MySQL => self.test_mysql_connection(info).await,
-            ConnectionType::CQL => self.test_cql_connection(info).await,
-            ConnectionType::Cypher => self.test_cypher_connection(info).await,
-            ConnectionType::AQL => self.test_aql_connection(info).await,
-            ConnectionType::FlightSQL => self.test_flightsql_connection(info).await,
-            ConnectionType::OrbitWire => self.test_orbitwire_connection(info).await,
+    /// Open a throwaway session to check the details are usable.
+    pub async fn test_connection(&self, info: &ConnectionInfo) -> ConnectionStatus {
+        match open_session(info).await {
+            Ok(_) => ConnectionStatus::Connected,
+            Err(e) => ConnectionStatus::Error(e.to_string()),
         }
     }
 
-    /// List all stored connections
+    /// All saved connections, with `status` reflecting live session state.
     pub async fn list_connections(&self) -> Vec<Connection> {
-        self.connections.values().cloned().collect()
+        let sessions = self.sessions.read().await;
+        self.connections
+            .read()
+            .await
+            .values()
+            .map(|connection| {
+                let status = if sessions.contains_key(&connection.id) {
+                    ConnectionStatus::Connected
+                } else {
+                    connection.status.clone()
+                };
+                Connection {
+                    status,
+                    ..connection.clone()
+                }
+            })
+            .collect()
     }
 
-    /// Get a specific connection
-    pub async fn get_connection(&self, connection_id: &str) -> Option<&Connection> {
-        self.connections.get(connection_id)
+    /// A single saved connection.
+    pub async fn get_connection(&self, connection_id: &str) -> Option<Connection> {
+        self.connections.read().await.get(connection_id).cloned()
     }
 
-    /// Disconnect a connection
-    pub async fn disconnect(&mut self, connection_id: &str) -> Result<(), ConnectionError> {
-        if let Some(mut db_connection) = self.active_connections.remove(connection_id) {
-            db_connection.disconnect()?;
+    /// Return a live session for `connection_id`, opening one if needed.
+    ///
+    /// A cached session that has since dropped is discarded and replaced rather
+    /// than handed out, so a server restart costs one failed ping, not a dead
+    /// connection the user has to notice and clear by hand.
+    ///
+    /// # Errors
+    /// Returns [`ConnectionError::ConnectionNotFound`] for an unknown id, or
+    /// the underlying failure when the endpoint cannot be reached.
+    pub async fn session(&self, connection_id: &str) -> Result<SessionHandle, ConnectionError> {
+        if let Some(handle) = self.sessions.read().await.get(connection_id).cloned() {
+            let alive = handle.lock().await.ping().await.is_ok();
+            if alive {
+                return Ok(handle);
+            }
+            tracing::info!(connection_id, "cached session is dead, reopening");
+            self.sessions.write().await.remove(connection_id);
         }
 
-        if let Some(connection) = self.connections.get_mut(connection_id) {
+        let info = self
+            .get_connection(connection_id)
+            .await
+            .ok_or_else(|| ConnectionError::ConnectionNotFound(connection_id.to_string()))?
+            .info;
+
+        // Opened outside the map lock so a slow handshake cannot stall queries
+        // against other connections.
+        let session = match open_session(&info).await {
+            Ok(session) => session,
+            Err(e) => {
+                self.mark_error(connection_id, &e).await;
+                return Err(e);
+            }
+        };
+
+        let handle: SessionHandle = Arc::new(Mutex::new(session));
+        let mut sessions = self.sessions.write().await;
+        // Another task may have opened one while we were connecting; prefer
+        // whichever landed first so both callers share a single session.
+        let handle = sessions
+            .entry(connection_id.to_string())
+            .or_insert(handle)
+            .clone();
+
+        if let Some(connection) = self.connections.write().await.get_mut(connection_id) {
+            connection.status = ConnectionStatus::Connected;
+        }
+
+        Ok(handle)
+    }
+
+    /// Drop the live session but keep the saved description.
+    pub async fn disconnect(&self, connection_id: &str) {
+        self.sessions.write().await.remove(connection_id);
+        if let Some(connection) = self.connections.write().await.get_mut(connection_id) {
             connection.status = ConnectionStatus::Disconnected;
         }
-
-        Ok(())
     }
 
-    /// Delete a connection entirely
-    pub async fn delete_connection(&mut self, connection_id: &str) -> Result<(), ConnectionError> {
-        // First disconnect if connected
-        self.disconnect(connection_id).await.ok();
-
-        // Remove from storage
-        self.connections.remove(connection_id);
-
-        Ok(())
+    /// Forget the connection entirely.
+    pub async fn delete_connection(&self, connection_id: &str) {
+        self.sessions.write().await.remove(connection_id);
+        self.connections.write().await.remove(connection_id);
     }
 
-    /// Update connection usage statistics
-    pub async fn update_usage(&mut self, connection_id: &str) {
-        if let Some(connection) = self.connections.get_mut(connection_id) {
+    /// Record that a query ran, so the UI's counters mean something.
+    pub async fn record_use(&self, connection_id: &str) {
+        if let Some(connection) = self.connections.write().await.get_mut(connection_id) {
             connection.last_used = Some(Utc::now());
             connection.query_count += 1;
         }
     }
 
-    /// Get active database connection for query execution
-    pub fn get_database_connection(
-        &self,
-        connection_id: &str,
-    ) -> Option<&Box<dyn DatabaseConnection>> {
-        self.active_connections.get(connection_id)
-    }
-
-    // Private helper methods
-
-    async fn create_database_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<Box<dyn DatabaseConnection>, ConnectionError> {
-        match info.connection_type {
-            ConnectionType::PostgreSQL => {
-                let conn = PostgreSQLConnection::new(info).await?;
-                Ok(Box::new(conn))
-            }
-            ConnectionType::OrbitQL => {
-                let conn = OrbitQLConnection::new(info).await?;
-                Ok(Box::new(conn))
-            }
-            ConnectionType::Redis => {
-                let conn = RedisConnection::new(info).await?;
-                Ok(Box::new(conn))
-            }
-            ConnectionType::MySQL => {
-                let conn = MySQLConnection::new(info).await?;
-                Ok(Box::new(conn))
-            }
-            ConnectionType::CQL => {
-                let conn = CQLConnection::new(info).await?;
-                Ok(Box::new(conn))
-            }
-            ConnectionType::Cypher => {
-                let conn = CypherConnection::new(info).await?;
-                Ok(Box::new(conn))
-            }
-            ConnectionType::AQL => {
-                let conn = AQLConnection::new(info).await?;
-                Ok(Box::new(conn))
-            }
-            ConnectionType::FlightSQL => {
-                let conn = FlightSQLConnection::new(info).await?;
-                Ok(Box::new(conn))
-            }
-            ConnectionType::OrbitWire => {
-                let conn = OrbitWireConnection::new(info).await?;
-                Ok(Box::new(conn))
-            }
+    async fn mark_error(&self, connection_id: &str, error: &ConnectionError) {
+        if let Some(connection) = self.connections.write().await.get_mut(connection_id) {
+            connection.status = ConnectionStatus::Error(error.to_string());
         }
     }
+}
 
-    async fn test_postgresql_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        // Build connection string
-        let connection_string = format!(
-            "host={} port={} user={} password={} dbname={}",
-            info.host,
-            info.port,
-            info.username.as_ref().unwrap_or(&"postgres".to_string()),
-            info.password.as_ref().unwrap_or(&"".to_string()),
-            info.database.as_ref().unwrap_or(&"postgres".to_string())
-        );
+/// Open a live session for `info`, dispatching on protocol.
+async fn open_session(
+    info: &ConnectionInfo,
+) -> Result<Box<dyn DatabaseSession>, ConnectionError> {
+    // Validate up front so an unusable ssl_mode fails before any socket work.
+    info.ssl_mode()?;
 
-        match tokio_postgres::connect(&connection_string, tokio_postgres::NoTls).await {
-            Ok((client, connection)) => {
-                // Spawn the connection task
-                tokio::spawn(async move {
-                    if let Err(e) = connection.await {
-                        tracing::error!("PostgreSQL connection error: {}", e);
-                    }
-                });
-
-                // Test a simple query
-                match client.simple_query("SELECT 1").await {
-                    Ok(_) => Ok(ConnectionStatus::Connected),
-                    Err(e) => Ok(ConnectionStatus::Error(format!("Query test failed: {}", e))),
-                }
-            }
-            Err(e) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
-        }
+    match info.connection_type {
+        ConnectionType::PostgreSQL => Ok(Box::new(PostgresSession::connect(info).await?)),
+        ConnectionType::MySQL => Ok(Box::new(MySqlSession::connect(info).await?)),
+        ConnectionType::Redis => Ok(Box::new(RedisSession::connect(info).await?)),
+        ConnectionType::CQL => Ok(Box::new(TcpProbeSession::connect(info).await?)),
+        ConnectionType::OrbitWire => Ok(Box::new(OrbitWireSession::connect(info).await?)),
+        ConnectionType::OrbitQL
+        | ConnectionType::Cypher
+        | ConnectionType::AQL
+        | ConnectionType::FlightSQL => Ok(Box::new(HttpSession::connect(info).await?)),
     }
+}
 
-    async fn test_orbitql_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        // For now, just test if we can reach the host and port
-        let addr = format!("{}:{}", info.host, info.port);
+// ---------------------------------------------------------------------------
+// PostgreSQL
+// ---------------------------------------------------------------------------
 
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            tokio::net::TcpStream::connect(&addr),
-        )
-        .await
-        {
-            Ok(Ok(_)) => Ok(ConnectionStatus::Connected),
-            Ok(Err(e)) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
-            Err(_) => Ok(ConnectionStatus::Error("Connection timeout".to_string())),
-        }
-    }
+/// A PostgreSQL session held open across statements.
+pub struct PostgresSession {
+    client: tokio_postgres::Client,
+    /// Whether the peer answers `Describe` well enough for `prepare()`.
+    ///
+    /// Real PostgreSQL does. `orbit-server`'s wire implementation replies to
+    /// every `Describe` with `NoData` instead of a `ParameterDescription`, so
+    /// `prepare()` fails there with "unexpected message from server" and the
+    /// simple query protocol has to be used instead. Which one applies is
+    /// decided once per session rather than per statement.
+    extended_protocol: bool,
+}
 
-    async fn test_redis_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        let redis_url = format!("redis://{}:{}/", info.host, info.port);
+impl PostgresSession {
+    async fn connect(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        let client = Self::open_client(info).await?;
 
-        match redis::Client::open(redis_url) {
-            Ok(client) => {
-                match client.get_connection() {
-                    Ok(mut conn) => {
-                        // Test with PING command
-                        match redis::cmd("PING").query::<String>(&mut conn) {
-                            Ok(response) if response == "PONG" => Ok(ConnectionStatus::Connected),
-                            Ok(response) => Ok(ConnectionStatus::Error(format!(
-                                "Unexpected response: {}",
-                                response
-                            ))),
-                            Err(e) => Ok(ConnectionStatus::Error(format!(
-                                "Redis command failed: {}",
-                                e
-                            ))),
-                        }
-                    }
-                    Err(e) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
-                }
-            }
-            Err(e) => Ok(ConnectionStatus::Error(format!("Invalid Redis URL: {}", e))),
-        }
-    }
-
-    async fn test_mysql_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        use mysql_async::prelude::*;
-
-        let opts = mysql_async::OptsBuilder::default()
-            .ip_or_hostname(info.host.clone())
-            .tcp_port(info.port)
-            .user(info.username.as_deref())
-            .pass(info.password.as_deref())
-            .db_name(info.database.as_deref());
-
-        match mysql_async::Conn::new(opts).await {
-            Ok(mut conn) => {
-                // Test with a simple query
-                match conn.query_first::<String, _>("SELECT 1").await {
-                    Ok(_) => Ok(ConnectionStatus::Connected),
-                    Err(e) => Ok(ConnectionStatus::Error(format!("Query test failed: {}", e))),
-                }
-            }
-            Err(e) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
-        }
-    }
-
-    async fn test_cql_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        // CQL uses TCP connection, test basic connectivity
-        let addr = format!("{}:{}", info.host, info.port);
-
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            tokio::net::TcpStream::connect(&addr),
-        )
-        .await
-        {
-            Ok(Ok(_)) => Ok(ConnectionStatus::Connected),
-            Ok(Err(e)) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
-            Err(_) => Ok(ConnectionStatus::Error("Connection timeout".to_string())),
-        }
-    }
-
-    async fn test_cypher_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        // Cypher/Neo4j uses HTTP REST API for queries
-        let base_url = format!("http://{}:{}", info.host, info.port);
-        let client = reqwest::Client::new();
-
-        // Test with a simple query endpoint
-        let test_url = format!("{}/db/data/transaction/commit", base_url);
-        let auth = if let (Some(user), Some(pass)) = (&info.username, &info.password) {
-            Some(format!("{}:{}", user, pass))
-        } else {
-            None
-        };
-
-        let mut request = client.post(&test_url);
-        if let Some(auth_str) = auth {
-            request = request.basic_auth(
-                info.username.as_deref().unwrap_or(""),
-                info.password.as_deref(),
+        // Probe with a statement that cannot fail for any reason except an
+        // unsupported extended protocol. The client stays usable either way —
+        // a failed `prepare` does not disturb subsequent simple queries — so
+        // this costs one round trip and no extra connection.
+        let extended_protocol = client.prepare("SELECT 1").await.is_ok();
+        if !extended_protocol {
+            tracing::info!(
+                host = %info.host,
+                port = info.port,
+                "peer does not support the extended query protocol; using simple queries"
             );
         }
 
-        match request
-            .json(&serde_json::json!({
-                "statements": [{"statement": "RETURN 1 as result"}]
-            }))
-            .send()
-            .await
-        {
-            Ok(response) if response.status().is_success() => Ok(ConnectionStatus::Connected),
-            Ok(response) => Ok(ConnectionStatus::Error(format!(
-                "HTTP {}: {}",
-                response.status(),
-                response.status().canonical_reason().unwrap_or("Unknown")
-            ))),
-            Err(e) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
-        }
+        Ok(Self {
+            client,
+            extended_protocol,
+        })
     }
 
-    async fn test_aql_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        // AQL/ArangoDB uses HTTP REST API
-        let base_url = format!("http://{}:{}", info.host, info.port);
-        let client = reqwest::Client::new();
-
-        // Test with version endpoint
-        let version_url = format!("{}/_api/version", base_url);
-        let mut request = client.get(&version_url);
-
-        if let (Some(user), Some(pass)) = (&info.username, &info.password) {
-            request = request.basic_auth(user, Some(pass));
+    async fn open_client(info: &ConnectionInfo) -> Result<tokio_postgres::Client, ConnectionError> {
+        // Built through `Config` rather than a connection string so that
+        // passwords containing spaces, quotes or backslashes cannot corrupt
+        // (or inject into) the parameter list.
+        let mut config = tokio_postgres::Config::new();
+        config
+            .host(&info.host)
+            .port(info.port)
+            .connect_timeout(info.connect_timeout())
+            .application_name("orbit-desktop");
+        config.user(info.username.as_deref().unwrap_or("orbit"));
+        if let Some(password) = &info.password {
+            config.password(password);
+        }
+        if let Some(database) = &info.database {
+            config.dbname(database);
         }
 
-        match request.send().await {
-            Ok(response) if response.status().is_success() => Ok(ConnectionStatus::Connected),
-            Ok(response) => Ok(ConnectionStatus::Error(format!(
-                "HTTP {}: {}",
-                response.status(),
-                response.status().canonical_reason().unwrap_or("Unknown")
-            ))),
-            Err(e) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
-        }
-    }
+        let mode = info.ssl_mode()?;
 
-    async fn test_flightsql_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        // Arrow Flight SQL uses gRPC, test via HTTP REST adapter
-        let base_url = format!("http://{}:{}", info.host, info.port);
-        let client = reqwest::Client::new();
-
-        // Try health endpoint or just test TCP connectivity
-        let health_url = format!("{}/health", base_url);
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            client.get(&health_url).send(),
-        )
-        .await
-        {
-            Ok(Ok(response))
-                if response.status().is_success() || response.status().as_u16() == 404 =>
-            {
-                // 404 is acceptable - means server is responding
-                Ok(ConnectionStatus::Connected)
-            }
-            Ok(Ok(response)) => Ok(ConnectionStatus::Error(format!(
-                "HTTP {}: {}",
-                response.status(),
-                response.status().canonical_reason().unwrap_or("Unknown")
-            ))),
-            Ok(Err(e)) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
-            Err(_) => Ok(ConnectionStatus::Error("Connection timeout".to_string())),
-        }
-    }
-
-    async fn test_orbitwire_connection(
-        &self,
-        info: &ConnectionInfo,
-    ) -> Result<ConnectionStatus, ConnectionError> {
-        use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-        let addr = format!("{}:{}", info.host, info.port);
-
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            tokio::net::TcpStream::connect(&addr),
-        )
-        .await
-        {
-            Ok(Ok(mut stream)) => {
-                // Send OrbitWire handshake: magic bytes + version
-                let handshake = [0x4F, 0x52, 0x42, 0x54, 0x01]; // "ORBT" + version 1
-                if let Err(e) = stream.write_all(&handshake).await {
-                    return Ok(ConnectionStatus::Error(format!(
-                        "Handshake write failed: {}",
-                        e
-                    )));
-                }
-
-                // Read handshake response
-                let mut response = [0u8; 5];
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(3),
-                    stream.read_exact(&mut response),
-                )
+        // `SslMode::Require` is passed to the driver as `Require` too, so a
+        // server that refuses TLS fails the connection instead of quietly
+        // continuing in plaintext.
+        let (client, connection) = if mode.is_encrypted() {
+            config.ssl_mode(tokio_postgres::config::SslMode::Require);
+            let tls = tokio_postgres_rustls::MakeRustlsConnect::new(tls_config(mode)?);
+            let (client, connection) = config
+                .connect(tls)
                 .await
-                {
-                    Ok(Ok(_)) if &response[..4] == b"ORBT" => Ok(ConnectionStatus::Connected),
-                    Ok(Ok(_)) => Ok(ConnectionStatus::Error(
-                        "Invalid handshake response".to_string(),
-                    )),
-                    Ok(Err(e)) => Ok(ConnectionStatus::Error(format!(
-                        "Handshake read failed: {}",
-                        e
-                    ))),
-                    Err(_) => Ok(ConnectionStatus::Error("Handshake timeout".to_string())),
+                .map_err(|e| ConnectionError::ConnectionFailed(describe(&e)))?;
+            tokio::spawn(async move {
+                if let Err(e) = connection.await {
+                    tracing::debug!("PostgreSQL TLS connection closed: {e}");
                 }
-            }
-            Ok(Err(e)) => Ok(ConnectionStatus::Error(format!("Connection failed: {}", e))),
-            Err(_) => Ok(ConnectionStatus::Error("Connection timeout".to_string())),
-        }
-    }
-}
-
-// Concrete database connection implementations
-
-/// PostgreSQL connection
-pub struct PostgreSQLConnection {
-    client: Option<tokio_postgres::Client>,
-    connected: bool,
-}
-
-impl PostgreSQLConnection {
-    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
-        let connection_string = format!(
-            "host={} port={} user={} password={} dbname={}",
-            info.host,
-            info.port,
-            info.username.as_ref().unwrap_or(&"postgres".to_string()),
-            info.password.as_ref().unwrap_or(&"".to_string()),
-            info.database.as_ref().unwrap_or(&"postgres".to_string())
-        );
-
-        match tokio_postgres::connect(&connection_string, tokio_postgres::NoTls).await {
-            Ok((client, connection)) => {
-                // Spawn the connection task
-                tokio::spawn(async move {
-                    if let Err(e) = connection.await {
-                        tracing::error!("PostgreSQL connection error: {}", e);
-                    }
-                });
-
-                Ok(Self {
-                    client: Some(client),
-                    connected: true,
-                })
-            }
-            Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
-        }
-    }
-
-    pub async fn execute_query(
-        &self,
-        query: &str,
-    ) -> Result<Vec<tokio_postgres::Row>, ConnectionError> {
-        if let Some(client) = &self.client {
-            match client.query(query, &[]).await {
-                Ok(rows) => Ok(rows),
-                Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
-            }
+            });
+            return Ok(client);
         } else {
-            Err(ConnectionError::ConnectionNotFound(
-                "PostgreSQL client not available".to_string(),
-            ))
+            config
+                .connect(tokio_postgres::NoTls)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(describe(&e)))?
+        };
+
+        // The connection future drives the socket; it ends when the client is
+        // dropped, which is what closes the session.
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                tracing::debug!("PostgreSQL connection closed: {e}");
+            }
+        });
+
+        Ok(client)
+    }
+
+    /// Run a statement over the extended protocol, with server-declared types.
+    async fn execute_extended(&self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+        // Preparing first tells us whether the statement returns a result set,
+        // and gives real column types instead of guessing from a Debug string.
+        let prepared = self
+            .client
+            .prepare(statement)
+            .await
+            .map_err(|e| ConnectionError::QueryFailed(describe(&e)))?;
+
+        if prepared.columns().is_empty() {
+            let affected = self
+                .client
+                .execute(&prepared, &[])
+                .await
+                .map_err(|e| ConnectionError::QueryFailed(describe(&e)))?;
+            return Ok(QueryPayload::affected(affected));
+        }
+
+        let columns: Vec<ColumnInfo> = prepared
+            .columns()
+            .iter()
+            .map(|column| ColumnInfo::new(column.name(), column.type_().name()))
+            .collect();
+
+        let rows = self
+            .client
+            .query(&prepared, &[])
+            .await
+            .map_err(|e| ConnectionError::QueryFailed(describe(&e)))?;
+
+        let shaped = rows
+            .iter()
+            .map(|row| {
+                columns
+                    .iter()
+                    .enumerate()
+                    .map(|(index, column)| {
+                        (column.name.clone(), postgres_value_to_json(row, index))
+                    })
+                    .collect()
+            })
+            .collect();
+
+        Ok(QueryPayload::returned(columns, shaped))
+    }
+
+    /// Run a statement over the simple query protocol.
+    ///
+    /// Every value arrives as text and the protocol carries no type OIDs to the
+    /// client, so columns are reported as `text`. That is what the wire actually
+    /// said; guessing a richer type from the characters in a value would put an
+    /// unverified claim in the type column.
+    async fn execute_simple(&self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+        use tokio_postgres::SimpleQueryMessage;
+
+        let messages = self
+            .client
+            .simple_query(statement)
+            .await
+            .map_err(|e| ConnectionError::QueryFailed(describe(&e)))?;
+
+        let mut columns: Vec<ColumnInfo> = Vec::new();
+        let mut rows: Vec<HashMap<String, serde_json::Value>> = Vec::new();
+        let mut affected: Option<u64> = None;
+
+        for message in messages {
+            match message {
+                SimpleQueryMessage::Row(row) => {
+                    if columns.is_empty() {
+                        columns = row
+                            .columns()
+                            .iter()
+                            .map(|column| ColumnInfo::new(column.name(), "text"))
+                            .collect();
+                    }
+                    rows.push(
+                        columns
+                            .iter()
+                            .enumerate()
+                            .map(|(index, column)| {
+                                let value = row
+                                    .get(index)
+                                    .map(|text| serde_json::Value::String(text.to_string()))
+                                    // A missing field here is SQL NULL: the
+                                    // simple protocol sends those as absent.
+                                    .unwrap_or(serde_json::Value::Null);
+                                (column.name.clone(), value)
+                            })
+                            .collect(),
+                    );
+                }
+                SimpleQueryMessage::CommandComplete(count) => {
+                    affected = Some(affected.unwrap_or(0) + count);
+                }
+                // The enum is non_exhaustive; anything new carries no rows.
+                _ => {}
+            }
+        }
+
+        if !columns.is_empty() {
+            return Ok(QueryPayload::returned(columns, rows));
+        }
+
+        match affected {
+            Some(count) => Ok(QueryPayload::affected(count)),
+            None => Ok(QueryPayload {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                outcome: crate::queries::StatementOutcome::Completed,
+            }),
         }
     }
 }
 
-impl DatabaseConnection for PostgreSQLConnection {
+#[async_trait]
+impl DatabaseSession for PostgresSession {
     fn connection_type(&self) -> ConnectionType {
         ConnectionType::PostgreSQL
     }
 
-    fn is_connected(&self) -> bool {
-        self.connected && self.client.is_some()
-    }
-
-    fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.client = None;
-        self.connected = false;
-        Ok(())
-    }
-}
-
-/// OrbitQL connection
-pub struct OrbitQLConnection {
-    // This would connect to the actual Orbit instance
-    // For now, we'll use HTTP client as a placeholder
-    client: reqwest::Client,
-    base_url: String,
-    connected: bool,
-}
-
-impl OrbitQLConnection {
-    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
-        let base_url = format!("http://{}:{}", info.host, info.port);
-        let client = reqwest::Client::new();
-
-        // Test connection with a health check
-        let health_url = format!("{}/health", base_url);
-        match client.get(&health_url).send().await {
-            Ok(response) if response.status().is_success() => Ok(Self {
-                client,
-                base_url,
-                connected: true,
-            }),
-            Ok(response) => Err(ConnectionError::ConnectionFailed(format!(
-                "Health check failed: {}",
-                response.status()
-            ))),
-            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
-        }
-    }
-
-    pub async fn execute_orbitql(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
-        if !self.connected {
-            return Err(ConnectionError::ConnectionNotFound(
-                "Not connected".to_string(),
-            ));
-        }
-
-        let query_url = format!("{}/query", self.base_url);
-        let request_body = serde_json::json!({
-            "query": query
-        });
-
-        match self
-            .client
-            .post(&query_url)
-            .json(&request_body)
-            .send()
-            .await
-        {
-            Ok(response) => {
-                if response.status().is_success() {
-                    match response.json::<serde_json::Value>().await {
-                        Ok(result) => Ok(result),
-                        Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
-                    }
-                } else {
-                    Err(ConnectionError::ConnectionFailed(format!(
-                        "Query failed: {}",
-                        response.status()
-                    )))
-                }
-            }
-            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
-        }
-    }
-}
-
-impl DatabaseConnection for OrbitQLConnection {
-    fn connection_type(&self) -> ConnectionType {
-        ConnectionType::OrbitQL
-    }
-
-    fn is_connected(&self) -> bool {
-        self.connected
-    }
-
-    fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.connected = false;
-        Ok(())
-    }
-}
-
-/// Redis connection
-pub struct RedisConnection {
-    client: Option<redis::Client>,
-    connected: bool,
-}
-
-impl RedisConnection {
-    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
-        let redis_url = format!("redis://{}:{}/", info.host, info.port);
-
-        match redis::Client::open(redis_url) {
-            Ok(client) => {
-                // Test connection
-                let mut conn = client
-                    .get_async_connection()
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
-                // Test with PING
-                redis::cmd("PING")
-                    .query_async::<_, String>(&mut conn)
-                    .await
-                    .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
-                Ok(Self {
-                    client: Some(client),
-                    connected: true,
-                })
-            }
-            Err(e) => Err(ConnectionError::InvalidConfiguration(e.to_string())),
-        }
-    }
-
-    pub async fn execute_redis_command(
-        &self,
-        cmd: &str,
-        args: &[&str],
-    ) -> Result<redis::Value, ConnectionError> {
-        if let Some(client) = &self.client {
-            let mut conn = client
-                .get_async_connection()
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
-            let mut redis_cmd = redis::cmd(cmd);
-            for arg in args {
-                redis_cmd.arg(*arg);
-            }
-
-            redis_cmd
-                .query_async::<_, redis::Value>(&mut conn)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+    async fn execute(&mut self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+        if self.extended_protocol {
+            self.execute_extended(statement).await
         } else {
-            Err(ConnectionError::ConnectionNotFound(
-                "Redis connection not available".to_string(),
-            ))
+            self.execute_simple(statement).await
         }
     }
-}
 
-impl DatabaseConnection for RedisConnection {
-    fn connection_type(&self) -> ConnectionType {
-        ConnectionType::Redis
-    }
-
-    fn is_connected(&self) -> bool {
-        self.connected && self.client.is_some()
-    }
-
-    fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.client = None;
-        self.connected = false;
-        Ok(())
+    async fn ping(&mut self) -> Result<(), ConnectionError> {
+        if self.client.is_closed() {
+            return Err(ConnectionError::NetworkError("session closed".to_string()));
+        }
+        self.client
+            .simple_query("")
+            .await
+            .map(|_| ())
+            .map_err(|e| ConnectionError::NetworkError(e.to_string()))
     }
 }
 
-/// MySQL connection
-pub struct MySQLConnection {
-    pool: Option<mysql_async::Pool>,
-    connected: bool,
+/// Decode one PostgreSQL column into JSON, keeping SQL `NULL` distinct from
+/// "this client could not decode it".
+fn postgres_value_to_json(row: &tokio_postgres::Row, index: usize) -> serde_json::Value {
+    use serde_json::Value;
+
+    /// `Ok(Some)` decoded, `Ok(None)` SQL NULL, `Err` not decodable here.
+    fn decode<'a, T>(row: &'a tokio_postgres::Row, index: usize) -> Result<Option<T>, ()>
+    where
+        T: tokio_postgres::types::FromSql<'a>,
+    {
+        row.try_get::<_, Option<T>>(index).map_err(|_| ())
+    }
+
+    fn number(value: f64) -> Value {
+        serde_json::Number::from_f64(value)
+            .map(Value::Number)
+            .unwrap_or_else(|| Value::String(value.to_string()))
+    }
+
+    let column_type = row.columns()[index].type_();
+
+    let decoded = match column_type.name() {
+        "bool" => decode::<bool>(row, index).map(|v| v.map(Value::Bool)),
+        "int2" => decode::<i16>(row, index).map(|v| v.map(|n| Value::Number(n.into()))),
+        "int4" => decode::<i32>(row, index).map(|v| v.map(|n| Value::Number(n.into()))),
+        "int8" => decode::<i64>(row, index).map(|v| v.map(|n| Value::Number(n.into()))),
+        "oid" => decode::<u32>(row, index).map(|v| v.map(|n| Value::Number(n.into()))),
+        "float4" => decode::<f32>(row, index).map(|v| v.map(|n| number(f64::from(n)))),
+        "float8" => decode::<f64>(row, index).map(|v| v.map(number)),
+        // Rendered as text: f64 cannot hold every NUMERIC exactly, and silently
+        // rounding a monetary column is worse than making the caller parse it.
+        "numeric" => decode::<rust_decimal::Decimal>(row, index)
+            .map(|v| v.map(|d| Value::String(d.to_string()))),
+        "uuid" => decode::<uuid::Uuid>(row, index).map(|v| v.map(|u| Value::String(u.to_string()))),
+        "json" | "jsonb" => decode::<Value>(row, index),
+        "timestamptz" => decode::<DateTime<Utc>>(row, index)
+            .map(|v| v.map(|t| Value::String(t.to_rfc3339()))),
+        "timestamp" => decode::<chrono::NaiveDateTime>(row, index)
+            .map(|v| v.map(|t| Value::String(t.to_string()))),
+        "date" => decode::<chrono::NaiveDate>(row, index)
+            .map(|v| v.map(|t| Value::String(t.to_string()))),
+        "time" => decode::<chrono::NaiveTime>(row, index)
+            .map(|v| v.map(|t| Value::String(t.to_string()))),
+        "bytea" => decode::<Vec<u8>>(row, index)
+            .map(|v| v.map(|bytes| Value::String(format!("\\x{}", hex_encode(&bytes))))),
+        _ => decode::<String>(row, index).map(|v| v.map(Value::String)),
+    };
+
+    match decoded {
+        Ok(Some(value)) => value,
+        Ok(None) => Value::Null,
+        // Not null, but this client has no decoder. Saying so beats rendering
+        // it as NULL, which would read as "the database has no value here".
+        Err(()) => Value::String(format!("<undecoded {}>", column_type.name())),
+    }
 }
 
-impl MySQLConnection {
-    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
-        use mysql_async::prelude::*;
+fn hex_encode(bytes: &[u8]) -> String {
+    use fmt::Write as _;
+    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut acc, byte| {
+        // Writing to a String cannot fail; the Result is discarded deliberately.
+        let _ = write!(acc, "{byte:02x}");
+        acc
+    })
+}
 
+// ---------------------------------------------------------------------------
+// MySQL
+// ---------------------------------------------------------------------------
+
+/// A MySQL session held open across statements.
+pub struct MySqlSession {
+    conn: mysql_async::Conn,
+}
+
+impl MySqlSession {
+    async fn connect(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
         let opts = mysql_async::OptsBuilder::default()
             .ip_or_hostname(info.host.clone())
             .tcp_port(info.port)
-            .user(info.username.as_deref())
-            .pass(info.password.as_deref())
-            .db_name(info.database.as_deref());
+            .user(info.username.clone())
+            .pass(info.password.clone())
+            .db_name(info.database.clone());
 
-        let pool = mysql_async::Pool::new(opts);
+        let conn = tokio::time::timeout(
+            info.connect_timeout(),
+            mysql_async::Conn::new(opts),
+        )
+        .await
+        .map_err(|_| ConnectionError::Timeout(info.connect_timeout()))?
+        .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
 
-        // Test connection
-        match pool.get_conn().await {
-            Ok(mut conn) => match conn.query_first::<String, _>("SELECT 1").await {
-                Ok(_) => Ok(Self {
-                    pool: Some(pool),
-                    connected: true,
-                }),
-                Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
-            },
-            Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
-        }
-    }
-
-    pub async fn execute_query(
-        &self,
-        query: &str,
-    ) -> Result<Vec<mysql_async::Row>, ConnectionError> {
-        use mysql_async::prelude::Queryable;
-
-        if let Some(pool) = &self.pool {
-            let mut conn = pool
-                .get_conn()
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
-
-            conn.query::<mysql_async::Row, _>(query)
-                .await
-                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
-        } else {
-            Err(ConnectionError::ConnectionNotFound(
-                "MySQL pool not available".to_string(),
-            ))
-        }
+        Ok(Self { conn })
     }
 }
 
-impl DatabaseConnection for MySQLConnection {
+#[async_trait]
+impl DatabaseSession for MySqlSession {
     fn connection_type(&self) -> ConnectionType {
         ConnectionType::MySQL
     }
 
-    fn is_connected(&self) -> bool {
-        self.connected && self.pool.is_some()
-    }
+    async fn execute(&mut self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+        use mysql_async::prelude::Queryable;
 
-    fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.pool = None;
-        self.connected = false;
-        Ok(())
-    }
-}
-
-/// CQL (Cassandra) connection
-pub struct CQLConnection {
-    base_url: String,
-    client: reqwest::Client,
-    connected: bool,
-}
-
-impl CQLConnection {
-    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
-        // CQL uses binary protocol, but we'll use HTTP REST API if available
-        let base_url = format!("http://{}:{}", info.host, info.port);
-        let client = reqwest::Client::new();
-
-        // Test connection
-        let test_url = format!("{}/health", base_url);
-        match client.get(&test_url).send().await {
-            Ok(response) if response.status().is_success() => Ok(Self {
-                base_url,
-                client,
-                connected: true,
-            }),
-            Ok(_) => {
-                // If health endpoint doesn't exist, assume connection is OK
-                Ok(Self {
-                    base_url,
-                    client,
-                    connected: true,
-                })
-            }
-            Err(e) => Err(ConnectionError::ConnectionFailed(e.to_string())),
-        }
-    }
-
-    pub async fn execute_cql(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
-        if !self.connected {
-            return Err(ConnectionError::ConnectionNotFound(
-                "Not connected".to_string(),
-            ));
-        }
-
-        // Execute CQL query via HTTP REST API
-        let query_url = format!("{}/api/v1/query", self.base_url);
-        let request_body = serde_json::json!({
-            "query": query
-        });
-
-        match self
-            .client
-            .post(&query_url)
-            .json(&request_body)
-            .send()
+        let mut result = self
+            .conn
+            .query_iter(statement)
             .await
-        {
-            Ok(response) => {
-                if response.status().is_success() {
-                    response
-                        .json::<serde_json::Value>()
-                        .await
-                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
-                } else {
-                    Err(ConnectionError::ConnectionFailed(format!(
-                        "Query failed: {}",
-                        response.status()
-                    )))
-                }
-            }
-            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
-        }
-    }
-}
+            .map_err(|e| ConnectionError::QueryFailed(e.to_string()))?;
 
-impl DatabaseConnection for CQLConnection {
-    fn connection_type(&self) -> ConnectionType {
-        ConnectionType::CQL
-    }
+        // Column metadata has to be taken before the result set is consumed.
+        let columns: Vec<ColumnInfo> = result
+            .columns_ref()
+            .iter()
+            .map(|column| {
+                ColumnInfo::new(
+                    column.name_str().as_ref(),
+                    format!("{:?}", column.column_type()).to_lowercase(),
+                )
+            })
+            .collect();
 
-    fn is_connected(&self) -> bool {
-        self.connected
-    }
-
-    fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.connected = false;
-        Ok(())
-    }
-}
-
-/// Cypher (Neo4j) connection
-pub struct CypherConnection {
-    client: reqwest::Client,
-    base_url: String,
-    username: Option<String>,
-    password: Option<String>,
-    connected: bool,
-}
-
-impl CypherConnection {
-    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
-        let base_url = format!("http://{}:{}", info.host, info.port);
-        let client = reqwest::Client::new();
-
-        // Test connection with a simple query
-        let test_url = format!("{}/db/data/transaction/commit", base_url);
-        let mut request = client.post(&test_url);
-
-        if let (Some(user), Some(pass)) = (&info.username, &info.password) {
-            request = request.basic_auth(user, Some(pass));
+        if columns.is_empty() {
+            let affected = result.affected_rows();
+            result
+                .drop_result()
+                .await
+                .map_err(|e| ConnectionError::QueryFailed(e.to_string()))?;
+            return Ok(QueryPayload::affected(affected));
         }
 
-        match request
-            .json(&serde_json::json!({
-                "statements": [{"statement": "RETURN 1 as result"}]
-            }))
-            .send()
+        let rows: Vec<mysql_async::Row> = result
+            .collect()
             .await
-        {
-            Ok(response) if response.status().is_success() => Ok(Self {
-                client,
-                base_url,
-                username: info.username.clone(),
-                password: info.password.clone(),
-                connected: true,
-            }),
-            Ok(response) => Err(ConnectionError::ConnectionFailed(format!(
-                "HTTP {}: {}",
-                response.status(),
-                response.status().canonical_reason().unwrap_or("Unknown")
-            ))),
-            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
-        }
+            .map_err(|e| ConnectionError::QueryFailed(e.to_string()))?;
+
+        let shaped = rows
+            .into_iter()
+            .map(|row| {
+                columns
+                    .iter()
+                    .enumerate()
+                    .map(|(index, column)| {
+                        let value = row
+                            .as_ref(index)
+                            .map(mysql_value_to_json)
+                            .unwrap_or(serde_json::Value::Null);
+                        (column.name.clone(), value)
+                    })
+                    .collect()
+            })
+            .collect();
+
+        Ok(QueryPayload::returned(columns, shaped))
     }
 
-    pub async fn execute_cypher(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
-        if !self.connected {
-            return Err(ConnectionError::ConnectionNotFound(
-                "Not connected".to_string(),
-            ));
-        }
+    async fn ping(&mut self) -> Result<(), ConnectionError> {
+        use mysql_async::prelude::Queryable;
 
-        let query_url = format!("{}/db/data/transaction/commit", self.base_url);
-        let mut request = self.client.post(&query_url);
+        self.conn
+            .ping()
+            .await
+            .map_err(|e| ConnectionError::NetworkError(e.to_string()))
+    }
+}
 
-        if let (Some(user), Some(pass)) = (&self.username, &self.password) {
-            request = request.basic_auth(user, Some(pass));
-        }
+/// Decode one MySQL column into JSON.
+fn mysql_value_to_json(value: &mysql_async::Value) -> serde_json::Value {
+    use mysql_async::Value as My;
+    use serde_json::Value;
 
-        let request_body = serde_json::json!({
-            "statements": [{"statement": query}]
-        });
-
-        match request.json(&request_body).send().await {
-            Ok(response) => {
-                if response.status().is_success() {
-                    response
-                        .json::<serde_json::Value>()
-                        .await
-                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
-                } else {
-                    Err(ConnectionError::ConnectionFailed(format!(
-                        "Query failed: {}",
-                        response.status()
-                    )))
-                }
-            }
-            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+    match value {
+        My::NULL => Value::Null,
+        My::Int(n) => Value::Number((*n).into()),
+        My::UInt(n) => Value::Number((*n).into()),
+        My::Float(n) => serde_json::Number::from_f64(f64::from(*n))
+            .map(Value::Number)
+            .unwrap_or_else(|| Value::String(n.to_string())),
+        My::Double(n) => serde_json::Number::from_f64(*n)
+            .map(Value::Number)
+            .unwrap_or_else(|| Value::String(n.to_string())),
+        My::Bytes(bytes) => match std::str::from_utf8(bytes) {
+            Ok(text) => Value::String(text.to_string()),
+            Err(_) => Value::String(format!("\\x{}", hex_encode(bytes))),
+        },
+        My::Date(year, month, day, hour, minute, second, micros) => Value::String(format!(
+            "{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}.{micros:06}"
+        )),
+        My::Time(negative, days, hours, minutes, seconds, micros) => {
+            let sign = if *negative { "-" } else { "" };
+            Value::String(format!(
+                "{sign}{days}d {hours:02}:{minutes:02}:{seconds:02}.{micros:06}"
+            ))
         }
     }
 }
 
-impl DatabaseConnection for CypherConnection {
-    fn connection_type(&self) -> ConnectionType {
-        ConnectionType::Cypher
-    }
+// ---------------------------------------------------------------------------
+// Redis
+// ---------------------------------------------------------------------------
 
-    fn is_connected(&self) -> bool {
-        self.connected
-    }
-
-    fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.connected = false;
-        Ok(())
-    }
+/// A Redis session held open across commands, so `SELECT <db>` and `MULTI`
+/// apply to subsequent commands the way `redis-cli` behaves.
+pub struct RedisSession {
+    conn: redis::aio::MultiplexedConnection,
 }
 
-/// AQL (ArangoDB) connection
-pub struct AQLConnection {
-    client: reqwest::Client,
-    base_url: String,
-    username: Option<String>,
-    password: Option<String>,
-    database: Option<String>,
-    connected: bool,
-}
-
-impl AQLConnection {
-    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
-        let base_url = format!("http://{}:{}", info.host, info.port);
-        let client = reqwest::Client::new();
-
-        // Test connection
-        let version_url = format!("{}/_api/version", base_url);
-        let mut request = client.get(&version_url);
-
-        if let (Some(user), Some(pass)) = (&info.username, &info.password) {
-            request = request.basic_auth(user, Some(pass));
+impl RedisSession {
+    async fn connect(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        // The redis crate builds its own TLS config from the process-wide
+        // provider, so it has to be installed before the client is opened.
+        if info.ssl_mode()?.is_encrypted() {
+            install_crypto_provider();
         }
 
-        match request.send().await {
-            Ok(response) if response.status().is_success() => Ok(Self {
-                client,
-                base_url,
-                username: info.username.clone(),
-                password: info.password.clone(),
-                database: info.database.clone(),
-                connected: true,
-            }),
-            Ok(response) => Err(ConnectionError::ConnectionFailed(format!(
-                "HTTP {}: {}",
-                response.status(),
-                response.status().canonical_reason().unwrap_or("Unknown")
-            ))),
-            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+        // Redis encrypts implicitly: the scheme decides, there is no in-band
+        // negotiation. `#insecure` skips certificate verification, matching what
+        // `require` means for PostgreSQL — encrypted but unauthenticated.
+        let mut url = match info.ssl_mode()? {
+            SslMode::Disable => format!("redis://{}:{}", info.host, info.port),
+            SslMode::Require => format!("rediss://{}:{}", info.host, info.port),
+            SslMode::VerifyFull => format!("rediss://{}:{}", info.host, info.port),
+        };
+        if let Some(database) = info.database.as_deref().filter(|d| !d.is_empty()) {
+            url.push('/');
+            url.push_str(database);
         }
-    }
-
-    pub async fn execute_aql(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
-        if !self.connected {
-            return Err(ConnectionError::ConnectionNotFound(
-                "Not connected".to_string(),
-            ));
+        if info.ssl_mode()? == SslMode::Require {
+            url.push_str("#insecure");
         }
 
-        let db = self.database.as_deref().unwrap_or("_system");
-        let query_url = format!("{}/_api/cursor", self.base_url);
-        let mut request = self.client.post(&query_url);
+        let client = redis::Client::open(url)
+            .map_err(|e| ConnectionError::InvalidConfiguration(e.to_string()))?;
 
-        if let (Some(user), Some(pass)) = (&self.username, &self.password) {
-            request = request.basic_auth(user, Some(pass));
-        }
-
-        let request_body = serde_json::json!({
-            "query": query,
-            "count": true
-        });
-
-        match request.json(&request_body).send().await {
-            Ok(response) => {
-                if response.status().is_success() {
-                    response
-                        .json::<serde_json::Value>()
-                        .await
-                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
-                } else {
-                    Err(ConnectionError::ConnectionFailed(format!(
-                        "Query failed: {}",
-                        response.status()
-                    )))
-                }
-            }
-            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
-        }
-    }
-}
-
-impl DatabaseConnection for AQLConnection {
-    fn connection_type(&self) -> ConnectionType {
-        ConnectionType::AQL
-    }
-
-    fn is_connected(&self) -> bool {
-        self.connected
-    }
-
-    fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.connected = false;
-        Ok(())
-    }
-}
-
-/// Arrow Flight SQL connection
-pub struct FlightSQLConnection {
-    client: reqwest::Client,
-    endpoint: String,
-    database: Option<String>,
-    connected: bool,
-}
-
-impl FlightSQLConnection {
-    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
-        let endpoint = format!("http://{}:{}", info.host, info.port);
-        let client = reqwest::Client::new();
-
-        // Test connection by checking if server responds
-        let health_url = format!("{}/health", endpoint);
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            client.get(&health_url).send(),
+        let mut conn = tokio::time::timeout(
+            info.connect_timeout(),
+            client.get_multiplexed_async_connection(),
         )
         .await
-        {
-            Ok(Ok(response))
-                if response.status().is_success() || response.status().as_u16() == 404 =>
-            {
-                Ok(Self {
-                    client,
-                    endpoint,
-                    database: info.database.clone(),
-                    connected: true,
-                })
+        .map_err(|_| ConnectionError::Timeout(info.connect_timeout()))?
+        .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
+
+        if let Some(password) = info.password.as_deref().filter(|p| !p.is_empty()) {
+            let mut auth = redis::cmd("AUTH");
+            if let Some(user) = info.username.as_deref().filter(|u| !u.is_empty()) {
+                auth.arg(user);
             }
-            Ok(Ok(response)) => Err(ConnectionError::ConnectionFailed(format!(
-                "HTTP {}: {}",
-                response.status(),
-                response.status().canonical_reason().unwrap_or("Unknown")
-            ))),
-            Ok(Err(e)) => Err(ConnectionError::NetworkError(e.to_string())),
-            Err(_) => Err(ConnectionError::Timeout),
+            auth.arg(password);
+            auth.query_async::<redis::Value>(&mut conn)
+                .await
+                .map_err(|e| ConnectionError::ConnectionFailed(format!("AUTH failed: {e}")))?;
         }
+
+        Ok(Self { conn })
+    }
+}
+
+#[async_trait]
+impl DatabaseSession for RedisSession {
+    fn connection_type(&self) -> ConnectionType {
+        ConnectionType::Redis
     }
 
-    pub async fn execute_query(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
-        if !self.connected {
-            return Err(ConnectionError::ConnectionNotFound(
-                "Not connected".to_string(),
-            ));
+    async fn execute(&mut self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+        let args = split_redis_command(statement);
+        let (name, rest) = args
+            .split_first()
+            .ok_or_else(|| ConnectionError::QueryFailed("empty Redis command".to_string()))?;
+
+        let mut command = redis::cmd(&name.to_uppercase());
+        for arg in rest {
+            command.arg(arg.as_str());
         }
 
-        let url = format!("{}/api/v1/flight/sql", self.endpoint);
-        let request_body = serde_json::json!({
-            "query": query,
-            "database": self.database
-        });
+        let value = command
+            .query_async::<redis::Value>(&mut self.conn)
+            .await
+            .map_err(|e| ConnectionError::QueryFailed(e.to_string()))?;
 
-        match self.client.post(&url).json(&request_body).send().await {
-            Ok(response) => {
-                if response.status().is_success() {
-                    response
-                        .json::<serde_json::Value>()
-                        .await
-                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
-                } else {
-                    Err(ConnectionError::ConnectionFailed(format!(
-                        "Query failed: {}",
-                        response.status()
-                    )))
+        Ok(QueryPayload::single_value(
+            "result",
+            "redis",
+            redis_value_to_json(value),
+        ))
+    }
+
+    async fn ping(&mut self) -> Result<(), ConnectionError> {
+        redis::cmd("PING")
+            .query_async::<redis::Value>(&mut self.conn)
+            .await
+            .map(|_| ())
+            .map_err(|e| ConnectionError::NetworkError(e.to_string()))
+    }
+}
+
+/// Split a Redis command line, honouring single and double quoted arguments so
+/// that `SET greeting "hello world"` is two arguments rather than three.
+fn split_redis_command(line: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    let mut started = false;
+
+    for ch in line.trim().chars() {
+        match (quote, ch) {
+            (Some(q), c) if c == q => {
+                quote = None;
+            }
+            (Some(_), c) => current.push(c),
+            (None, c @ ('"' | '\'')) => {
+                quote = Some(c);
+                started = true;
+            }
+            (None, c) if c.is_whitespace() => {
+                if started || !current.is_empty() {
+                    args.push(std::mem::take(&mut current));
+                    started = false;
                 }
             }
-            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
+            (None, c) => current.push(c),
+        }
+    }
+
+    if started || !current.is_empty() {
+        args.push(current);
+    }
+
+    args
+}
+
+/// Convert a RESP value into JSON, recursing into aggregates rather than
+/// falling back to a `Debug` rendering.
+fn redis_value_to_json(value: redis::Value) -> serde_json::Value {
+    use redis::Value as Resp;
+    use serde_json::Value;
+
+    match value {
+        Resp::Nil => Value::Null,
+        Resp::Int(n) => Value::Number(n.into()),
+        Resp::BulkString(bytes) => match String::from_utf8(bytes) {
+            Ok(text) => Value::String(text),
+            Err(e) => Value::String(format!("\\x{}", hex_encode(e.as_bytes()))),
+        },
+        Resp::Array(values) | Resp::Set(values) => {
+            Value::Array(values.into_iter().map(redis_value_to_json).collect())
+        }
+        Resp::SimpleString(text) => Value::String(text),
+        Resp::Okay => Value::String("OK".to_string()),
+        Resp::Map(pairs) => Value::Object(
+            pairs
+                .into_iter()
+                .map(|(key, value)| {
+                    let key = match redis_value_to_json(key) {
+                        Value::String(text) => text,
+                        other => other.to_string(),
+                    };
+                    (key, redis_value_to_json(value))
+                })
+                .collect(),
+        ),
+        Resp::Attribute { data, .. } => redis_value_to_json(*data),
+        Resp::Double(n) => serde_json::Number::from_f64(n)
+            .map(Value::Number)
+            .unwrap_or_else(|| Value::String(n.to_string())),
+        Resp::Boolean(b) => Value::Bool(b),
+        Resp::VerbatimString { text, .. } => Value::String(text),
+        Resp::BigNumber(n) => Value::String(n.to_string()),
+        Resp::Push { kind, data } => Value::Object(
+            [
+                ("kind".to_string(), Value::String(format!("{kind:?}"))),
+                (
+                    "data".to_string(),
+                    Value::Array(data.into_iter().map(redis_value_to_json).collect()),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        ),
+        Resp::ServerError(error) => Value::String(format!("{error:?}")),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP-backed protocols
+// ---------------------------------------------------------------------------
+
+/// A session for the protocols Orbit-RS exposes over HTTP.
+///
+/// The reqwest client is kept so that keep-alive applies across statements.
+pub struct HttpSession {
+    client: reqwest::Client,
+    base_url: String,
+    flavor: ConnectionType,
+    username: Option<String>,
+    password: Option<String>,
+}
+
+impl HttpSession {
+    async fn connect(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        let client = reqwest::Client::builder()
+            .connect_timeout(info.connect_timeout())
+            .build()
+            .map_err(|e| ConnectionError::InvalidConfiguration(e.to_string()))?;
+
+        let session = Self {
+            client,
+            base_url: info.http_base_url(),
+            flavor: info.connection_type,
+            username: info.username.clone(),
+            password: info.password.clone(),
+        };
+
+        session.probe().await?;
+        Ok(session)
+    }
+
+    /// Endpoint and body for one statement, per protocol.
+    fn request_for(&self, statement: &str) -> (String, serde_json::Value) {
+        match self.flavor {
+            ConnectionType::Cypher => (
+                format!("{}/db/data/transaction/commit", self.base_url),
+                serde_json::json!({ "statements": [{ "statement": statement }] }),
+            ),
+            ConnectionType::AQL => (
+                format!("{}/_api/cursor", self.base_url),
+                serde_json::json!({ "query": statement, "count": true }),
+            ),
+            ConnectionType::FlightSQL => (
+                format!("{}/api/v1/flight/sql", self.base_url),
+                serde_json::json!({ "query": statement }),
+            ),
+            _ => (
+                format!("{}/api/v1/sql", self.base_url),
+                serde_json::json!({ "query": statement }),
+            ),
+        }
+    }
+
+    /// Confirm something is listening and answering before declaring success.
+    async fn probe(&self) -> Result<(), ConnectionError> {
+        let url = match self.flavor {
+            ConnectionType::AQL => format!("{}/_api/version", self.base_url),
+            _ => format!("{}/health", self.base_url),
+        };
+
+        let response = self
+            .authenticated(self.client.get(&url))
+            .send()
+            .await
+            .map_err(|e| ConnectionError::NetworkError(e.to_string()))?;
+
+        // A 404 still proves a server answered; the health path merely differs.
+        if response.status().is_success() || response.status() == reqwest::StatusCode::NOT_FOUND {
+            Ok(())
+        } else {
+            Err(ConnectionError::ConnectionFailed(format!(
+                "health probe returned HTTP {}",
+                response.status()
+            )))
+        }
+    }
+
+    fn authenticated(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match (&self.username, &self.password) {
+            (Some(user), password) => builder.basic_auth(user, password.as_ref()),
+            (None, _) => builder,
         }
     }
 }
 
-impl DatabaseConnection for FlightSQLConnection {
+#[async_trait]
+impl DatabaseSession for HttpSession {
     fn connection_type(&self) -> ConnectionType {
-        ConnectionType::FlightSQL
+        self.flavor
     }
 
-    fn is_connected(&self) -> bool {
-        self.connected
+    async fn execute(&mut self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+        let (url, body) = self.request_for(statement);
+
+        let response = self
+            .authenticated(self.client.post(&url))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ConnectionError::NetworkError(e.to_string()))?;
+
+        let status = response.status();
+        let payload: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| ConnectionError::QueryFailed(format!("HTTP {status}: {e}")))?;
+
+        if !status.is_success() {
+            return Err(ConnectionError::QueryFailed(format!(
+                "HTTP {status}: {payload}"
+            )));
+        }
+
+        Ok(QueryPayload::from_json(&payload))
     }
 
-    fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.connected = false;
-        Ok(())
+    async fn ping(&mut self) -> Result<(), ConnectionError> {
+        self.probe().await
     }
 }
 
-/// OrbitWire (native binary protocol) connection
-pub struct OrbitWireConnection {
-    client: reqwest::Client,
-    base_url: String,
-    database: Option<String>,
-    connected: bool,
+// ---------------------------------------------------------------------------
+// Raw TCP protocols
+// ---------------------------------------------------------------------------
+
+/// A protocol we can prove is listening but cannot yet speak.
+///
+/// Used for CQL: the desktop app has no CQL binary-protocol client, so it
+/// verifies reachability and then refuses statements rather than pretending to
+/// have run them.
+pub struct TcpProbeSession {
+    addr: String,
+    flavor: ConnectionType,
+    timeout: Duration,
 }
 
-impl OrbitWireConnection {
-    pub async fn new(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+impl TcpProbeSession {
+    async fn connect(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
+        let session = Self {
+            addr: info.socket_addr(),
+            flavor: info.connection_type,
+            timeout: info.connect_timeout(),
+        };
+        session.probe().await?;
+        Ok(session)
+    }
+
+    async fn probe(&self) -> Result<(), ConnectionError> {
+        tokio::time::timeout(self.timeout, tokio::net::TcpStream::connect(&self.addr))
+            .await
+            .map_err(|_| ConnectionError::Timeout(self.timeout))?
+            .map(|_| ())
+            .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))
+    }
+}
+
+#[async_trait]
+impl DatabaseSession for TcpProbeSession {
+    fn connection_type(&self) -> ConnectionType {
+        self.flavor
+    }
+
+    async fn execute(&mut self, _statement: &str) -> Result<QueryPayload, ConnectionError> {
+        Err(ConnectionError::QueryFailed(format!(
+            "{} statements cannot be executed from the desktop app yet: the {0} binary protocol \
+             has no client here. The endpoint at {} is reachable — use cqlsh against it, or \
+             connect over PostgreSQL/MySQL instead.",
+            self.flavor, self.addr
+        )))
+    }
+
+    async fn ping(&mut self) -> Result<(), ConnectionError> {
+        self.probe().await
+    }
+}
+
+/// OrbitWire: handshake over TCP to prove the server speaks the protocol, then
+/// carry statements over the REST endpoint on the same host.
+pub struct OrbitWireSession {
+    http: HttpSession,
+}
+
+impl OrbitWireSession {
+    /// `"ORBT"` plus protocol version 1.
+    const HANDSHAKE: [u8; 5] = [0x4F, 0x52, 0x42, 0x54, 0x01];
+
+    async fn connect(info: &ConnectionInfo) -> Result<Self, ConnectionError> {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-        let addr = format!("{}:{}", info.host, info.port);
-
-        // Test connection with OrbitWire handshake
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            tokio::net::TcpStream::connect(&addr),
-        )
-        .await
-        {
-            Ok(Ok(mut stream)) => {
-                // Send handshake
-                let handshake = [0x4F, 0x52, 0x42, 0x54, 0x01]; // "ORBT" + version 1
-                stream
-                    .write_all(&handshake)
-                    .await
-                    .map_err(|e| ConnectionError::NetworkError(e.to_string()))?;
-
-                // Read response
-                let mut response = [0u8; 5];
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(3),
-                    stream.read_exact(&mut response),
-                )
+        let timeout = info.connect_timeout();
+        let mut stream =
+            tokio::time::timeout(timeout, tokio::net::TcpStream::connect(info.socket_addr()))
                 .await
-                {
-                    Ok(Ok(_)) if &response[..4] == b"ORBT" => {
-                        // Connection successful, we'll use HTTP fallback for queries
-                        // since maintaining raw TCP state is complex for this use case
-                        let http_port = 8080; // Default REST API port
-                        let base_url = format!("http://{}:{}", info.host, http_port);
-                        let client = reqwest::Client::new();
+                .map_err(|_| ConnectionError::Timeout(timeout))?
+                .map_err(|e| ConnectionError::ConnectionFailed(e.to_string()))?;
 
-                        Ok(Self {
-                            client,
-                            base_url,
-                            database: info.database.clone(),
-                            connected: true,
-                        })
-                    }
-                    Ok(Ok(_)) => Err(ConnectionError::ConnectionFailed(
-                        "Invalid handshake response".to_string(),
-                    )),
-                    Ok(Err(e)) => Err(ConnectionError::NetworkError(e.to_string())),
-                    Err(_) => Err(ConnectionError::Timeout),
-                }
-            }
-            Ok(Err(e)) => Err(ConnectionError::ConnectionFailed(e.to_string())),
-            Err(_) => Err(ConnectionError::Timeout),
-        }
-    }
+        stream
+            .write_all(&Self::HANDSHAKE)
+            .await
+            .map_err(|e| ConnectionError::NetworkError(e.to_string()))?;
 
-    pub async fn execute_query(&self, query: &str) -> Result<serde_json::Value, ConnectionError> {
-        if !self.connected {
-            return Err(ConnectionError::ConnectionNotFound(
-                "Not connected".to_string(),
+        let mut response = [0u8; 5];
+        tokio::time::timeout(timeout, stream.read_exact(&mut response))
+            .await
+            .map_err(|_| ConnectionError::Timeout(timeout))?
+            .map_err(|e| ConnectionError::NetworkError(e.to_string()))?;
+
+        if &response[..4] != b"ORBT" {
+            return Err(ConnectionError::ConnectionFailed(
+                "peer did not answer the OrbitWire handshake".to_string(),
             ));
         }
 
-        let url = format!("{}/api/v1/sql", self.base_url);
-        let request_body = serde_json::json!({
-            "query": query,
-            "protocol": "orbitwire"
-        });
+        // Statements travel over REST; `http_port` says where, defaulting to the
+        // REST listener rather than assuming it shares the wire port.
+        let rest_port = info
+            .additional_params
+            .get("http_port")
+            .and_then(|value| value.parse::<u16>().ok())
+            .unwrap_or(8080);
 
-        match self.client.post(&url).json(&request_body).send().await {
-            Ok(response) => {
-                if response.status().is_success() {
-                    response
-                        .json::<serde_json::Value>()
-                        .await
-                        .map_err(|e| ConnectionError::NetworkError(e.to_string()))
-                } else {
-                    Err(ConnectionError::ConnectionFailed(format!(
-                        "Query failed: {}",
-                        response.status()
-                    )))
-                }
-            }
-            Err(e) => Err(ConnectionError::NetworkError(e.to_string())),
-        }
+        let http = HttpSession::connect(&ConnectionInfo {
+            port: rest_port,
+            connection_type: ConnectionType::OrbitWire,
+            ..info.clone()
+        })
+        .await?;
+
+        Ok(Self { http })
     }
 }
 
-impl DatabaseConnection for OrbitWireConnection {
+#[async_trait]
+impl DatabaseSession for OrbitWireSession {
     fn connection_type(&self) -> ConnectionType {
         ConnectionType::OrbitWire
     }
 
-    fn is_connected(&self) -> bool {
-        self.connected
+    async fn execute(&mut self, statement: &str) -> Result<QueryPayload, ConnectionError> {
+        self.http.execute(statement).await
     }
 
-    fn disconnect(&mut self) -> Result<(), ConnectionError> {
-        self.connected = false;
-        Ok(())
+    async fn ping(&mut self) -> Result<(), ConnectionError> {
+        self.http.ping().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connection_type_round_trips_through_its_string_form() {
+        for variant in ConnectionType::ALL {
+            let parsed: ConnectionType = variant
+                .as_str()
+                .parse()
+                .expect("every variant's own string must parse back");
+            assert_eq!(variant, parsed);
+        }
+    }
+
+    #[test]
+    fn connection_type_parsing_is_case_insensitive_and_rejects_junk() {
+        assert_eq!(
+            "postgresql".parse::<ConnectionType>().ok(),
+            Some(ConnectionType::PostgreSQL)
+        );
+        assert!("Postgres".parse::<ConnectionType>().is_err());
+    }
+
+    #[test]
+    fn default_ports_match_the_documented_protocol_ports() {
+        assert_eq!(ConnectionType::PostgreSQL.default_port(), 5432);
+        assert_eq!(ConnectionType::MySQL.default_port(), 3306);
+        assert_eq!(ConnectionType::Redis.default_port(), 6379);
+        assert_eq!(ConnectionType::CQL.default_port(), 9042);
+        assert_eq!(ConnectionType::OrbitQL.default_port(), 8080);
+    }
+
+    fn info_with_ssl(mode: Option<&str>) -> ConnectionInfo {
+        ConnectionInfo {
+            name: "test".to_string(),
+            connection_type: ConnectionType::PostgreSQL,
+            host: "localhost".to_string(),
+            port: 5432,
+            database: None,
+            username: None,
+            password: None,
+            ssl_mode: mode.map(str::to_string),
+            connection_timeout: None,
+            additional_params: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn absent_or_disabled_ssl_means_plaintext() {
+        for mode in [None, Some(""), Some("disable"), Some("off"), Some("none")] {
+            assert_eq!(
+                info_with_ssl(mode).ssl_mode().expect("recognised mode"),
+                SslMode::Disable
+            );
+        }
+    }
+
+    /// `prefer` is mapped to `require` on purpose: PostgreSQL's own `prefer`
+    /// falls back to plaintext without telling anyone.
+    #[test]
+    fn prefer_and_require_both_encrypt() {
+        for mode in ["prefer", "allow", "require"] {
+            assert_eq!(
+                info_with_ssl(Some(mode)).ssl_mode().expect("recognised"),
+                SslMode::Require
+            );
+        }
+    }
+
+    #[test]
+    fn verify_modes_request_full_verification() {
+        for mode in ["verify-ca", "verify-full", "verify_full"] {
+            assert_eq!(
+                info_with_ssl(Some(mode)).ssl_mode().expect("recognised"),
+                SslMode::VerifyFull
+            );
+        }
+    }
+
+    /// An unrecognised value must not silently become plaintext.
+    #[test]
+    fn an_unknown_ssl_mode_is_rejected() {
+        assert!(info_with_ssl(Some("sort-of")).ssl_mode().is_err());
+    }
+
+    #[test]
+    fn a_tls_config_can_be_built_for_each_encrypted_mode() {
+        assert!(tls_config(SslMode::Require).is_ok());
+        assert!(tls_config(SslMode::VerifyFull).is_ok());
+        assert!(
+            tls_config(SslMode::Disable).is_err(),
+            "asking for TLS config on a plaintext connection is a caller error"
+        );
+    }
+
+    #[test]
+    fn connect_timeout_falls_back_to_the_default_when_unset() {
+        assert_eq!(
+            info_with_ssl(None).connect_timeout(),
+            DEFAULT_CONNECT_TIMEOUT
+        );
+        let mut info = info_with_ssl(None);
+        info.connection_timeout = Some(250);
+        assert_eq!(info.connect_timeout(), Duration::from_millis(250));
+    }
+
+    #[test]
+    fn redis_command_splitting_keeps_quoted_arguments_whole() {
+        assert_eq!(
+            split_redis_command("SET greeting \"hello world\""),
+            vec!["SET", "greeting", "hello world"]
+        );
+        assert_eq!(
+            split_redis_command("  GET   key  "),
+            vec!["GET", "key"]
+        );
+        assert_eq!(
+            split_redis_command("SET empty \"\""),
+            vec!["SET", "empty", ""]
+        );
+        assert!(split_redis_command("   ").is_empty());
+    }
+
+    #[test]
+    fn redis_aggregates_convert_without_debug_fallbacks() {
+        use redis::Value as Resp;
+        let nested = Resp::Array(vec![
+            Resp::Int(1),
+            Resp::BulkString(b"two".to_vec()),
+            Resp::Array(vec![Resp::Okay]),
+        ]);
+        assert_eq!(
+            redis_value_to_json(nested),
+            serde_json::json!([1, "two", ["OK"]])
+        );
+    }
+
+    #[test]
+    fn hex_encoding_pads_every_byte() {
+        assert_eq!(hex_encode(&[0x00, 0x0f, 0xff]), "000fff");
+    }
+}
+
+/// Tests that need a running `orbit-server`.
+///
+/// A green unit-test run says nothing about whether the app can actually reach
+/// Orbit, so these drive the real session types against real listeners. They
+/// are `#[ignore]`d because they need a server:
+///
+/// ```text
+/// ./target/debug/orbit-server --dev-mode --data-dir /tmp/orbit-verify &
+/// cargo test --manifest-path orbit/desktop/src-tauri/Cargo.toml -- --ignored --test-threads=1
+/// ```
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+
+    /// `orbit-server` auto-registers an unknown user with the password set to
+    /// the username, so these credentials work against a fresh dev server.
+    const USER: &str = "orbit";
+
+    fn info(connection_type: ConnectionType, port: u16) -> ConnectionInfo {
+        ConnectionInfo {
+            name: format!("live-{connection_type}"),
+            connection_type,
+            host: "127.0.0.1".to_string(),
+            port,
+            database: None,
+            username: Some(USER.to_string()),
+            password: Some(USER.to_string()),
+            ssl_mode: None,
+            connection_timeout: Some(5_000),
+            additional_params: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn a_connection_failure_reports_the_underlying_cause() {
+        // The driver's own message here is the useless "invalid configuration";
+        // the reason lives one level down in the source chain.
+        let mut without_password = info(ConnectionType::PostgreSQL, 5432);
+        without_password.password = None;
+
+        let message = match PostgresSession::connect(&without_password).await {
+            Ok(_) => panic!("the server asks for a password, so this must fail"),
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            message.contains("password"),
+            "the message must name the cause, got: {message}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn postgres_session_runs_a_statement_and_shapes_the_rows() {
+        let mut session = PostgresSession::connect(&info(ConnectionType::PostgreSQL, 5432))
+            .await
+            .expect("orbit-server should accept a PostgreSQL connection");
+
+        session.ping().await.expect("ping should succeed");
+
+        let payload = session
+            .execute("SELECT 1 AS one")
+            .await
+            .expect("SELECT 1 should execute");
+
+        assert_eq!(payload.columns.len(), 1, "one column expected");
+        assert_eq!(payload.columns[0].name, "one");
+        assert_eq!(
+            payload.outcome,
+            crate::queries::StatementOutcome::Returned { rows: 1 }
+        );
+
+        // Both protocol paths must surface the value. The extended path decodes
+        // int4 to a JSON number; the simple path can only report the text the
+        // wire carried, and says so in the column type rather than guessing.
+        let value = payload.rows[0].get("one").expect("the column must be present");
+        assert!(
+            *value == serde_json::json!(1) || *value == serde_json::json!("1"),
+            "expected the value 1 in either form, got {value}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn a_session_survives_across_statements() {
+        let mut session = PostgresSession::connect(&info(ConnectionType::PostgreSQL, 5432))
+            .await
+            .expect("connect");
+
+        // Three statements on one session: if the manager were reconnecting per
+        // query this would still pass, but the session would be a new one each
+        // time and any SET or temp table would vanish.
+        for expected in 1..=3 {
+            let payload = session
+                .execute(&format!("SELECT {expected} AS n"))
+                .await
+                .expect("statement should execute on the reused session");
+            let value = payload.rows[0].get("n").expect("column n");
+            assert!(
+                *value == serde_json::json!(expected)
+                    || *value == serde_json::json!(expected.to_string()),
+                "expected {expected} in either form, got {value}"
+            );
+        }
+    }
+
+    /// The server must now answer `Describe`, so the driver's `prepare()` — the
+    /// gate every conforming PostgreSQL client goes through — has to succeed.
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn the_server_supports_the_extended_query_protocol() {
+        let session = PostgresSession::connect(&info(ConnectionType::PostgreSQL, 5432))
+            .await
+            .expect("connect");
+
+        assert!(
+            session.extended_protocol,
+            "prepare() must succeed against orbit-server; the client only falls back to \
+             simple queries when Describe is unusable"
+        );
+    }
+
+    /// A bound parameter must filter the result, not be executed as the literal
+    /// text `$1`.
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn bound_parameters_filter_rows_on_the_server() {
+        let mut session = PostgresSession::connect(&info(ConnectionType::PostgreSQL, 5432))
+            .await
+            .expect("connect");
+
+        let table = "desktop_param_check";
+        for statement in [
+            format!("DROP TABLE IF EXISTS {table}"),
+            format!("CREATE TABLE {table} (id INTEGER, name TEXT)"),
+            format!("INSERT INTO {table} (id, name) VALUES (1, 'alice')"),
+            format!("INSERT INTO {table} (id, name) VALUES (2, 'bob')"),
+        ] {
+            session
+                .execute(&statement)
+                .await
+                .unwrap_or_else(|e| panic!("setup statement failed: {statement}: {e}"));
+        }
+
+        // Goes through prepare/bind/execute in the driver, so the server must
+        // substitute the parameter.
+        let rows = session
+            .client
+            .query(&format!("SELECT name FROM {table} WHERE id = $1"), &[&2i32])
+            .await
+            .expect("parameterised query should execute");
+
+        assert_eq!(rows.len(), 1, "the parameter should select exactly one row");
+
+        let _ = session.execute(&format!("DROP TABLE IF EXISTS {table}")).await;
+    }
+
+    /// A TLS-enabled server must be reachable with `ssl_mode = require`.
+    ///
+    /// Run against a server started with `[server.tls] enabled = true`.
+    #[tokio::test]
+    #[ignore = "requires a TLS-enabled orbit-server on 5432; set ORBIT_TEST_TLS_SERVER=1"]
+    async fn a_tls_session_runs_statements() {
+        // Paired with the downgrade test below: the two need opposite server
+        // configurations, so each is gated rather than one silently failing.
+        if std::env::var("ORBIT_TEST_TLS_SERVER").is_err() {
+            eprintln!("skipped: set ORBIT_TEST_TLS_SERVER=1 with a TLS-enabled server");
+            return;
+        }
+
+        let mut encrypted = info(ConnectionType::PostgreSQL, 5432);
+        encrypted.ssl_mode = Some("require".to_string());
+
+        let mut session = PostgresSession::connect(&encrypted)
+            .await
+            .expect("the server should accept a TLS connection");
+
+        let payload = session
+            .execute("SELECT 1 AS one")
+            .await
+            .expect("statement should run over TLS");
+        assert_eq!(payload.columns.len(), 1);
+    }
+
+    /// Asking for encryption against a server that does not offer it must fail.
+    ///
+    /// This is the property that matters: a silent downgrade would leave
+    /// credentials on the wire in the clear while the UI reported success. Run
+    /// against a server started *without* TLS.
+    #[tokio::test]
+    #[ignore = "requires a plaintext orbit-server on 5432; set ORBIT_TEST_PLAINTEXT_SERVER=1"]
+    async fn requiring_tls_against_a_plaintext_server_fails_rather_than_downgrading() {
+        // Only meaningful against a server that does *not* offer TLS. Gated on
+        // an explicit variable so that running it against a TLS server is a
+        // visible skip rather than a pass that proved nothing.
+        if std::env::var("ORBIT_TEST_PLAINTEXT_SERVER").is_err() {
+            eprintln!("skipped: set ORBIT_TEST_PLAINTEXT_SERVER=1 with a non-TLS server");
+            return;
+        }
+
+        let mut encrypted = info(ConnectionType::PostgreSQL, 5432);
+        encrypted.ssl_mode = Some("require".to_string());
+
+        assert!(
+            PostgresSession::connect(&encrypted).await.is_err(),
+            "a plaintext server must not satisfy ssl_mode=require"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 6379"]
+    async fn redis_session_runs_commands_and_decodes_replies() {
+        // Redis encrypts implicitly, so the client has to be told which the
+        // server is doing. ORBIT_TEST_REDIS_TLS=1 selects the encrypted form.
+        let mut connection = info(ConnectionType::Redis, 6379);
+        if std::env::var("ORBIT_TEST_REDIS_TLS").is_ok() {
+            connection.ssl_mode = Some("require".to_string());
+        }
+
+        let mut session = RedisSession::connect(&connection)
+            .await
+            .expect("orbit-server should accept a Redis connection");
+
+        session.ping().await.expect("PING should succeed");
+
+        let payload = session.execute("PING").await.expect("PING should execute");
+        assert_eq!(payload.columns.len(), 1);
+        assert!(
+            !payload.rows.is_empty(),
+            "a Redis reply should produce one row"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432"]
+    async fn the_manager_reopens_a_session_for_a_restored_connection() {
+        let manager = ConnectionManager::new();
+
+        // Exactly the startup path: register a description with no live session,
+        // as `restore_connections` does for every connection loaded from disk.
+        let connection = Connection {
+            id: "restored".to_string(),
+            info: info(ConnectionType::PostgreSQL, 5432),
+            status: ConnectionStatus::Disconnected,
+            created_at: None,
+            last_used: None,
+            query_count: 0,
+        };
+        manager.register(connection).await;
+
+        let session = manager
+            .session("restored")
+            .await
+            .expect("a restored connection must be usable without being recreated");
+
+        let payload = session
+            .lock()
+            .await
+            .execute("SELECT 1 AS one")
+            .await
+            .expect("query on the lazily opened session");
+        let value = payload.rows[0].get("one").expect("column one");
+        assert!(
+            *value == serde_json::json!(1) || *value == serde_json::json!("1"),
+            "expected 1 in either form, got {value}"
+        );
+
+        let listed = manager.list_connections().await;
+        assert_eq!(listed[0].status, ConnectionStatus::Connected);
+    }
+}
+
+/// Cross-protocol tests: the same data through two different front doors.
+#[cfg(test)]
+mod cross_protocol_tests {
+    use super::*;
+
+    /// A table written over REST must be readable over the PostgreSQL wire.
+    ///
+    /// The REST endpoint and the PostgreSQL listener run separate `QueryEngine`
+    /// instances; only sharing one storage handle makes them the same database.
+    /// They were once wired to different handles, so `CREATE TABLE` over HTTP
+    /// produced a table `psql` could not see — two databases behind one name.
+    #[tokio::test]
+    #[ignore = "requires a running orbit-server on 5432 and 8080"]
+    async fn a_table_written_over_rest_is_readable_over_postgres() {
+        let table = "cross_protocol_check";
+        let client = reqwest::Client::new();
+
+        let run = |sql: String| {
+            let client = client.clone();
+            async move {
+                client
+                    .post("http://127.0.0.1:8080/api/v1/sql")
+                    .json(&serde_json::json!({ "query": sql }))
+                    .send()
+                    .await
+                    .expect("REST endpoint should answer")
+            }
+        };
+
+        run(format!("DROP TABLE IF EXISTS {table}")).await;
+        let created = run(format!("CREATE TABLE {table} (id INTEGER, note TEXT)")).await;
+        assert!(created.status().is_success(), "CREATE over REST should work");
+        let inserted = run(format!(
+            "INSERT INTO {table} (id, note) VALUES (7, 'written over REST')"
+        ))
+        .await;
+        assert!(inserted.status().is_success(), "INSERT over REST should work");
+
+        let info = ConnectionInfo {
+            name: "cross-protocol".to_string(),
+            connection_type: ConnectionType::PostgreSQL,
+            host: "127.0.0.1".to_string(),
+            port: 5432,
+            database: None,
+            username: Some("orbit".to_string()),
+            password: Some("orbit".to_string()),
+            ssl_mode: None,
+            connection_timeout: Some(5_000),
+            additional_params: HashMap::new(),
+        };
+
+        let mut session = PostgresSession::connect(&info)
+            .await
+            .expect("PostgreSQL connect");
+        let payload = session
+            .execute(&format!("SELECT note FROM {table}"))
+            .await
+            .expect("the REST-written table must be visible here");
+
+        assert_eq!(
+            payload.rows.len(),
+            1,
+            "expected the single row written over REST"
+        );
+        assert_eq!(
+            payload.rows[0].get("NOTE"),
+            Some(&serde_json::json!("written over REST")),
+            "the value must survive the trip between protocols unchanged"
+        );
+
+        run(format!("DROP TABLE IF EXISTS {table}")).await;
     }
 }

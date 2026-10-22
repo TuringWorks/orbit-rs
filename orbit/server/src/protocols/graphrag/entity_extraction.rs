@@ -622,36 +622,19 @@ impl EntityExtractionActor {
         entity_types: &[EntityType],
         request: &DocumentProcessingRequest,
     ) -> OrbitResult<(Vec<ExtractedEntity>, Vec<ExtractedRelationship>)> {
-        use crate::protocols::graphrag::llm_client::{create_llm_client, LLMGenerationRequest};
-        use orbit_shared::graphrag::LLMProvider;
+        use crate::protocols::graphrag::llm_client::{self, LLMGenerationRequest};
         use std::str::FromStr;
 
-        // Get LLM provider from environment or configuration
-        let llm_provider = if provider_name == "openai" {
-            if let Ok(api_key) = std::env::var("OPENAI_API_KEY") {
-                LLMProvider::OpenAI {
-                    api_key,
-                    model: "gpt-4".to_string(),
-                    temperature: Some(0.3),
-                    max_tokens: Some(2048),
-                }
-            } else {
-                warn!("OpenAI API key not found, skipping LLM extraction");
-                return Ok((Vec::new(), Vec::new()));
-            }
-        } else if provider_name == "ollama" {
-            let model = std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama2".to_string());
-            LLMProvider::Ollama {
-                model,
-                temperature: Some(0.3),
-            }
-        } else {
+        // The extractor names a profile in the shared runtime rather than reconstructing a
+        // provider from environment variables with a hardcoded model, which is what this did
+        // before: `provider_name == "openai"` meant `gpt-4`, and nothing could change it.
+        if !llm_client::profile_is_available(provider_name) {
             warn!(
-                "Unknown LLM provider: {}, skipping LLM extraction",
-                provider_name
+                provider = provider_name,
+                "no LLM profile registered under this name; skipping LLM extraction"
             );
             return Ok((Vec::new(), Vec::new()));
-        };
+        }
 
         // Build prompt with entity types
         let entity_types_str = entity_types
@@ -664,12 +647,11 @@ impl EntityExtractionActor {
             .replace("{text}", &request.text)
             .replace("{entity_types}", &entity_types_str);
 
-        let llm_client = create_llm_client(&llm_provider)
-            .map_err(|e| OrbitError::internal(format!("Failed to create LLM client: {}", e)))?;
-
         let generation_request = LLMGenerationRequest {
             prompt,
             max_tokens: Some(2048),
+            // Extraction wants near-deterministic output regardless of what the profile is tuned
+            // for conversationally, so this override is deliberate rather than inherited.
             temperature: Some(0.3),
             system_message: Some(
                 "You are an entity extraction system. Extract entities and relationships from the text. "
@@ -679,10 +661,9 @@ impl EntityExtractionActor {
             ),
         };
 
-        let response = llm_client
-            .generate(generation_request)
+        let response = llm_client::generate(Some(provider_name), generation_request)
             .await
-            .map_err(|e| OrbitError::internal(format!("LLM extraction failed: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("LLM extraction failed: {e}")))?;
 
         // Parse JSON response
         let json: serde_json::Value = serde_json::from_str(&response.text)

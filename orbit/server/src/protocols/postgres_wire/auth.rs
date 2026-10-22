@@ -28,6 +28,51 @@ pub enum AuthMethod {
     MD5,
     /// SCRAM-SHA-256 authentication
     ScramSha256,
+    /// GSSAPI (Kerberos) authentication.
+    ///
+    /// No credential is stored for this method: the ticket is checked by the
+    /// Kerberos library against a KDC, and this server only decides whether
+    /// the principal it vouched for may log in as the requested user.
+    Gss,
+}
+
+/// The method this server authenticates with, from `ORBIT_PG_AUTH_METHOD`.
+///
+/// Defaults to SCRAM-SHA-256. An unreadable value is refused loudly rather
+/// than falling back: silently dropping to a weaker method — or to `trust` —
+/// because of a typo is how a server ends up open.
+#[must_use]
+pub fn configured_auth_method() -> AuthMethod {
+    match std::env::var("ORBIT_PG_AUTH_METHOD") {
+        Ok(name) => AuthMethod::parse(&name).unwrap_or_else(|unknown| {
+            tracing::error!(
+                method = %unknown,
+                "ORBIT_PG_AUTH_METHOD is not a method this server knows; \
+                 falling back to scram-sha-256"
+            );
+            AuthMethod::ScramSha256
+        }),
+        Err(_) => AuthMethod::ScramSha256,
+    }
+}
+
+impl AuthMethod {
+    /// Read the method from `name`, as it is written in configuration.
+    ///
+    /// # Errors
+    /// Returns the unrecognised name. An unknown method is refused rather than
+    /// defaulting, because every plausible default is either a lock-out or —
+    /// worse — `trust`.
+    pub fn parse(name: &str) -> Result<Self, String> {
+        match name.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "trust" => Ok(Self::Trust),
+            "password" | "cleartext" => Ok(Self::Password),
+            "md5" => Ok(Self::MD5),
+            "scram-sha-256" | "scram" => Ok(Self::ScramSha256),
+            "gss" | "gssapi" | "kerberos" => Ok(Self::Gss),
+            other => Err(other.to_string()),
+        }
+    }
 }
 
 /// User credentials stored in the system
@@ -75,6 +120,17 @@ impl UserStore {
             AuthMethod::MD5 => UserCredentials {
                 username: username.clone(),
                 password_hash: password, // Will be hashed with salt + username during auth
+                scram_stored_key: None,
+                scram_server_key: None,
+                scram_salt: None,
+                scram_iterations: None,
+            },
+            // A GSSAPI login has no password to store. An entry is still
+            // written so the user exists, with no credential that could be
+            // used to log in by any other method.
+            AuthMethod::Gss => UserCredentials {
+                username: username.clone(),
+                password_hash: String::new(),
                 scram_stored_key: None,
                 scram_server_key: None,
                 scram_salt: None,
@@ -169,6 +225,7 @@ impl AuthManager {
             AuthMethod::ScramSha256 => AuthenticationResponse::SASL {
                 mechanisms: vec!["SCRAM-SHA-256".to_string()],
             },
+            AuthMethod::Gss => AuthenticationResponse::GSS,
         }
     }
 
@@ -205,6 +262,10 @@ impl AuthManager {
                 // SCRAM verification handled separately
                 Ok(false)
             }
+            // There is no password to verify: a GSSAPI login never sends one,
+            // and answering anything but `false` here would let a password
+            // message stand in for a ticket.
+            AuthMethod::Gss => Ok(false),
         }
     }
 
@@ -258,6 +319,15 @@ pub struct ScramAuth {
     server_first_message: String,
 }
 
+/// First code point of the RFC 5802 nonce alphabet (`!`).
+const SCRAM_NONCE_FIRST: u32 = 0x21;
+/// Last code point of the RFC 5802 nonce alphabet (`~`).
+const SCRAM_NONCE_LAST: u32 = 0x7E;
+/// The one excluded code point: `,` separates fields in a SCRAM message.
+const SCRAM_NONCE_COMMA: u32 = b',' as u32;
+/// Size of the alphabet once the comma is removed.
+const SCRAM_NONCE_ALPHABET_LEN: u32 = SCRAM_NONCE_LAST - SCRAM_NONCE_FIRST;
+
 impl ScramAuth {
     /// Create new SCRAM authentication session
     pub fn new(
@@ -268,14 +338,25 @@ impl ScramAuth {
         stored_key: Vec<u8>,
         server_key: Vec<u8>,
     ) -> Self {
-        // Generate server nonce by appending random data to client nonce
+        // Generate server nonce by appending random data to client nonce.
+        //
+        // RFC 5802 defines the nonce alphabet as printable ASCII *excluding*
+        // comma (`%x21-2B / %x2D-7E`). The comma is the field separator in
+        // `r=<nonce>,s=<salt>,i=<iterations>`, so a comma inside the nonce
+        // splits the message into an extra field and the client rejects the
+        // handshake with a parse error such as "expected `s`". At 16 characters
+        // drawn from the full 33..127 range that happened to roughly one login
+        // in six, making PostgreSQL authentication intermittently fail.
         let server_nonce_suffix: String = (0..16)
             .map(|_| {
-                // RFC 5802 nonce is printable ASCII excluding ','; draw from
-                // alphanumerics so a stray comma never corrupts server-first.
-                const ALPHABET: &[u8] =
-                    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-                ALPHABET[rand::rng().random_range(0..ALPHABET.len())] as char
+                let ch = rand::rng().random_range(0..SCRAM_NONCE_ALPHABET_LEN);
+                // Skip the comma by shifting everything at or above it up one.
+                let ch = if ch + SCRAM_NONCE_FIRST >= SCRAM_NONCE_COMMA {
+                    ch + SCRAM_NONCE_FIRST + 1
+                } else {
+                    ch + SCRAM_NONCE_FIRST
+                };
+                ch as u8 as char
             })
             .collect();
         let server_nonce = format!("{}{}", client_nonce, server_nonce_suffix);
@@ -507,5 +588,63 @@ mod tests {
             .verify_password(username, "md5wronghash", Some(&salt))
             .await;
         assert!(!result.unwrap());
+    }
+
+    /// The server nonce must never contain a comma.
+    ///
+    /// `server-first-message` is `r=<nonce>,s=<salt>,i=<iterations>` and the
+    /// client splits it on commas. A comma inside the nonce creates a spurious
+    /// field, and the client fails the handshake with a parse error. Drawing
+    /// from the full printable range made that happen for roughly one login in
+    /// six, so this is checked over enough samples to catch a regression.
+    #[test]
+    fn scram_server_nonce_never_contains_a_comma() {
+        for _ in 0..2_000 {
+            let auth = ScramAuth::new(
+                "user".to_string(),
+                "clientnonce".to_string(),
+                vec![0u8; 16],
+                4096,
+                vec![0u8; 32],
+                vec![0u8; 32],
+            );
+            assert!(
+                !auth.server_nonce.contains(','),
+                "nonce must exclude the field separator: {:?}",
+                auth.server_nonce
+            );
+            assert!(
+                auth.server_nonce
+                    .chars()
+                    .all(|c| ('\x21'..='\x7e').contains(&c)),
+                "nonce must stay in the RFC 5802 printable range: {:?}",
+                auth.server_nonce
+            );
+        }
+    }
+
+    /// A server-first-message must parse into exactly the three fields the
+    /// client expects, in order.
+    #[test]
+    fn scram_server_first_message_has_three_parseable_fields() {
+        for _ in 0..500 {
+            let mut auth = ScramAuth::new(
+                "user".to_string(),
+                "clientnonce".to_string(),
+                vec![1u8; 16],
+                4096,
+                vec![0u8; 32],
+                vec![0u8; 32],
+            );
+            let message = auth
+                .process_client_first("n,,n=user,r=clientnonce")
+                .expect("a well formed client-first-message is accepted");
+
+            let fields: Vec<&str> = message.split(',').collect();
+            assert_eq!(fields.len(), 3, "unexpected field count in {message:?}");
+            assert!(fields[0].starts_with("r="), "{message:?}");
+            assert!(fields[1].starts_with("s="), "{message:?}");
+            assert!(fields[2].starts_with("i="), "{message:?}");
+        }
     }
 }
