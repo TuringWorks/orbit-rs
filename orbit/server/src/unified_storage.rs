@@ -41,7 +41,7 @@
 use orbit_engine::unified::{
     AdapterFactory, CqlAdapter, GraphAdapter, MemoryBackend, Protocol, RedisAdapter, RestAdapter,
     RocksDbBackend, SchemaRegistry, SqlAdapter, UnifiedStorage, UnifiedStorageBackend,
-    UnifiedStorageConfig, UnifiedStorageError,
+    UnifiedStorageConfig,
 };
 use std::path::Path;
 use std::sync::Arc;

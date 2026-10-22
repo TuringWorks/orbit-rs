@@ -838,8 +838,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mongodb_bind =
         std::env::var("ORBIT_MONGODB_BIND").unwrap_or_else(|_| "127.0.0.1".to_string());
     let mongodb_bind_addr = format!("{mongodb_bind}:27017");
-    let mongodb_server =
-        MongoDbServer::new(mongodb_bind_addr).with_tls_config(toml_config.server.tls.clone());
+    let mongodb_server = MongoDbServer::new(mongodb_bind_addr.clone())
+        .with_tls_config(toml_config.server.tls.clone());
     let mongodb_handle = tokio::spawn(async move {
         mongodb_server
             .run()
