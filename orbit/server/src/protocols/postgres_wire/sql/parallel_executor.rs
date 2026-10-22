@@ -63,8 +63,7 @@ impl Default for ParallelConfig {
         Self {
             enabled: true,
             max_workers: std::thread::available_parallelism()
-                .map(|p| p.get())
-                .unwrap_or(4)
+                .map_or(4, std::num::NonZero::get)
                 .max(2),
             min_rows_for_parallel: 10_000,
             rows_per_partition: 50_000,
@@ -593,7 +592,7 @@ impl ResultMerger {
                     .iter()
                     .map(|col| {
                         row.get(col)
-                            .map(|v| v.to_postgres_string())
+                            .map(super::types::SqlValue::to_postgres_string)
                             .unwrap_or_default()
                     })
                     .collect::<Vec<_>>()
@@ -765,19 +764,18 @@ impl AggregateAccumulator {
                 if self.values.is_empty() {
                     SqlValue::Null
                 } else {
-                    let strings: Vec<String> =
-                        self.values.iter().map(|v| v.to_postgres_string()).collect();
+                    let strings: Vec<String> = self
+                        .values
+                        .iter()
+                        .map(super::types::SqlValue::to_postgres_string)
+                        .collect();
                     SqlValue::Text(strings.join(delimiter))
                 }
             }
-            AggregateFunction::BoolAnd => self
-                .bool_result
-                .map(SqlValue::Boolean)
-                .unwrap_or(SqlValue::Null),
-            AggregateFunction::BoolOr => self
-                .bool_result
-                .map(SqlValue::Boolean)
-                .unwrap_or(SqlValue::Null),
+            AggregateFunction::BoolAnd => {
+                self.bool_result.map_or(SqlValue::Null, SqlValue::Boolean)
+            }
+            AggregateFunction::BoolOr => self.bool_result.map_or(SqlValue::Null, SqlValue::Boolean),
         }
     }
 

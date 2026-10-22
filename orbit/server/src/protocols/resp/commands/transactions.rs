@@ -69,10 +69,7 @@ impl TransactionCommands {
     /// Check if connection is in a transaction
     pub async fn is_in_transaction(&self, conn_id: &str) -> bool {
         let states = self.connection_states.read().await;
-        states
-            .get(conn_id)
-            .map(|s| s.in_transaction)
-            .unwrap_or(false)
+        states.get(conn_id).is_some_and(|s| s.in_transaction)
     }
 
     /// Remove connection state (on disconnect)
@@ -223,7 +220,10 @@ impl CommandHandler for TransactionCommands {
                         "ERR wrong number of arguments for 'watch' command".to_string(),
                     ));
                 }
-                let keys: Vec<String> = args.iter().filter_map(|v| v.as_string()).collect();
+                let keys: Vec<String> = args
+                    .iter()
+                    .filter_map(super::super::types::RespValue::as_string)
+                    .collect();
                 if keys.is_empty() {
                     return Err(ProtocolError::RespError(
                         "ERR wrong number of arguments for 'watch' command".to_string(),

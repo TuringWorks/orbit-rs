@@ -83,8 +83,7 @@ pub trait ActorImplementation: ActorLifecycle + Any + Send + Sync {
         _args: Vec<serde_json::Value>,
     ) -> OrbitResult<serde_json::Value> {
         Err(OrbitError::internal(format!(
-            "Method {} not implemented",
-            method
+            "Method {method} not implemented"
         )))
     }
 }

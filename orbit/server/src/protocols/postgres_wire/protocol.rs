@@ -531,7 +531,7 @@ impl PostgresWireProtocol {
                     self.finish_authentication(buf);
                 }
                 Err(e) => {
-                    self.send_error(buf, &format!("SCRAM authentication failed: {}", e));
+                    self.send_error(buf, &format!("SCRAM authentication failed: {e}"));
                 }
             }
         } else {

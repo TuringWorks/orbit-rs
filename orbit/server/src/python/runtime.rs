@@ -66,7 +66,7 @@ impl PythonWorker {
         } else {
             // Default: look for worker.py in the same directory as this binary
             let mut path = std::env::current_exe()
-                .map_err(|e| PythonError::InternalError(format!("Cannot get exe path: {}", e)))?;
+                .map_err(|e| PythonError::InternalError(format!("Cannot get exe path: {e}")))?;
             path.pop(); // Remove binary name
             path.push("worker.py");
 
@@ -91,7 +91,7 @@ impl PythonWorker {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| PythonError::WorkerError(format!("Failed to spawn Python: {}", e)))?;
+            .map_err(|e| PythonError::WorkerError(format!("Failed to spawn Python: {e}")))?;
 
         let stdin = Arc::new(Mutex::new(process.stdin.take().ok_or_else(|| {
             PythonError::WorkerError("Failed to get stdin".to_string())
@@ -178,7 +178,7 @@ impl PythonWorker {
 
         // Parse batch response
         if let Some(error) = response.error {
-            return Err(PythonError::RuntimeError(format!("{:?}", error)));
+            return Err(PythonError::RuntimeError(format!("{error:?}")));
         }
 
         if let Some(serde_json::Value::Array(results)) = response.result {
@@ -187,7 +187,7 @@ impl PythonWorker {
                 .map(|r| {
                     if let Some(err) = r.get("error") {
                         if !err.is_null() {
-                            return Err(PythonError::RuntimeError(format!("{:?}", err)));
+                            return Err(PythonError::RuntimeError(format!("{err:?}")));
                         }
                     }
 
@@ -244,16 +244,16 @@ impl PythonWorker {
 
     fn send_json_request(&self, request: &PythonRequest) -> PythonResult<PythonResponse> {
         let request_json = serde_json::to_string(request)
-            .map_err(|e| PythonError::CommunicationError(format!("JSON encode error: {}", e)))?;
+            .map_err(|e| PythonError::CommunicationError(format!("JSON encode error: {e}")))?;
 
         // Write request
         {
             let mut stdin = self.stdin.lock().unwrap();
-            writeln!(stdin, "{}", request_json)
-                .map_err(|e| PythonError::CommunicationError(format!("Write error: {}", e)))?;
+            writeln!(stdin, "{request_json}")
+                .map_err(|e| PythonError::CommunicationError(format!("Write error: {e}")))?;
             stdin
                 .flush()
-                .map_err(|e| PythonError::CommunicationError(format!("Flush error: {}", e)))?;
+                .map_err(|e| PythonError::CommunicationError(format!("Flush error: {e}")))?;
         }
 
         // Read response
@@ -261,18 +261,18 @@ impl PythonWorker {
             let mut stdout = self.stdout.lock().unwrap();
             let mut line = String::new();
             std::io::BufRead::read_line(&mut *stdout, &mut line)
-                .map_err(|e| PythonError::CommunicationError(format!("Read error: {}", e)))?;
+                .map_err(|e| PythonError::CommunicationError(format!("Read error: {e}")))?;
             line
         };
 
         serde_json::from_str(&response_line)
-            .map_err(|e| PythonError::CommunicationError(format!("JSON decode error: {}", e)))
+            .map_err(|e| PythonError::CommunicationError(format!("JSON decode error: {e}")))
     }
 
     fn send_msgpack_request(&self, request: &PythonRequest) -> PythonResult<PythonResponse> {
         // Serialize request
         let packed = rmp_serde::to_vec(request).map_err(|e| {
-            PythonError::CommunicationError(format!("MessagePack encode error: {}", e))
+            PythonError::CommunicationError(format!("MessagePack encode error: {e}"))
         })?;
 
         // Write request
@@ -280,19 +280,19 @@ impl PythonWorker {
             let mut stdin = self.stdin.lock().unwrap();
             stdin
                 .write_all(&packed)
-                .map_err(|e| PythonError::CommunicationError(format!("Write error: {}", e)))?;
+                .map_err(|e| PythonError::CommunicationError(format!("Write error: {e}")))?;
             stdin
                 .flush()
-                .map_err(|e| PythonError::CommunicationError(format!("Flush error: {}", e)))?;
+                .map_err(|e| PythonError::CommunicationError(format!("Flush error: {e}")))?;
         }
 
         // Read length prefix (4 bytes)
         let mut length_bytes = [0u8; 4];
         {
             let mut stdout = self.stdout.lock().unwrap();
-            stdout.read_exact(&mut length_bytes).map_err(|e| {
-                PythonError::CommunicationError(format!("Read length error: {}", e))
-            })?;
+            stdout
+                .read_exact(&mut length_bytes)
+                .map_err(|e| PythonError::CommunicationError(format!("Read length error: {e}")))?;
         }
 
         let length = u32::from_be_bytes(length_bytes) as usize;
@@ -303,18 +303,17 @@ impl PythonWorker {
             let mut stdout = self.stdout.lock().unwrap();
             stdout
                 .read_exact(&mut response_bytes)
-                .map_err(|e| PythonError::CommunicationError(format!("Read data error: {}", e)))?;
+                .map_err(|e| PythonError::CommunicationError(format!("Read data error: {e}")))?;
         }
 
         // Deserialize response
-        rmp_serde::from_slice(&response_bytes).map_err(|e| {
-            PythonError::CommunicationError(format!("MessagePack decode error: {}", e))
-        })
+        rmp_serde::from_slice(&response_bytes)
+            .map_err(|e| PythonError::CommunicationError(format!("MessagePack decode error: {e}")))
     }
 
     fn parse_response(&self, response: PythonResponse) -> PythonResult<PythonValue> {
         if let Some(error) = response.error {
-            return Err(PythonError::RuntimeError(format!("{:?}", error)));
+            return Err(PythonError::RuntimeError(format!("{error:?}")));
         }
 
         response
@@ -373,7 +372,7 @@ impl PythonRuntimePool {
             worker_guard.execute(&func_source, &func_name, args)
         })
         .await
-        .map_err(|e| PythonError::InternalError(format!("Task join error: {}", e)))?
+        .map_err(|e| PythonError::InternalError(format!("Task join error: {e}")))?
     }
 
     /// Execute multiple functions in batch
@@ -388,7 +387,7 @@ impl PythonRuntimePool {
             worker_guard.execute_batch(requests)
         })
         .await
-        .map_err(|e| PythonError::InternalError(format!("Task join error: {}", e)))?
+        .map_err(|e| PythonError::InternalError(format!("Task join error: {e}")))?
     }
 
     async fn get_next_worker(&self) -> PythonResult<Arc<Mutex<PythonWorker>>> {
@@ -483,6 +482,6 @@ impl PythonRuntime {
             worker_guard.execute(&func_source, &func_name, args)
         })
         .await
-        .map_err(|e| PythonError::InternalError(format!("Task join error: {}", e)))?
+        .map_err(|e| PythonError::InternalError(format!("Task join error: {e}")))?
     }
 }

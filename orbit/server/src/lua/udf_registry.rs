@@ -201,7 +201,7 @@ impl UdfRegistry {
     pub async fn unregister(&self, qualified_name: &str) -> LuaResult<()> {
         let mut functions = self.functions.write().await;
         let metadata = functions.remove(qualified_name).ok_or_else(|| {
-            LuaError::FunctionNotFound(format!("Function {} not found", qualified_name))
+            LuaError::FunctionNotFound(format!("Function {qualified_name} not found"))
         })?;
 
         // Remove aliases
@@ -385,8 +385,7 @@ pub fn sql_to_lua(sql: SqlValue) -> LuaValue {
         SqlValue::Numeric(s) => {
             // Try to parse as number, fallback to string
             s.parse::<f64>()
-                .map(LuaValue::Number)
-                .unwrap_or_else(|_| LuaValue::String(s))
+                .map_or_else(|_| LuaValue::String(s), LuaValue::Number)
         }
         SqlValue::Text(s) => LuaValue::String(s),
         SqlValue::Bytea(b) => LuaValue::Binary(b),
@@ -431,7 +430,7 @@ pub fn lua_to_sql(lua: &LuaValue) -> SqlValue {
             let json = serde_json::to_string(map).unwrap_or_else(|_| "{}".to_string());
             SqlValue::Json(json)
         }
-        LuaValue::Function(name) => SqlValue::Text(format!("function:{}", name)),
+        LuaValue::Function(name) => SqlValue::Text(format!("function:{name}")),
     }
 }
 

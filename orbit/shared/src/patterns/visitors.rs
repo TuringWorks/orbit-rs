@@ -41,7 +41,7 @@ pub enum QueryNode {
 /// echoing attacker-controlled text verbatim.
 fn sanitize_identifier(ident: &str) -> String {
     validate_sql_identifier(ident)
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .unwrap_or_default()
 }
 
@@ -336,7 +336,7 @@ impl QueryVisitor for QueryValidator {
         let valid_functions = ["COUNT", "SUM", "AVG", "MIN", "MAX"];
         if !valid_functions.contains(&function.to_uppercase().as_str()) {
             self.errors
-                .push(format!("Invalid aggregate function: {}", function));
+                .push(format!("Invalid aggregate function: {function}"));
         }
 
         if column.is_empty() {

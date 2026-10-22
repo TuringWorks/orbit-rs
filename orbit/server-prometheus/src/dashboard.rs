@@ -48,9 +48,8 @@ impl DashboardGenerator {
             refresh: "30s".to_string(),
         };
 
-        serde_json::to_string_pretty(&dashboard).map_err(|e| {
-            PrometheusError::dashboard(format!("Failed to serialize dashboard: {}", e))
-        })
+        serde_json::to_string_pretty(&dashboard)
+            .map_err(|e| PrometheusError::dashboard(format!("Failed to serialize dashboard: {e}")))
     }
 
     /// Generate a simple HTML metrics page

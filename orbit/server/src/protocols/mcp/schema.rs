@@ -91,7 +91,7 @@ impl SchemaAnalyzer {
         let cache = self.schema_cache.read().unwrap();
         cache
             .statistics
-            .get(&format!("{}.{}", table_name, column_name))
+            .get(&format!("{table_name}.{column_name}"))
             .cloned()
     }
 
@@ -164,7 +164,7 @@ impl SchemaAnalyzer {
                         "TEXT".to_string()
                     }
                     crate::protocols::postgres_wire::sql::types::SqlType::Varchar(Some(n)) => {
-                        format!("VARCHAR({})", n)
+                        format!("VARCHAR({n})")
                     }
                     crate::protocols::postgres_wire::sql::types::SqlType::Varchar(None) => {
                         "VARCHAR".to_string()
@@ -198,7 +198,7 @@ impl SchemaAnalyzer {
                     name: col.name.clone(),
                     data_type: data_type_str,
                     nullable: !has_not_null,
-                    default_value: col.default.as_ref().map(|v| format!("{:?}", v)),
+                    default_value: col.default.as_ref().map(|v| format!("{v:?}")),
                     is_primary_key,
                     is_indexed: false, // TODO: Check indexes
                 }
@@ -459,18 +459,18 @@ pub enum SchemaError {
 impl std::fmt::Display for SchemaError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SchemaError::TableNotFound(name) => write!(f, "Table not found: {}", name),
-            SchemaError::ColumnNotFound(name) => write!(f, "Column not found: {}", name),
+            SchemaError::TableNotFound(name) => write!(f, "Table not found: {name}"),
+            SchemaError::ColumnNotFound(name) => write!(f, "Column not found: {name}"),
             SchemaError::DiscoveryNotImplemented => {
                 write!(f, "Schema discovery not yet implemented")
             }
             SchemaError::DiscoveryError(msg) => {
-                write!(f, "Schema discovery error: {}", msg)
+                write!(f, "Schema discovery error: {msg}")
             }
             SchemaError::StatisticsNotImplemented => {
                 write!(f, "Statistics collection not yet implemented")
             }
-            SchemaError::CacheError(msg) => write!(f, "Cache error: {}", msg),
+            SchemaError::CacheError(msg) => write!(f, "Cache error: {msg}"),
         }
     }
 }

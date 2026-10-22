@@ -270,8 +270,7 @@ impl ProcedureInterpreter {
                         "EXCEPTION" | "ERROR" => {
                             // RAISE EXCEPTION terminates execution with an error
                             Err(EngineError::ExecutionError(format!(
-                                "RAISE {}: {}",
-                                level, message
+                                "RAISE {level}: {message}"
                             )))
                         }
                         _ => {
@@ -339,7 +338,7 @@ impl ProcedureInterpreter {
             match expr {
                 Expression::Literal(lit) => Ok(Value::from(lit.clone())),
                 Expression::Variable(name) => scope.get(name).ok_or_else(|| {
-                    EngineError::ExecutionError(format!("Variable not found: {}", name))
+                    EngineError::ExecutionError(format!("Variable not found: {name}"))
                 }),
                 Expression::BinaryOp { left, op, right } => {
                     let l = self.evaluate_expression(left, scope).await?;
@@ -370,8 +369,7 @@ impl ProcedureInterpreter {
             (UnaryOperator::Negate, Value::Float(f)) => Ok(Value::Float(-f)),
             (UnaryOperator::Negate, Value::Null) => Ok(Value::Null),
             (op, val) => Err(EngineError::ExecutionError(format!(
-                "Unsupported unary operation: {:?} on {:?}",
-                op, val
+                "Unsupported unary operation: {op:?} on {val:?}"
             ))),
         }
     }
@@ -588,8 +586,8 @@ impl ProcedureInterpreter {
                         Value::Date(d) => result.push_str(&d.to_string()),
                         Value::Time(t) => result.push_str(&t.to_string()),
                         Value::Timestamp(ts) => result.push_str(&ts.to_string()),
-                        Value::Interval(i) => result.push_str(&format!("{:?}", i)),
-                        Value::Array(arr) => result.push_str(&format!("{:?}", arr)),
+                        Value::Interval(i) => result.push_str(&format!("{i:?}")),
+                        Value::Array(arr) => result.push_str(&format!("{arr:?}")),
                         Value::Null => {} // NULL is ignored in CONCAT
                     }
                 }
@@ -673,7 +671,7 @@ impl ProcedureInterpreter {
                     Value::Integer(i) => Ok(Value::Integer(*i)),
                     Value::Float(f) => Ok(Value::Integer(*f as i64)),
                     Value::String(s) => s.parse::<i64>().map(Value::Integer).map_err(|_| {
-                        EngineError::ExecutionError(format!("Cannot convert '{}' to integer", s))
+                        EngineError::ExecutionError(format!("Cannot convert '{s}' to integer"))
                     }),
                     Value::Boolean(b) => Ok(Value::Integer(if *b { 1 } else { 0 })),
                     Value::Null => Ok(Value::Null),
@@ -692,7 +690,7 @@ impl ProcedureInterpreter {
                     Value::Integer(i) => Ok(Value::Float(*i as f64)),
                     Value::Float(f) => Ok(Value::Float(*f)),
                     Value::String(s) => s.parse::<f64>().map(Value::Float).map_err(|_| {
-                        EngineError::ExecutionError(format!("Cannot convert '{}' to float", s))
+                        EngineError::ExecutionError(format!("Cannot convert '{s}' to float"))
                     }),
                     Value::Null => Ok(Value::Null),
                     _ => Err(EngineError::ExecutionError(
@@ -718,7 +716,7 @@ impl ProcedureInterpreter {
                     }
                     Value::Interval(i) => Ok(Value::String(format!("{} seconds", i.num_seconds()))),
                     Value::Array(arr) => {
-                        let items: Vec<String> = arr.iter().map(|v| format!("{:?}", v)).collect();
+                        let items: Vec<String> = arr.iter().map(|v| format!("{v:?}")).collect();
                         Ok(Value::String(format!("[{}]", items.join(", "))))
                     }
                     Value::Null => Ok(Value::Null),
@@ -762,10 +760,7 @@ impl ProcedureInterpreter {
                 NaiveDate::from_ymd_opt(year, month, day)
                     .map(Value::Date)
                     .ok_or_else(|| {
-                        EngineError::ExecutionError(format!(
-                            "Invalid date: {}-{}-{}",
-                            year, month, day
-                        ))
+                        EngineError::ExecutionError(format!("Invalid date: {year}-{month}-{day}"))
                     })
             }
             "MAKE_TIME" => {
@@ -815,8 +810,7 @@ impl ProcedureInterpreter {
                     .map(Value::Time)
                     .ok_or_else(|| {
                         EngineError::ExecutionError(format!(
-                            "Invalid time: {}:{}:{}.{}",
-                            hour, minute, second, micro
+                            "Invalid time: {hour}:{minute}:{second}.{micro}"
                         ))
                     })
             }
@@ -904,8 +898,7 @@ impl ProcedureInterpreter {
                             "QUARTER" => ((d.month() - 1) / 3 + 1) as i64,
                             _ => {
                                 return Err(EngineError::ExecutionError(format!(
-                                    "Unknown date field: {}",
-                                    field
+                                    "Unknown date field: {field}"
                                 )))
                             }
                         };
@@ -920,8 +913,7 @@ impl ProcedureInterpreter {
                             "MICROSECOND" => (t.nanosecond() / 1_000) as i64,
                             _ => {
                                 return Err(EngineError::ExecutionError(format!(
-                                    "Unknown time field: {}",
-                                    field
+                                    "Unknown time field: {field}"
                                 )))
                             }
                         };
@@ -944,8 +936,7 @@ impl ProcedureInterpreter {
                             "EPOCH" => ts.and_utc().timestamp(),
                             _ => {
                                 return Err(EngineError::ExecutionError(format!(
-                                    "Unknown timestamp field: {}",
-                                    field
+                                    "Unknown timestamp field: {field}"
                                 )))
                             }
                         };
@@ -1001,8 +992,7 @@ impl ProcedureInterpreter {
                             .unwrap_or(*d),
                             _ => {
                                 return Err(EngineError::ExecutionError(format!(
-                                    "Unknown date field: {}",
-                                    field
+                                    "Unknown date field: {field}"
                                 )))
                             }
                         };
@@ -1017,8 +1007,7 @@ impl ProcedureInterpreter {
                             "WEEK" | "WEEKS" => *ts + Duration::weeks(amount),
                             _ => {
                                 return Err(EngineError::ExecutionError(format!(
-                                    "Unknown timestamp field: {}",
-                                    field
+                                    "Unknown timestamp field: {field}"
                                 )))
                             }
                         };
@@ -1052,8 +1041,7 @@ impl ProcedureInterpreter {
                             "WEEK" | "WEEKS" => diff.num_weeks(),
                             _ => {
                                 return Err(EngineError::ExecutionError(format!(
-                                    "Unknown date diff field: {}",
-                                    field
+                                    "Unknown date diff field: {field}"
                                 )))
                             }
                         };
@@ -1069,8 +1057,7 @@ impl ProcedureInterpreter {
                             "WEEK" | "WEEKS" => diff.num_weeks(),
                             _ => {
                                 return Err(EngineError::ExecutionError(format!(
-                                    "Unknown timestamp diff field: {}",
-                                    field
+                                    "Unknown timestamp diff field: {field}"
                                 )))
                             }
                         };
@@ -1112,7 +1099,7 @@ impl ProcedureInterpreter {
                 NaiveDate::parse_from_str(&s, &format)
                     .map(Value::Date)
                     .map_err(|e| {
-                        EngineError::ExecutionError(format!("Cannot parse date '{}': {}", s, e))
+                        EngineError::ExecutionError(format!("Cannot parse date '{s}': {e}"))
                     })
             }
             "TO_TIMESTAMP" => {
@@ -1127,8 +1114,7 @@ impl ProcedureInterpreter {
                         // Interpret as Unix epoch
                         return Ok(Value::Timestamp(
                             chrono::DateTime::from_timestamp(*epoch, 0)
-                                .map(|dt| dt.naive_utc())
-                                .unwrap_or_else(NaiveDateTime::default),
+                                .map_or_else(NaiveDateTime::default, |dt| dt.naive_utc()),
                         ));
                     }
                     Value::Null => return Ok(Value::Null),
@@ -1153,10 +1139,7 @@ impl ProcedureInterpreter {
                 NaiveDateTime::parse_from_str(&s, &format)
                     .map(Value::Timestamp)
                     .map_err(|e| {
-                        EngineError::ExecutionError(format!(
-                            "Cannot parse timestamp '{}': {}",
-                            s, e
-                        ))
+                        EngineError::ExecutionError(format!("Cannot parse timestamp '{s}': {e}"))
                     })
             }
             "DATE_TRUNC" => {
@@ -1187,8 +1170,7 @@ impl ProcedureInterpreter {
                             "DAY" => *d,
                             _ => {
                                 return Err(EngineError::ExecutionError(format!(
-                                    "Unknown truncation field: {}",
-                                    field
+                                    "Unknown truncation field: {field}"
                                 )))
                             }
                         };
@@ -1221,8 +1203,7 @@ impl ProcedureInterpreter {
                             ),
                             _ => {
                                 return Err(EngineError::ExecutionError(format!(
-                                    "Unknown truncation field: {}",
-                                    field
+                                    "Unknown truncation field: {field}"
                                 )))
                             }
                         };
@@ -1306,8 +1287,7 @@ impl ProcedureInterpreter {
             }
 
             _ => Err(EngineError::ExecutionError(format!(
-                "Unknown function: {}",
-                name
+                "Unknown function: {name}"
             ))),
         }
     }
@@ -1576,8 +1556,7 @@ impl ProcedureInterpreter {
             (Value::Null, _, _) | (_, _, Value::Null) => Ok(Value::Null),
 
             _ => Err(EngineError::ExecutionError(format!(
-                "Unsupported binary operation: {:?} {:?} {:?}",
-                left, op, right
+                "Unsupported binary operation: {left:?} {op:?} {right:?}"
             ))),
         }
     }

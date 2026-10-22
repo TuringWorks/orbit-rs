@@ -95,8 +95,8 @@ impl AggregationType {
                 .map(|s| s.value)
                 .fold(f64::NEG_INFINITY, f64::max),
             Self::Count => samples.len() as f64,
-            Self::First => samples.first().map(|s| s.value).unwrap_or(0.0),
-            Self::Last => samples.last().map(|s| s.value).unwrap_or(0.0),
+            Self::First => samples.first().map_or(0.0, |s| s.value),
+            Self::Last => samples.last().map_or(0.0, |s| s.value),
             Self::Range => {
                 let min = samples
                     .iter()

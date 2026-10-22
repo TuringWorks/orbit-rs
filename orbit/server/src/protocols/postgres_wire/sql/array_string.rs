@@ -75,9 +75,11 @@ pub fn string_join(args: &[Value]) -> ProtocolResult<Value> {
     let strings: Result<Vec<String>, _> = array
         .iter()
         .map(|v| {
-            v.as_str().map(|s| s.to_string()).ok_or_else(|| {
-                ProtocolError::PostgresError("All array elements must be strings".to_string())
-            })
+            v.as_str()
+                .map(std::string::ToString::to_string)
+                .ok_or_else(|| {
+                    ProtocolError::PostgresError("All array elements must be strings".to_string())
+                })
         })
         .collect();
 

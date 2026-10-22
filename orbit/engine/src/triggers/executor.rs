@@ -63,13 +63,13 @@ impl TriggerExecutor for TriggerExecutionService {
 
         if let Some(row) = old_row {
             for (col, val) in row {
-                context.insert(format!("OLD_{}", col), Self::convert_sql_value(val));
+                context.insert(format!("OLD_{col}"), Self::convert_sql_value(val));
             }
         }
 
         if let Some(row) = new_row {
             for (col, val) in row {
-                context.insert(format!("NEW_{}", col), Self::convert_sql_value(val));
+                context.insert(format!("NEW_{col}"), Self::convert_sql_value(val));
             }
         }
 

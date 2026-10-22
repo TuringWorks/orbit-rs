@@ -258,7 +258,9 @@ impl CompressionStrategy for RunLengthCompression {
         }
 
         Ok(data
-            .as_chunks::<2>().0.iter()
+            .as_chunks::<2>()
+            .0
+            .iter()
             .flat_map(|pair| std::iter::repeat_n(pair[1], usize::from(pair[0])))
             .collect())
     }

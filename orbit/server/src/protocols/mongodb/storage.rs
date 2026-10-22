@@ -56,7 +56,7 @@ impl Collection {
             Bson::String(s) => s.clone(),
             Bson::Int32(i) => i.to_string(),
             Bson::Int64(i) => i.to_string(),
-            _ => format!("{:?}", bson),
+            _ => format!("{bson:?}"),
         }
     }
 
@@ -65,7 +65,7 @@ impl Collection {
         let id = if let Some(id) = doc.get("_id") {
             let key = Self::bson_to_key(id);
             if self.documents.contains_key(&key) {
-                return Err(format!("Duplicate key error: _id {:?} already exists", id));
+                return Err(format!("Duplicate key error: _id {id:?} already exists"));
             }
             id.clone()
         } else {
@@ -217,7 +217,7 @@ impl Collection {
     ) -> String {
         let index_name = name.unwrap_or_else(|| {
             keys.iter()
-                .map(|(k, v)| format!("{}_{}", k, v))
+                .map(|(k, v)| format!("{k}_{v}"))
                 .collect::<Vec<_>>()
                 .join("_")
         });
@@ -380,13 +380,13 @@ impl Collection {
                 // If the value is an array, add each element
                 if let Bson::Array(arr) = value {
                     for item in arr {
-                        let key_str = format!("{:?}", item);
+                        let key_str = format!("{item:?}");
                         if seen.insert(key_str) {
                             values.push(item);
                         }
                     }
                 } else {
-                    let key_str = format!("{:?}", value);
+                    let key_str = format!("{value:?}");
                     if seen.insert(key_str) {
                         values.push(value);
                     }
@@ -404,7 +404,7 @@ pub fn matches_filter(doc: &Document, filter: &Document) -> bool {
         return true;
     }
 
-    for (key, filter_value) in filter.iter() {
+    for (key, filter_value) in filter {
         match key.as_str() {
             // Logical operators
             "$and" => {
@@ -488,7 +488,7 @@ fn matches_value(doc_value: &Option<Bson>, filter_value: &Bson) -> bool {
     match filter_value {
         Bson::Document(filter_doc) => {
             // Check for operators
-            for (op, op_value) in filter_doc.iter() {
+            for (op, op_value) in filter_doc {
                 match op.as_str() {
                     "$eq" => {
                         if doc_value.as_ref() != Some(op_value) {
@@ -804,11 +804,11 @@ where
 fn apply_update(doc: &mut Document, update: &Document) -> bool {
     let mut modified = false;
 
-    for (op, op_value) in update.iter() {
+    for (op, op_value) in update {
         match op.as_str() {
             "$set" => {
                 if let Bson::Document(fields) = op_value {
-                    for (key, value) in fields.iter() {
+                    for (key, value) in fields {
                         set_nested_value(doc, key, value.clone());
                         modified = true;
                     }
@@ -816,7 +816,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             }
             "$unset" => {
                 if let Bson::Document(fields) = op_value {
-                    for (key, _) in fields.iter() {
+                    for (key, _) in fields {
                         if doc.remove(key).is_some() {
                             modified = true;
                         }
@@ -825,7 +825,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             }
             "$inc" => {
                 if let Bson::Document(fields) = op_value {
-                    for (key, inc_value) in fields.iter() {
+                    for (key, inc_value) in fields {
                         if let Some(current) = doc.get_mut(key) {
                             match (current, inc_value) {
                                 (Bson::Int32(c), Bson::Int32(i)) => {
@@ -860,7 +860,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             "$mul" => {
                 // $mul multiplies the value of a field by a number
                 if let Bson::Document(fields) = op_value {
-                    for (key, mul_value) in fields.iter() {
+                    for (key, mul_value) in fields {
                         if let Some(current) = doc.get_mut(key) {
                             match (current, mul_value) {
                                 (Bson::Int32(c), Bson::Int32(m)) => {
@@ -903,7 +903,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             }
             "$push" => {
                 if let Bson::Document(fields) = op_value {
-                    for (key, push_value) in fields.iter() {
+                    for (key, push_value) in fields {
                         // Check if push_value is a document with $each modifier
                         if let Bson::Document(push_doc) = push_value {
                             if push_doc.contains_key("$each") {
@@ -924,15 +924,13 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
                                         .or_insert_with(|| Bson::Array(Vec::new()));
                                     if let Bson::Array(arr) = arr {
                                         // Insert at position or append
-                                        let insert_pos = position
-                                            .map(|p| {
-                                                if p >= 0 {
-                                                    p as usize
-                                                } else {
-                                                    (arr.len() as i32 + p).max(0) as usize
-                                                }
-                                            })
-                                            .unwrap_or(arr.len());
+                                        let insert_pos = position.map_or(arr.len(), |p| {
+                                            if p >= 0 {
+                                                p as usize
+                                            } else {
+                                                (arr.len() as i32 + p).max(0) as usize
+                                            }
+                                        });
 
                                         for (i, v) in values.iter().enumerate() {
                                             arr.insert(insert_pos + i, v.clone());
@@ -1001,7 +999,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             "$pop" => {
                 // $pop removes the first or last element of an array
                 if let Bson::Document(fields) = op_value {
-                    for (key, pop_value) in fields.iter() {
+                    for (key, pop_value) in fields {
                         if let Some(Bson::Array(arr)) = doc.get_mut(key) {
                             if !arr.is_empty() {
                                 let direction = match pop_value {
@@ -1022,7 +1020,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             }
             "$pull" => {
                 if let Bson::Document(fields) = op_value {
-                    for (key, pull_value) in fields.iter() {
+                    for (key, pull_value) in fields {
                         if let Some(Bson::Array(arr)) = doc.get_mut(key) {
                             let before_len = arr.len();
                             // Check if pull_value is a document with query operators
@@ -1047,7 +1045,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             "$pullAll" => {
                 // $pullAll removes all matching values from an array
                 if let Bson::Document(fields) = op_value {
-                    for (key, values_to_remove) in fields.iter() {
+                    for (key, values_to_remove) in fields {
                         if let (Some(Bson::Array(arr)), Bson::Array(remove_arr)) =
                             (doc.get_mut(key), values_to_remove)
                         {
@@ -1062,7 +1060,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             }
             "$addToSet" => {
                 if let Bson::Document(fields) = op_value {
-                    for (key, add_value) in fields.iter() {
+                    for (key, add_value) in fields {
                         // Check for $each modifier
                         if let Bson::Document(add_doc) = add_value {
                             if let Ok(each_values) = add_doc.get_array("$each") {
@@ -1097,10 +1095,10 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             "$bit" => {
                 // $bit performs bitwise operations: and, or, xor
                 if let Bson::Document(fields) = op_value {
-                    for (key, bit_ops) in fields.iter() {
+                    for (key, bit_ops) in fields {
                         if let Bson::Document(ops) = bit_ops {
                             if let Some(current) = doc.get_mut(key) {
-                                for (bit_op, bit_value) in ops.iter() {
+                                for (bit_op, bit_value) in ops {
                                     let current_num = match current {
                                         Bson::Int32(n) => *n as i64,
                                         Bson::Int64(n) => *n,
@@ -1132,7 +1130,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             }
             "$rename" => {
                 if let Bson::Document(fields) = op_value {
-                    for (old_key, new_key) in fields.iter() {
+                    for (old_key, new_key) in fields {
                         if let Bson::String(new_key_str) = new_key {
                             if let Some(value) = doc.remove(old_key) {
                                 doc.insert(new_key_str.clone(), value);
@@ -1144,7 +1142,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             }
             "$min" => {
                 if let Bson::Document(fields) = op_value {
-                    for (key, min_value) in fields.iter() {
+                    for (key, min_value) in fields {
                         if let Some(current) = doc.get(key) {
                             if compare_bson(&Some(min_value.clone()), current, |a, b| a < b) {
                                 doc.insert(key.clone(), min_value.clone());
@@ -1159,7 +1157,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             }
             "$max" => {
                 if let Bson::Document(fields) = op_value {
-                    for (key, max_value) in fields.iter() {
+                    for (key, max_value) in fields {
                         if let Some(current) = doc.get(key) {
                             if compare_bson(&Some(max_value.clone()), current, |a, b| a > b) {
                                 doc.insert(key.clone(), max_value.clone());
@@ -1174,7 +1172,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
             }
             "$currentDate" => {
                 if let Bson::Document(fields) = op_value {
-                    for (key, type_spec) in fields.iter() {
+                    for (key, type_spec) in fields {
                         let value = match type_spec {
                             Bson::Boolean(true) => Bson::DateTime(bson::DateTime::now()),
                             Bson::Document(d) if d.get_str("$type").ok() == Some("timestamp") => {
@@ -1201,7 +1199,7 @@ fn apply_update(doc: &mut Document, update: &Document) -> bool {
                 if let Some(id) = id {
                     doc.insert("_id", id);
                 }
-                for (key, value) in update.iter() {
+                for (key, value) in update {
                     if key != "_id" {
                         doc.insert(key.clone(), value.clone());
                     }

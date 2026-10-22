@@ -523,10 +523,7 @@ impl AqlQueryEngine {
             .update_document(collection, &key, updates)
             .await?
             .ok_or_else(|| {
-                ProtocolError::AqlError(format!(
-                    "Document {}/{} not found for UPDATE",
-                    collection, key
-                ))
+                ProtocolError::AqlError(format!("Document {collection}/{key} not found for UPDATE"))
             })?;
 
         info!("AQL UPDATE: Updated document {}/{}", collection, key);
@@ -606,8 +603,7 @@ impl AqlQueryEngine {
             }
         } else {
             Err(ProtocolError::AqlError(format!(
-                "Document {}/{} not found for REMOVE",
-                collection, key
+                "Document {collection}/{key} not found for REMOVE"
             )))
         }
     }
@@ -664,8 +660,7 @@ impl AqlQueryEngine {
                         .await?
                         .ok_or_else(|| {
                             ProtocolError::AqlError(format!(
-                                "Document {}/{} not found for UPSERT UPDATE",
-                                collection, key
+                                "Document {collection}/{key} not found for UPSERT UPDATE"
                             ))
                         })?;
                     info!(
@@ -756,8 +751,7 @@ impl AqlQueryEngine {
                 }
             }
             _ => Err(ProtocolError::AqlError(format!(
-                "Invalid key type: expected string or object with _key, got {:?}",
-                key_value
+                "Invalid key type: expected string or object with _key, got {key_value:?}"
             ))),
         }
     }
@@ -775,16 +769,16 @@ impl AqlQueryEngine {
             AqlExpression::Variable(name) => context
                 .get(name)
                 .cloned()
-                .ok_or_else(|| ProtocolError::AqlError(format!("Variable '{}' not found", name))),
+                .ok_or_else(|| ProtocolError::AqlError(format!("Variable '{name}' not found"))),
             AqlExpression::Literal(value) => Ok(value.clone()),
             AqlExpression::PropertyAccess { object, property } => {
                 let obj_value = context.get(object).ok_or_else(|| {
-                    ProtocolError::AqlError(format!("Object '{}' not found", object))
+                    ProtocolError::AqlError(format!("Object '{object}' not found"))
                 })?;
 
                 if let AqlValue::Object(obj_map) = obj_value {
                     obj_map.get(property).cloned().ok_or_else(|| {
-                        ProtocolError::AqlError(format!("Property '{}' not found", property))
+                        ProtocolError::AqlError(format!("Property '{property}' not found"))
                     })
                 } else {
                     Err(ProtocolError::AqlError(
@@ -834,7 +828,7 @@ impl AqlQueryEngine {
                             }
                         }
                         (AqlValue::String(l), AqlValue::String(r)) => {
-                            Ok(AqlValue::String(format!("{}{}", l, r)))
+                            Ok(AqlValue::String(format!("{l}{r}")))
                         }
                         _ => Ok(AqlValue::Null),
                     },
@@ -1127,7 +1121,7 @@ impl AqlQueryEngine {
 
         for result in results {
             // Simple deduplication based on string representation
-            let key = format!("{:?}", result);
+            let key = format!("{result:?}");
             if seen.insert(key) {
                 unique.push(result);
             }
@@ -1231,7 +1225,7 @@ impl AqlQueryEngine {
                 if let (AqlValue::String(text), AqlValue::String(pat)) = (&field_value, &pattern) {
                     // Simple pattern matching: % = any chars, _ = single char
                     let regex_pattern = pat.replace('%', ".*").replace('_', ".");
-                    if let Ok(re) = regex::Regex::new(&format!("(?i)^{}$", regex_pattern)) {
+                    if let Ok(re) = regex::Regex::new(&format!("(?i)^{regex_pattern}$")) {
                         Ok(re.is_match(text))
                     } else {
                         Ok(false)
@@ -1767,8 +1761,7 @@ impl AqlQueryEngine {
                 {
                     let case_insensitive = args
                         .get(2)
-                        .map(|v| matches!(v, AqlValue::Bool(true)))
-                        .unwrap_or(false);
+                        .is_some_and(|v| matches!(v, AqlValue::Bool(true)));
                     let result = if case_insensitive {
                         haystack.to_lowercase().contains(&needle.to_lowercase())
                     } else {
@@ -1785,7 +1778,7 @@ impl AqlQueryEngine {
                 {
                     // Simple LIKE pattern matching (% = any, _ = single char)
                     let regex_pattern = pattern.replace('%', ".*").replace('_', ".");
-                    if let Ok(re) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
+                    if let Ok(re) = regex::Regex::new(&format!("^{regex_pattern}$")) {
                         Ok(AqlValue::Bool(re.is_match(text)))
                     } else {
                         Ok(AqlValue::Bool(false))
@@ -2271,7 +2264,7 @@ impl AqlQueryEngine {
                     let unique: Vec<AqlValue> = arr
                         .iter()
                         .filter(|v| {
-                            let key = format!("{:?}", v);
+                            let key = format!("{v:?}");
                             seen.insert(key)
                         })
                         .cloned()
@@ -2355,7 +2348,7 @@ impl AqlQueryEngine {
                     if name.to_uppercase() == "COUNT_DISTINCT" {
                         let mut seen = std::collections::HashSet::new();
                         for v in arr {
-                            seen.insert(format!("{:?}", v));
+                            seen.insert(format!("{v:?}"));
                         }
                         Ok(AqlValue::Number(serde_json::Number::from(seen.len())))
                     } else {
@@ -2380,7 +2373,7 @@ impl AqlQueryEngine {
                     if name.to_uppercase() == "SORTED_UNIQUE" {
                         let mut seen = std::collections::HashSet::new();
                         sorted.retain(|v| {
-                            let key = format!("{:?}", v);
+                            let key = format!("{v:?}");
                             seen.insert(key)
                         });
                     }
@@ -2399,7 +2392,7 @@ impl AqlQueryEngine {
                 if name.to_uppercase() == "UNION_DISTINCT" {
                     let mut seen = std::collections::HashSet::new();
                     result.retain(|v| {
-                        let key = format!("{:?}", v);
+                        let key = format!("{v:?}");
                         seen.insert(key)
                     });
                 }
@@ -2643,10 +2636,10 @@ impl AqlQueryEngine {
                     Some(AqlValue::Bool(b)) => b.to_string(),
                     Some(AqlValue::Null) => "null".to_string(),
                     Some(AqlValue::Array(arr)) => {
-                        format!("{:?}", arr)
+                        format!("{arr:?}")
                     }
                     Some(AqlValue::Object(obj)) => {
-                        format!("{:?}", obj)
+                        format!("{obj:?}")
                     }
                     Some(AqlValue::DateTime(dt)) => dt.to_rfc3339(),
                     None => "null".to_string(),
@@ -2697,8 +2690,7 @@ impl AqlQueryEngine {
                         chrono::DateTime::from_timestamp_millis(ts).unwrap_or_else(chrono::Utc::now)
                     }
                     Some(AqlValue::String(s)) => chrono::DateTime::parse_from_rfc3339(s)
-                        .map(|d| d.with_timezone(&chrono::Utc))
-                        .unwrap_or_else(|_| chrono::Utc::now()),
+                        .map_or_else(|_| chrono::Utc::now(), |d| d.with_timezone(&chrono::Utc)),
                     _ => chrono::Utc::now(),
                 };
                 let value = match name.to_uppercase().as_str() {
@@ -2831,7 +2823,7 @@ impl AqlQueryEngine {
             "UUID" => Ok(AqlValue::String(uuid::Uuid::new_v4().to_string())),
             "HASH" => {
                 // Simple hash - return a numeric hash
-                let input = format!("{:?}", args);
+                let input = format!("{args:?}");
                 use std::collections::hash_map::DefaultHasher;
                 use std::hash::{Hash, Hasher};
                 let mut hasher = DefaultHasher::new();

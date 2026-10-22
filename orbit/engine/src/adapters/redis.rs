@@ -454,6 +454,6 @@ impl super::error_mapping::ErrorMapper for RedisErrorMapper {
     }
 
     fn to_error_message(error: &EngineError) -> String {
-        format!("ERR {}", error)
+        format!("ERR {error}")
     }
 }

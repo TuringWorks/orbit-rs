@@ -103,7 +103,7 @@ impl WindowFunctionEvaluator {
                     let col_name = col_ref.name.clone();
                     let value = row.get(&col_name).cloned().unwrap_or(SqlValue::Null);
                     // Convert to string representation for hashing
-                    key_parts.push(format!("{:?}", value));
+                    key_parts.push(format!("{value:?}"));
                 }
                 _ => {
                     // Skip complex expressions for now

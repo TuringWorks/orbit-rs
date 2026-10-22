@@ -92,7 +92,7 @@ impl RocksDbAddressableProvider {
         let txn_opts = TransactionDBOptions::default();
 
         let db = TransactionDB::open(&opts, &txn_opts, &config.data_dir)
-            .map_err(|e| OrbitError::internal(format!("Failed to open RocksDB: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to open RocksDB: {e}")))?;
 
         Ok(Self {
             db: Arc::new(db),
@@ -134,7 +134,7 @@ impl RocksDbAddressableProvider {
 
     #[allow(dead_code)] // Reserved for future node key functionality
     fn node_id_to_key(node_id: &NodeId) -> String {
-        format!("node:{}", node_id)
+        format!("node:{node_id}")
     }
 }
 
@@ -158,7 +158,7 @@ impl PersistenceProvider for RocksDbAddressableProvider {
         match self.db.get("__health_check__") {
             Ok(_) => ProviderHealth::Healthy,
             Err(e) => ProviderHealth::Unhealthy {
-                reason: format!("RocksDB health check failed: {}", e),
+                reason: format!("RocksDB health check failed: {e}"),
             },
         }
     }
@@ -199,14 +199,14 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
         let start = Instant::now();
         let key = Self::reference_to_key(&lease.reference);
         let value = serde_json::to_vec(lease)
-            .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?;
 
         let result = self.db.put(key.as_bytes(), &value);
         let success = result.is_ok();
 
         if let Err(e) = result {
             self.update_metrics("write", start.elapsed(), false).await;
-            return Err(OrbitError::internal(format!("RocksDB put error: {}", e)));
+            return Err(OrbitError::internal(format!("RocksDB put error: {e}")));
         }
 
         self.update_metrics("write", start.elapsed(), success).await;
@@ -223,7 +223,7 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
         match self.db.get(key.as_bytes()) {
             Ok(Some(data)) => {
                 let lease = serde_json::from_slice(data.as_slice())
-                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
                 self.update_metrics("read", start.elapsed(), true).await;
                 Ok(Some(lease))
             }
@@ -233,7 +233,7 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
             }
             Err(e) => {
                 self.update_metrics("read", start.elapsed(), false).await;
-                Err(OrbitError::internal(format!("RocksDB get error: {}", e)))
+                Err(OrbitError::internal(format!("RocksDB get error: {e}")))
             }
         }
     }
@@ -248,18 +248,14 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
         let key = Self::reference_to_key(reference);
 
         // Check if key exists first
-        let exists = self
-            .db
-            .get(key.as_bytes())
-            .map(|opt| opt.is_some())
-            .unwrap_or(false);
+        let exists = self.db.get(key.as_bytes()).is_ok_and(|opt| opt.is_some());
 
         let result = self.db.delete(key.as_bytes());
         let success = result.is_ok() && exists;
 
         if let Err(e) = result {
             self.update_metrics("delete", start.elapsed(), false).await;
-            return Err(OrbitError::internal(format!("RocksDB delete error: {}", e)));
+            return Err(OrbitError::internal(format!("RocksDB delete error: {e}")));
         }
 
         self.update_metrics("delete", start.elapsed(), success)
@@ -370,7 +366,7 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
         for lease in leases {
             let key = Self::reference_to_key(&lease.reference);
             let value = serde_json::to_vec(lease)
-                .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?;
             batch.put(key.as_bytes(), &value);
         }
 
@@ -380,8 +376,7 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
         if let Err(e) = result {
             self.update_metrics("write", start.elapsed(), false).await;
             return Err(OrbitError::internal(format!(
-                "RocksDB batch write error: {}",
-                e
+                "RocksDB batch write error: {e}"
             )));
         }
 
@@ -400,12 +395,7 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
             let key = Self::reference_to_key(reference);
 
             // Check if key exists
-            if self
-                .db
-                .get(key.as_bytes())
-                .map(|opt| opt.is_some())
-                .unwrap_or(false)
-            {
+            if self.db.get(key.as_bytes()).is_ok_and(|opt| opt.is_some()) {
                 batch.delete(key.as_bytes());
                 count += 1;
             }
@@ -417,8 +407,7 @@ impl AddressableDirectoryProvider for RocksDbAddressableProvider {
         if let Err(e) = result {
             self.update_metrics("delete", start.elapsed(), false).await;
             return Err(OrbitError::internal(format!(
-                "RocksDB batch delete error: {}",
-                e
+                "RocksDB batch delete error: {e}"
             )));
         }
 
@@ -451,7 +440,7 @@ impl RocksDbClusterProvider {
         // Use separate directory for cluster nodes
         let cluster_data_dir = format!("{}_cluster", config.data_dir);
         let db = TransactionDB::open(&opts, &txn_opts, &cluster_data_dir).map_err(|e| {
-            OrbitError::internal(format!("Failed to open RocksDB for cluster: {}", e))
+            OrbitError::internal(format!("Failed to open RocksDB for cluster: {e}"))
         })?;
 
         Ok(Self {
@@ -462,7 +451,7 @@ impl RocksDbClusterProvider {
     }
 
     fn node_id_to_key(node_id: &NodeId) -> String {
-        format!("node:{}", node_id)
+        format!("node:{node_id}")
     }
 }
 
@@ -482,7 +471,7 @@ impl PersistenceProvider for RocksDbClusterProvider {
         match self.db.get("__health_check__") {
             Ok(_) => ProviderHealth::Healthy,
             Err(e) => ProviderHealth::Unhealthy {
-                reason: format!("RocksDB health check failed: {}", e),
+                reason: format!("RocksDB health check failed: {e}"),
             },
         }
     }
@@ -509,11 +498,11 @@ impl ClusterNodeProvider for RocksDbClusterProvider {
     async fn store_node(&self, node: &NodeInfo) -> OrbitResult<()> {
         let key = Self::node_id_to_key(&node.id);
         let value = serde_json::to_vec(node)
-            .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?;
 
         self.db
             .put(key.as_bytes(), &value)
-            .map_err(|e| OrbitError::internal(format!("RocksDB put error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("RocksDB put error: {e}")))?;
 
         Ok(())
     }
@@ -524,11 +513,11 @@ impl ClusterNodeProvider for RocksDbClusterProvider {
         match self.db.get(key.as_bytes()) {
             Ok(Some(data)) => {
                 let node = serde_json::from_slice(data.as_slice())
-                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
                 Ok(Some(node))
             }
             Ok(None) => Ok(None),
-            Err(e) => Err(OrbitError::internal(format!("RocksDB get error: {}", e))),
+            Err(e) => Err(OrbitError::internal(format!("RocksDB get error: {e}"))),
         }
     }
 
@@ -538,15 +527,11 @@ impl ClusterNodeProvider for RocksDbClusterProvider {
 
     async fn remove_node(&self, node_id: &NodeId) -> OrbitResult<bool> {
         let key = Self::node_id_to_key(node_id);
-        let exists = self
-            .db
-            .get(key.as_bytes())
-            .map(|opt| opt.is_some())
-            .unwrap_or(false);
+        let exists = self.db.get(key.as_bytes()).is_ok_and(|opt| opt.is_some());
 
         self.db
             .delete(key.as_bytes())
-            .map_err(|e| OrbitError::internal(format!("RocksDB delete error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("RocksDB delete error: {e}")))?;
 
         Ok(exists)
     }

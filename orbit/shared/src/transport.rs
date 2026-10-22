@@ -427,7 +427,7 @@ impl TransactionMessageSender for GrpcTransactionMessageSender {
                 client
                     .send_transaction_message(Request::new(req))
                     .await
-                    .map(|r| r.into_inner())
+                    .map(tonic::Response::into_inner)
             }
         };
 

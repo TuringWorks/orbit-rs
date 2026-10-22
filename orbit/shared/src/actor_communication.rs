@@ -239,14 +239,13 @@ impl ActorDiscoveryService {
 
         // In a real implementation, this would send discovery requests to other nodes
         // For now, we'll simulate with a timeout
-        match tokio::time::timeout(self.config.message_timeout, receiver).await {
-            Ok(result) => result.map_err(|_| OrbitError::internal("Discovery channel closed")),
-            Err(_) => {
-                // Remove from pending discoveries on timeout
-                let mut pending = self.pending_discoveries.write().await;
-                pending.remove(reference);
-                Ok(None)
-            }
+        if let Ok(result) = tokio::time::timeout(self.config.message_timeout, receiver).await {
+            result.map_err(|_| OrbitError::internal("Discovery channel closed"))
+        } else {
+            // Remove from pending discoveries on timeout
+            let mut pending = self.pending_discoveries.write().await;
+            pending.remove(reference);
+            Ok(None)
         }
     }
 
@@ -544,17 +543,14 @@ impl ActorMessageRouter {
         target: &AddressableReference,
         message: ActorMessage,
     ) -> OrbitResult<()> {
-        match self.discovery_service.discover_actor(target).await? {
-            Some(node_id) => {
-                info!("Forwarding message to actor {} on node {}", target, node_id);
-                self.forward_to_node(&node_id, message).await
-            }
-            None => {
-                warn!("Actor {} not found in cluster", target);
-                Err(OrbitError::AddressableNotFound {
-                    reference: target.to_string(),
-                })
-            }
+        if let Some(node_id) = self.discovery_service.discover_actor(target).await? {
+            info!("Forwarding message to actor {} on node {}", target, node_id);
+            self.forward_to_node(&node_id, message).await
+        } else {
+            warn!("Actor {} not found in cluster", target);
+            Err(OrbitError::AddressableNotFound {
+                reference: target.to_string(),
+            })
         }
     }
 

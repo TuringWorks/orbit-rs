@@ -199,7 +199,7 @@ impl SecondaryIndexManager {
 
         // Otherwise, scan for index entries referencing this key
         let indexes = self.get_indexes(namespace).await;
-        let idx_namespace = format!("__idx__{}", namespace);
+        let idx_namespace = format!("__idx__{namespace}");
         let mut deleted = 0;
 
         for index in &indexes {
@@ -207,14 +207,14 @@ impl SecondaryIndexManager {
             let prefix = format!("{}:", index.name);
             let result = self
                 .storage
-                .scan_keys(&idx_namespace, Some(format!("{}*", prefix)), None)
+                .scan_keys(&idx_namespace, Some(format!("{prefix}*")), None)
                 .await?;
 
             if let super::types::UniversalResult::Values(keys) = result {
                 for key_val in keys {
                     if let UniversalValue::String(idx_key) = key_val {
                         // Check if this entry points to our record
-                        if idx_key.ends_with(&format!(":{}", key)) {
+                        if idx_key.ends_with(&format!(":{key}")) {
                             self.storage.delete(&idx_namespace, &idx_key).await?;
                             deleted += 1;
                         }
@@ -233,12 +233,12 @@ impl SecondaryIndexManager {
         index_name: &str,
         field_value: &str,
     ) -> UnifiedStorageResult<Vec<String>> {
-        let idx_namespace = format!("__idx__{}", namespace);
-        let prefix = format!("{}:{}:", index_name, field_value);
+        let idx_namespace = format!("__idx__{namespace}");
+        let prefix = format!("{index_name}:{field_value}:");
 
         let result = self
             .storage
-            .scan_keys(&idx_namespace, Some(format!("{}*", prefix)), None)
+            .scan_keys(&idx_namespace, Some(format!("{prefix}*")), None)
             .await?;
 
         let mut record_keys = Vec::new();
@@ -266,12 +266,12 @@ impl SecondaryIndexManager {
         min_value: Option<&str>,
         max_value: Option<&str>,
     ) -> UnifiedStorageResult<Vec<String>> {
-        let idx_namespace = format!("__idx__{}", namespace);
-        let prefix = format!("{}:", index_name);
+        let idx_namespace = format!("__idx__{namespace}");
+        let prefix = format!("{index_name}:");
 
         let result = self
             .storage
-            .scan_keys(&idx_namespace, Some(format!("{}*", prefix)), None)
+            .scan_keys(&idx_namespace, Some(format!("{prefix}*")), None)
             .await?;
 
         let mut record_keys = Vec::new();
@@ -337,7 +337,7 @@ impl SecondaryIndexManager {
         }
 
         // First, delete all existing index entries
-        let idx_namespace = format!("__idx__{}", namespace);
+        let idx_namespace = format!("__idx__{namespace}");
         let result = self.storage.scan_keys(&idx_namespace, None, None).await?;
 
         if let super::types::UniversalResult::Values(keys) = result {
@@ -378,12 +378,12 @@ impl SecondaryIndexManager {
             .map(|i| (i.fields.clone(), i.unique))
             .unwrap_or_default();
 
-        let idx_namespace = format!("__idx__{}", namespace);
-        let prefix = format!("{}:", index_name);
+        let idx_namespace = format!("__idx__{namespace}");
+        let prefix = format!("{index_name}:");
 
         let result = self
             .storage
-            .scan_keys(&idx_namespace, Some(format!("{}*", prefix)), None)
+            .scan_keys(&idx_namespace, Some(format!("{prefix}*")), None)
             .await?;
 
         let mut entry_count = 0u64;
@@ -419,9 +419,9 @@ impl SecondaryIndexManager {
             UniversalValue::Int(i) => i.to_string(),
             UniversalValue::Float(f) => f.to_string(),
             UniversalValue::String(s) => s.clone(),
-            UniversalValue::Bytes(b) => b.iter().map(|byte| format!("{:02x}", byte)).collect(),
+            UniversalValue::Bytes(b) => b.iter().map(|byte| format!("{byte:02x}")).collect(),
             UniversalValue::Timestamp(t) => t.to_string(),
-            UniversalValue::Uuid(u) => u.iter().map(|byte| format!("{:02x}", byte)).collect(),
+            UniversalValue::Uuid(u) => u.iter().map(|byte| format!("{byte:02x}")).collect(),
             // For complex types, use JSON representation
             _ => serde_json::to_string(value).unwrap_or_else(|_| "unknown".to_string()),
         }

@@ -175,7 +175,7 @@ impl MongoSpatialEngine {
                             )
                         })?;
 
-                        let z = coords.get(2).and_then(|v| v.as_f64());
+                        let z = coords.get(2).and_then(serde_json::Value::as_f64);
                         return Ok(if let Some(elevation) = z {
                             Point::with_elevation(lon, lat, elevation, Some(WGS84_SRID))
                         } else {
@@ -205,11 +205,11 @@ impl MongoSpatialEngine {
                 .get("lon")
                 .or_else(|| obj.get("lng"))
                 .or_else(|| obj.get("x"))
-                .and_then(|v| v.as_f64());
+                .and_then(serde_json::Value::as_f64);
             let lat = obj
                 .get("lat")
                 .or_else(|| obj.get("y"))
-                .and_then(|v| v.as_f64());
+                .and_then(serde_json::Value::as_f64);
 
             if let (Some(lon), Some(lat)) = (lon, lat) {
                 return Ok(Point::new(lon, lat, Some(WGS84_SRID)));
@@ -590,8 +590,7 @@ impl MongoSpatialEngine {
                 Ok(SpatialGeometry::Polygon(polygon))
             }
             _ => Err(MongoSpatialError::InvalidGeoJson(format!(
-                "Unsupported geometry type: {}",
-                geo_type
+                "Unsupported geometry type: {geo_type}"
             ))),
         }
     }

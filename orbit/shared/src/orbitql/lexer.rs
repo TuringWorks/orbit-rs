@@ -1455,7 +1455,7 @@ impl Lexer {
         let (token_type, token_value) = if !duration_suffix.is_empty() {
             (
                 TokenType::DurationLiteral,
-                format!("{}{}", number, duration_suffix),
+                format!("{number}{duration_suffix}"),
             )
         } else if is_float {
             (TokenType::Float, number)

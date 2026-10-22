@@ -35,7 +35,7 @@ impl QueryParser {
 
         query_parser
             .parse_query(&tantivy_query)
-            .map_err(|e| anyhow!("Failed to parse tsquery: {}", e))
+            .map_err(|e| anyhow!("Failed to parse tsquery: {e}"))
     }
 
     /// Parse MySQL boolean mode query to Tantivy query
@@ -80,7 +80,7 @@ impl QueryParser {
 
         query_parser
             .parse_query(search)
-            .map_err(|e| anyhow!("Failed to parse MongoDB text query: {}", e))
+            .map_err(|e| anyhow!("Failed to parse MongoDB text query: {e}"))
     }
 
     /// Parse Redis FT.SEARCH query to Tantivy query
@@ -90,7 +90,7 @@ impl QueryParser {
 
         query_parser
             .parse_query(query)
-            .map_err(|e| anyhow!("Failed to parse Redis search query: {}", e))
+            .map_err(|e| anyhow!("Failed to parse Redis search query: {e}"))
     }
 
     /// Parse standard query (Lucene-like syntax)
@@ -100,7 +100,7 @@ impl QueryParser {
 
         query_parser
             .parse_query(query)
-            .map_err(|e| anyhow!("Failed to parse query: {}", e))
+            .map_err(|e| anyhow!("Failed to parse query: {e}"))
     }
 
     /// Parse fuzzy query

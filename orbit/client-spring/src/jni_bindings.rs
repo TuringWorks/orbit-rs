@@ -269,7 +269,7 @@ fn start_context_impl(context_id: jlong) -> SpringResult<()> {
 
     if let Some(context) = guard.as_ref() {
         let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| SpringError::context(format!("Failed to create tokio runtime: {}", e)))?;
+            .map_err(|e| SpringError::context(format!("Failed to create tokio runtime: {e}")))?;
 
         rt.block_on(async {
             let context_guard = context.read().await;
@@ -290,7 +290,7 @@ fn stop_context_impl(context_id: jlong) -> SpringResult<()> {
 
     if let Some(context) = guard.as_ref() {
         let rt = tokio::runtime::Runtime::new()
-            .map_err(|e| SpringError::context(format!("Failed to create tokio runtime: {}", e)))?;
+            .map_err(|e| SpringError::context(format!("Failed to create tokio runtime: {e}")))?;
 
         rt.block_on(async {
             let context_guard = context.read().await;
@@ -349,11 +349,11 @@ fn set_config_value_impl(
 ) -> SpringResult<()> {
     let key_str: String = env
         .get_string(&key)
-        .map_err(|e| SpringError::context(format!("JNI error: {}", e)))?
+        .map_err(|e| SpringError::context(format!("JNI error: {e}")))?
         .into();
     let value_str: String = env
         .get_string(&value)
-        .map_err(|e| SpringError::context(format!("JNI error: {}", e)))?
+        .map_err(|e| SpringError::context(format!("JNI error: {e}")))?
         .into();
 
     info!("Setting config via JNI: {} = {}", key_str, value_str);
@@ -370,11 +370,11 @@ fn register_service_impl(
 ) -> SpringResult<()> {
     let name_str: String = env
         .get_string(&name)
-        .map_err(|e| SpringError::context(format!("JNI error: {}", e)))?
+        .map_err(|e| SpringError::context(format!("JNI error: {e}")))?
         .into();
     let type_str: String = env
         .get_string(&service_type)
-        .map_err(|e| SpringError::context(format!("JNI error: {}", e)))?
+        .map_err(|e| SpringError::context(format!("JNI error: {e}")))?
         .into();
 
     info!(
@@ -389,7 +389,7 @@ fn register_service_impl(
 fn unregister_service_impl(mut env: JNIEnv, _context_id: jlong, name: JString) -> SpringResult<()> {
     let name_str: String = env
         .get_string(&name)
-        .map_err(|e| SpringError::context(format!("JNI error: {}", e)))?
+        .map_err(|e| SpringError::context(format!("JNI error: {e}")))?
         .into();
 
     info!("Unregistering service via JNI: {}", name_str);
@@ -569,7 +569,7 @@ pub extern "C" fn JNI_OnUnload(_vm: *mut jni::sys::JavaVM, _reserved: *mut std::
 
 impl From<jni::errors::Error> for SpringError {
     fn from(error: jni::errors::Error) -> Self {
-        SpringError::context(format!("JNI error: {}", error))
+        SpringError::context(format!("JNI error: {error}"))
     }
 }
 

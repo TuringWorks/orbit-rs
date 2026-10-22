@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start the LSP server
     if let Err(e) = start_lsp_server().await {
-        eprintln!("Failed to start OrbitQL Language Server: {}", e);
+        eprintln!("Failed to start OrbitQL Language Server: {e}");
         std::process::exit(1);
     }
 

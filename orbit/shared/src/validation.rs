@@ -94,7 +94,7 @@ where
 {
     if value < min || value > max {
         Err(OrbitError::configuration(
-            ctx.error_msg(&format!("must be between {} and {}", min, max)),
+            ctx.error_msg(&format!("must be between {min} and {max}")),
         ))
     } else {
         Ok(())
@@ -185,8 +185,7 @@ where
 {
     if min >= max {
         Err(OrbitError::configuration(ctx.error_msg(&format!(
-            "min ({}) must be less than max ({})",
-            min, max
+            "min ({min}) must be less than max ({max})"
         ))))
     } else {
         Ok(())
@@ -206,12 +205,8 @@ pub fn validate_sql_identifier(ident: &str) -> Result<&str, String> {
         return Err("Empty SQL identifier".to_string());
     }
     for part in ident.split('.') {
-        if part.is_empty()
-            || !part
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
-            return Err(format!("Invalid SQL identifier: '{}'", ident));
+        if part.is_empty() || !part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return Err(format!("Invalid SQL identifier: '{ident}'"));
         }
     }
     Ok(ident)

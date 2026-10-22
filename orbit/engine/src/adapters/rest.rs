@@ -262,7 +262,11 @@ impl CreateTableRequest {
     pub fn to_table_schema(&self) -> TableSchema {
         TableSchema {
             name: self.name.clone(),
-            columns: self.columns.iter().map(|col| col.to_column_def()).collect(),
+            columns: self
+                .columns
+                .iter()
+                .map(RestColumnDef::to_column_def)
+                .collect(),
             primary_key: self.primary_key.clone(),
         }
     }
@@ -320,7 +324,7 @@ impl QueryRequest {
     pub fn to_access_pattern(&self) -> crate::storage::AccessPattern {
         crate::storage::AccessPattern::Scan {
             time_range: None,
-            filter: self.filter.as_ref().map(|f| f.to_filter_predicate()),
+            filter: self.filter.as_ref().map(RestFilter::to_filter_predicate),
         }
     }
 }
@@ -420,10 +424,16 @@ impl RestFilter {
                 json_to_sql_value(value).unwrap_or(SqlValue::Null),
             ),
             RestFilter::And { filters } => crate::storage::FilterPredicate::And(
-                filters.iter().map(|f| f.to_filter_predicate()).collect(),
+                filters
+                    .iter()
+                    .map(RestFilter::to_filter_predicate)
+                    .collect(),
             ),
             RestFilter::Or { filters } => crate::storage::FilterPredicate::Or(
-                filters.iter().map(|f| f.to_filter_predicate()).collect(),
+                filters
+                    .iter()
+                    .map(RestFilter::to_filter_predicate)
+                    .collect(),
             ),
         }
     }
@@ -531,7 +541,7 @@ fn sql_value_to_json(value: &SqlValue) -> EngineResult<serde_json::Value> {
         SqlValue::Timestamp(ts) => {
             let duration = ts
                 .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|e| EngineError::internal(format!("Invalid timestamp: {}", e)))?;
+                .map_err(|e| EngineError::internal(format!("Invalid timestamp: {e}")))?;
             Ok(serde_json::json!(duration.as_secs()))
         }
     }

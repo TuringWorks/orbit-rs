@@ -375,8 +375,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .await
             .map_err(|e| {
                 Box::new(std::io::Error::other(format!(
-                    "Failed to initialize unified storage: {}",
-                    e
+                    "Failed to initialize unified storage: {e}"
                 ))) as Box<dyn Error>
             })?;
 
@@ -996,8 +995,7 @@ async fn initialize_rocksdb_storage(
         .persistence
         .as_ref()
         .and_then(|p| p.rocksdb.as_ref())
-        .map(|r| r.enable_wal)
-        .unwrap_or(true);
+        .map_or(true, |r| r.enable_wal);
 
     info!(
         "[RocksDB] Opening RocksDB at: {:?} (WAL: {})",
@@ -1023,19 +1021,13 @@ fn configure_tiered_storage(
     let storage_config = config.storage.as_ref();
     let tiered_config = storage_config.map(|s| &s.tiered);
 
-    let hot_to_warm_hours = tiered_config
-        .map(|t| t.hot_to_warm_threshold_hours)
-        .unwrap_or(48);
+    let hot_to_warm_hours = tiered_config.map_or(48, |t| t.hot_to_warm_threshold_hours);
 
-    let warm_to_cold_days = tiered_config
-        .map(|t| t.warm_to_cold_threshold_days)
-        .unwrap_or(30);
+    let warm_to_cold_days = tiered_config.map_or(30, |t| t.warm_to_cold_threshold_days);
 
-    let auto_tiering = tiered_config.map(|t| t.auto_tiering).unwrap_or(true);
+    let auto_tiering = tiered_config.map_or(true, |t| t.auto_tiering);
 
-    let background_migration = tiered_config
-        .map(|t| t.background_migration)
-        .unwrap_or(true);
+    let background_migration = tiered_config.map_or(true, |t| t.background_migration);
 
     HybridStorageConfig {
         hot_to_warm_threshold: Duration::from_secs(hot_to_warm_hours * 60 * 60),
@@ -1105,7 +1097,7 @@ async fn start_prometheus_metrics_exporter(port: u16) -> Result<(), Box<dyn Erro
     let builder = PrometheusBuilder::new();
     let handle = builder
         .install_recorder()
-        .map_err(|e| format!("Failed to install Prometheus recorder: {}", e))?;
+        .map_err(|e| format!("Failed to install Prometheus recorder: {e}"))?;
 
     // Start HTTP server for metrics endpoint
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
@@ -1113,10 +1105,7 @@ async fn start_prometheus_metrics_exporter(port: u16) -> Result<(), Box<dyn Erro
     // Bind the listener before spawning to catch port binding errors early
     use tokio::net::TcpListener;
     let listener = TcpListener::bind(addr).await.map_err(|e| {
-        format!(
-            "Failed to bind metrics server to {}: {}. Port may already be in use.",
-            addr, e
-        )
+        format!("Failed to bind metrics server to {addr}: {e}. Port may already be in use.")
     })?;
 
     tokio::spawn(async move {
@@ -1282,8 +1271,7 @@ async fn initialize_cluster(args: &Args) -> Result<(), Box<dyn Error>> {
     // Start the cluster manager (this starts Raft consensus)
     cluster_manager.start(transport).await.map_err(|e| {
         Box::new(std::io::Error::other(format!(
-            "Failed to start cluster manager: {}",
-            e
+            "Failed to start cluster manager: {e}"
         )))
     })?;
 

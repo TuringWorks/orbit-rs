@@ -325,14 +325,14 @@ impl CostRouter {
             }
             ExecutionBackend::CpuSimd => {
                 let speedup = estimate.cpu_scalar_cost / estimate.cpu_simd_cost;
-                format!("SIMD provides {:.1}x speedup", speedup)
+                format!("SIMD provides {speedup:.1}x speedup")
             }
             ExecutionBackend::Gpu => {
                 if operation == OperationType::VectorSearch {
                     "GPU optimal for vector similarity operations".to_string()
                 } else {
                     let speedup = estimate.cpu_scalar_cost / estimate.gpu_cost;
-                    format!("GPU provides {:.1}x speedup (including transfer)", speedup)
+                    format!("GPU provides {speedup:.1}x speedup (including transfer)")
                 }
             }
         }

@@ -341,22 +341,19 @@ impl CdcCoordinator {
         }
 
         // Broadcast to all subscribers
-        match self.event_broadcast.send(event.clone()) {
-            Ok(receiver_count) => {
-                debug!(
-                    "CDC event {} broadcast to {} subscribers",
-                    event.event_id, receiver_count
-                );
-                Ok(())
-            }
-            Err(_) => {
-                // No active subscribers
-                debug!(
-                    "CDC event {} captured but no active subscribers",
-                    event.event_id
-                );
-                Ok(())
-            }
+        if let Ok(receiver_count) = self.event_broadcast.send(event.clone()) {
+            debug!(
+                "CDC event {} broadcast to {} subscribers",
+                event.event_id, receiver_count
+            );
+            Ok(())
+        } else {
+            // No active subscribers
+            debug!(
+                "CDC event {} captured but no active subscribers",
+                event.event_id
+            );
+            Ok(())
         }
     }
 

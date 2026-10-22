@@ -280,7 +280,7 @@ impl DynamicProviderManager {
     ) -> Option<(String, Arc<dyn PersistenceProvider>)> {
         // Simple round-robin among healthy providers
         // TODO: Implement proper round-robin state tracking
-        for (provider_name, provider) in providers.iter() {
+        for (provider_name, provider) in providers {
             if self.is_provider_healthy(provider_name, monitors).await {
                 return Some((provider_name.clone(), provider.clone()));
             }
@@ -297,7 +297,7 @@ impl DynamicProviderManager {
         let mut best_provider = None;
         let mut best_latency = f64::MAX;
 
-        for (provider_name, provider) in providers.iter() {
+        for (provider_name, provider) in providers {
             if let Some(metrics) = self
                 .get_provider_metrics_if_healthy(provider_name, monitors)
                 .await
@@ -460,8 +460,7 @@ impl DynamicProviderManager {
         let providers = self.providers.read().await;
         if !providers.contains_key(provider_name) {
             return Err(OrbitError::configuration(format!(
-                "Provider '{}' not found",
-                provider_name
+                "Provider '{provider_name}' not found"
             )));
         }
 

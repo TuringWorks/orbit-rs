@@ -176,7 +176,7 @@ impl PostgresAdapter {
                 let col_names = batch.column_names.clone().unwrap_or_else(|| {
                     // Generate default column names if not provided
                     (0..batch.columns.len())
-                        .map(|i| format!("column_{}", i))
+                        .map(|i| format!("column_{i}"))
                         .collect()
                 });
 
@@ -325,7 +325,7 @@ impl PostgresAdapter {
                 let mut rows = Vec::new();
                 let col_names = batch.column_names.clone().unwrap_or_else(|| {
                     (0..batch.columns.len())
-                        .map(|i| format!("column_{}", i))
+                        .map(|i| format!("column_{i}"))
                         .collect()
                 });
 
@@ -400,10 +400,9 @@ impl PostgresAdapter {
     pub async fn view_history(&self, table_name: &str) -> EngineResult<CommandResult> {
         // This would query the Iceberg metadata table
         // For now, return placeholder
-        let history_table = format!("{}.history", table_name);
+        let history_table = format!("{table_name}.history");
         Err(EngineError::not_implemented(format!(
-            "History table '{}' access not yet implemented. Requires Iceberg metadata access.",
-            history_table
+            "History table '{history_table}' access not yet implemented. Requires Iceberg metadata access."
         )))
     }
 
@@ -413,10 +412,9 @@ impl PostgresAdapter {
     ///
     /// Returns detailed snapshot information.
     pub async fn view_snapshots(&self, table_name: &str) -> EngineResult<CommandResult> {
-        let snapshots_table = format!("{}.snapshots", table_name);
+        let snapshots_table = format!("{table_name}.snapshots");
         Err(EngineError::not_implemented(format!(
-            "Snapshots table '{}' access not yet implemented. Requires Iceberg metadata access.",
-            snapshots_table
+            "Snapshots table '{snapshots_table}' access not yet implemented. Requires Iceberg metadata access."
         )))
     }
 
@@ -424,10 +422,9 @@ impl PostgresAdapter {
     ///
     /// Equivalent to `SELECT * FROM table.refs`
     pub async fn view_refs(&self, table_name: &str) -> EngineResult<CommandResult> {
-        let refs_table = format!("{}.refs", table_name);
+        let refs_table = format!("{table_name}.refs");
         Err(EngineError::not_implemented(format!(
-            "Refs table '{}' access not yet implemented. Requires Iceberg metadata access.",
-            refs_table
+            "Refs table '{refs_table}' access not yet implemented. Requires Iceberg metadata access."
         )))
     }
 
@@ -440,8 +437,7 @@ impl PostgresAdapter {
         tag_name: &str,
     ) -> EngineResult<CommandResult> {
         Err(EngineError::not_implemented(format!(
-            "CREATE TAG '{}' for table '{}' not yet implemented. Requires Iceberg tag management.",
-            tag_name, table_name
+            "CREATE TAG '{tag_name}' for table '{table_name}' not yet implemented. Requires Iceberg tag management."
         )))
     }
 
@@ -454,8 +450,7 @@ impl PostgresAdapter {
         branch_name: &str,
     ) -> EngineResult<CommandResult> {
         Err(EngineError::not_implemented(format!(
-            "CREATE BRANCH '{}' for table '{}' not yet implemented. Requires Iceberg branch management.",
-            branch_name, table_name
+            "CREATE BRANCH '{branch_name}' for table '{table_name}' not yet implemented. Requires Iceberg branch management."
         )))
     }
 
@@ -639,13 +634,13 @@ impl PostgresFilter {
             PostgresFilter::And(filters) => crate::storage::FilterPredicate::And(
                 filters
                     .iter()
-                    .map(|f| f.to_engine_filter_predicate())
+                    .map(PostgresFilter::to_engine_filter_predicate)
                     .collect(),
             ),
             PostgresFilter::Or(filters) => crate::storage::FilterPredicate::Or(
                 filters
                     .iter()
-                    .map(|f| f.to_engine_filter_predicate())
+                    .map(PostgresFilter::to_engine_filter_predicate)
                     .collect(),
             ),
             PostgresFilter::Not(filter) => {

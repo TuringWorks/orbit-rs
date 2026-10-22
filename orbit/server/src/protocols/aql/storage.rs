@@ -113,8 +113,7 @@ impl AqlStorage {
             Err(e) => {
                 error!("Failed to open AQL RocksDB at {:?}: {}", db_path, e);
                 return Err(ProtocolError::Other(format!(
-                    "Failed to initialize AQL RocksDB: {}",
-                    e
+                    "Failed to initialize AQL RocksDB: {e}"
                 )));
             }
         }
@@ -199,12 +198,12 @@ impl AqlStorage {
 
             let key = format!("collection:{}", collection.name);
             let value = serde_json::to_vec(&collection).map_err(|e| {
-                ProtocolError::Other(format!("Failed to serialize collection: {}", e))
+                ProtocolError::Other(format!("Failed to serialize collection: {e}"))
             })?;
 
             db.put_cf(collections_cf, key.as_bytes(), &value)
                 .map_err(|e| {
-                    ProtocolError::Other(format!("Failed to persist collection to RocksDB: {}", e))
+                    ProtocolError::Other(format!("Failed to persist collection to RocksDB: {e}"))
                 })?;
         }
 
@@ -239,12 +238,11 @@ impl AqlStorage {
             })?;
 
             let key = format!("doc:{}:{}", collection_name, doc.key);
-            let value = serde_json::to_vec(&doc).map_err(|e| {
-                ProtocolError::Other(format!("Failed to serialize document: {}", e))
-            })?;
+            let value = serde_json::to_vec(&doc)
+                .map_err(|e| ProtocolError::Other(format!("Failed to serialize document: {e}")))?;
 
             db.put_cf(docs_cf, key.as_bytes(), &value).map_err(|e| {
-                ProtocolError::Other(format!("Failed to persist document to RocksDB: {}", e))
+                ProtocolError::Other(format!("Failed to persist document to RocksDB: {e}"))
             })?;
         }
 
@@ -296,9 +294,9 @@ impl AqlStorage {
                     ProtocolError::Other("Documents column family not found".to_string())
                 })?;
 
-                let db_key = format!("doc:{}:{}", collection, key);
+                let db_key = format!("doc:{collection}:{key}");
                 db.delete_cf(docs_cf, db_key.as_bytes()).map_err(|e| {
-                    ProtocolError::Other(format!("Failed to delete document from RocksDB: {}", e))
+                    ProtocolError::Other(format!("Failed to delete document from RocksDB: {e}"))
                 })?;
             }
         }
@@ -341,13 +339,13 @@ impl AqlStorage {
                     ProtocolError::Other("Documents column family not found".to_string())
                 })?;
 
-                let db_key = format!("doc:{}:{}", collection, key);
+                let db_key = format!("doc:{collection}:{key}");
                 let value = serde_json::to_vec(&doc).map_err(|e| {
-                    ProtocolError::Other(format!("Failed to serialize document: {}", e))
+                    ProtocolError::Other(format!("Failed to serialize document: {e}"))
                 })?;
 
                 db.put_cf(docs_cf, db_key.as_bytes(), &value).map_err(|e| {
-                    ProtocolError::Other(format!("Failed to persist document to RocksDB: {}", e))
+                    ProtocolError::Other(format!("Failed to persist document to RocksDB: {e}"))
                 })?;
             }
         }

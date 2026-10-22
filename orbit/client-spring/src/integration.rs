@@ -237,20 +237,23 @@ impl OrbitIntegration {
         config: &mut OrbitClientConfig,
         parsed_config: &serde_json::Value,
     ) {
-        if let Some(auto_start) = parsed_config.get("auto_start").and_then(|v| v.as_bool()) {
+        if let Some(auto_start) = parsed_config
+            .get("auto_start")
+            .and_then(serde_json::Value::as_bool)
+        {
             config.auto_start = auto_start;
         }
 
         if let Some(timeout) = parsed_config
             .get("connection_timeout")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
         {
             config.connection_timeout = timeout;
         }
 
         if let Some(timeout) = parsed_config
             .get("request_timeout")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
         {
             config.request_timeout = timeout;
         }
@@ -308,7 +311,7 @@ impl OrbitIntegration {
             connected: false,
             peer_count: 0,
             last_heartbeat: chrono::Utc::now(),
-            status: format!("DOWN: {}", error),
+            status: format!("DOWN: {error}"),
         }
     }
 }

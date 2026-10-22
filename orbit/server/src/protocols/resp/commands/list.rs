@@ -34,12 +34,14 @@ impl ListCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<String> {
-        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(super::super::types::RespValue::as_string)
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     fn get_int_arg(
@@ -98,10 +100,10 @@ impl ListCommands {
             .local_registry
             .execute_list(&key, "lpush", &[serde_json::to_value(&values).unwrap()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let new_length: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         // Persist to OrbitClient
         let orbit_key = self.base.make_key(&key);
@@ -143,10 +145,10 @@ impl ListCommands {
             .local_registry
             .execute_list(&key, "rpush", &[serde_json::to_value(&values).unwrap()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let new_length: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         // Persist to OrbitClient
         let orbit_key = self.base.make_key(&key);
@@ -191,9 +193,9 @@ impl ListCommands {
             .await;
 
         let popped_items: Result<Vec<String>, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         // Persist to OrbitClient
@@ -216,10 +218,9 @@ impl ListCommands {
             Ok(items) if !items.is_empty() => {
                 debug!("LPOP {} {} -> {:?}", key, count, items);
                 if count == 1 {
-                    Ok(items
-                        .first()
-                        .map(|s| RespValue::BulkString(Bytes::from(s.as_bytes().to_vec())))
-                        .unwrap_or(RespValue::null()))
+                    Ok(items.first().map_or(RespValue::null(), |s| {
+                        RespValue::BulkString(Bytes::from(s.as_bytes().to_vec()))
+                    }))
                 } else {
                     let result: Vec<RespValue> = items
                         .into_iter()
@@ -257,9 +258,9 @@ impl ListCommands {
             .await;
 
         let popped_items: Result<Vec<String>, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         // Persist to OrbitClient
@@ -282,10 +283,9 @@ impl ListCommands {
             Ok(items) => {
                 debug!("RPOP {} {} -> {:?}", key, count, items);
                 if count == 1 {
-                    Ok(items
-                        .first()
-                        .map(|s| RespValue::BulkString(Bytes::from(s.as_bytes().to_vec())))
-                        .unwrap_or(RespValue::null()))
+                    Ok(items.first().map_or(RespValue::null(), |s| {
+                        RespValue::BulkString(Bytes::from(s.as_bytes().to_vec()))
+                    }))
                 } else {
                     let result: Vec<RespValue> = items
                         .into_iter()
@@ -321,66 +321,13 @@ impl ListCommands {
             .await;
 
         let range_result: Result<Vec<String>, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
-        match range_result {
-            Ok(items) => {
-                if items.is_empty() {
-                    // Try OrbitClient
-                    let orbit_key = self.base.make_key(&key);
-                    if let Ok(actor_ref) = self
-                        .base
-                        .orbit_client
-                        .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
-                        .await
-                    {
-                        if let Ok(remote_items) = actor_ref
-                            .invoke::<Vec<String>>(
-                                "lrange",
-                                vec![
-                                    serde_json::to_value(start).unwrap(),
-                                    serde_json::to_value(stop).unwrap(),
-                                ],
-                            )
-                            .await
-                        {
-                            if !remote_items.is_empty() {
-                                let result: Vec<RespValue> = remote_items
-                                    .into_iter()
-                                    .map(|item| {
-                                        RespValue::BulkString(Bytes::from(item.as_bytes().to_vec()))
-                                    })
-                                    .collect();
-                                debug!(
-                                    "LRANGE {} {} {} -> {} items (OrbitClient)",
-                                    key,
-                                    start,
-                                    stop,
-                                    result.len()
-                                );
-                                return Ok(RespValue::Array(result));
-                            }
-                        }
-                    }
-                }
-
-                let result: Vec<RespValue> = items
-                    .into_iter()
-                    .map(|item| RespValue::BulkString(Bytes::from(item.as_bytes().to_vec())))
-                    .collect();
-                debug!(
-                    "LRANGE {} {} {} -> {} items",
-                    key,
-                    start,
-                    stop,
-                    result.len()
-                );
-                Ok(RespValue::Array(result))
-            }
-            Err(_) => {
+        if let Ok(items) = range_result {
+            if items.is_empty() {
                 // Try OrbitClient
                 let orbit_key = self.base.make_key(&key);
                 if let Ok(actor_ref) = self
@@ -399,24 +346,72 @@ impl ListCommands {
                         )
                         .await
                     {
-                        let result: Vec<RespValue> = remote_items
-                            .into_iter()
-                            .map(|item| {
-                                RespValue::BulkString(Bytes::from(item.as_bytes().to_vec()))
-                            })
-                            .collect();
-                        debug!(
-                            "LRANGE {} {} {} -> {} items (OrbitClient fallback)",
-                            key,
-                            start,
-                            stop,
-                            result.len()
-                        );
-                        return Ok(RespValue::Array(result));
+                        if !remote_items.is_empty() {
+                            let result: Vec<RespValue> = remote_items
+                                .into_iter()
+                                .map(|item| {
+                                    RespValue::BulkString(Bytes::from(item.as_bytes().to_vec()))
+                                })
+                                .collect();
+                            debug!(
+                                "LRANGE {} {} {} -> {} items (OrbitClient)",
+                                key,
+                                start,
+                                stop,
+                                result.len()
+                            );
+                            return Ok(RespValue::Array(result));
+                        }
                     }
                 }
-                Ok(RespValue::Array(vec![]))
             }
+
+            let result: Vec<RespValue> = items
+                .into_iter()
+                .map(|item| RespValue::BulkString(Bytes::from(item.as_bytes().to_vec())))
+                .collect();
+            debug!(
+                "LRANGE {} {} {} -> {} items",
+                key,
+                start,
+                stop,
+                result.len()
+            );
+            Ok(RespValue::Array(result))
+        } else {
+            // Try OrbitClient
+            let orbit_key = self.base.make_key(&key);
+            if let Ok(actor_ref) = self
+                .base
+                .orbit_client
+                .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+                .await
+            {
+                if let Ok(remote_items) = actor_ref
+                    .invoke::<Vec<String>>(
+                        "lrange",
+                        vec![
+                            serde_json::to_value(start).unwrap(),
+                            serde_json::to_value(stop).unwrap(),
+                        ],
+                    )
+                    .await
+                {
+                    let result: Vec<RespValue> = remote_items
+                        .into_iter()
+                        .map(|item| RespValue::BulkString(Bytes::from(item.as_bytes().to_vec())))
+                        .collect();
+                    debug!(
+                        "LRANGE {} {} {} -> {} items (OrbitClient fallback)",
+                        key,
+                        start,
+                        stop,
+                        result.len()
+                    );
+                    return Ok(RespValue::Array(result));
+                }
+            }
+            Ok(RespValue::Array(vec![]))
         }
     }
 
@@ -432,10 +427,10 @@ impl ListCommands {
             .local_registry
             .execute_list(&key, "llen", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let mut length: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0);
 
         if length == 0 {
@@ -473,44 +468,38 @@ impl ListCommands {
             .local_registry
             .execute_list(&key, "lindex", &[serde_json::to_value(index).unwrap()])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let element: Option<String> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
-        match element {
-            Some(value) => {
-                debug!("LINDEX {} {} -> {}", key, index, value);
-                Ok(RespValue::BulkString(Bytes::from(
-                    value.as_bytes().to_vec(),
-                )))
-            }
-            None => {
-                // Try OrbitClient
-                let orbit_key = self.base.make_key(&key);
-                if let Ok(actor_ref) = self
-                    .base
-                    .orbit_client
-                    .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+        if let Some(value) = element {
+            debug!("LINDEX {} {} -> {}", key, index, value);
+            Ok(RespValue::BulkString(Bytes::from(
+                value.as_bytes().to_vec(),
+            )))
+        } else {
+            // Try OrbitClient
+            let orbit_key = self.base.make_key(&key);
+            if let Ok(actor_ref) = self
+                .base
+                .orbit_client
+                .actor_reference::<crate::protocols::resp::actors::ListActor>(orbit_key)
+                .await
+            {
+                if let Ok(Some(remote_value)) = actor_ref
+                    .invoke::<Option<String>>("lindex", vec![serde_json::to_value(index).unwrap()])
                     .await
                 {
-                    if let Ok(Some(remote_value)) = actor_ref
-                        .invoke::<Option<String>>(
-                            "lindex",
-                            vec![serde_json::to_value(index).unwrap()],
-                        )
-                        .await
-                    {
-                        debug!("LINDEX {} {} -> {} (OrbitClient)", key, index, remote_value);
-                        return Ok(RespValue::BulkString(Bytes::from(
-                            remote_value.as_bytes().to_vec(),
-                        )));
-                    }
+                    debug!("LINDEX {} {} -> {} (OrbitClient)", key, index, remote_value);
+                    return Ok(RespValue::BulkString(Bytes::from(
+                        remote_value.as_bytes().to_vec(),
+                    )));
                 }
-
-                debug!("LINDEX {} {} -> null", key, index);
-                Ok(RespValue::null())
             }
+
+            debug!("LINDEX {} {} -> null", key, index);
+            Ok(RespValue::null())
         }
     }
 
@@ -535,7 +524,7 @@ impl ListCommands {
                 ],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
 
         let success: bool = serde_json::from_value(result)
             .map_err(|_| ProtocolError::RespError("ERR invalid response".to_string()))?;
@@ -593,7 +582,7 @@ impl ListCommands {
                 ],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
 
         let num_removed: usize = serde_json::from_value(result).unwrap_or(0);
 
@@ -641,7 +630,7 @@ impl ListCommands {
                 &[serde_json::to_value(start)?, serde_json::to_value(stop)?],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
 
         // Persist to OrbitClient
         let orbit_key = self.base.make_key(&key);

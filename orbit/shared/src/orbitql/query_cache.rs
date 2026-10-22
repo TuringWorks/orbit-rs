@@ -829,7 +829,7 @@ impl QueryCacheManager {
         let rules = self.invalidator.rules.read().unwrap().clone();
         let mut invalidated_count = 0;
 
-        for rule in rules.iter() {
+        for rule in &rules {
             if self.trigger_matches(&rule.trigger, &trigger) {
                 invalidated_count += self.apply_invalidation(&rule.targets).await?;
             }

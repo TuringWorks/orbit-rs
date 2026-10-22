@@ -442,14 +442,14 @@ impl TransactionCoordinator {
             match event {
                 TransactionEvent::Started => transaction.state = TransactionState::Preparing,
                 TransactionEvent::PrepareRequested => {
-                    transaction.state = TransactionState::Preparing
+                    transaction.state = TransactionState::Preparing;
                 }
                 TransactionEvent::CommitRequested => {
-                    transaction.state = TransactionState::Committing
+                    transaction.state = TransactionState::Committing;
                 }
                 TransactionEvent::Committed => transaction.state = TransactionState::Committed,
                 TransactionEvent::AbortRequested { .. } => {
-                    transaction.state = TransactionState::Aborting
+                    transaction.state = TransactionState::Aborting;
                 }
                 TransactionEvent::Aborted { .. } => transaction.state = TransactionState::Aborted,
                 _ => {}

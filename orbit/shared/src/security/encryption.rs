@@ -259,7 +259,7 @@ impl EncryptionManager {
 
         // Create cipher from key
         let cipher = Aes256Gcm::new_from_slice(&key.key_data)
-            .map_err(|e| OrbitError::internal(format!("Invalid key length: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid key length: {e}")))?;
 
         // Generate random nonce (12 bytes for AES-GCM)
         let mut nonce_bytes = [0u8; NONCE_SIZE];
@@ -269,7 +269,7 @@ impl EncryptionManager {
         // Encrypt data (returns ciphertext + authentication tag)
         let ciphertext = cipher
             .encrypt(nonce, data)
-            .map_err(|e| OrbitError::internal(format!("Encryption failed: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Encryption failed: {e}")))?;
 
         // Prepend nonce to ciphertext: [nonce][ciphertext+tag]
         let mut encrypted = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
@@ -308,11 +308,11 @@ impl EncryptionManager {
             .key_management
             .get_key(key_id)
             .await?
-            .ok_or_else(|| OrbitError::internal(format!("Key not found: {}", key_id)))?;
+            .ok_or_else(|| OrbitError::internal(format!("Key not found: {key_id}")))?;
 
         // Create cipher from key
         let cipher = Aes256Gcm::new_from_slice(&key.key_data)
-            .map_err(|e| OrbitError::internal(format!("Invalid key length: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid key length: {e}")))?;
 
         // Extract nonce and ciphertext
         let nonce = Nonce::from_slice(&encrypted_data[..NONCE_SIZE]);

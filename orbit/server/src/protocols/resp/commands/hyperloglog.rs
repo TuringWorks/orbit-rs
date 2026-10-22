@@ -168,12 +168,14 @@ impl HyperLogLogCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<String> {
-        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(super::super::types::RespValue::as_string)
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     /// PFADD key element [element ...]
@@ -222,7 +224,7 @@ impl HyperLogLogCommands {
                 .local_registry
                 .execute_keyvalue(&key, "set_value", &[serde_json::to_value(hll_str)?])
                 .await
-                .map_err(|e| ProtocolError::RespError(format!("ERR failed to store HLL: {}", e)))?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR failed to store HLL: {e}")))?;
         }
 
         // Return 1 if modified, 0 otherwise
@@ -333,7 +335,7 @@ impl HyperLogLogCommands {
             .execute_keyvalue(&dest_key, "set_value", &[serde_json::to_value(merged_str)?])
             .await
             .map_err(|e| {
-                ProtocolError::RespError(format!("ERR failed to store merged HLL: {}", e))
+                ProtocolError::RespError(format!("ERR failed to store merged HLL: {e}"))
             })?;
 
         Ok(RespValue::simple_string("OK"))
@@ -350,8 +352,7 @@ impl CommandHandler for HyperLogLogCommands {
             "PFCOUNT" => self.cmd_pfcount(args).await,
             "PFMERGE" => self.cmd_pfmerge(args).await,
             _ => Err(ProtocolError::RespError(format!(
-                "ERR unknown HyperLogLog command '{}'",
-                command_name
+                "ERR unknown HyperLogLog command '{command_name}'"
             ))),
         }
     }

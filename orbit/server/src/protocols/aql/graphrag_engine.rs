@@ -96,18 +96,18 @@ impl AqlGraphRAGEngine {
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect()
             });
 
         let build_graph = options
             .get("build_graph")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(true);
 
         let generate_embeddings = options
             .get("generate_embeddings")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(true);
 
         // Get GraphRAG actor reference
@@ -292,19 +292,19 @@ impl AqlGraphRAGEngine {
         // Parse options
         let max_hops = options
             .get("max_hops")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as u32);
         let context_size = options
             .get("context_size")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as usize);
         let llm_provider = options
             .get("llm_provider")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
         let include_explanation = options
             .get("include_explanation")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         // Get GraphRAG actor reference
@@ -442,15 +442,15 @@ impl AqlGraphRAGEngine {
         // Parse options
         let max_hops = options
             .get("max_hops")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as u32);
         let include_explanation = options
             .get("include_explanation")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
         let max_results = options
             .get("max_results")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as usize);
 
         // Get GraphRAG actor reference
@@ -540,15 +540,13 @@ impl AqlGraphRAGEngine {
 
         let limit = options
             .get("limit")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let similarity_threshold = options
             .get("similarity_threshold")
-            .and_then(|v| v.as_f64())
-            .map(|f| f as f32)
-            .unwrap_or(0.7);
+            .and_then(serde_json::Value::as_f64)
+            .map_or(0.7, |f| f as f32);
 
         // Get storage and find similar entities
         let storage = self.get_storage(&kg_name).await?;
@@ -561,8 +559,7 @@ impl AqlGraphRAGEngine {
 
         if target_node.is_none() {
             return Err(ProtocolError::AqlError(format!(
-                "Entity '{}' not found in knowledge graph",
-                entity_text
+                "Entity '{entity_text}' not found in knowledge graph"
             )));
         }
 
@@ -717,9 +714,8 @@ impl AqlGraphRAGEngine {
 
         let max_results = options
             .get("max_results")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(20);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(20, |n| n as usize);
 
         // Use RAG query to find relevant entities and context
         let rag_query = GraphRAGQuery {
@@ -727,21 +723,19 @@ impl AqlGraphRAGEngine {
             max_hops: Some(
                 options
                     .get("max_hops")
-                    .and_then(|v| v.as_u64())
-                    .map(|n| n as u32)
-                    .unwrap_or(2),
+                    .and_then(serde_json::Value::as_u64)
+                    .map_or(2, |n| n as u32),
             ),
             context_size: Some(
                 options
                     .get("context_size")
-                    .and_then(|v| v.as_u64())
-                    .map(|n| n as usize)
-                    .unwrap_or(1024),
+                    .and_then(serde_json::Value::as_u64)
+                    .map_or(1024, |n| n as usize),
             ),
             llm_provider: options
                 .get("llm_provider")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             search_strategy: None,
             include_explanation: false,
             max_results: Some(max_results),
@@ -905,13 +899,13 @@ impl AqlGraphRAGEngine {
 
         let limit = options
             .get("limit")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as usize);
 
         let entity_type_filter = options
             .get("entity_type")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
 
         // Get storage and list entities
         let storage = self.get_storage(&kg_name).await?;
@@ -987,9 +981,8 @@ impl AqlGraphRAGEngine {
 
         let time_window_days = options
             .get("time_window_days")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as i64)
-            .unwrap_or(30);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(30, |n| n as i64);
 
         // Get storage and analyze trends
         let storage = self.get_storage(&kg_name).await?;
@@ -1071,9 +1064,8 @@ impl AqlGraphRAGEngine {
 
         let min_community_size = options
             .get("min_community_size")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(3);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(3, |n| n as usize);
 
         // Get storage
         let storage = self.get_storage(&kg_name).await?;

@@ -1015,8 +1015,7 @@ impl WorkScheduler {
             .iter()
             .enumerate()
             .min_by_key(|(_, load)| load.queue_length)
-            .map(|(id, _)| id)
-            .unwrap_or(0);
+            .map_or(0, |(id, _)| id);
         Ok(min_load_worker)
     }
 

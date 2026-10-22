@@ -558,7 +558,7 @@ impl MultiHopReasoningEngine {
         let mut edge_weights: Vec<f32> = Vec::new();
         let mut edge_count = 0;
 
-        for (entity, neighbors) in adjacency_map.iter() {
+        for (entity, neighbors) in &adjacency_map {
             if let Some(&node_idx) = entity_to_id.get(entity) {
                 let idx = node_idx as usize;
                 if idx < adjacency_list.len() {
@@ -709,7 +709,7 @@ impl MultiHopReasoningEngine {
         let mut edge_weights: Vec<f32> = Vec::new();
         let mut edge_count = 0;
 
-        for (entity, neighbors) in adjacency_map.iter() {
+        for (entity, neighbors) in &adjacency_map {
             if let Some(&node_idx) = entity_to_id.get(entity) {
                 let idx = node_idx as usize;
                 if idx < adjacency_list.len() {
@@ -768,7 +768,7 @@ impl MultiHopReasoningEngine {
 
         // Create reverse mapping (u64 -> String)
         let mut id_to_entity: HashMap<u64, String> = HashMap::new();
-        for (entity, &id) in entity_to_id.iter() {
+        for (entity, &id) in entity_to_id {
             id_to_entity.insert(id, entity.clone());
         }
 
@@ -1007,7 +1007,7 @@ impl MultiHopReasoningEngine {
         let paths = self.find_paths(orbit_client, kg_name, query).await?;
 
         let best_path = paths.first().cloned();
-        let connection_strength = best_path.as_ref().map(|p| p.score).unwrap_or(0.0);
+        let connection_strength = best_path.as_ref().map_or(0.0, |p| p.score);
 
         let explanation = if paths.is_empty() {
             format!(
@@ -1020,7 +1020,7 @@ impl MultiHopReasoningEngine {
                 paths.len(),
                 entity_a,
                 entity_b,
-                best_path.as_ref().map(|p| p.length).unwrap_or(0),
+                best_path.as_ref().map_or(0, |p| p.length),
                 connection_strength
             )
         };

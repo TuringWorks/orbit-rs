@@ -95,8 +95,7 @@ impl CypherGraphStorage {
             Err(e) => {
                 error!("Failed to open Cypher RocksDB at {:?}: {}", db_path, e);
                 return Err(ProtocolError::Other(format!(
-                    "Failed to initialize Cypher RocksDB: {}",
-                    e
+                    "Failed to initialize Cypher RocksDB: {e}"
                 )));
             }
         }
@@ -175,10 +174,10 @@ impl CypherGraphStorage {
 
             let key = format!("node:{}", node.id);
             let value = serde_json::to_vec(&node)
-                .map_err(|e| ProtocolError::Other(format!("Failed to serialize node: {}", e)))?;
+                .map_err(|e| ProtocolError::Other(format!("Failed to serialize node: {e}")))?;
 
             db.put_cf(nodes_cf, key.as_bytes(), &value).map_err(|e| {
-                ProtocolError::Other(format!("Failed to persist node to RocksDB: {}", e))
+                ProtocolError::Other(format!("Failed to persist node to RocksDB: {e}"))
             })?;
         }
 
@@ -212,11 +211,11 @@ impl CypherGraphStorage {
 
             let key = format!("rel:{}", rel.id);
             let value = serde_json::to_vec(&rel).map_err(|e| {
-                ProtocolError::Other(format!("Failed to serialize relationship: {}", e))
+                ProtocolError::Other(format!("Failed to serialize relationship: {e}"))
             })?;
 
             db.put_cf(rels_cf, key.as_bytes(), &value).map_err(|e| {
-                ProtocolError::Other(format!("Failed to persist relationship to RocksDB: {}", e))
+                ProtocolError::Other(format!("Failed to persist relationship to RocksDB: {e}"))
             })?;
         }
 

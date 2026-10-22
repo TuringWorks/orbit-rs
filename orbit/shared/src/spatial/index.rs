@@ -273,7 +273,7 @@ impl QuadTree {
                     removed_point,
                     max_depth,
                     max_points_per_node,
-                )?
+                )?;
             }
         }
 
@@ -296,7 +296,7 @@ impl QuadTree {
                 point,
                 max_depth,
                 max_points_per_node,
-            )?
+            )?;
         }
 
         Ok(())

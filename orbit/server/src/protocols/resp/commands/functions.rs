@@ -116,7 +116,7 @@ impl FunctionManager {
 
         let mut libraries = self.libraries.write().await;
         if libraries.contains_key(name) && !replace {
-            return Err(format!("Library {} already exists", name));
+            return Err(format!("Library {name} already exists"));
         }
 
         libraries.insert(name.to_string(), library);
@@ -222,7 +222,7 @@ impl FunctionManager {
         let _func = self
             .get_function(func_name)
             .await
-            .ok_or_else(|| format!("Function not found: {}", func_name))?;
+            .ok_or_else(|| format!("Function not found: {func_name}"))?;
 
         // Update statistics
         *self.calls.write().await += 1;
@@ -230,8 +230,7 @@ impl FunctionManager {
         // In a real implementation, we would execute the Lua script here
         // For now, return a simulated response
         Ok(RespValue::SimpleString(format!(
-            "(function {} executed)",
-            func_name
+            "(function {func_name} executed)"
         )))
     }
 }
@@ -265,12 +264,14 @@ impl FunctionCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<String> {
-        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(super::super::types::RespValue::as_string)
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     fn get_int_arg(
@@ -315,7 +316,7 @@ impl FunctionCommands {
         self.function_manager
             .call(&func_name, &keys, &func_args)
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))
     }
 
     /// FCALL_RO - Read-only version of FCALL
@@ -350,8 +351,10 @@ impl FunctionCommands {
             code.lines()
                 .find(|l| l.contains("#!lua name="))
                 .and_then(|l| l.split("name=").nth(1))
-                .map(|n| n.trim().to_string())
-                .unwrap_or_else(|| format!("lib_{}", uuid::Uuid::new_v4().simple()))
+                .map_or_else(
+                    || format!("lib_{}", uuid::Uuid::new_v4().simple()),
+                    |n| n.trim().to_string(),
+                )
         } else {
             format!("lib_{}", uuid::Uuid::new_v4().simple())
         };
@@ -359,7 +362,7 @@ impl FunctionCommands {
         self.function_manager
             .load_library(&library_name, &code, "LUA", replace)
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
 
         debug!("FUNCTION LOAD {} -> OK", library_name);
         Ok(RespValue::BulkString(Bytes::from(
@@ -460,8 +463,7 @@ impl FunctionCommands {
             Ok(RespValue::SimpleString("OK".to_string()))
         } else {
             Err(ProtocolError::RespError(format!(
-                "ERR Library '{}' not found",
-                library_name
+                "ERR Library '{library_name}' not found"
             )))
         }
     }
@@ -488,8 +490,7 @@ impl FunctionCommands {
         result.push(
             if stats
                 .get("running_script")
-                .map(|s| s.is_empty())
-                .unwrap_or(true)
+                .is_none_or(std::string::String::is_empty)
             {
                 RespValue::NullBulkString
             } else {
@@ -659,14 +660,12 @@ impl CommandHandler for FunctionCommands {
                     "RESTORE" => self.cmd_function_restore(sub_args).await,
                     "STATS" => self.cmd_function_stats().await,
                     _ => Err(ProtocolError::RespError(format!(
-                        "ERR Unknown FUNCTION subcommand '{}'",
-                        subcommand
+                        "ERR Unknown FUNCTION subcommand '{subcommand}'"
                     ))),
                 }
             }
             _ => Err(ProtocolError::RespError(format!(
-                "ERR unknown command '{}'",
-                command_name
+                "ERR unknown command '{command_name}'"
             ))),
         }
     }

@@ -69,7 +69,7 @@ impl NlpQueryProcessor {
                         let table_name = if table_name.ends_with('s') {
                             table_name
                         } else {
-                            format!("{}s", table_name)
+                            format!("{table_name}s")
                         };
                         entities.push(RecognizedEntity {
                             entity_type: EntityType::Table,
@@ -744,13 +744,13 @@ impl std::fmt::Display for NlpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NlpError::IntentClassificationFailed(msg) => {
-                write!(f, "Intent classification failed: {}", msg)
+                write!(f, "Intent classification failed: {msg}")
             }
             NlpError::EntityExtractionFailed(msg) => {
-                write!(f, "Entity extraction failed: {}", msg)
+                write!(f, "Entity extraction failed: {msg}")
             }
-            NlpError::AmbiguousQuery(msg) => write!(f, "Ambiguous query: {}", msg),
-            NlpError::InvalidQuery(msg) => write!(f, "Invalid query: {}", msg),
+            NlpError::AmbiguousQuery(msg) => write!(f, "Ambiguous query: {msg}"),
+            NlpError::InvalidQuery(msg) => write!(f, "Invalid query: {msg}"),
         }
     }
 }

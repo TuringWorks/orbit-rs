@@ -184,7 +184,7 @@ impl AuthManager {
             AuthMethod::Password => {
                 // Simple plaintext comparison
                 let user = self.user_store.get_user(username).await;
-                Ok(user.map(|u| u.password_hash == password).unwrap_or(false))
+                Ok(user.is_some_and(|u| u.password_hash == password))
             }
             AuthMethod::MD5 => {
                 let user = self.user_store.get_user(username).await;
@@ -230,7 +230,7 @@ pub fn compute_md5_hash(password: &str, username: &str, salt: &[u8; 4]) -> Strin
     let first_hash = md5::compute(&combined);
 
     // Convert to hex string
-    let hex_hash = format!("{:x}", first_hash);
+    let hex_hash = format!("{first_hash:x}");
 
     // Second hash: md5(hex_hash + salt)
     let mut combined2 = Vec::new();
@@ -239,7 +239,7 @@ pub fn compute_md5_hash(password: &str, username: &str, salt: &[u8; 4]) -> Strin
     let final_hash = md5::compute(&combined2);
 
     // Return with "md5" prefix
-    format!("md5{:x}", final_hash)
+    format!("md5{final_hash:x}")
 }
 
 /// SCRAM-SHA-256 authentication state
@@ -278,7 +278,7 @@ impl ScramAuth {
                 ALPHABET[rand::rng().random_range(0..ALPHABET.len())] as char
             })
             .collect();
-        let server_nonce = format!("{}{}", client_nonce, server_nonce_suffix);
+        let server_nonce = format!("{client_nonce}{server_nonce_suffix}");
 
         Self {
             username,
@@ -353,7 +353,7 @@ impl ScramAuth {
         }
 
         // Construct client-final-without-proof
-        let client_final_without_proof = format!("c={},r={}", channel_binding, nonce);
+        let client_final_without_proof = format!("c={channel_binding},r={nonce}");
 
         // Construct auth message
         let auth_message = format!(

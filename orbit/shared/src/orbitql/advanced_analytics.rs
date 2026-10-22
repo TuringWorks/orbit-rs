@@ -3838,77 +3838,64 @@ impl BoostingEnsemble {
             return 100.0;
         }
 
-        match self.ensemble_method {
-            EnsembleMethod::WeightedAverage => {
-                let mut weighted_sum = 0.0;
-                let mut weight_sum = 0.0;
+        if let EnsembleMethod::WeightedAverage = self.ensemble_method {
+            let mut weighted_sum = 0.0;
+            let mut weight_sum = 0.0;
 
-                if let (Some(ref model), Some(&weight)) =
-                    (&self.gb_model, self.model_weights.first())
-                {
-                    weighted_sum += weight * model.predict(features);
-                    weight_sum += weight;
-                }
-
-                if let (Some(ref model), Some(&weight)) =
-                    (&self.ada_model, self.model_weights.get(1))
-                {
-                    weighted_sum += weight * model.predict(features);
-                    weight_sum += weight;
-                }
-
-                if let (Some(ref model), Some(&weight)) =
-                    (&self.lgb_model, self.model_weights.get(2))
-                {
-                    weighted_sum += weight * model.predict(features);
-                    weight_sum += weight;
-                }
-
-                if let (Some(ref model), Some(&weight)) =
-                    (&self.cat_model, self.model_weights.get(3))
-                {
-                    weighted_sum += weight * model.predict(features);
-                    weight_sum += weight;
-                }
-
-                if let (Some(ref model), Some(&weight)) =
-                    (&self.xgb_model, self.model_weights.get(4))
-                {
-                    weighted_sum += weight * model.predict(features);
-                    weight_sum += weight;
-                }
-
-                if weight_sum > 0.0 {
-                    (weighted_sum / weight_sum).max(0.0)
-                } else {
-                    100.0
-                }
+            if let (Some(ref model), Some(&weight)) = (&self.gb_model, self.model_weights.first()) {
+                weighted_sum += weight * model.predict(features);
+                weight_sum += weight;
             }
-            _ => {
-                // Default to simple average for other methods
-                let mut predictions = Vec::new();
 
-                if let Some(ref model) = self.gb_model {
-                    predictions.push(model.predict(features));
-                }
-                if let Some(ref model) = self.ada_model {
-                    predictions.push(model.predict(features));
-                }
-                if let Some(ref model) = self.lgb_model {
-                    predictions.push(model.predict(features));
-                }
-                if let Some(ref model) = self.cat_model {
-                    predictions.push(model.predict(features));
-                }
-                if let Some(ref model) = self.xgb_model {
-                    predictions.push(model.predict(features));
-                }
+            if let (Some(ref model), Some(&weight)) = (&self.ada_model, self.model_weights.get(1)) {
+                weighted_sum += weight * model.predict(features);
+                weight_sum += weight;
+            }
 
-                if !predictions.is_empty() {
-                    (predictions.iter().sum::<f64>() / predictions.len() as f64).max(0.0)
-                } else {
-                    100.0
-                }
+            if let (Some(ref model), Some(&weight)) = (&self.lgb_model, self.model_weights.get(2)) {
+                weighted_sum += weight * model.predict(features);
+                weight_sum += weight;
+            }
+
+            if let (Some(ref model), Some(&weight)) = (&self.cat_model, self.model_weights.get(3)) {
+                weighted_sum += weight * model.predict(features);
+                weight_sum += weight;
+            }
+
+            if let (Some(ref model), Some(&weight)) = (&self.xgb_model, self.model_weights.get(4)) {
+                weighted_sum += weight * model.predict(features);
+                weight_sum += weight;
+            }
+
+            if weight_sum > 0.0 {
+                (weighted_sum / weight_sum).max(0.0)
+            } else {
+                100.0
+            }
+        } else {
+            // Default to simple average for other methods
+            let mut predictions = Vec::new();
+
+            if let Some(ref model) = self.gb_model {
+                predictions.push(model.predict(features));
+            }
+            if let Some(ref model) = self.ada_model {
+                predictions.push(model.predict(features));
+            }
+            if let Some(ref model) = self.lgb_model {
+                predictions.push(model.predict(features));
+            }
+            if let Some(ref model) = self.cat_model {
+                predictions.push(model.predict(features));
+            }
+            if let Some(ref model) = self.xgb_model {
+                predictions.push(model.predict(features));
+            }
+
+            if !predictions.is_empty() {
+                (predictions.iter().sum::<f64>() / predictions.len() as f64).max(0.0)
+            } else {
+                100.0
             }
         }
     }

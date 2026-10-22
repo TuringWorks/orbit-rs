@@ -65,12 +65,14 @@ impl PersistentStringCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<String> {
-        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(super::super::types::RespValue::as_string)
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     fn get_int_arg(
@@ -79,12 +81,14 @@ impl PersistentStringCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<i64> {
-        args.get(index).and_then(|v| v.as_integer()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid integer argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(super::super::types::RespValue::as_integer)
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid integer argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     // Parse SET command options (EX, PX, NX, XX)
@@ -163,7 +167,7 @@ impl PersistentStringCommands {
                 debug!("GET {} -> (nil)", key);
                 Ok(RespValue::null())
             }
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -196,12 +200,12 @@ impl PersistentStringCommands {
                     debug!("SET {} {} (NX) -> (nil)", key, value_str);
                     Ok(RespValue::null())
                 }
-                Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+                Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
             }
         } else if options.xx {
             let exists = match self.redis_provider.exists(&key).await {
                 Ok(exists) => exists,
-                Err(e) => return Err(ProtocolError::RespError(format!("ERR {}", e))),
+                Err(e) => return Err(ProtocolError::RespError(format!("ERR {e}"))),
             };
 
             if exists {
@@ -210,7 +214,7 @@ impl PersistentStringCommands {
                         debug!("SET {} {} (XX) -> OK", key, value_str);
                         Ok(RespValue::ok())
                     }
-                    Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+                    Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
                 }
             } else {
                 debug!("SET {} {} (XX) -> (nil)", key, value_str);
@@ -223,7 +227,7 @@ impl PersistentStringCommands {
                     debug!("SET {} {} -> OK", key, value_str);
                     Ok(RespValue::ok())
                 }
-                Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+                Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
             }
         }
     }
@@ -243,7 +247,7 @@ impl PersistentStringCommands {
             match self.redis_provider.delete(&key).await {
                 Ok(true) => deleted_count += 1,
                 Ok(false) => {} // Key didn't exist
-                Err(e) => return Err(ProtocolError::RespError(format!("ERR {}", e))),
+                Err(e) => return Err(ProtocolError::RespError(format!("ERR {e}"))),
             }
         }
 
@@ -266,7 +270,7 @@ impl PersistentStringCommands {
             match self.redis_provider.exists(&key).await {
                 Ok(true) => exists_count += 1,
                 Ok(false) => {} // Key doesn't exist
-                Err(e) => return Err(ProtocolError::RespError(format!("ERR {}", e))),
+                Err(e) => return Err(ProtocolError::RespError(format!("ERR {e}"))),
             }
         }
 
@@ -284,7 +288,7 @@ impl PersistentStringCommands {
                 debug!("STRLEN {} -> {}", key, length);
                 Ok(RespValue::Integer(length as i64))
             }
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -306,16 +310,16 @@ impl PersistentStringCommands {
                 let results: Vec<RespValue> = values
                     .into_iter()
                     .map(|opt_value| {
-                        opt_value
-                            .map(|v| RespValue::BulkString(Bytes::from(v.data.into_bytes())))
-                            .unwrap_or(RespValue::null())
+                        opt_value.map_or(RespValue::null(), |v| {
+                            RespValue::BulkString(Bytes::from(v.data.into_bytes()))
+                        })
                     })
                     .collect();
 
                 debug!("MGET -> {} values", results.len());
                 Ok(RespValue::Array(results))
             }
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -338,7 +342,7 @@ impl PersistentStringCommands {
 
         match self.redis_provider.mset(values).await {
             Ok(()) => Ok(RespValue::ok()),
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -371,7 +375,7 @@ impl PersistentStringCommands {
                 debug!("INCR/DECR {} by {} -> {}", key, delta, new_value);
                 Ok(RespValue::Integer(new_value))
             }
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -386,7 +390,7 @@ impl PersistentStringCommands {
                 debug!("APPEND {} -> new length {}", key, new_length);
                 Ok(RespValue::Integer(new_length as i64))
             }
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -406,7 +410,7 @@ impl PersistentStringCommands {
                 debug!("GETSET {} -> (nil)", key);
                 Ok(RespValue::null())
             }
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -430,7 +434,7 @@ impl PersistentStringCommands {
                 debug!("SETEX {} {} {} -> OK", key, ttl_seconds, value_str);
                 Ok(RespValue::ok())
             }
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -450,7 +454,7 @@ impl PersistentStringCommands {
                 debug!("SETNX {} {} -> 0", key, value_str);
                 Ok(RespValue::Integer(0))
             }
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 }
@@ -482,8 +486,7 @@ impl CommandHandler for PersistentStringCommands {
             "SETEX" => self.cmd_setex(args).await,
             "SETNX" => self.cmd_setnx(args).await,
             _ => Err(ProtocolError::RespError(format!(
-                "ERR unknown string command '{}'",
-                command_name
+                "ERR unknown string command '{command_name}'"
             ))),
         }
     }

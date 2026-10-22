@@ -125,13 +125,12 @@ impl UniversalElectionManager {
         k8s_config: K8sElectionConfig,
         state_path: Option<std::path::PathBuf>,
     ) -> OrbitResult<Self> {
-        let state_manager = match state_path {
-            Some(path) => ElectionStateManager::new(&path, node_id.clone()),
-            None => {
-                let default_path =
-                    std::env::temp_dir().join(format!("orbit-election-{}.json", node_id.key));
-                ElectionStateManager::new(&default_path, node_id.clone())
-            }
+        let state_manager = if let Some(path) = state_path {
+            ElectionStateManager::new(&path, node_id.clone())
+        } else {
+            let default_path =
+                std::env::temp_dir().join(format!("orbit-election-{}.json", node_id.key));
+            ElectionStateManager::new(&default_path, node_id.clone())
         };
 
         // Load existing state

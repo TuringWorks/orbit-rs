@@ -51,7 +51,7 @@ impl SpringGrpcServer {
         let addr = format!("{}:{}", self.config.host, self.config.port);
         let _socket_addr: std::net::SocketAddr = addr
             .parse()
-            .map_err(|e| SpringError::context(format!("Invalid address {}: {}", addr, e)))?;
+            .map_err(|e| SpringError::context(format!("Invalid address {addr}: {e}")))?;
 
         info!("🚀 Starting Orbit Spring gRPC server on {}", addr);
 

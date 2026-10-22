@@ -179,7 +179,7 @@ impl MongoGraphEngine {
             for doc in result.documents {
                 // Get document ID to avoid duplicates
                 let doc_id = get_field_as_string(&doc, &config.connect_to_field)
-                    .unwrap_or_else(|| format!("{:?}", doc));
+                    .unwrap_or_else(|| format!("{doc:?}"));
 
                 if !seen.contains(&doc_id) {
                     seen.insert(doc_id.clone());
@@ -264,7 +264,7 @@ fn bson_to_string(value: &Bson) -> String {
         Bson::Int64(i) => i.to_string(),
         Bson::Double(f) => f.to_string(),
         Bson::Boolean(b) => b.to_string(),
-        _ => format!("{:?}", value),
+        _ => format!("{value:?}"),
     }
 }
 
@@ -285,12 +285,12 @@ fn bson_to_json(value: &Bson) -> serde_json::Value {
             serde_json::Value::Object(obj)
         }
         Bson::ObjectId(oid) => serde_json::Value::String(oid.to_hex()),
-        _ => serde_json::Value::String(format!("{:?}", value)),
+        _ => serde_json::Value::String(format!("{value:?}")),
     }
 }
 
 fn matches_filter(doc: &Document, filter: &Document) -> bool {
-    for (key, filter_val) in filter.iter() {
+    for (key, filter_val) in filter {
         if let Some(doc_val) = doc.get(key) {
             // Simple equality check
             if doc_val != filter_val {
@@ -311,7 +311,7 @@ fn matches_filter(doc: &Document, filter: &Document) -> bool {
 }
 
 fn matches_operator(doc_val: &Bson, op_doc: &Document) -> bool {
-    for (op, expected) in op_doc.iter() {
+    for (op, expected) in op_doc {
         match op.as_str() {
             "$eq" if doc_val != expected => {
                 return false;

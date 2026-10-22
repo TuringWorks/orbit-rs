@@ -120,8 +120,7 @@ impl LoadBalancer {
             .min_by_key(|node| {
                 node_loads
                     .get(&node.id)
-                    .map(|load| load.active_addressables)
-                    .unwrap_or(0)
+                    .map_or(0, |load| load.active_addressables)
             })
             .unwrap()
     }

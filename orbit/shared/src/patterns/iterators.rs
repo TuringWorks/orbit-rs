@@ -302,7 +302,7 @@ impl<I: Iterator> PeekableN<I> {
         while self.peeked.len() <= n {
             {
                 let item = self.inner.next()?;
-                self.peeked.push_back(item)
+                self.peeked.push_back(item);
             }
         }
 
@@ -407,7 +407,7 @@ where
         for item in self.inner.by_ref() {
             {
                 let mapped = (self.mapper)(item)?;
-                items.push(mapped)
+                items.push(mapped);
             }
         }
         Ok(items.into_iter().collect())
@@ -464,12 +464,11 @@ impl<I: Iterator + Clone> Iterator for Cycle<I> {
     type Item = I::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.current.next() {
-            Some(item) => Some(item),
-            None => {
-                self.current = self.original.clone();
-                self.current.next()
-            }
+        if let Some(item) = self.current.next() {
+            Some(item)
+        } else {
+            self.current = self.original.clone();
+            self.current.next()
         }
     }
 }

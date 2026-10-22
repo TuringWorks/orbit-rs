@@ -246,26 +246,23 @@ impl SpatialOperations {
     pub fn equals(geom1: &SpatialGeometry, geom2: &SpatialGeometry) -> Result<bool, SpatialError> {
         // For now, use simple equality check
         // In production, this would need more sophisticated comparison
-        match (geom1, geom2) {
-            (SpatialGeometry::Point(p1), SpatialGeometry::Point(p2)) => {
-                Ok((p1.x - p2.x).abs() < 1e-9 && (p1.y - p2.y).abs() < 1e-9)
-            }
-            _ => {
-                // For complex geometries, check bounding boxes first
-                let bbox1 = Self::bounding_box(geom1)?;
-                let bbox2 = Self::bounding_box(geom2)?;
+        if let (SpatialGeometry::Point(p1), SpatialGeometry::Point(p2)) = (geom1, geom2) {
+            Ok((p1.x - p2.x).abs() < 1e-9 && (p1.y - p2.y).abs() < 1e-9)
+        } else {
+            // For complex geometries, check bounding boxes first
+            let bbox1 = Self::bounding_box(geom1)?;
+            let bbox2 = Self::bounding_box(geom2)?;
 
-                if bbox1.min_x != bbox2.min_x
-                    || bbox1.max_x != bbox2.max_x
-                    || bbox1.min_y != bbox2.min_y
-                    || bbox1.max_y != bbox2.max_y
-                {
-                    return Ok(false);
-                }
-
-                // TODO: Implement full geometry equality check
-                Ok(false)
+            if bbox1.min_x != bbox2.min_x
+                || bbox1.max_x != bbox2.max_x
+                || bbox1.min_y != bbox2.min_y
+                || bbox1.max_y != bbox2.max_y
+            {
+                return Ok(false);
             }
+
+            // TODO: Implement full geometry equality check
+            Ok(false)
         }
     }
 

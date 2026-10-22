@@ -30,7 +30,7 @@ pub trait ResultExt<T, E> {
 
 impl<T, E: std::error::Error> ResultExt<T, E> for Result<T, E> {
     fn or_internal_error(self, context: &str) -> OrbitResult<T> {
-        self.map_err(|e| OrbitError::internal(format!("{}: {}", context, e)))
+        self.map_err(|e| OrbitError::internal(format!("{context}: {e}")))
     }
 
     fn or_default_with_log(self, message: &str) -> T
@@ -154,7 +154,7 @@ where
 
     fn try_get(&self, key: &K) -> OrbitResult<&V> {
         self.get(key)
-            .ok_or_else(|| OrbitError::internal(format!("Key not found: {}", key)))
+            .ok_or_else(|| OrbitError::internal(format!("Key not found: {key}")))
     }
 
     fn try_remove(&mut self, key: &K) -> OrbitResult<V>
@@ -162,7 +162,7 @@ where
         K: Clone,
     {
         self.remove(key)
-            .ok_or_else(|| OrbitError::internal(format!("Key not found: {}", key)))
+            .ok_or_else(|| OrbitError::internal(format!("Key not found: {key}")))
     }
 }
 
@@ -200,7 +200,7 @@ impl<T> VecExt<T> for Vec<T> {
 
     fn try_get(&self, index: usize) -> OrbitResult<&T> {
         self.get(index)
-            .ok_or_else(|| OrbitError::internal(format!("Index out of bounds: {}", index)))
+            .ok_or_else(|| OrbitError::internal(format!("Index out of bounds: {index}")))
     }
 
     fn chunks_exact_vec(&self, chunk_size: usize) -> Vec<&[T]> {

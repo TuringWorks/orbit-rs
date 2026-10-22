@@ -544,7 +544,7 @@ impl StreamingQueryBuilder {
 
     pub fn watch_tables<S: Into<String>>(mut self, tables: Vec<S>) -> Self {
         let mut config = self.live_config.unwrap_or_default();
-        config.watched_tables = tables.into_iter().map(|s| s.into()).collect();
+        config.watched_tables = tables.into_iter().map(std::convert::Into::into).collect();
         self.live_config = Some(config);
         self
     }

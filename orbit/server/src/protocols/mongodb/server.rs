@@ -598,7 +598,7 @@ async fn handle_command(
 
                         for doc in &docs {
                             let key = evaluate_expression(sort_by_count_expr, doc);
-                            let key_str = format!("{:?}", key);
+                            let key_str = format!("{key:?}");
                             counts
                                 .entry(key_str)
                                 .and_modify(|(_, count)| *count += 1)
@@ -639,7 +639,7 @@ async fn handle_command(
                                     Bson::Double(n) => *n,
                                     _ => {
                                         if let Some(def) = default_val {
-                                            let key = format!("{:?}", def);
+                                            let key = format!("{def:?}");
                                             buckets.entry(key).or_default().push(doc);
                                         }
                                         continue;
@@ -668,9 +668,9 @@ async fn handle_command(
                                 }
 
                                 if let Some(key) = bucket_key {
-                                    buckets.entry(format!("{:?}", key)).or_default().push(doc);
+                                    buckets.entry(format!("{key:?}")).or_default().push(doc);
                                 } else if let Some(def) = default_val {
-                                    buckets.entry(format!("{:?}", def)).or_default().push(doc);
+                                    buckets.entry(format!("{def:?}")).or_default().push(doc);
                                 }
                             }
 
@@ -682,7 +682,7 @@ async fn handle_command(
                                     if let Some(output) = output_spec {
                                         for (field, acc) in output {
                                             if let Bson::Document(acc_doc) = acc {
-                                                let doc_refs: Vec<&Document> = bucket_docs.to_vec();
+                                                let doc_refs: Vec<&Document> = bucket_docs.clone();
                                                 if let Some((op, expr)) = acc_doc.iter().next() {
                                                     let value =
                                                         apply_accumulator(op, expr, &doc_refs);
@@ -877,7 +877,7 @@ async fn handle_command(
                                         }
                                     }
 
-                                    let val_key = format!("{:?}", current_val);
+                                    let val_key = format!("{current_val:?}");
                                     if visited.contains(&val_key) {
                                         continue;
                                     }
@@ -971,7 +971,7 @@ async fn handle_command(
 
                                     // Apply output accumulators
                                     if let Some(output_doc) = &output {
-                                        for (field, acc_doc) in output_doc.iter() {
+                                        for (field, acc_doc) in *output_doc {
                                             if let Bson::Document(acc) = acc_doc {
                                                 if let Some((acc_op, acc_expr)) = acc.iter().next()
                                                 {
@@ -1115,34 +1115,31 @@ async fn handle_command(
                                     }
 
                                     // Get min/max based on bounds
-                                    let (min_val, max_val) = match bounds {
-                                        "full" => {
-                                            let min = partition
-                                                .first()
-                                                .and_then(|d| d.get(field))
-                                                .and_then(bson_to_f64)
-                                                .unwrap_or(0.0);
-                                            let max = partition
-                                                .last()
-                                                .and_then(|d| d.get(field))
-                                                .and_then(bson_to_f64)
-                                                .unwrap_or(0.0);
-                                            (min, max)
-                                        }
-                                        _ => {
-                                            // partition - use existing range
-                                            let min = partition
-                                                .first()
-                                                .and_then(|d| d.get(field))
-                                                .and_then(bson_to_f64)
-                                                .unwrap_or(0.0);
-                                            let max = partition
-                                                .last()
-                                                .and_then(|d| d.get(field))
-                                                .and_then(bson_to_f64)
-                                                .unwrap_or(0.0);
-                                            (min, max)
-                                        }
+                                    let (min_val, max_val) = if bounds == "full" {
+                                        let min = partition
+                                            .first()
+                                            .and_then(|d| d.get(field))
+                                            .and_then(bson_to_f64)
+                                            .unwrap_or(0.0);
+                                        let max = partition
+                                            .last()
+                                            .and_then(|d| d.get(field))
+                                            .and_then(bson_to_f64)
+                                            .unwrap_or(0.0);
+                                        (min, max)
+                                    } else {
+                                        // partition - use existing range
+                                        let min = partition
+                                            .first()
+                                            .and_then(|d| d.get(field))
+                                            .and_then(bson_to_f64)
+                                            .unwrap_or(0.0);
+                                        let max = partition
+                                            .last()
+                                            .and_then(|d| d.get(field))
+                                            .and_then(bson_to_f64)
+                                            .unwrap_or(0.0);
+                                        (min, max)
                                     };
 
                                     // Build a set of existing values
@@ -1214,7 +1211,7 @@ async fn handle_command(
                         }
 
                         if let Some(output_doc) = output {
-                            for (field, fill_spec) in output_doc.iter() {
+                            for (field, fill_spec) in output_doc {
                                 if let Bson::Document(spec) = fill_spec {
                                     let method = spec.get_str("method").ok();
                                     let value = spec.get("value");
@@ -1305,7 +1302,10 @@ async fn handle_command(
             for index in indexes {
                 if let Some(index_doc) = index.as_document() {
                     let keys = index_doc.get_document("key").cloned().unwrap_or_default();
-                    let name = index_doc.get_str("name").ok().map(|s| s.to_string());
+                    let name = index_doc
+                        .get_str("name")
+                        .ok()
+                        .map(std::string::ToString::to_string);
                     let unique = index_doc.get_bool("unique").unwrap_or(false);
                     let sparse = index_doc.get_bool("sparse").unwrap_or(false);
 
@@ -1734,7 +1734,7 @@ async fn handle_command(
         let cmd_name = command
             .keys()
             .next()
-            .map(|s| s.to_string())
+            .cloned()
             .unwrap_or_else(|| "unknown".to_string());
 
         warn!("Unknown MongoDB command: {}", cmd_name);
@@ -1998,7 +1998,7 @@ fn apply_group(docs: &[Document], group_doc: &Document) -> Vec<Document> {
         } else {
             Bson::Null
         };
-        let key_str = format!("{:?}", group_key);
+        let key_str = format!("{group_key:?}");
         groups
             .entry(key_str)
             .or_insert_with(|| (group_key.clone(), Vec::new()))
@@ -2088,12 +2088,10 @@ fn apply_accumulator(op: &str, expr: &Bson, docs: &[&Document]) -> Bson {
         "$count" => Bson::Int64(docs.len() as i64),
         "$first" => docs
             .first()
-            .map(|d| evaluate_expression(expr, d))
-            .unwrap_or(Bson::Null),
+            .map_or(Bson::Null, |d| evaluate_expression(expr, d)),
         "$last" => docs
             .last()
-            .map(|d| evaluate_expression(expr, d))
-            .unwrap_or(Bson::Null),
+            .map_or(Bson::Null, |d| evaluate_expression(expr, d)),
         "$push" => {
             let values: Vec<Bson> = docs.iter().map(|d| evaluate_expression(expr, d)).collect();
             Bson::Array(values)
@@ -2103,7 +2101,7 @@ fn apply_accumulator(op: &str, expr: &Bson, docs: &[&Document]) -> Bson {
             let mut values = Vec::new();
             for doc in docs {
                 let val = evaluate_expression(expr, doc);
-                let key = format!("{:?}", val);
+                let key = format!("{val:?}");
                 if seen.insert(key) {
                     values.push(val);
                 }
@@ -2376,7 +2374,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                 .iter()
                                 .map(|v| match evaluate_expression(v, doc) {
                                     Bson::String(s) => s,
-                                    other => format!("{:?}", other),
+                                    other => format!("{other:?}"),
                                 })
                                 .collect();
                             Bson::String(parts.join(""))
@@ -2426,7 +2424,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                     // Type conversion
                     "$toString" => {
                         let val = evaluate_expression(args, doc);
-                        Bson::String(format!("{:?}", val))
+                        Bson::String(format!("{val:?}"))
                     }
                     "$toInt" => {
                         let val = evaluate_expression(args, doc);
@@ -2434,9 +2432,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             Bson::Int32(n) => Bson::Int32(n),
                             Bson::Int64(n) => Bson::Int32(n as i32),
                             Bson::Double(n) => Bson::Int32(n as i32),
-                            Bson::String(s) => {
-                                s.parse::<i32>().map(Bson::Int32).unwrap_or(Bson::Null)
-                            }
+                            Bson::String(s) => s.parse::<i32>().map_or(Bson::Null, Bson::Int32),
                             _ => Bson::Null,
                         }
                     }
@@ -2976,9 +2972,9 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                 }
 
                                 let max_len = if use_longest {
-                                    arrays.iter().map(|a| a.len()).max().unwrap_or(0)
+                                    arrays.iter().map(std::vec::Vec::len).max().unwrap_or(0)
                                 } else {
-                                    arrays.iter().map(|a| a.len()).min().unwrap_or(0)
+                                    arrays.iter().map(std::vec::Vec::len).min().unwrap_or(0)
                                 };
 
                                 let mut result = Vec::new();
@@ -3342,9 +3338,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             Bson::Int32(n) => Bson::Int64(n as i64),
                             Bson::Int64(n) => Bson::Int64(n),
                             Bson::Double(n) => Bson::Int64(n as i64),
-                            Bson::String(s) => {
-                                s.parse::<i64>().map(Bson::Int64).unwrap_or(Bson::Null)
-                            }
+                            Bson::String(s) => s.parse::<i64>().map_or(Bson::Null, Bson::Int64),
                             _ => Bson::Null,
                         }
                     }
@@ -4153,7 +4147,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             if let (Some(input_str), Some(pattern)) = (input, regex_str) {
                                 let mut regex_pattern = pattern;
                                 if let Some(opts) = options {
-                                    regex_pattern = format!("(?{}){}", opts, regex_pattern);
+                                    regex_pattern = format!("(?{opts}){regex_pattern}");
                                 }
                                 if let Ok(re) = regex::Regex::new(&regex_pattern) {
                                     if let Some(mat) = re.find(&input_str) {
@@ -4163,10 +4157,9 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                                 caps.iter()
                                                     .skip(1)
                                                     .map(|m| {
-                                                        m.map(|m| {
+                                                        m.map_or(Bson::Null, |m| {
                                                             Bson::String(m.as_str().to_string())
                                                         })
-                                                        .unwrap_or(Bson::Null)
                                                     })
                                                     .collect()
                                             })
@@ -4203,7 +4196,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             if let (Some(input_str), Some(pattern)) = (input, regex_str) {
                                 let mut regex_pattern = pattern;
                                 if let Some(opts) = options {
-                                    regex_pattern = format!("(?{}){}", opts, regex_pattern);
+                                    regex_pattern = format!("(?{opts}){regex_pattern}");
                                 }
                                 if let Ok(re) = regex::Regex::new(&regex_pattern) {
                                     let matches: Vec<Bson> = re
@@ -4215,10 +4208,9 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                                     caps.iter()
                                                         .skip(1)
                                                         .map(|m| {
-                                                            m.map(|m| {
+                                                            m.map_or(Bson::Null, |m| {
                                                                 Bson::String(m.as_str().to_string())
                                                             })
-                                                            .unwrap_or(Bson::Null)
                                                         })
                                                         .collect()
                                                 })
@@ -4262,12 +4254,11 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                             if let (Some(input_val), Some(target_type)) = (input, to) {
                                 if matches!(input_val, Bson::Null) {
                                     return on_null
-                                        .map(|v| evaluate_expression(v, doc))
-                                        .unwrap_or(Bson::Null);
+                                        .map_or(Bson::Null, |v| evaluate_expression(v, doc));
                                 }
                                 match target_type {
                                     "string" => {
-                                        return Bson::String(format!("{:?}", input_val));
+                                        return Bson::String(format!("{input_val:?}"));
                                     }
                                     "double" => {
                                         if let Some(n) = bson_to_f64(&input_val) {
@@ -4325,8 +4316,7 @@ pub(crate) fn evaluate_expression(expr: &Bson, doc: &Document) -> Bson {
                                     _ => {}
                                 }
                                 return on_error
-                                    .map(|v| evaluate_expression(v, doc))
-                                    .unwrap_or(Bson::Null);
+                                    .map_or(Bson::Null, |v| evaluate_expression(v, doc));
                             }
                         }
                         Bson::Null

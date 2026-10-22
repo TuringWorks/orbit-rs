@@ -410,19 +410,18 @@ impl AppConfig {
     /// Load configuration from file
     pub fn from_file<P: AsRef<Path>>(path: P) -> SpringResult<Self> {
         let path_ref = path.as_ref();
-        let content = std::fs::read_to_string(&path).map_err(|e| {
-            SpringError::configuration(format!("Failed to read config file: {}", e))
-        })?;
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| SpringError::configuration(format!("Failed to read config file: {e}")))?;
 
         let config: Self = if path_ref.extension().and_then(|s| s.to_str()) == Some("yml")
             || path_ref.extension().and_then(|s| s.to_str()) == Some("yaml")
         {
             serde_yaml_ng::from_str(&content).map_err(|e| {
-                SpringError::configuration(format!("Failed to parse YAML config: {}", e))
+                SpringError::configuration(format!("Failed to parse YAML config: {e}"))
             })?
         } else {
             serde_json::from_str(&content).map_err(|e| {
-                SpringError::configuration(format!("Failed to parse JSON config: {}", e))
+                SpringError::configuration(format!("Failed to parse JSON config: {e}"))
             })?
         };
 

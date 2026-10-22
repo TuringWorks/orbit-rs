@@ -122,7 +122,7 @@ impl BatchInsertOptimizer {
     pub fn stats(&self) -> BatchStats {
         BatchStats {
             pending_batches: self.pending_batches.len(),
-            total_pending_rows: self.pending_batches.values().map(|b| b.len()).sum(),
+            total_pending_rows: self.pending_batches.values().map(std::vec::Vec::len).sum(),
         }
     }
 }

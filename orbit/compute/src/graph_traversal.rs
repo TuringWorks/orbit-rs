@@ -1118,7 +1118,7 @@ impl GPUGraphTraversal {
             if let Some(neighbors) = graph.adjacency_list.get(node_idx) {
                 let edge_start = graph.adjacency_list[..node_idx]
                     .iter()
-                    .map(|v| v.len())
+                    .map(std::vec::Vec::len)
                     .sum::<usize>();
 
                 for (i, &neighbor_idx) in neighbors.iter().enumerate() {
@@ -1582,7 +1582,7 @@ impl GPUGraphTraversal {
         let mut edge_offset = Vec::with_capacity(graph.node_count + 1);
 
         let mut offset = 0;
-        for neighbors in graph.adjacency_list.iter() {
+        for neighbors in &graph.adjacency_list {
             edge_offset.push(offset);
             offset += neighbors.len() as u32;
 

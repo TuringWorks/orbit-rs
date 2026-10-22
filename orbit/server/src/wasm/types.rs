@@ -48,12 +48,12 @@ impl WasmValue {
             WasmValue::Bytes(b) => Ok(SqlValue::Bytea(b.clone())),
             WasmValue::Array(arr) => {
                 let sql_values: Result<Vec<SqlValue>, _> =
-                    arr.iter().map(|v| v.to_sql_value()).collect();
+                    arr.iter().map(WasmValue::to_sql_value).collect();
                 Ok(SqlValue::Array(sql_values?))
             }
             WasmValue::Object(map) => {
                 let json = serde_json::to_value(map).map_err(|e| {
-                    ProtocolError::SerializationError(format!("Failed to convert to JSON: {}", e))
+                    ProtocolError::SerializationError(format!("Failed to convert to JSON: {e}"))
                 })?;
                 Ok(SqlValue::Json(json))
             }
@@ -99,25 +99,25 @@ impl WasmValue {
     /// Serialize to MessagePack bytes for passing to WASM memory
     pub fn to_msgpack_bytes(&self) -> ProtocolResult<Vec<u8>> {
         rmp_serde::to_vec(self)
-            .map_err(|e| ProtocolError::SerializationError(format!("MessagePack encode: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("MessagePack encode: {e}")))
     }
 
     /// Deserialize from MessagePack bytes
     pub fn from_msgpack_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
         rmp_serde::from_slice(bytes)
-            .map_err(|e| ProtocolError::SerializationError(format!("MessagePack decode: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("MessagePack decode: {e}")))
     }
 
     /// Serialize to JSON bytes (fallback)
     pub fn to_json_bytes(&self) -> ProtocolResult<Vec<u8>> {
         serde_json::to_vec(self)
-            .map_err(|e| ProtocolError::SerializationError(format!("JSON encode: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("JSON encode: {e}")))
     }
 
     /// Deserialize from JSON bytes
     pub fn from_json_bytes(bytes: &[u8]) -> ProtocolResult<Self> {
         serde_json::from_slice(bytes)
-            .map_err(|e| ProtocolError::SerializationError(format!("JSON decode: {}", e)))
+            .map_err(|e| ProtocolError::SerializationError(format!("JSON decode: {e}")))
     }
 }
 

@@ -246,7 +246,7 @@ impl Graph {
             let weight = rel
                 .properties
                 .get("weight")
-                .and_then(|v| v.as_f64())
+                .and_then(serde_json::Value::as_f64)
                 .unwrap_or(1.0);
             shared.add_edge(
                 rel.src_id.to_string(),
@@ -554,9 +554,9 @@ impl GraphCommands {
             RespValue::Array(vec![]), // Empty header
             RespValue::Array(vec![]), // Empty results
             RespValue::Array(vec![
-                RespValue::bulk_string_from_str(format!("Nodes created: {}", nodes_created)),
-                RespValue::bulk_string_from_str(format!("Relationships created: {}", rels_created)),
-                RespValue::bulk_string_from_str(format!("Properties set: {}", properties_set)),
+                RespValue::bulk_string_from_str(format!("Nodes created: {nodes_created}")),
+                RespValue::bulk_string_from_str(format!("Relationships created: {rels_created}")),
+                RespValue::bulk_string_from_str(format!("Properties set: {properties_set}")),
             ]),
         ]))
     }
@@ -833,8 +833,7 @@ impl GraphCommands {
                 Ok(RespValue::ok())
             }
             _ => Err(crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR unknown subcommand '{}'",
-                subcommand
+                "ERR unknown subcommand '{subcommand}'"
             ))),
         }
     }

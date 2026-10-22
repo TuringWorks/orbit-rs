@@ -121,8 +121,7 @@ impl MySqlPacket {
         // Validate length doesn't exceed protocol maximum
         if len > MAX_PAYLOAD_LENGTH {
             return Err(ProtocolError::ParseError(format!(
-                "Packet length {} exceeds maximum {}",
-                len, MAX_PAYLOAD_LENGTH
+                "Packet length {len} exceeds maximum {MAX_PAYLOAD_LENGTH}"
             )));
         }
 
@@ -188,8 +187,7 @@ pub fn read_lenenc_int(buf: &mut Bytes) -> ProtocolResult<u64> {
             Ok(buf.get_u64_le())
         }
         _ => Err(ProtocolError::ParseError(format!(
-            "Invalid length-encoded integer: {}",
-            first
+            "Invalid length-encoded integer: {first}"
         ))),
     }
 }

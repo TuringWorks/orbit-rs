@@ -47,7 +47,7 @@ impl MetalDevice {
             .map_err(|e| {
                 ComputeError::gpu(GPUError::APIInitializationFailed {
                     api: "Metal".to_string(),
-                    error: format!("Failed to compile kernels: {}", e),
+                    error: format!("Failed to compile kernels: {e}"),
                 })
             })?;
 
@@ -355,7 +355,7 @@ impl MetalDevice {
             _ => Err(ComputeError::execution(
                 ExecutionError::InvalidKernelParameters {
                     parameter: "kernel_name".to_string(),
-                    value: format!("Unknown kernel: {}", kernel_name),
+                    value: format!("Unknown kernel: {kernel_name}"),
                 },
             )),
         }
@@ -376,7 +376,7 @@ impl MetalDevice {
         let kernel = self.library.get_function(kernel_name, None).map_err(|e| {
             ComputeError::gpu(GPUError::KernelLaunchFailed {
                 kernel_name: kernel_name.to_string(),
-                error: format!("Kernel not found: {}", e),
+                error: format!("Kernel not found: {e}"),
             })
         })?;
 
@@ -388,7 +388,7 @@ impl MetalDevice {
             .map_err(|e| {
                 ComputeError::execution(ExecutionError::KernelCompilationFailed {
                     kernel: kernel_name.to_string(),
-                    error: format!("Failed to create pipeline: {}", e),
+                    error: format!("Failed to create pipeline: {e}"),
                 })
             })?;
 
@@ -1007,8 +1007,8 @@ impl MetalDevice {
             .new_compute_pipeline_state_with_function(&kernel)
             .map_err(|e| {
                 ComputeError::execution(ExecutionError::RuntimeError {
-                    stage: format!("pipeline_creation:{}", kernel_name),
-                    error: format!("{:?}", e),
+                    stage: format!("pipeline_creation:{kernel_name}"),
+                    error: format!("{e:?}"),
                 })
             })?;
 

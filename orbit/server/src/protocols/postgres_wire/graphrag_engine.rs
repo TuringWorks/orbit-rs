@@ -471,10 +471,7 @@ impl GraphRAGQueryEngine {
                 .get(4)
                 .and_then(|m| m.as_str().parse::<usize>().ok());
             let llm_provider = captures.get(5).map(|m| m.as_str().to_string());
-            let include_explanation = captures
-                .get(6)
-                .map(|m| m.as_str() == "true")
-                .unwrap_or(false);
+            let include_explanation = captures.get(6).is_some_and(|m| m.as_str() == "true");
 
             Ok((
                 kg_name,
@@ -524,10 +521,7 @@ impl GraphRAGQueryEngine {
             let from_entity = captures.get(2).unwrap().as_str().to_string();
             let to_entity = captures.get(3).unwrap().as_str().to_string();
             let max_hops = captures.get(4).and_then(|m| m.as_str().parse::<u32>().ok());
-            let include_explanation = captures
-                .get(5)
-                .map(|m| m.as_str() == "true")
-                .unwrap_or(false);
+            let include_explanation = captures.get(5).is_some_and(|m| m.as_str() == "true");
 
             Ok((
                 kg_name,

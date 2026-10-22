@@ -138,9 +138,9 @@ impl OrbitQLGraphBuilder {
         column: &str,
     ) -> ProtocolResult<String> {
         row.get(column)
-            .map(|v| v.to_postgres_string())
+            .map(super::types::SqlValue::to_postgres_string)
             .ok_or_else(|| {
-                ProtocolError::PostgresError(format!("Column '{}' not found in row", column))
+                ProtocolError::PostgresError(format!("Column '{column}' not found in row"))
             })
     }
 

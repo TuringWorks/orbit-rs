@@ -39,17 +39,15 @@ pub enum IsolationLevel {
 #[async_trait::async_trait]
 impl AISubsystem for AdaptiveTransactionManager {
     async fn handle_decision(&self, decision: AIDecision) -> OrbitResult<()> {
-        match decision {
-            AIDecision::AdjustIsolation {
-                transaction_class: _,
-                new_level: _,
-            } => {
-                info!("Handling isolation level adjustment decision");
-                // TODO: Apply isolation level adjustment
-            }
-            _ => {
-                // Not applicable
-            }
+        if let AIDecision::AdjustIsolation {
+            transaction_class: _,
+            new_level: _,
+        } = decision
+        {
+            info!("Handling isolation level adjustment decision");
+            // TODO: Apply isolation level adjustment
+        } else {
+            // Not applicable
         }
         Ok(())
     }

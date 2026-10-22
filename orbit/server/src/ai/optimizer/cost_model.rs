@@ -243,7 +243,7 @@ impl CostEstimationModel {
 
         for epoch in 0..num_epochs {
             let mut total_loss = 0.0;
-            for example in training_data.iter() {
+            for example in &training_data {
                 // Predict using current weights
                 let mut prediction = new_weights.bias;
                 for (i, &feature) in example.inputs.iter().enumerate() {

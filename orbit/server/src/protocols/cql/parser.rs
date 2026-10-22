@@ -714,8 +714,7 @@ impl CqlParser {
             self.parse_list_permissions(query)
         } else {
             Err(ProtocolError::ParseError(format!(
-                "Unsupported CQL statement: {}",
-                query
+                "Unsupported CQL statement: {query}"
             )))
         }
     }
@@ -847,7 +846,7 @@ impl CqlParser {
             let limit_str: String = after_ppl
                 .trim()
                 .chars()
-                .take_while(|c| c.is_ascii_digit())
+                .take_while(char::is_ascii_digit)
                 .collect();
             if !limit_str.is_empty() {
                 return limit_str.parse::<usize>().ok();
@@ -1342,17 +1341,14 @@ impl CqlParser {
 
         // Find table name (after CREATE TABLE or CREATE TABLE IF NOT EXISTS)
         let name_index = if if_not_exists { 5 } else { 2 };
-        let raw_table_name = parts
-            .get(name_index)
-            .map(|s| {
-                // Remove trailing parenthesis if present
-                if let Some(idx) = s.find('(') {
-                    &s[..idx]
-                } else {
-                    *s
-                }
-            })
-            .unwrap_or("unknown_table");
+        let raw_table_name = parts.get(name_index).map_or("unknown_table", |s| {
+            // Remove trailing parenthesis if present
+            if let Some(idx) = s.find('(') {
+                &s[..idx]
+            } else {
+                *s
+            }
+        });
 
         // Resolve table name with current keyspace
         let table_name = self.resolve_table_name(raw_table_name);
@@ -1493,10 +1489,10 @@ impl CqlParser {
 
         // Find the index name (after CREATE INDEX or CREATE INDEX IF NOT EXISTS)
         let name_index = if if_not_exists { 5 } else { 2 };
-        let name = parts
-            .get(name_index)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "unnamed_index".to_string());
+        let name = parts.get(name_index).map_or_else(
+            || "unnamed_index".to_string(),
+            std::string::ToString::to_string,
+        );
 
         // Find ON keyword to get table name
         let on_index = parts
@@ -1504,10 +1500,10 @@ impl CqlParser {
             .position(|&p| p.to_uppercase() == "ON")
             .unwrap_or(parts.len());
 
-        let table = parts
-            .get(on_index + 1)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "unknown_table".to_string());
+        let table = parts.get(on_index + 1).map_or_else(
+            || "unknown_table".to_string(),
+            std::string::ToString::to_string,
+        );
 
         // Extract column name from parentheses
         let column = if let Some(start) = query.find('(') {
@@ -1538,10 +1534,10 @@ impl CqlParser {
 
         // Find the type name
         let name_index = if if_not_exists { 5 } else { 2 };
-        let name = parts
-            .get(name_index)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "unnamed_type".to_string());
+        let name = parts.get(name_index).map_or_else(
+            || "unnamed_type".to_string(),
+            std::string::ToString::to_string,
+        );
 
         // Parse fields from parentheses - simplified parsing
         let fields = if let Some(start) = query.find('(') {
@@ -1599,10 +1595,10 @@ impl CqlParser {
 
         // Find view name (after CREATE MATERIALIZED VIEW or CREATE MATERIALIZED VIEW IF NOT EXISTS)
         let name_index = if if_not_exists { 6 } else { 3 };
-        let name = parts
-            .get(name_index)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "unnamed_view".to_string());
+        let name = parts.get(name_index).map_or_else(
+            || "unnamed_view".to_string(),
+            std::string::ToString::to_string,
+        );
 
         // Find AS keyword to get SELECT clause
         let as_index = parts
@@ -1616,16 +1612,16 @@ impl CqlParser {
             .position(|&p| p.to_uppercase() == "FROM")
             .unwrap_or(parts.len());
 
-        let source_table = parts
-            .get(from_index + 1)
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "unknown_table".to_string());
+        let source_table = parts.get(from_index + 1).map_or_else(
+            || "unknown_table".to_string(),
+            std::string::ToString::to_string,
+        );
 
         // Extract columns (simplified - just support * for now)
         let columns = if as_index + 2 < from_index {
             parts[as_index + 2..from_index]
                 .iter()
-                .map(|s| s.replace(',', "").to_string())
+                .map(|s| s.replace(',', "").clone())
                 .filter(|s| !s.is_empty())
                 .collect()
         } else {
@@ -2003,7 +1999,7 @@ impl CqlParser {
         if trimmed_lower.starts_with("tojson(") && trimmed_lower.ends_with(')') {
             let inner = &trimmed[7..trimmed.len() - 1];
             // For now, return the value as a JSON-formatted string
-            let json_str = format!("\"{}\"", inner);
+            let json_str = format!("\"{inner}\"");
             return Ok(CqlValue::Text(json_str));
         }
 
@@ -2067,7 +2063,7 @@ impl CqlParser {
         if table.contains('.') {
             table.to_string()
         } else if let Some(keyspace) = &self.current_keyspace {
-            format!("{}.{}", keyspace, table)
+            format!("{keyspace}.{table}")
         } else {
             table.to_string()
         }
@@ -2100,8 +2096,7 @@ impl CqlParser {
                 .to_string();
             let col_type = parts
                 .get(add_index + 2)
-                .map(|s| self.parse_cql_type(s))
-                .unwrap_or(CqlType::Text);
+                .map_or(CqlType::Text, |s| self.parse_cql_type(s));
             TableAlteration::AddColumn {
                 name: col_name,
                 data_type: col_type,
@@ -2191,8 +2186,7 @@ impl CqlParser {
                 .to_string();
             let field_type = parts
                 .get(add_index + 2)
-                .map(|s| self.parse_cql_type(s))
-                .unwrap_or(CqlType::Text);
+                .map_or(CqlType::Text, |s| self.parse_cql_type(s));
             TypeAlteration::AddField {
                 name: field_name,
                 data_type: field_type,
@@ -2287,7 +2281,7 @@ impl CqlParser {
 
         // Handle IF NOT EXISTS
         let name_start = if if_not_exists {
-            after_func.find("EXISTS").map(|p| p + 6).unwrap_or(0)
+            after_func.find("EXISTS").map_or(0, |p| p + 6)
         } else {
             0
         };
@@ -2378,7 +2372,7 @@ impl CqlParser {
         let after_agg = &query[agg_keyword_pos + 9..].trim_start();
 
         let name_start = if if_not_exists {
-            after_agg.find("EXISTS").map(|p| p + 6).unwrap_or(0)
+            after_agg.find("EXISTS").map_or(0, |p| p + 6)
         } else {
             0
         };
@@ -2473,15 +2467,17 @@ impl CqlParser {
             // Skip '=' if present
             let pwd_start = after_pwd
                 .strip_prefix('=')
-                .map(|s| s.trim_start())
-                .unwrap_or(after_pwd);
+                .map_or(after_pwd, str::trim_start);
             // Extract quoted password
             if let Some(unquoted) = pwd_start.strip_prefix('\'') {
                 unquoted
                     .find('\'')
                     .map(|end_pos| unquoted[..end_pos].to_string())
             } else {
-                pwd_start.split_whitespace().next().map(|s| s.to_string())
+                pwd_start
+                    .split_whitespace()
+                    .next()
+                    .map(std::string::ToString::to_string)
             }
         } else {
             None
@@ -2530,14 +2526,16 @@ impl CqlParser {
             let after_pwd = query[pwd_pos + 8..].trim_start();
             let pwd_start = after_pwd
                 .strip_prefix('=')
-                .map(|s| s.trim_start())
-                .unwrap_or(after_pwd);
+                .map_or(after_pwd, str::trim_start);
             if let Some(unquoted) = pwd_start.strip_prefix('\'') {
                 unquoted
                     .find('\'')
                     .map(|end_pos| unquoted[..end_pos].to_string())
             } else {
-                pwd_start.split_whitespace().next().map(|s| s.to_string())
+                pwd_start
+                    .split_whitespace()
+                    .next()
+                    .map(std::string::ToString::to_string)
             }
         } else {
             None
@@ -2647,7 +2645,9 @@ impl CqlParser {
                 .iter()
                 .position(|&p| p.to_uppercase() == "OF")
                 .unwrap();
-            parts.get(of_index + 1).map(|s| s.to_string())
+            parts
+                .get(of_index + 1)
+                .map(std::string::ToString::to_string)
         } else {
             None
         };
@@ -2696,7 +2696,9 @@ impl CqlParser {
                 .iter()
                 .position(|&p| p.to_uppercase() == "OF")
                 .unwrap();
-            parts.get(of_index + 1).map(|s| s.to_string())
+            parts
+                .get(of_index + 1)
+                .map(std::string::ToString::to_string)
         } else {
             None
         };

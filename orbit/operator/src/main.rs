@@ -184,7 +184,7 @@ async fn start_health_server(addr: String) -> Result<()> {
                 .serve_connection(io, service_fn(handle_request))
                 .await
             {
-                eprintln!("Health server connection error: {:?}", err);
+                eprintln!("Health server connection error: {err:?}");
             }
         });
     }
@@ -254,7 +254,7 @@ orbit_transactions_total 0
                 .serve_connection(io, service_fn(handle_request))
                 .await
             {
-                eprintln!("Metrics server connection error: {:?}", err);
+                eprintln!("Metrics server connection error: {err:?}");
             }
         });
     }

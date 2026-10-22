@@ -656,7 +656,7 @@ impl EntityExtractionActor {
         // Build prompt with entity types
         let entity_types_str = entity_types
             .iter()
-            .map(|et| format!("{:?}", et))
+            .map(|et| format!("{et:?}"))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -665,7 +665,7 @@ impl EntityExtractionActor {
             .replace("{entity_types}", &entity_types_str);
 
         let llm_client = create_llm_client(&llm_provider)
-            .map_err(|e| OrbitError::internal(format!("Failed to create LLM client: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to create LLM client: {e}")))?;
 
         let generation_request = LLMGenerationRequest {
             prompt,
@@ -682,11 +682,11 @@ impl EntityExtractionActor {
         let response = llm_client
             .generate(generation_request)
             .await
-            .map_err(|e| OrbitError::internal(format!("LLM extraction failed: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("LLM extraction failed: {e}")))?;
 
         // Parse JSON response
         let json: serde_json::Value = serde_json::from_str(&response.text)
-            .map_err(|e| OrbitError::internal(format!("Failed to parse LLM response: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to parse LLM response: {e}")))?;
 
         let mut entities = Vec::new();
         let mut relationships = Vec::new();
@@ -703,7 +703,7 @@ impl EntityExtractionActor {
 
                     let confidence = entity_json
                         .get("confidence")
-                        .and_then(|v| v.as_f64())
+                        .and_then(serde_json::Value::as_f64)
                         .unwrap_or(0.8) as f32;
 
                     let start_pos = request.text.find(text).unwrap_or(0);
@@ -733,7 +733,7 @@ impl EntityExtractionActor {
                 ) {
                     let confidence = rel_json
                         .get("confidence")
-                        .and_then(|v| v.as_f64())
+                        .and_then(serde_json::Value::as_f64)
                         .unwrap_or(0.7) as f32;
 
                     relationships.push(ExtractedRelationship {
@@ -741,7 +741,7 @@ impl EntityExtractionActor {
                         to_entity: to.to_string(),
                         relationship_type: rel_type.to_string(),
                         confidence,
-                        source_text: format!("{} {} {}", from, rel_type, to),
+                        source_text: format!("{from} {rel_type} {to}"),
                         properties: HashMap::new(),
                         source_document: request.document_id.clone(),
                     });

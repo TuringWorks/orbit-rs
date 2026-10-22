@@ -187,7 +187,7 @@ impl ColumnarData {
                     };
                     bool_col.push(bool_val);
                 } else if let Some(str_col) = result.string_columns.get_mut(col_name) {
-                    let str_val = value.map(|v| v.to_postgres_string());
+                    let str_val = value.map(super::types::SqlValue::to_postgres_string);
                     str_col.push(str_val);
                 }
             }
@@ -344,8 +344,7 @@ impl VectorizedExecutor {
                 SqlValue::SmallInt(i) => *i as i64,
                 _ => {
                     return Err(ProtocolError::PostgresError(format!(
-                        "Cannot compare integer column to {:?}",
-                        value
+                        "Cannot compare integer column to {value:?}"
                     )))
                 }
             };
@@ -405,8 +404,7 @@ impl VectorizedExecutor {
                 SqlValue::BigInt(i) => *i as f64,
                 _ => {
                     return Err(ProtocolError::PostgresError(format!(
-                        "Cannot compare float column to {:?}",
-                        value
+                        "Cannot compare float column to {value:?}"
                     )))
                 }
             };
@@ -457,8 +455,7 @@ impl VectorizedExecutor {
         }
 
         Err(ProtocolError::PostgresError(format!(
-            "Column '{}' not found for filtering",
-            column_name
+            "Column '{column_name}' not found for filtering"
         )))
     }
 
@@ -496,7 +493,7 @@ impl VectorizedExecutor {
             match agg_func {
                 AggregateType::Sum => {
                     let sum = self.cpu_engine.sum_i64(&values, &null_bm);
-                    sum.map(SqlValue::BigInt).unwrap_or(SqlValue::Null)
+                    sum.map_or(SqlValue::Null, SqlValue::BigInt)
                 }
                 AggregateType::Avg => {
                     let sum = self.cpu_engine.sum_i64(&values, &null_bm);
@@ -508,11 +505,11 @@ impl VectorizedExecutor {
                 }
                 AggregateType::Min => {
                     let min = self.cpu_engine.min_i64(&values, &null_bm);
-                    min.map(SqlValue::BigInt).unwrap_or(SqlValue::Null)
+                    min.map_or(SqlValue::Null, SqlValue::BigInt)
                 }
                 AggregateType::Max => {
                     let max = self.cpu_engine.max_i64(&values, &null_bm);
-                    max.map(SqlValue::BigInt).unwrap_or(SqlValue::Null)
+                    max.map_or(SqlValue::Null, SqlValue::BigInt)
                 }
                 AggregateType::Count => {
                     let count = null_bm.non_null_count();
@@ -540,7 +537,7 @@ impl VectorizedExecutor {
             match agg_func {
                 AggregateType::Sum => {
                     let sum = self.cpu_engine.sum_f64(&values, &null_bm);
-                    sum.map(SqlValue::DoublePrecision).unwrap_or(SqlValue::Null)
+                    sum.map_or(SqlValue::Null, SqlValue::DoublePrecision)
                 }
                 AggregateType::Avg => {
                     let sum = self.cpu_engine.sum_f64(&values, &null_bm);
@@ -552,11 +549,11 @@ impl VectorizedExecutor {
                 }
                 AggregateType::Min => {
                     let min = self.cpu_engine.min_f64(&values, &null_bm);
-                    min.map(SqlValue::DoublePrecision).unwrap_or(SqlValue::Null)
+                    min.map_or(SqlValue::Null, SqlValue::DoublePrecision)
                 }
                 AggregateType::Max => {
                     let max = self.cpu_engine.max_f64(&values, &null_bm);
-                    max.map(SqlValue::DoublePrecision).unwrap_or(SqlValue::Null)
+                    max.map_or(SqlValue::Null, SqlValue::DoublePrecision)
                 }
                 AggregateType::Count => {
                     let count = null_bm.non_null_count();
@@ -571,7 +568,9 @@ impl VectorizedExecutor {
                         let count = match indices {
                             Some(idx) => idx
                                 .iter()
-                                .filter(|&&i| str_col.get(i).is_some_and(|v| v.is_some()))
+                                .filter(|&&i| {
+                                    str_col.get(i).is_some_and(std::option::Option::is_some)
+                                })
                                 .count(),
                             None => str_col.iter().filter(|v| v.is_some()).count(),
                         };
@@ -582,8 +581,7 @@ impl VectorizedExecutor {
                 }
                 _ => {
                     return Err(ProtocolError::PostgresError(format!(
-                        "Aggregation {:?} not supported for string column '{}'",
-                        agg_func, column_name
+                        "Aggregation {agg_func:?} not supported for string column '{column_name}'"
                     )))
                 }
             }
@@ -620,8 +618,7 @@ impl VectorizedExecutor {
                 SqlValue::SmallInt(i) => *i as i64,
                 _ => {
                     return Err(ProtocolError::PostgresError(format!(
-                        "Cannot compare integer column to {:?}",
-                        value
+                        "Cannot compare integer column to {value:?}"
                     )))
                 }
             };
@@ -650,8 +647,7 @@ impl VectorizedExecutor {
                 SqlValue::Integer(i) => *i as f64,
                 _ => {
                     return Err(ProtocolError::PostgresError(format!(
-                        "Cannot compare float column to {:?}",
-                        value
+                        "Cannot compare float column to {value:?}"
                     )))
                 }
             };
@@ -674,8 +670,7 @@ impl VectorizedExecutor {
         }
 
         Err(ProtocolError::PostgresError(format!(
-            "Column '{}' not found",
-            column_name
+            "Column '{column_name}' not found"
         )))
     }
 
@@ -769,14 +764,11 @@ impl VectorizedExecutor {
         indices: Option<&[usize]>,
     ) -> ProtocolResult<Vec<usize>> {
         if sort_keys.is_empty() {
-            return Ok(indices
-                .map(|i| i.to_vec())
-                .unwrap_or_else(|| columnar_data.all_indices()));
+            return Ok(indices.map_or_else(|| columnar_data.all_indices(), <[usize]>::to_vec));
         }
 
-        let mut sorted_indices: Vec<usize> = indices
-            .map(|i| i.to_vec())
-            .unwrap_or_else(|| columnar_data.all_indices());
+        let mut sorted_indices: Vec<usize> =
+            indices.map_or_else(|| columnar_data.all_indices(), <[usize]>::to_vec);
 
         // Sort using the first key, with tiebreakers from subsequent keys
         sorted_indices.sort_by(|&a, &b| {
@@ -983,7 +975,7 @@ impl VectorizedExecutor {
             .map(|row| {
                 column_order
                     .iter()
-                    .map(|col| row.get(col).map(|v| v.to_postgres_string()))
+                    .map(|col| row.get(col).map(super::types::SqlValue::to_postgres_string))
                     .collect()
             })
             .collect();

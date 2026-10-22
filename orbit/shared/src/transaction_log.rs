@@ -463,8 +463,7 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
 
         let database_size = tokio::fs::metadata(&self.config.database_path)
             .await
-            .map(|m| m.len())
-            .unwrap_or(0);
+            .map_or(0, |m| m.len());
 
         let stats = LogStats {
             total_entries: stats_row.get::<i64, _>("total") as u64,

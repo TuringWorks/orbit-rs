@@ -362,7 +362,7 @@ impl SqliteTransactionLogger {
         // Configure WAL autocheckpoint (number of pages before auto-checkpoint)
         if self.config.enable_wal {
             let checkpoint_pages = (self.config.wal_checkpoint_interval / 10).max(1000);
-            let checkpoint_pragma = format!("PRAGMA wal_autocheckpoint = {}", checkpoint_pages);
+            let checkpoint_pragma = format!("PRAGMA wal_autocheckpoint = {checkpoint_pages}");
             sqlx::raw_sql(sqlx::AssertSqlSafe(checkpoint_pragma))
                 .execute(&self.pool)
                 .await
@@ -428,7 +428,7 @@ impl SqliteTransactionLogger {
             .bind(persistent_entry.id.to_string())
             .bind(persistent_entry.timestamp)
             .bind(entry.transaction_id.id.clone())
-            .bind(entry.transaction_id.coordinator_node.to_string())
+            .bind(entry.transaction_id.coordinator_node.clone())
             .bind(discriminant_name(&entry.event))
             .bind(event_data)
             .bind(details_json)
@@ -608,8 +608,7 @@ impl PersistentTransactionLogger for SqliteTransactionLogger {
 
         let database_size = tokio::fs::metadata(&self.config.database_path)
             .await
-            .map(|m| m.len())
-            .unwrap_or(0);
+            .map_or(0, |m| m.len());
 
         let stats = LogStats {
             total_entries: stats_row.get::<i64, _>("total") as u64,

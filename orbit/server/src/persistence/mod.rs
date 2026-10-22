@@ -615,8 +615,7 @@ impl PersistenceProviderRegistry {
         let providers = self.addressable_providers.read().await;
         providers.get(&default_name).cloned().ok_or_else(|| {
             OrbitError::configuration(format!(
-                "Default addressable provider '{}' not found",
-                default_name
+                "Default addressable provider '{default_name}' not found"
             ))
         })
     }
@@ -633,8 +632,7 @@ impl PersistenceProviderRegistry {
         let providers = self.cluster_providers.read().await;
         providers.get(&default_name).cloned().ok_or_else(|| {
             OrbitError::configuration(format!(
-                "Default cluster provider '{}' not found",
-                default_name
+                "Default cluster provider '{default_name}' not found"
             ))
         })
     }
@@ -646,7 +644,7 @@ impl PersistenceProviderRegistry {
     ) -> OrbitResult<Arc<dyn AddressableDirectoryProvider>> {
         let providers = self.addressable_providers.read().await;
         providers.get(name).cloned().ok_or_else(|| {
-            OrbitError::configuration(format!("Addressable provider '{}' not found", name))
+            OrbitError::configuration(format!("Addressable provider '{name}' not found"))
         })
     }
 
@@ -657,7 +655,7 @@ impl PersistenceProviderRegistry {
     ) -> OrbitResult<Arc<dyn ClusterNodeProvider>> {
         let providers = self.cluster_providers.read().await;
         providers.get(name).cloned().ok_or_else(|| {
-            OrbitError::configuration(format!("Cluster provider '{}' not found", name))
+            OrbitError::configuration(format!("Cluster provider '{name}' not found"))
         })
     }
 

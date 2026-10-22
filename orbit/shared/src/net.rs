@@ -104,7 +104,7 @@ impl Message {
                     MessageTarget::RoutedUnicast { route } => route
                         .hops
                         .first()
-                        .map(|node| node.to_string())
+                        .map(std::string::ToString::to_string)
                         .unwrap_or_default(),
                 })
                 .unwrap_or_default(),

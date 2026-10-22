@@ -333,7 +333,7 @@ impl CypherTokenizer {
             '"' | '\'' => self.start_string_literal(ch),
             ' ' | '\t' | '\n' | '\r' => self.handle_whitespace(),
             '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' | '*' | '|' | '+' | '-' | '/' => {
-                self.handle_single_char_token(ch)
+                self.handle_single_char_token(ch);
             }
             '.' => self.handle_dot(),
             '=' | '!' | '>' | '<' => self.handle_comparison_operator(ch),
@@ -745,7 +745,7 @@ impl TokenParser {
                 self.advance();
                 let (right_expr, right_str) = self.parse_return_expression()?;
 
-                let expr_str = format!("{} {} {}", left_str, op, right_str);
+                let expr_str = format!("{left_str} {op} {right_str}");
 
                 let binary_op = match op {
                     "+" => BinaryOperator::Add,
@@ -815,9 +815,9 @@ impl TokenParser {
             self.expect_token(Token::RightParen)?;
 
             let expr_str = if distinct {
-                format!("{}(DISTINCT {})", func_name, inner_str)
+                format!("{func_name}(DISTINCT {inner_str})")
             } else {
-                format!("{}({})", func_name, inner_str)
+                format!("{func_name}({inner_str})")
             };
 
             return Ok((
@@ -841,7 +841,7 @@ impl TokenParser {
                 if let Some(Token::Identifier(prop)) = self.current_token() {
                     let prop = prop.clone();
                     self.advance();
-                    let expr_str = format!("{}.{}", name, prop);
+                    let expr_str = format!("{name}.{prop}");
                     return Ok((
                         Expression::PropertyAccess {
                             variable: name,
@@ -866,7 +866,7 @@ impl TokenParser {
             self.advance();
             return Ok((
                 Expression::Literal(serde_json::Value::String(s.clone())),
-                format!("'{}'", s),
+                format!("'{s}'"),
             ));
         }
 
@@ -988,7 +988,7 @@ impl TokenParser {
                 };
 
                 assignments.push(PropertyAssignment {
-                    target: format!("{}.{}", var, prop),
+                    target: format!("{var}.{prop}"),
                     value,
                 });
 
@@ -1092,7 +1092,7 @@ impl TokenParser {
             if matches!(self.current_token(), Some(Token::Dot)) {
                 self.advance();
                 if let Some(Token::Identifier(prop)) = self.current_token() {
-                    expression = format!("{}.{}", expression, prop);
+                    expression = format!("{expression}.{prop}");
                     self.advance();
                 }
             }
@@ -1139,9 +1139,8 @@ impl TokenParser {
             Some(Token::Number(n)) => {
                 let n = n.clone();
                 self.advance();
-                n.parse::<usize>().map_err(|_| {
-                    ProtocolError::CypherError(format!("Invalid LIMIT value: {}", n))
-                })?
+                n.parse::<usize>()
+                    .map_err(|_| ProtocolError::CypherError(format!("Invalid LIMIT value: {n}")))?
             }
             _ => {
                 return Err(ProtocolError::CypherError(
@@ -1161,7 +1160,7 @@ impl TokenParser {
                 let n = n.clone();
                 self.advance();
                 n.parse::<usize>()
-                    .map_err(|_| ProtocolError::CypherError(format!("Invalid SKIP value: {}", n)))?
+                    .map_err(|_| ProtocolError::CypherError(format!("Invalid SKIP value: {n}")))?
             }
             _ => {
                 return Err(ProtocolError::CypherError(
@@ -1264,7 +1263,7 @@ impl TokenParser {
                 } else if let Ok(f) = n.parse::<f64>() {
                     Ok(serde_json::json!(f))
                 } else {
-                    Err(ProtocolError::CypherError(format!("Invalid number: {}", n)))
+                    Err(ProtocolError::CypherError(format!("Invalid number: {n}")))
                 }
             }
             Some(Token::String(s)) => {
@@ -1288,8 +1287,7 @@ impl TokenParser {
                 }
             }
             Some(token) => Err(ProtocolError::CypherError(format!(
-                "Unexpected token in CALL arguments: {:?}",
-                token
+                "Unexpected token in CALL arguments: {token:?}"
             ))),
             None => Err(ProtocolError::CypherError(
                 "Unexpected end of query in CALL arguments".to_string(),
@@ -1553,7 +1551,7 @@ impl TokenParser {
                         if args.len() >= 2 {
                             let start = args[0].as_i64().unwrap_or(0);
                             let end = args[1].as_i64().unwrap_or(0);
-                            let step = args.get(2).and_then(|v| v.as_i64());
+                            let step = args.get(2).and_then(serde_json::Value::as_i64);
                             return Ok(UnwindExpression::Range { start, end, step });
                         }
                     }
@@ -1638,7 +1636,7 @@ impl TokenParser {
             Some(Token::Identifier(name)) => {
                 let name = name.clone();
                 self.advance();
-                Ok(serde_json::Value::String(format!("${}", name))) // Variable reference
+                Ok(serde_json::Value::String(format!("${name}"))) // Variable reference
             }
             _ => Err(ProtocolError::CypherError(
                 "Expected literal value".to_string(),
@@ -2123,7 +2121,7 @@ impl TokenParser {
                 if let Some(Token::Identifier(prop)) = self.current_token() {
                     let prop = prop.clone();
                     self.advance();
-                    return self.parse_property_condition(&format!("{}.{}", var, prop));
+                    return self.parse_property_condition(&format!("{var}.{prop}"));
                 }
             }
 
@@ -2354,8 +2352,7 @@ impl TokenParser {
         if !found_keyword {
             let expected = if has_for { "REQUIRE" } else { "ASSERT" };
             return Err(ProtocolError::CypherError(format!(
-                "Expected {} in CREATE CONSTRAINT",
-                expected
+                "Expected {expected} in CREATE CONSTRAINT"
             )));
         }
         self.advance();

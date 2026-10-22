@@ -487,7 +487,7 @@ impl OrbitQLExecutor {
         let columns = &table.columns;
         let spatial_columns = &table.spatial_columns;
 
-        for row in table.rows.iter_mut() {
+        for row in &mut table.rows {
             let update_result = self
                 .process_row_update_optimized(row, &query, columns, spatial_columns)
                 .await?;

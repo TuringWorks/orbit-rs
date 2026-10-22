@@ -162,21 +162,18 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let damping = config
             .get("damping")
-            .and_then(|v| v.as_f64())
-            .map(|f| f as f32)
-            .unwrap_or(0.85);
+            .and_then(serde_json::Value::as_f64)
+            .map_or(0.85, |f| f as f32);
 
         let max_iterations = config
             .get("iterations")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(20);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(20, |n| n as usize);
 
         let tolerance = config
             .get("tolerance")
-            .and_then(|v| v.as_f64())
-            .map(|f| f as f32)
-            .unwrap_or(0.0001);
+            .and_then(serde_json::Value::as_f64)
+            .map_or(0.0001, |f| f as f32);
 
         // Try GPU-accelerated PageRank if available
         #[cfg(feature = "gpu-graph-traversal")]
@@ -221,7 +218,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
                         let rows: Vec<Vec<Option<String>>> = results
                             .into_iter()
-                            .map(|(score, id)| vec![Some(id), Some(format!("{:.6}", score))])
+                            .map(|(score, id)| vec![Some(id), Some(format!("{score:.6}"))])
                             .collect();
 
                         return Ok(QueryResult {
@@ -336,7 +333,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let rows: Vec<Vec<Option<String>>> = results
             .into_iter()
-            .map(|(score, id)| vec![Some(id), Some(format!("{:.6}", score))])
+            .map(|(score, id)| vec![Some(id), Some(format!("{score:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -368,7 +365,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let weighted = config
             .get("weighted")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         // Try GPU-accelerated shortest path if available
@@ -540,9 +537,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let max_depth = config
             .get("maxDepth")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(usize::MAX);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(usize::MAX, |n| n as usize);
 
         // Try GPU-accelerated BFS if available
         #[cfg(feature = "gpu-graph-traversal")]
@@ -581,8 +577,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                                             .paths
                                             .iter()
                                             .find(|p| p.nodes.contains(&node_idx))
-                                            .map(|p| p.length)
-                                            .unwrap_or(0);
+                                            .map_or(0, |p| p.length);
                                         vec![Some(id.clone()), Some(depth.to_string())]
                                     })
                                 })
@@ -620,8 +615,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         if !graph.nodes.contains_key(start_id) {
             return Err(ProtocolError::CypherError(format!(
-                "Start node '{}' not found",
-                start_id
+                "Start node '{start_id}' not found"
             )));
         }
 
@@ -672,17 +666,15 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let max_depth = config
             .get("maxDepth")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(usize::MAX);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(usize::MAX, |n| n as usize);
 
         // Build shared graph from storage
         let graph = self.build_shared_graph().await?;
 
         if !graph.nodes.contains_key(&start_id) {
             return Err(ProtocolError::CypherError(format!(
-                "Start node '{}' not found",
-                start_id
+                "Start node '{start_id}' not found"
             )));
         }
 
@@ -724,9 +716,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let min_size = config
             .get("minSize")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(2);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(2, |n| n as usize);
 
         // Try GPU-accelerated community detection if available
         #[cfg(feature = "gpu-graph-traversal")]
@@ -972,7 +963,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let rows: Vec<Vec<Option<String>>> = results
             .into_iter()
-            .map(|(c, id)| vec![Some(id), Some(format!("{:.6}", c))])
+            .map(|(c, id)| vec![Some(id), Some(format!("{c:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -1054,7 +1045,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let rows: Vec<Vec<Option<String>>> = results
             .into_iter()
-            .map(|(c, id)| vec![Some(id), Some(format!("{:.6}", c))])
+            .map(|(c, id)| vec![Some(id), Some(format!("{c:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -1229,13 +1220,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let max_iterations = config
             .get("iterations")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(100);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(100, |n| n as usize);
 
         let tolerance = config
             .get("tolerance")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0001);
 
         let nodes = self.get_all_nodes().await?;
@@ -1314,7 +1304,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let rows: Vec<Vec<Option<String>>> = results
             .into_iter()
-            .map(|(c, id)| vec![Some(id), Some(format!("{:.6}", c))])
+            .map(|(c, id)| vec![Some(id), Some(format!("{c:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -1391,7 +1381,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 rows: vec![vec![
                     Some(node1.to_string()),
                     Some(node2.to_string()),
-                    Some(format!("{:.6}", similarity)),
+                    Some(format!("{similarity:.6}")),
                 ]],
             });
         }
@@ -1399,9 +1389,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         // Compute top-K similar pairs
         let top_k = config
             .get("topK")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let mut similarities: Vec<(String, String, f64)> = Vec::new();
         let node_ids: Vec<&String> = neighbor_sets.keys().collect();
@@ -1438,7 +1427,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         ];
         let rows: Vec<Vec<Option<String>>> = similarities
             .into_iter()
-            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{:.6}", sim))])
+            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{sim:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -1466,9 +1455,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let top_k = config
             .get("topK")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let nodes = self.get_all_nodes().await?;
 
@@ -1490,7 +1478,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         for node in &nodes {
             if let Some(vec_val) = node.properties.get(property) {
                 if let Some(arr) = vec_val.as_array() {
-                    let vec: Vec<f64> = arr.iter().filter_map(|v| v.as_f64()).collect();
+                    let vec: Vec<f64> = arr.iter().filter_map(serde_json::Value::as_f64).collect();
                     if !vec.is_empty() {
                         node_vectors.push((node.id.to_string(), vec));
                     }
@@ -1547,7 +1535,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         ];
         let rows: Vec<Vec<Option<String>>> = similarities
             .into_iter()
-            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{:.6}", sim))])
+            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{sim:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -1570,9 +1558,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let top_k = config
             .get("topK")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -1638,7 +1625,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         ];
         let rows: Vec<Vec<Option<String>>> = similarities
             .into_iter()
-            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{:.6}", sim))])
+            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{sim:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -1723,9 +1710,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         // Predict links for non-connected pairs
         let top_k = config
             .get("topK")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let mut predictions: Vec<(String, String, usize)> = Vec::new();
         let node_ids: Vec<&String> = neighbor_sets.keys().collect();
@@ -1787,9 +1773,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let top_k = config
             .get("topK")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -1844,7 +1829,9 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                     let score: f64 = set1
                         .intersection(set2)
                         .map(|common| {
-                            let degree = neighbor_sets.get(common).map(|s| s.len()).unwrap_or(1);
+                            let degree = neighbor_sets
+                                .get(common)
+                                .map_or(1, std::collections::HashSet::len);
                             if degree > 1 {
                                 1.0 / (degree as f64).ln()
                             } else {
@@ -1872,7 +1859,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         ];
         let rows: Vec<Vec<Option<String>>> = predictions
             .into_iter()
-            .map(|(n1, n2, score)| vec![Some(n1), Some(n2), Some(format!("{:.6}", score))])
+            .map(|(n1, n2, score)| vec![Some(n1), Some(n2), Some(format!("{score:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -1898,9 +1885,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let top_k = config
             .get("topK")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -1997,14 +1983,13 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let resolution = config
             .get("resolution")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(1.0);
 
         let max_iterations = config
             .get("iterations")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -2038,7 +2023,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 let weight = rel
                     .properties
                     .get("weight")
-                    .and_then(|v| v.as_f64())
+                    .and_then(serde_json::Value::as_f64)
                     .unwrap_or(1.0);
 
                 adj[from_idx].push((to_idx, weight));
@@ -2147,7 +2132,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             self.parse_config_arg(&args[0])?
         };
 
-        let target_k = config.get("k").and_then(|v| v.as_u64()).map(|n| n as usize);
+        let target_k = config
+            .get("k")
+            .and_then(serde_json::Value::as_u64)
+            .map(|n| n as usize);
 
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -2181,7 +2169,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         }
 
         // K-core decomposition using Batagelj-Zaversnik algorithm
-        let mut degree: Vec<usize> = adj.iter().map(|s| s.len()).collect();
+        let mut degree: Vec<usize> = adj.iter().map(std::collections::HashSet::len).collect();
         let mut coreness = vec![0usize; n];
         let mut removed = vec![false; n];
 
@@ -2290,9 +2278,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 let weight = rel
                     .properties
                     .get("weight")
-                    .and_then(|v| v.as_f64())
-                    .map(|f| f as f32)
-                    .unwrap_or(1.0);
+                    .and_then(serde_json::Value::as_f64)
+                    .map_or(1.0, |f| f as f32);
                 edge_weights.push(weight);
             }
         }
@@ -2306,9 +2293,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                     importance: n
                         .properties
                         .get("importance")
-                        .and_then(|v| v.as_f64())
-                        .map(|f| f as f32)
-                        .unwrap_or(1.0),
+                        .and_then(serde_json::Value::as_f64)
+                        .map_or(1.0, |f| f as f32),
                     node_type: n.labels.first().cloned(),
                     metadata: n
                         .properties
@@ -2420,7 +2406,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             let weight = rel
                 .properties
                 .get("weight")
-                .and_then(|v| v.as_f64())
+                .and_then(serde_json::Value::as_f64)
                 .unwrap_or(1.0);
             graph.add_edge(
                 rel.start_node.to_string(),
@@ -2510,7 +2496,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 let weight = rel
                     .properties
                     .get(weight_property)
-                    .and_then(|v| v.as_f64())
+                    .and_then(serde_json::Value::as_f64)
                     .unwrap_or(1.0);
                 adj[from_idx].push((to_idx, weight));
             }
@@ -2571,7 +2557,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let rows = vec![vec![
             Some(format!("[{}]", path.join(", "))),
-            Some(format!("{:.4}", cost)),
+            Some(format!("{cost:.4}")),
             Some(path.len().to_string()),
         ]];
 
@@ -2631,7 +2617,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 let weight = rel
                     .properties
                     .get(weight_property)
-                    .and_then(|v| v.as_f64())
+                    .and_then(serde_json::Value::as_f64)
                     .unwrap_or(1.0);
                 adj[from_idx].push((to_idx, weight));
             }
@@ -2848,7 +2834,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .join(", ");
 
         let rows = vec![vec![
-            Some(format!("[{}]", paths_str)),
+            Some(format!("[{paths_str}]")),
             Some(all_paths.len().to_string()),
             Some(target_dist.to_string()),
         ]];
@@ -2883,7 +2869,10 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .get("endNode")
             .and_then(|v| v.as_str())
             .ok_or_else(|| ProtocolError::CypherError("endNode parameter required".to_string()))?;
-        let k = config.get("k").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
+        let k = config
+            .get("k")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(3) as usize;
         let weight_property = config
             .get("weightProperty")
             .and_then(|v| v.as_str())
@@ -2917,7 +2906,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 let weight = rel
                     .properties
                     .get(weight_property)
-                    .and_then(|v| v.as_f64())
+                    .and_then(serde_json::Value::as_f64)
                     .unwrap_or(1.0);
                 adj[from_idx].push((to_idx, weight));
             }
@@ -2969,8 +2958,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                     .join(" -> ");
                 vec![
                     Some((i + 1).to_string()),
-                    Some(format!("[{}]", path_str)),
-                    Some(format!("{:.4}", cost)),
+                    Some(format!("[{path_str}]")),
+                    Some(format!("{cost:.4}")),
                 ]
             })
             .collect();
@@ -3034,7 +3023,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 let weight = rel
                     .properties
                     .get(weight_property)
-                    .and_then(|v| v.as_f64())
+                    .and_then(serde_json::Value::as_f64)
                     .unwrap_or(1.0);
                 edges.push((from_idx, to_idx, weight));
             }
@@ -3129,7 +3118,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 vec![
                     Some(nodes[*u].id.to_string()),
                     Some(nodes[*v].id.to_string()),
-                    Some(format!("{:.4}", w)),
+                    Some(format!("{w:.4}")),
                 ]
             })
             .collect();
@@ -3138,7 +3127,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         rows.push(vec![
             Some("TOTAL".to_string()),
             Some(format!("{} edges", mst_edges.len())),
-            Some(format!("{:.4}", total_weight)),
+            Some(format!("{total_weight:.4}")),
         ]);
 
         Ok(QueryResult {
@@ -3176,7 +3165,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .unwrap_or("weight");
         let max_distance = config
             .get("maxDistance")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(f64::INFINITY);
 
         let nodes = self.get_all_nodes().await?;
@@ -3203,7 +3192,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 let weight = rel
                     .properties
                     .get(weight_property)
-                    .and_then(|v| v.as_f64())
+                    .and_then(serde_json::Value::as_f64)
                     .unwrap_or(1.0);
                 adj[from_idx].push((to_idx, weight));
             }
@@ -3294,9 +3283,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let max_iterations = config
             .get("maxIterations")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -3396,15 +3384,13 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let walk_length = config
             .get("walkLength")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let num_walks = config
             .get("walks")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(5);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(5, |n| n as usize);
 
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -3417,7 +3403,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .collect();
 
         let start_idx = node_id_to_idx.get(&start_node_id).copied().ok_or_else(|| {
-            ProtocolError::CypherError(format!("Start node not found: {}", start_node_id))
+            ProtocolError::CypherError(format!("Start node not found: {start_node_id}"))
         })?;
 
         let mut adjacency: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
@@ -3483,13 +3469,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let max_iterations = config
             .get("iterations")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(20);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(20, |n| n as usize);
 
         let tolerance = config
             .get("tolerance")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0001);
 
         let nodes = self.get_all_nodes().await?;
@@ -3586,8 +3571,8 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
             .map(|(auth, hub_score, id)| {
                 vec![
                     Some(id),
-                    Some(format!("{:.6}", auth)),
-                    Some(format!("{:.6}", hub_score)),
+                    Some(format!("{auth:.6}")),
+                    Some(format!("{hub_score:.6}")),
                 ]
             })
             .collect();
@@ -3611,14 +3596,13 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let damping = config
             .get("damping")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.85);
 
         let max_iterations = config
             .get("iterations")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(20);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(20, |n| n as usize);
 
         let nodes = self.get_all_nodes().await?;
         let relationships = self.get_all_relationships().await?;
@@ -3684,7 +3668,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let rows: Vec<Vec<Option<String>>> = results
             .into_iter()
-            .map(|(rank, id)| vec![Some(id), Some(format!("{:.6}", rank))])
+            .map(|(rank, id)| vec![Some(id), Some(format!("{rank:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -3706,13 +3690,12 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
 
         let top_k = config
             .get("topK")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let similarity_cutoff = config
             .get("similarityCutoff")
-            .and_then(|v| v.as_f64())
+            .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
 
         let nodes = self.get_all_nodes().await?;
@@ -3786,7 +3769,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
         ];
         let rows: Vec<Vec<Option<String>>> = similarities
             .into_iter()
-            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{:.6}", sim))])
+            .map(|(n1, n2, sim)| vec![Some(n1), Some(n2), Some(format!("{sim:.6}"))])
             .collect();
 
         Ok(QueryResult {
@@ -3862,14 +3845,14 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphAlgorithmProcedures<S> {
                 Some("relationshipCount".to_string()),
                 Some(relationship_count.to_string()),
             ],
-            vec![Some("density".to_string()), Some(format!("{:.6}", density))],
+            vec![Some("density".to_string()), Some(format!("{density:.6}"))],
             vec![
                 Some("avgInDegree".to_string()),
-                Some(format!("{:.2}", avg_in_degree)),
+                Some(format!("{avg_in_degree:.2}")),
             ],
             vec![
                 Some("avgOutDegree".to_string()),
-                Some(format!("{:.2}", avg_out_degree)),
+                Some(format!("{avg_out_degree:.2}")),
             ],
             vec![
                 Some("maxInDegree".to_string()),

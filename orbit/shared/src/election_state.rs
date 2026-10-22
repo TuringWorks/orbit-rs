@@ -306,9 +306,10 @@ impl ElectionStateManager {
 
         self.save().await?;
 
-        match leader {
-            Some(leader_id) => info!("Updated leader to: {}", leader_id),
-            None => info!("Cleared leader"),
+        if let Some(leader_id) = leader {
+            info!("Updated leader to: {}", leader_id)
+        } else {
+            info!("Cleared leader")
         }
 
         Ok(())

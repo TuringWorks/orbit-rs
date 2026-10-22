@@ -275,8 +275,7 @@ impl QueryEngine {
                         .await
                 } else {
                     Err(ProtocolError::PostgresError(format!(
-                        "Table '{}' not found. Use actors table for actor queries or enable persistent storage.",
-                        table
+                        "Table '{table}' not found. Use actors table for actor queries or enable persistent storage."
                     )))
                 }
             }
@@ -294,8 +293,7 @@ impl QueryEngine {
                         .await
                 } else {
                     Err(ProtocolError::PostgresError(format!(
-                        "Table '{}' not found. Enable persistent storage for table operations.",
-                        table
+                        "Table '{table}' not found. Enable persistent storage for table operations."
                     )))
                 }
             }
@@ -1090,7 +1088,10 @@ impl QueryEngine {
             if parts.len() >= 2 {
                 let name = parts[0].to_string();
                 let data_type = parts[1].to_string();
-                let constraints = parts[2..].iter().map(|s| s.to_string()).collect();
+                let constraints = parts[2..]
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect();
 
                 columns.push(SimpleColumnDef {
                     name,
@@ -1365,8 +1366,7 @@ impl QueryEngine {
         // Check if table exists
         if !storage.table_exists(table).await? {
             return Err(ProtocolError::PostgresError(format!(
-                "Table '{}' does not exist",
-                table
+                "Table '{table}' does not exist"
             )));
         }
 
@@ -1457,15 +1457,14 @@ impl QueryEngine {
         // Check if table exists
         if !storage.table_exists(table).await? {
             return Err(ProtocolError::PostgresError(format!(
-                "Table '{}' does not exist",
-                table
+                "Table '{table}' does not exist"
             )));
         }
 
         // Get table schema to handle column types properly
         let schema = storage.get_table_schema(table).await?;
         let schema = schema.ok_or_else(|| {
-            ProtocolError::PostgresError(format!("Table '{}' schema not found", table))
+            ProtocolError::PostgresError(format!("Table '{table}' schema not found"))
         })?;
 
         let mut count = 0;
@@ -1555,8 +1554,7 @@ impl QueryEngine {
         // Check if table exists
         if !storage.table_exists(table).await? {
             return Err(ProtocolError::PostgresError(format!(
-                "Table '{}' does not exist",
-                table
+                "Table '{table}' does not exist"
             )));
         }
 
@@ -1605,8 +1603,7 @@ impl QueryEngine {
         // Check if table exists
         if !storage.table_exists(table).await? {
             return Err(ProtocolError::PostgresError(format!(
-                "Table '{}' does not exist",
-                table
+                "Table '{table}' does not exist"
             )));
         }
 
@@ -1653,8 +1650,7 @@ impl QueryEngine {
                 return Ok(QueryResult::Update { count: 0 });
             } else {
                 return Err(ProtocolError::PostgresError(format!(
-                    "Table '{}' already exists",
-                    table
+                    "Table '{table}' already exists"
                 )));
             }
         }
@@ -1728,8 +1724,7 @@ impl QueryEngine {
                 return Ok(QueryResult::Update { count: 0 });
             } else {
                 return Err(ProtocolError::PostgresError(format!(
-                    "Table '{}' does not exist",
-                    table
+                    "Table '{table}' does not exist"
                 )));
             }
         }

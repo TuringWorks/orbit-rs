@@ -404,7 +404,7 @@ impl AqlTokenizer {
             '"' | '\'' => self.start_string_literal(ch),
             ' ' | '\t' | '\n' | '\r' => self.handle_whitespace(),
             '(' | ')' | '{' | '}' | '[' | ']' | ',' | ':' | '+' | '-' | '*' | '/' | '%' => {
-                self.handle_single_char_token(ch)
+                self.handle_single_char_token(ch);
             }
             '=' => self.handle_equals_operator(),
             '!' => self.handle_exclamation_operator()?,
@@ -495,10 +495,7 @@ impl AqlTokenizer {
             self.tokens.push(AqlToken::Range);
         } else if !self.current_token.is_empty()
             && self.current_token.chars().all(|c| c.is_ascii_digit())
-            && self
-                .peek_char()
-                .map(|c| c.is_ascii_digit())
-                .unwrap_or(false)
+            && self.peek_char().is_some_and(|c| c.is_ascii_digit())
         {
             // This is a decimal number like 19.99 - keep the dot in the current token
             self.current_token.push('.');

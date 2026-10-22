@@ -28,17 +28,15 @@ pub struct PredictiveResourceManager {
 #[async_trait::async_trait]
 impl AISubsystem for PredictiveResourceManager {
     async fn handle_decision(&self, decision: AIDecision) -> OrbitResult<()> {
-        match decision {
-            AIDecision::ScaleResources {
-                resource_type: _,
-                change: _,
-            } => {
-                info!("Handling resource scaling decision");
-                // TODO: Apply resource scaling
-            }
-            _ => {
-                // Not applicable
-            }
+        if let AIDecision::ScaleResources {
+            resource_type: _,
+            change: _,
+        } = decision
+        {
+            info!("Handling resource scaling decision");
+            // TODO: Apply resource scaling
+        } else {
+            // Not applicable
         }
         Ok(())
     }

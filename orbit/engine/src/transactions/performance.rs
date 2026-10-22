@@ -190,10 +190,9 @@ where
                     let queue = processor.queue.lock().await;
                     queue.len() >= processor.config.min_batch_size
                         || (!queue.is_empty()
-                            && queue
-                                .front()
-                                .map(|op| op.timestamp.elapsed() >= processor.config.max_wait_time)
-                                .unwrap_or(false))
+                            && queue.front().is_some_and(|op| {
+                                op.timestamp.elapsed() >= processor.config.max_wait_time
+                            }))
                 };
 
                 if should_process {

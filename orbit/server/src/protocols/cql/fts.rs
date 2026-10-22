@@ -88,7 +88,7 @@ impl SasiIndex {
                 // Standard tokenizer: split on whitespace and punctuation
                 text.split(|c: char| !c.is_alphanumeric())
                     .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect()
             }
             AnalyzerMode::NonTokenizing => {
@@ -100,7 +100,7 @@ impl SasiIndex {
                 text.to_lowercase()
                     .split(|c: char| !c.is_alphanumeric())
                     .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect()
             }
         }
@@ -214,7 +214,7 @@ impl SasiIndex {
                 .iter()
                 .filter(|(_, v)| {
                     let v = if self.config.case_sensitive {
-                        v.to_string()
+                        (*v).clone()
                     } else {
                         v.to_lowercase()
                     };
@@ -233,7 +233,7 @@ impl SasiIndex {
                         .iter()
                         .filter(|(_, v)| {
                             let v = if self.config.case_sensitive {
-                                v.to_string()
+                                (*v).clone()
                             } else {
                                 v.to_lowercase()
                             };
@@ -253,7 +253,7 @@ impl SasiIndex {
                         .iter()
                         .filter(|(_, v)| {
                             let v = if self.config.case_sensitive {
-                                v.to_string()
+                                (*v).clone()
                             } else {
                                 v.to_lowercase()
                             };
@@ -268,7 +268,7 @@ impl SasiIndex {
                 .iter()
                 .filter(|(_, v)| {
                     let v = if self.config.case_sensitive {
-                        v.to_string()
+                        (*v).clone()
                     } else {
                         v.to_lowercase()
                     };
@@ -352,7 +352,7 @@ impl CqlFts {
         column: &str,
         config: SasiIndexConfig,
     ) -> anyhow::Result<()> {
-        let index_name = format!("{}_{}_sasi", table_name, column);
+        let index_name = format!("{table_name}_{column}_sasi");
 
         let mut store = self.text_store.write().await;
         store.insert(index_name, SasiIndex::new(column.to_string(), config));
@@ -386,7 +386,7 @@ impl CqlFts {
         partition_key: &str,
         value: &str,
     ) -> anyhow::Result<()> {
-        let index_name = format!("{}_{}_sasi", table_name, column);
+        let index_name = format!("{table_name}_{column}_sasi");
 
         let mut store = self.text_store.write().await;
         if let Some(index) = store.get_mut(&index_name) {
@@ -403,7 +403,7 @@ impl CqlFts {
         column: &str,
         partition_key: &str,
     ) -> anyhow::Result<bool> {
-        let index_name = format!("{}_{}_sasi", table_name, column);
+        let index_name = format!("{table_name}_{column}_sasi");
 
         let mut store = self.text_store.write().await;
         if let Some(index) = store.get_mut(&index_name) {
@@ -421,7 +421,7 @@ impl CqlFts {
         column: &str,
         term: &str,
     ) -> anyhow::Result<Vec<SearchResult>> {
-        let index_name = format!("{}_{}_sasi", table_name, column);
+        let index_name = format!("{table_name}_{column}_sasi");
 
         let store = self.text_store.read().await;
         if let Some(index) = store.get(&index_name) {
@@ -439,7 +439,7 @@ impl CqlFts {
         column: &str,
         pattern: &str,
     ) -> anyhow::Result<Vec<SearchResult>> {
-        let index_name = format!("{}_{}_sasi", table_name, column);
+        let index_name = format!("{table_name}_{column}_sasi");
 
         let store = self.text_store.read().await;
         if let Some(index) = store.get(&index_name) {
@@ -458,7 +458,7 @@ impl CqlFts {
         query: &str,
         limit: usize,
     ) -> anyhow::Result<Vec<SearchResult>> {
-        let index_name = format!("{}_{}_sasi", table_name, column);
+        let index_name = format!("{table_name}_{column}_sasi");
 
         let store = self.text_store.read().await;
         if let Some(index) = store.get(&index_name) {
@@ -474,7 +474,7 @@ impl CqlFts {
         table_name: &str,
         column: &str,
     ) -> anyhow::Result<Option<IndexInfo>> {
-        let index_name = format!("{}_{}_sasi", table_name, column);
+        let index_name = format!("{table_name}_{column}_sasi");
 
         let store = self.text_store.read().await;
         if let Some(index) = store.get(&index_name) {
@@ -492,7 +492,7 @@ impl CqlFts {
 
     /// Drop index
     pub async fn drop_index(&self, table_name: &str, column: &str) -> anyhow::Result<bool> {
-        let index_name = format!("{}_{}_sasi", table_name, column);
+        let index_name = format!("{table_name}_{column}_sasi");
 
         let mut store = self.text_store.write().await;
         Ok(store.remove(&index_name).is_some())

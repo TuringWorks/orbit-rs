@@ -501,7 +501,7 @@ impl DataMaskingEngine {
         }
         let visible: String = chars[..count].iter().collect();
         let masked = mask_char.to_string().repeat(chars.len() - count);
-        format!("{}{}", visible, masked)
+        format!("{visible}{masked}")
     }
 
     /// Show last N characters
@@ -512,7 +512,7 @@ impl DataMaskingEngine {
         }
         let masked = mask_char.to_string().repeat(chars.len() - count);
         let visible: String = chars[chars.len() - count..].iter().collect();
-        format!("{}{}", masked, visible)
+        format!("{masked}{visible}")
     }
 
     /// Show first and last N characters
@@ -530,27 +530,27 @@ impl DataMaskingEngine {
         let start: String = chars[..first].iter().collect();
         let end: String = chars[chars.len() - last..].iter().collect();
         let middle = mask_char.to_string().repeat(chars.len() - first - last);
-        format!("{}{}{}", start, middle, end)
+        format!("{start}{middle}{end}")
     }
 
     /// Mask credit card number
     fn mask_credit_card(&self, value: &str) -> String {
-        let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
+        let digits: String = value.chars().filter(char::is_ascii_digit).collect();
         if digits.len() < 4 {
             return "*".repeat(value.len());
         }
         let last_four = &digits[digits.len() - 4..];
-        format!("****-****-****-{}", last_four)
+        format!("****-****-****-{last_four}")
     }
 
     /// Mask SSN
     fn mask_ssn(&self, value: &str) -> String {
-        let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
+        let digits: String = value.chars().filter(char::is_ascii_digit).collect();
         if digits.len() < 4 {
             return "***-**-****".to_string();
         }
         let last_four = &digits[digits.len() - 4..];
-        format!("***-**-{}", last_four)
+        format!("***-**-{last_four}")
     }
 
     /// Mask email
@@ -561,7 +561,7 @@ impl DataMaskingEngine {
             } else {
                 "***".to_string()
             };
-            format!("{}@{}", masked_local, domain)
+            format!("{masked_local}@{domain}")
         } else {
             "***@***.***".to_string()
         }
@@ -569,12 +569,12 @@ impl DataMaskingEngine {
 
     /// Mask phone number
     fn mask_phone(&self, value: &str) -> String {
-        let digits: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
+        let digits: String = value.chars().filter(char::is_ascii_digit).collect();
         if digits.len() < 4 {
             return "(***) ***-****".to_string();
         }
         let last_four = &digits[digits.len() - 4..];
-        format!("(***) ***-{}", last_four)
+        format!("(***) ***-{last_four}")
     }
 
     /// Hash value for consistent anonymization
@@ -590,7 +590,7 @@ impl DataMaskingEngine {
     /// Regex-based masking
     fn regex_mask(&self, value: &str, pattern: &str, replacement: &str) -> OrbitResult<String> {
         let re = regex::Regex::new(pattern)
-            .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid regex pattern: {e}")))?;
         Ok(re.replace_all(value, replacement).to_string())
     }
 

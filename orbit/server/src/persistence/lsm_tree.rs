@@ -165,7 +165,7 @@ impl MemTable {
     }
 
     fn insert(&mut self, key: String, value: Vec<u8>) {
-        let old_size = self.data.get(&key).map(|v| v.len()).unwrap_or(0);
+        let old_size = self.data.get(&key).map_or(0, std::vec::Vec::len);
         self.data.insert(key, value.clone());
         self.size_bytes = self.size_bytes - old_size + value.len();
     }
@@ -178,7 +178,7 @@ impl MemTable {
         if let Some(old_value) = self.data.remove(key) {
             self.size_bytes -= old_value.len();
             // Insert tombstone marker
-            self.data.insert(format!("__TOMBSTONE__{}", key), vec![]);
+            self.data.insert(format!("__TOMBSTONE__{key}"), vec![]);
             true
         } else {
             false
@@ -197,7 +197,7 @@ impl WriteAheadLog {
             .append(true)
             .open(path)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to open WAL: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to open WAL: {e}")))?;
 
         Ok(Self { file })
     }
@@ -217,11 +217,11 @@ impl WriteAheadLog {
         self.file
             .write_all(entry.as_bytes())
             .await
-            .map_err(|e| OrbitError::internal(format!("WAL write error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("WAL write error: {e}")))?;
         self.file
             .sync_all()
             .await
-            .map_err(|e| OrbitError::internal(format!("WAL sync error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("WAL sync error: {e}")))?;
 
         Ok(())
     }
@@ -366,7 +366,7 @@ impl PersistenceProvider for LsmTreeAddressableProvider {
         let data_dir = PathBuf::from(&self.config.data_dir);
         tokio::fs::create_dir_all(&data_dir)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {e}")))?;
 
         tracing::info!(
             "LSM-Tree addressable provider initialized at {}",
@@ -423,7 +423,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
         let start = Instant::now();
         let key = Self::reference_to_key(&lease.reference);
         let value = serde_json::to_vec(lease)
-            .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?;
 
         // Write to WAL
         {
@@ -474,7 +474,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
 
         if let Some(data) = active_result {
             let lease = serde_json::from_slice(&data)
-                .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
             self.update_metrics("read", start.elapsed(), true).await;
             return Ok(Some(lease));
         }
@@ -494,7 +494,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
 
         if let Some(data) = immutable_result {
             let lease = serde_json::from_slice(&data)
-                .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
             self.update_metrics("read", start.elapsed(), true).await;
             return Ok(Some(lease));
         }
@@ -502,7 +502,7 @@ impl AddressableDirectoryProvider for LsmTreeAddressableProvider {
         // Search in SSTables
         if let Some(data) = self.search_sstables(&key).await? {
             let lease = serde_json::from_slice(&data)
-                .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
             self.update_metrics("read", start.elapsed(), true).await;
             return Ok(Some(lease));
         }
@@ -644,7 +644,7 @@ impl PersistenceProvider for LsmTreeClusterProvider {
         let data_dir = PathBuf::from(&self.config.data_dir);
         tokio::fs::create_dir_all(&data_dir)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {e}")))?;
 
         tracing::info!("LSM-Tree cluster provider initialized");
         Ok(())
@@ -688,7 +688,7 @@ impl ClusterNodeProvider for LsmTreeClusterProvider {
     async fn store_node(&self, node: &NodeInfo) -> OrbitResult<()> {
         let key = node.id.to_string();
         let value = serde_json::to_vec(node)
-            .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?;
 
         self.wal.lock().await.append(&key, &value, "INSERT").await?;
 
@@ -703,7 +703,7 @@ impl ClusterNodeProvider for LsmTreeClusterProvider {
 
         if let Some(data) = self.active_memtable.read().unwrap().get(&key) {
             let node = serde_json::from_slice(&data)
-                .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
             return Ok(Some(node));
         }
 

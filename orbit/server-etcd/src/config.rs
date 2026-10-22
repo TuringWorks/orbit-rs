@@ -317,10 +317,10 @@ impl EtcdConfig {
     #[allow(clippy::result_large_err)]
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> EtcdResult<Self> {
         let content = std::fs::read_to_string(&path)
-            .map_err(|e| EtcdError::configuration(format!("Failed to read config file: {}", e)))?;
+            .map_err(|e| EtcdError::configuration(format!("Failed to read config file: {e}")))?;
 
         let config: Self = serde_json::from_str(&content)
-            .map_err(|e| EtcdError::configuration(format!("Failed to parse JSON config: {}", e)))?;
+            .map_err(|e| EtcdError::configuration(format!("Failed to parse JSON config: {e}")))?;
 
         config.validate()?;
         Ok(config)

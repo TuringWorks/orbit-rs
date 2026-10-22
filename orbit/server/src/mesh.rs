@@ -135,10 +135,10 @@ impl ClusterManager {
         let now = chrono::Utc::now();
         let expires_at = now
             + chrono::Duration::from_std(self.lease_duration)
-                .map_err(|e| OrbitError::internal(format!("Invalid lease duration: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Invalid lease duration: {e}")))?;
         let renew_at = now
             + chrono::Duration::from_std(self.lease_duration / 2)
-                .map_err(|e| OrbitError::internal(format!("Invalid renew duration: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Invalid renew duration: {e}")))?;
 
         let lease = NodeLease::new(node_info.id.clone(), expires_at, renew_at);
 

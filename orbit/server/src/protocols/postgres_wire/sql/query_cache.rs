@@ -114,7 +114,7 @@ impl QueryKey {
         let normalized = Self::normalize_sql(sql);
         Self {
             normalized_sql: normalized,
-            context: format!("{}.{}", database, schema),
+            context: format!("{database}.{schema}"),
         }
     }
 

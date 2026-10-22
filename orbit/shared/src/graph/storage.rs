@@ -186,20 +186,17 @@ impl GraphStorage for InMemoryGraphStorage {
     ) -> OrbitResult<()> {
         let mut nodes = self.nodes.write().await;
 
-        match nodes.get_mut(node_id) {
-            Some(node) => {
-                for (key, value) in properties {
-                    node.set_property(&key, value);
-                }
-                info!(node_id = %node_id, "Updated node properties");
-                Ok(())
+        if let Some(node) = nodes.get_mut(node_id) {
+            for (key, value) in properties {
+                node.set_property(&key, value);
             }
-            None => {
-                warn!(node_id = %node_id, "Attempted to update non-existent node");
-                Err(OrbitError::NodeNotFound {
-                    node_id: node_id.to_string(),
-                })
-            }
+            info!(node_id = %node_id, "Updated node properties");
+            Ok(())
+        } else {
+            warn!(node_id = %node_id, "Attempted to update non-existent node");
+            Err(OrbitError::NodeNotFound {
+                node_id: node_id.to_string(),
+            })
         }
     }
 
@@ -251,28 +248,25 @@ impl GraphStorage for InMemoryGraphStorage {
     async fn add_labels(&self, node_id: &NodeId, labels: Vec<String>) -> OrbitResult<()> {
         let mut nodes = self.nodes.write().await;
 
-        match nodes.get_mut(node_id) {
-            Some(node) => {
-                let old_labels = node.labels.clone();
-                node.add_labels(labels.clone());
-                let new_labels = node.labels.clone();
+        if let Some(node) = nodes.get_mut(node_id) {
+            let old_labels = node.labels.clone();
+            node.add_labels(labels.clone());
+            let new_labels = node.labels.clone();
 
-                // Drop the write lock before updating index
-                drop(nodes);
+            // Drop the write lock before updating index
+            drop(nodes);
 
-                // Update label index
-                self.update_label_index(node_id, &old_labels, &new_labels)
-                    .await;
+            // Update label index
+            self.update_label_index(node_id, &old_labels, &new_labels)
+                .await;
 
-                info!(node_id = %node_id, labels = ?labels, "Added labels to node");
-                Ok(())
-            }
-            None => {
-                warn!(node_id = %node_id, "Attempted to add labels to non-existent node");
-                Err(OrbitError::NodeNotFound {
-                    node_id: node_id.to_string(),
-                })
-            }
+            info!(node_id = %node_id, labels = ?labels, "Added labels to node");
+            Ok(())
+        } else {
+            warn!(node_id = %node_id, "Attempted to add labels to non-existent node");
+            Err(OrbitError::NodeNotFound {
+                node_id: node_id.to_string(),
+            })
         }
     }
 
@@ -280,44 +274,38 @@ impl GraphStorage for InMemoryGraphStorage {
     async fn remove_labels(&self, node_id: &NodeId, labels: Vec<String>) -> OrbitResult<()> {
         let mut nodes = self.nodes.write().await;
 
-        match nodes.get_mut(node_id) {
-            Some(node) => {
-                let old_labels = node.labels.clone();
-                node.remove_labels(labels.clone());
-                let new_labels = node.labels.clone();
+        if let Some(node) = nodes.get_mut(node_id) {
+            let old_labels = node.labels.clone();
+            node.remove_labels(labels.clone());
+            let new_labels = node.labels.clone();
 
-                // Drop the write lock before updating index
-                drop(nodes);
+            // Drop the write lock before updating index
+            drop(nodes);
 
-                // Update label index
-                self.update_label_index(node_id, &old_labels, &new_labels)
-                    .await;
+            // Update label index
+            self.update_label_index(node_id, &old_labels, &new_labels)
+                .await;
 
-                info!(node_id = %node_id, labels = ?labels, "Removed labels from node");
-                Ok(())
-            }
-            None => {
-                warn!(node_id = %node_id, "Attempted to remove labels from non-existent node");
-                Err(OrbitError::NodeNotFound {
-                    node_id: node_id.to_string(),
-                })
-            }
+            info!(node_id = %node_id, labels = ?labels, "Removed labels from node");
+            Ok(())
+        } else {
+            warn!(node_id = %node_id, "Attempted to remove labels from non-existent node");
+            Err(OrbitError::NodeNotFound {
+                node_id: node_id.to_string(),
+            })
         }
     }
 
     #[instrument(skip(self))]
     async fn get_labels(&self, node_id: &NodeId) -> OrbitResult<Vec<String>> {
-        match self.nodes.read().await.get(node_id) {
-            Some(node) => {
-                debug!(node_id = %node_id, labels = ?node.labels, "Retrieved node labels");
-                Ok(node.labels.clone())
-            }
-            None => {
-                warn!(node_id = %node_id, "Attempted to get labels from non-existent node");
-                Err(OrbitError::NodeNotFound {
-                    node_id: node_id.to_string(),
-                })
-            }
+        if let Some(node) = self.nodes.read().await.get(node_id) {
+            debug!(node_id = %node_id, labels = ?node.labels, "Retrieved node labels");
+            Ok(node.labels.clone())
+        } else {
+            warn!(node_id = %node_id, "Attempted to get labels from non-existent node");
+            Err(OrbitError::NodeNotFound {
+                node_id: node_id.to_string(),
+            })
         }
     }
 
@@ -449,20 +437,17 @@ impl GraphStorage for InMemoryGraphStorage {
     ) -> OrbitResult<()> {
         let mut relationships = self.relationships.write().await;
 
-        match relationships.get_mut(rel_id) {
-            Some(relationship) => {
-                for (key, value) in properties {
-                    relationship.set_property(&key, value);
-                }
-                info!(rel_id = %rel_id, "Updated relationship properties");
-                Ok(())
+        if let Some(relationship) = relationships.get_mut(rel_id) {
+            for (key, value) in properties {
+                relationship.set_property(&key, value);
             }
-            None => {
-                warn!(rel_id = %rel_id, "Attempted to update non-existent relationship");
-                Err(OrbitError::internal(format!(
-                    "Relationship {rel_id} not found"
-                )))
-            }
+            info!(rel_id = %rel_id, "Updated relationship properties");
+            Ok(())
+        } else {
+            warn!(rel_id = %rel_id, "Attempted to update non-existent relationship");
+            Err(OrbitError::internal(format!(
+                "Relationship {rel_id} not found"
+            )))
         }
     }
 
@@ -503,12 +488,11 @@ impl GraphStorage for InMemoryGraphStorage {
         let label_index = self.label_index.read().await;
         let nodes = self.nodes.read().await;
 
-        let node_ids = match label_index.get(label) {
-            Some(ids) => ids,
-            None => {
-                debug!(label = label, "No nodes found with label");
-                return Ok(Vec::new());
-            }
+        let node_ids = if let Some(ids) = label_index.get(label) {
+            ids
+        } else {
+            debug!(label = label, "No nodes found with label");
+            return Ok(Vec::new());
         };
 
         let mut result = Vec::new();

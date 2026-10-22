@@ -212,8 +212,8 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
         for label in &self.known_labels {
             for prop in &self.known_property_keys {
                 rows.push(vec![
-                    Some(format!(":`{}`", label)),
-                    Some(format!("[\"{}\"]", label)),
+                    Some(format!(":`{label}`")),
+                    Some(format!("[\"{label}\"]")),
                     Some(prop.clone()),
                     Some("[\"String\"]".to_string()),
                     Some("false".to_string()),
@@ -237,13 +237,13 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
 
         for rel_type in &self.known_rel_types {
             rows.push(vec![
-                Some(format!(":`{}`", rel_type)),
+                Some(format!(":`{rel_type}`")),
                 Some("weight".to_string()),
                 Some("[\"Float\"]".to_string()),
                 Some("false".to_string()),
             ]);
             rows.push(vec![
-                Some(format!(":`{}`", rel_type)),
+                Some(format!(":`{rel_type}`")),
                 Some("created_at".to_string()),
                 Some("[\"DateTime\"]".to_string()),
                 Some("false".to_string()),
@@ -503,7 +503,10 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
 
     /// Execute dbms.listConfig()
     async fn execute_list_config(&self, args: &[JsonValue]) -> ProtocolResult<QueryResult> {
-        let filter = args.first().and_then(|v| v.as_str()).map(|s| s.to_string());
+        let filter = args
+            .first()
+            .and_then(|v| v.as_str())
+            .map(std::string::ToString::to_string);
 
         let columns = vec![
             "name".to_string(),
@@ -538,12 +541,7 @@ impl<S: GraphStorage + Send + Sync + 'static> DbProcedures<S> {
 
         let rows: Vec<Vec<Option<String>>> = configs
             .iter()
-            .filter(|(name, _, _)| {
-                filter
-                    .as_ref()
-                    .map(|f| name.contains(f.as_str()))
-                    .unwrap_or(true)
-            })
+            .filter(|(name, _, _)| filter.as_ref().is_none_or(|f| name.contains(f.as_str())))
             .map(|(name, value, desc)| {
                 vec![
                     Some(name.to_string()),

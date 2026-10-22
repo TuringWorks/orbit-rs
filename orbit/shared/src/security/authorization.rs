@@ -429,11 +429,9 @@ impl RbacEngine {
             SubjectMatcher::User(id) => &subject.id == id,
             SubjectMatcher::Role(role) => subject.roles.contains(role),
             SubjectMatcher::Group(_) => false, // Stub for now
-            SubjectMatcher::Attribute(key, value) => subject
-                .attributes
-                .get(key)
-                .map(|v| v == value)
-                .unwrap_or(false),
+            SubjectMatcher::Attribute(key, value) => {
+                subject.attributes.get(key).is_some_and(|v| v == value)
+            }
         }
     }
 

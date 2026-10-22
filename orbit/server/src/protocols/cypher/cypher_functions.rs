@@ -871,9 +871,18 @@ impl CypherFunctions {
             }
             Value::Object(obj) => {
                 // Construct date from components
-                let year = obj.get("year").and_then(|v| v.as_i64()).unwrap_or(1970) as i32;
-                let month = obj.get("month").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
-                let day = obj.get("day").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+                let year = obj
+                    .get("year")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(1970) as i32;
+                let month = obj
+                    .get("month")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(1) as u32;
+                let day = obj
+                    .get("day")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(1) as u32;
 
                 Ok(json!({
                     "year": year,
@@ -936,13 +945,13 @@ impl CypherFunctions {
             Value::Object(obj) => {
                 // Construct datetime from components
                 Ok(json!({
-                    "year": obj.get("year").and_then(|v| v.as_i64()).unwrap_or(1970),
-                    "month": obj.get("month").and_then(|v| v.as_u64()).unwrap_or(1),
-                    "day": obj.get("day").and_then(|v| v.as_u64()).unwrap_or(1),
-                    "hour": obj.get("hour").and_then(|v| v.as_u64()).unwrap_or(0),
-                    "minute": obj.get("minute").and_then(|v| v.as_u64()).unwrap_or(0),
-                    "second": obj.get("second").and_then(|v| v.as_u64()).unwrap_or(0),
-                    "nanosecond": obj.get("nanosecond").and_then(|v| v.as_u64()).unwrap_or(0),
+                    "year": obj.get("year").and_then(serde_json::Value::as_i64).unwrap_or(1970),
+                    "month": obj.get("month").and_then(serde_json::Value::as_u64).unwrap_or(1),
+                    "day": obj.get("day").and_then(serde_json::Value::as_u64).unwrap_or(1),
+                    "hour": obj.get("hour").and_then(serde_json::Value::as_u64).unwrap_or(0),
+                    "minute": obj.get("minute").and_then(serde_json::Value::as_u64).unwrap_or(0),
+                    "second": obj.get("second").and_then(serde_json::Value::as_u64).unwrap_or(0),
+                    "nanosecond": obj.get("nanosecond").and_then(serde_json::Value::as_u64).unwrap_or(0),
                     "timezone": obj.get("timezone").and_then(|v| v.as_str()).unwrap_or("UTC")
                 }))
             }
@@ -1005,10 +1014,10 @@ impl CypherFunctions {
                 }
             }
             Value::Object(obj) => Ok(json!({
-                "hour": obj.get("hour").and_then(|v| v.as_u64()).unwrap_or(0),
-                "minute": obj.get("minute").and_then(|v| v.as_u64()).unwrap_or(0),
-                "second": obj.get("second").and_then(|v| v.as_u64()).unwrap_or(0),
-                "nanosecond": obj.get("nanosecond").and_then(|v| v.as_u64()).unwrap_or(0)
+                "hour": obj.get("hour").and_then(serde_json::Value::as_u64).unwrap_or(0),
+                "minute": obj.get("minute").and_then(serde_json::Value::as_u64).unwrap_or(0),
+                "second": obj.get("second").and_then(serde_json::Value::as_u64).unwrap_or(0),
+                "nanosecond": obj.get("nanosecond").and_then(serde_json::Value::as_u64).unwrap_or(0)
             })),
             _ => Err(ProtocolError::CypherError(
                 "time requires a string or map argument".to_string(),
@@ -1052,10 +1061,10 @@ impl CypherFunctions {
                 }))
             }
             Value::Object(obj) => Ok(json!({
-                "months": obj.get("months").and_then(|v| v.as_i64()).unwrap_or(0),
-                "days": obj.get("days").and_then(|v| v.as_i64()).unwrap_or(0),
-                "seconds": obj.get("seconds").and_then(|v| v.as_i64()).unwrap_or(0),
-                "nanoseconds": obj.get("nanoseconds").and_then(|v| v.as_i64()).unwrap_or(0)
+                "months": obj.get("months").and_then(serde_json::Value::as_i64).unwrap_or(0),
+                "days": obj.get("days").and_then(serde_json::Value::as_i64).unwrap_or(0),
+                "seconds": obj.get("seconds").and_then(serde_json::Value::as_i64).unwrap_or(0),
+                "nanoseconds": obj.get("nanoseconds").and_then(serde_json::Value::as_i64).unwrap_or(0)
             })),
             _ => Err(ProtocolError::CypherError(
                 "duration requires a string or map argument".to_string(),
@@ -1076,9 +1085,18 @@ impl CypherFunctions {
 
         match &args[1] {
             Value::Object(obj) => {
-                let year = obj.get("year").and_then(|v| v.as_i64()).unwrap_or(1970);
-                let month = obj.get("month").and_then(|v| v.as_u64()).unwrap_or(1);
-                let day = obj.get("day").and_then(|v| v.as_u64()).unwrap_or(1);
+                let year = obj
+                    .get("year")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(1970);
+                let month = obj
+                    .get("month")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(1);
+                let day = obj
+                    .get("day")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(1);
 
                 match unit.as_str() {
                     "year" => Ok(json!({"year": year, "month": 1, "day": 1})),
@@ -1112,12 +1130,30 @@ impl CypherFunctions {
 
         match &args[1] {
             Value::Object(obj) => {
-                let year = obj.get("year").and_then(|v| v.as_i64()).unwrap_or(1970);
-                let month = obj.get("month").and_then(|v| v.as_u64()).unwrap_or(1);
-                let day = obj.get("day").and_then(|v| v.as_u64()).unwrap_or(1);
-                let hour = obj.get("hour").and_then(|v| v.as_u64()).unwrap_or(0);
-                let minute = obj.get("minute").and_then(|v| v.as_u64()).unwrap_or(0);
-                let second = obj.get("second").and_then(|v| v.as_u64()).unwrap_or(0);
+                let year = obj
+                    .get("year")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(1970);
+                let month = obj
+                    .get("month")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(1);
+                let day = obj
+                    .get("day")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(1);
+                let hour = obj
+                    .get("hour")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
+                let minute = obj
+                    .get("minute")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
+                let second = obj
+                    .get("second")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
 
                 match unit.as_str() {
                     "year" => Ok(json!({
@@ -1197,7 +1233,7 @@ impl CypherFunctions {
                     return Ok(id.clone());
                 }
                 if let Some(id) = obj.get("_id") {
-                    return Ok(Value::String(format!("element:{}", id)));
+                    return Ok(Value::String(format!("element:{id}")));
                 }
                 Ok(Value::Null)
             }
@@ -1212,7 +1248,7 @@ impl CypherFunctions {
             Value::Object(obj) => {
                 // Return properties, filtering out internal fields
                 let mut props = serde_json::Map::new();
-                for (k, v) in obj.iter() {
+                for (k, v) in obj {
                     if !k.starts_with('_') {
                         props.insert(k.clone(), v.clone());
                     }
@@ -1419,7 +1455,7 @@ impl CypherFunctions {
             return Ok(Value::Null);
         }
 
-        let values: Vec<f64> = args.iter().filter_map(|v| v.as_f64()).collect();
+        let values: Vec<f64> = args.iter().filter_map(serde_json::Value::as_f64).collect();
 
         if values.is_empty() || values.len() == 1 {
             return Ok(Value::Null);
@@ -1438,7 +1474,7 @@ impl CypherFunctions {
             return Ok(Value::Null);
         }
 
-        let values: Vec<f64> = args.iter().filter_map(|v| v.as_f64()).collect();
+        let values: Vec<f64> = args.iter().filter_map(serde_json::Value::as_f64).collect();
 
         if values.is_empty() {
             return Ok(Value::Null);
@@ -1463,7 +1499,8 @@ impl CypherFunctions {
 
         match &args[0] {
             Value::Array(arr) => {
-                let mut values: Vec<f64> = arr.iter().filter_map(|v| v.as_f64()).collect();
+                let mut values: Vec<f64> =
+                    arr.iter().filter_map(serde_json::Value::as_f64).collect();
 
                 if values.is_empty() {
                     return Ok(Value::Null);
@@ -1500,7 +1537,8 @@ impl CypherFunctions {
 
         match &args[0] {
             Value::Array(arr) => {
-                let mut values: Vec<f64> = arr.iter().filter_map(|v| v.as_f64()).collect();
+                let mut values: Vec<f64> =
+                    arr.iter().filter_map(serde_json::Value::as_f64).collect();
 
                 if values.is_empty() {
                     return Ok(Value::Null);

@@ -129,7 +129,7 @@ impl RaftTransport for GrpcRaftTransport {
 
         let proto_request = VoteRequestProto {
             term: request.term,
-            candidate_id: request.candidate_id.to_string(),
+            candidate_id: request.candidate_id.clone(),
             last_log_index: request.last_log_index,
             last_log_term: request.last_log_term,
         };
@@ -174,7 +174,7 @@ impl RaftTransport for GrpcRaftTransport {
 
         let proto_request = AppendEntriesRequestProto {
             term: request.term,
-            leader_id: request.leader_id.to_string(),
+            leader_id: request.leader_id.clone(),
             prev_log_index: request.prev_log_index,
             prev_log_term: request.prev_log_term,
             entries: request
@@ -306,7 +306,7 @@ impl RaftConsensusService for GrpcRaftHandler {
                 let proto_response = VoteResponseProto {
                     term: vote_response.term,
                     vote_granted: vote_response.vote_granted,
-                    voter_id: vote_response.voter_id.to_string(),
+                    voter_id: vote_response.voter_id.clone(),
                 };
                 Ok(Response::new(proto_response))
             }
@@ -353,7 +353,7 @@ impl RaftConsensusService for GrpcRaftHandler {
                 let proto_response = AppendEntriesResponseProto {
                     term: append_response.term,
                     success: append_response.success,
-                    follower_id: append_response.follower_id.to_string(),
+                    follower_id: append_response.follower_id.clone(),
                     last_log_index: append_response.last_log_index,
                 };
                 Ok(Response::new(proto_response))

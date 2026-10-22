@@ -34,12 +34,14 @@ impl SetCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<String> {
-        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(super::super::types::RespValue::as_string)
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     fn validate_arg_count(
@@ -78,9 +80,9 @@ impl SetCommands {
             .await;
 
         let added_count: Result<usize, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         match added_count {
@@ -129,9 +131,9 @@ impl SetCommands {
             .await;
 
         let removed_count: Result<usize, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
         match removed_count {
@@ -169,39 +171,13 @@ impl SetCommands {
             .await;
 
         let members_result: Result<Vec<String>, _> = result
-            .map_err(|e| format!("ERR actor invocation failed: {}", e))
+            .map_err(|e| format!("ERR actor invocation failed: {e}"))
             .and_then(|v| {
-                serde_json::from_value(v).map_err(|e| format!("Serialization error: {}", e))
+                serde_json::from_value(v).map_err(|e| format!("Serialization error: {e}"))
             });
 
-        match members_result {
-            Ok(members) => {
-                if members.is_empty() {
-                    // Try OrbitClient
-                    let orbit_key = self.base.make_key(key);
-                    if let Ok(actor_ref) = self
-                        .base
-                        .orbit_client
-                        .actor_reference::<crate::protocols::resp::actors::SetActor>(orbit_key)
-                        .await
-                    {
-                        if let Ok(remote_members) =
-                            actor_ref.invoke::<Vec<String>>("smembers", vec![]).await
-                        {
-                            if !remote_members.is_empty() {
-                                debug!(
-                                    "get_members {} -> {} members (OrbitClient)",
-                                    key,
-                                    remote_members.len()
-                                );
-                                return Ok(remote_members);
-                            }
-                        }
-                    }
-                }
-                Ok(members)
-            }
-            Err(_) => {
+        if let Ok(members) = members_result {
+            if members.is_empty() {
                 // Try OrbitClient
                 let orbit_key = self.base.make_key(key);
                 if let Ok(actor_ref) = self
@@ -213,16 +189,39 @@ impl SetCommands {
                     if let Ok(remote_members) =
                         actor_ref.invoke::<Vec<String>>("smembers", vec![]).await
                     {
-                        debug!(
-                            "get_members {} -> {} members (OrbitClient fallback)",
-                            key,
-                            remote_members.len()
-                        );
-                        return Ok(remote_members);
+                        if !remote_members.is_empty() {
+                            debug!(
+                                "get_members {} -> {} members (OrbitClient)",
+                                key,
+                                remote_members.len()
+                            );
+                            return Ok(remote_members);
+                        }
                     }
                 }
-                Ok(Vec::new())
             }
+            Ok(members)
+        } else {
+            // Try OrbitClient
+            let orbit_key = self.base.make_key(key);
+            if let Ok(actor_ref) = self
+                .base
+                .orbit_client
+                .actor_reference::<crate::protocols::resp::actors::SetActor>(orbit_key)
+                .await
+            {
+                if let Ok(remote_members) =
+                    actor_ref.invoke::<Vec<String>>("smembers", vec![]).await
+                {
+                    debug!(
+                        "get_members {} -> {} members (OrbitClient fallback)",
+                        key,
+                        remote_members.len()
+                    );
+                    return Ok(remote_members);
+                }
+            }
+            Ok(Vec::new())
         }
     }
 
@@ -254,10 +253,10 @@ impl SetCommands {
             .local_registry
             .execute_set(&key, "scard", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let size: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0);
 
         debug!("SCARD {} -> {}", key, size);
@@ -281,10 +280,10 @@ impl SetCommands {
                 &[serde_json::to_value(member.clone()).unwrap()],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let is_member: bool = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(false);
 
         debug!("SISMEMBER {} {} -> {}", key, member, is_member);
@@ -336,28 +335,25 @@ impl SetCommands {
             let key = self.get_string_arg(args, i, "SINTER")?;
 
             // Use get_members helper
-            match self.get_members(&key).await {
-                Ok(members) => {
-                    let current_set: HashSet<String> = members.into_iter().collect();
+            if let Ok(members) = self.get_members(&key).await {
+                let current_set: HashSet<String> = members.into_iter().collect();
 
-                    match result_set {
-                        None => {
-                            result_set = Some(current_set);
-                            debug!("SINTER: Initialized with members from key {}", key);
-                        }
-                        Some(ref mut existing_set) => {
-                            let intersection: HashSet<String> =
-                                existing_set.intersection(&current_set).cloned().collect();
-                            *existing_set = intersection;
-                            debug!("SINTER: After intersection with key {}", key);
-                        }
+                match result_set {
+                    None => {
+                        result_set = Some(current_set);
+                        debug!("SINTER: Initialized with members from key {}", key);
+                    }
+                    Some(ref mut existing_set) => {
+                        let intersection: HashSet<String> =
+                            existing_set.intersection(&current_set).cloned().collect();
+                        *existing_set = intersection;
+                        debug!("SINTER: After intersection with key {}", key);
                     }
                 }
-                Err(_) => {
-                    // If any set is missing or error, intersection is empty
-                    result_set = Some(HashSet::new());
-                    break;
-                }
+            } else {
+                // If any set is missing or error, intersection is empty
+                result_set = Some(HashSet::new());
+                break;
             }
         }
 
@@ -400,20 +396,17 @@ impl SetCommands {
     /// Get the initial set for SDIFF operation
     async fn get_initial_set(&self, first_key: &str) -> ProtocolResult<HashSet<String>> {
         // Use get_members helper
-        match self.get_members(first_key).await {
-            Ok(members) => {
-                let result_set: HashSet<String> = members.into_iter().collect();
-                debug!(
-                    "SDIFF: Started with {} members from key {}",
-                    result_set.len(),
-                    first_key
-                );
-                Ok(result_set)
-            }
-            Err(_) => {
-                debug!("SDIFF: Failed to get members from first key {}", first_key);
-                Ok(HashSet::new())
-            }
+        if let Ok(members) = self.get_members(first_key).await {
+            let result_set: HashSet<String> = members.into_iter().collect();
+            debug!(
+                "SDIFF: Started with {} members from key {}",
+                result_set.len(),
+                first_key
+            );
+            Ok(result_set)
+        } else {
+            debug!("SDIFF: Failed to get members from first key {}", first_key);
+            Ok(HashSet::new())
         }
     }
 

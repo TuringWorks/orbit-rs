@@ -90,7 +90,7 @@ impl WasmRuntime {
     pub fn new(config: WasmConfig) -> ProtocolResult<Self> {
         config
             .validate()
-            .map_err(|e| ProtocolError::PostgresError(format!("Invalid WASM config: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Invalid WASM config: {e}")))?;
 
         // Configure the WASM engine
         let mut wasm_config = Config::new();
@@ -114,7 +114,7 @@ impl WasmRuntime {
         wasm_config.max_wasm_stack(1024 * 1024); // 1MB stack
 
         let engine = Engine::new(&wasm_config).map_err(|e| {
-            ProtocolError::PostgresError(format!("Failed to create WASM engine: {}", e))
+            ProtocolError::PostgresError(format!("Failed to create WASM engine: {e}"))
         })?;
 
         let cache_size = NonZeroUsize::new(config.cache_size)
@@ -156,7 +156,7 @@ impl WasmRuntime {
 
         // Compile the module
         let module = Module::new(&self.engine, wasm_binary).map_err(|e| {
-            WasmError::CompilationError(format!("Failed to compile WASM module: {}", e))
+            WasmError::CompilationError(format!("Failed to compile WASM module: {e}"))
         })?;
 
         // Cache the compiled module
@@ -258,7 +258,7 @@ impl WasmRuntime {
         if self.config.enable_fuel {
             store
                 .set_fuel(self.config.fuel_limit)
-                .map_err(|e| WasmError::ExecutionError(format!("Failed to set fuel: {}", e)))?;
+                .map_err(|e| WasmError::ExecutionError(format!("Failed to set fuel: {e}")))?;
         }
 
         // Create linker and add WASI if enabled
@@ -289,7 +289,7 @@ impl WasmRuntime {
         let instance = Instance::new_async(&mut store, &module, &[])
             .await
             .map_err(|e| {
-                WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
+                WasmError::InstantiationError(format!("Failed to instantiate module: {e}"))
             })?;
 
         // Get the exported function
@@ -329,7 +329,7 @@ impl WasmRuntime {
                 if e.to_string().contains("fuel") {
                     WasmError::OutOfFuelError
                 } else {
-                    WasmError::ExecutionError(format!("Function execution failed: {}", e))
+                    WasmError::ExecutionError(format!("Function execution failed: {e}"))
                 }
             })?;
 
@@ -416,7 +416,7 @@ impl WasmRuntime {
             let bytes_read = reader
                 .read(&mut chunk)
                 .await
-                .map_err(|e| WasmError::ExecutionError(format!("Streaming read error: {}", e)))?;
+                .map_err(|e| WasmError::ExecutionError(format!("Streaming read error: {e}")))?;
 
             if bytes_read == 0 {
                 break; // End of stream
@@ -440,7 +440,7 @@ impl WasmRuntime {
 
             // Serialize to MessagePack for WASM
             let buffer_bytes = rmp_serde::to_vec(&buffer.data).map_err(|e| {
-                WasmError::TypeConversionError(format!("Failed to serialize chunk: {}", e))
+                WasmError::TypeConversionError(format!("Failed to serialize chunk: {e}"))
             })?;
 
             // Process chunk through WASM
@@ -504,7 +504,7 @@ impl WasmRuntime {
         if self.config.enable_fuel {
             store
                 .set_fuel(self.config.fuel_limit)
-                .map_err(|e| WasmError::ExecutionError(format!("Failed to set fuel: {}", e)))?;
+                .map_err(|e| WasmError::ExecutionError(format!("Failed to set fuel: {e}")))?;
         }
 
         // Instantiate module
@@ -534,7 +534,7 @@ impl WasmRuntime {
         let instance = Instance::new_async(&mut store, module, &[])
             .await
             .map_err(|e| {
-                WasmError::InstantiationError(format!("Failed to instantiate module: {}", e))
+                WasmError::InstantiationError(format!("Failed to instantiate module: {e}"))
             })?;
 
         // Get exported function
@@ -552,7 +552,7 @@ impl WasmRuntime {
         memory
             .write(&mut store, data_ptr, chunk_data)
             .map_err(|e| {
-                WasmError::ExecutionError(format!("Failed to write to WASM memory: {}", e))
+                WasmError::ExecutionError(format!("Failed to write to WASM memory: {e}"))
             })?;
 
         // Call function with (data_ptr, data_len, offset, is_last)
@@ -576,7 +576,7 @@ impl WasmRuntime {
             if e.to_string().contains("fuel") {
                 WasmError::OutOfFuelError
             } else {
-                WasmError::ExecutionError(format!("Function execution failed: {}", e))
+                WasmError::ExecutionError(format!("Function execution failed: {e}"))
             }
         })?;
 

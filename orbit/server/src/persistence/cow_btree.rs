@@ -235,7 +235,7 @@ impl WriteAheadLog {
             .append(true)
             .open(path)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to open WAL file: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to open WAL file: {e}")))?;
 
         // Determine the next sequence number by reading existing entries
         let sequence = Self::get_last_sequence(path).await.unwrap_or(0) + 1;
@@ -255,7 +255,7 @@ impl WriteAheadLog {
 
         let content = tokio::fs::read(path)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to read WAL file: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to read WAL file: {e}")))?;
         let mut last_sequence = 0u64;
         let mut offset = 0;
 
@@ -293,7 +293,7 @@ impl WriteAheadLog {
         };
 
         let serialized = serde_json::to_vec(&entry)
-            .map_err(|e| OrbitError::internal(format!("WAL serialization error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("WAL serialization error: {e}")))?;
 
         // Write entry length followed by entry data
         let len_bytes = (serialized.len() as u32).to_le_bytes();
@@ -321,11 +321,11 @@ impl WriteAheadLog {
             self.file
                 .write_all(&self.buffer)
                 .await
-                .map_err(|e| OrbitError::internal(format!("WAL flush error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("WAL flush error: {e}")))?;
             self.file
                 .sync_all()
                 .await
-                .map_err(|e| OrbitError::internal(format!("WAL sync error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("WAL sync error: {e}")))?;
             self.buffer.clear();
         }
         Ok(())
@@ -384,7 +384,7 @@ impl PersistenceProvider for CowBTreeAddressableProvider {
         let data_dir = PathBuf::from(&self.config.data_dir);
         tokio::fs::create_dir_all(&data_dir)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {e}")))?;
 
         // Initialize WAL
         let wal_path = data_dir.join("orbit.wal");
@@ -582,7 +582,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
             let root = self.root.read().unwrap();
             root.addressable_values
                 .iter()
-                .filter_map(|v| v.clone())
+                .filter_map(std::clone::Clone::clone)
                 .collect::<Vec<AddressableLease>>()
         };
 
@@ -671,7 +671,7 @@ impl PersistenceProvider for CowBTreeClusterProvider {
         let data_dir = PathBuf::from(&self.config.data_dir);
         tokio::fs::create_dir_all(&data_dir)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {e}")))?;
 
         // Initialize WAL
         let wal_path = data_dir.join("cluster_nodes.wal");
@@ -759,7 +759,7 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
         let nodes: Vec<NodeInfo> = root
             .node_values
             .iter()
-            .filter_map(|v| v.clone())
+            .filter_map(std::clone::Clone::clone)
             .filter(|node| node.status == NodeStatus::Active)
             .collect();
         Ok(nodes)
@@ -767,7 +767,11 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
 
     async fn list_all_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
         let root = self.root.read().unwrap();
-        let nodes: Vec<NodeInfo> = root.node_values.iter().filter_map(|v| v.clone()).collect();
+        let nodes: Vec<NodeInfo> = root
+            .node_values
+            .iter()
+            .filter_map(std::clone::Clone::clone)
+            .collect();
         Ok(nodes)
     }
 

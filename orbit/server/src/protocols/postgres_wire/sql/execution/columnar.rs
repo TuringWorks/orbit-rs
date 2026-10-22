@@ -519,7 +519,7 @@ impl fmt::Display for ColumnBatch {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                write!(f, "{}", name)?;
+                write!(f, "{name}")?;
             }
             writeln!(f)?;
         }
@@ -528,13 +528,13 @@ impl fmt::Display for ColumnBatch {
         let preview_rows = self.row_count.min(5);
         for row_idx in 0..preview_rows {
             if let Some(row) = self.get_row(row_idx) {
-                write!(f, "  Row {}: [", row_idx)?;
+                write!(f, "  Row {row_idx}: [")?;
                 for (col_idx, value) in row.iter().enumerate() {
                     if col_idx > 0 {
                         write!(f, ", ")?;
                     }
                     match value {
-                        Some(v) => write!(f, "{:?}", v)?,
+                        Some(v) => write!(f, "{v:?}")?,
                         None => write!(f, "NULL")?,
                     }
                 }

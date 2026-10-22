@@ -67,7 +67,7 @@ impl PythonValue {
             PythonValue::String(s) => SqlValue::Text(s.clone()),
             PythonValue::Bytes(b) => SqlValue::Bytea(b.clone()),
             PythonValue::List(items) => {
-                SqlValue::Array(items.iter().map(|v| v.to_sql_value()).collect())
+                SqlValue::Array(items.iter().map(PythonValue::to_sql_value).collect())
             }
             PythonValue::Dict(map) => {
                 // Convert dict to JSON Value
@@ -119,7 +119,7 @@ impl PythonValue {
             SqlValue::Date(d) => PythonValue::String(d.format("%Y-%m-%d").to_string()),
             SqlValue::Time(t) => PythonValue::String(t.format("%H:%M:%S%.f").to_string()),
             SqlValue::Uuid(u) => PythonValue::String(u.to_string()),
-            _ => PythonValue::String(format!("{:?}", sql)),
+            _ => PythonValue::String(format!("{sql:?}")),
         }
     }
 

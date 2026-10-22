@@ -170,11 +170,7 @@ impl PrometheusExporter {
             running: self.is_running(),
             server_running: self.server.is_some(),
             collector_running: self.collector.is_some(),
-            metrics_count: self
-                .metrics
-                .get_summary()
-                .map(|s| s.total_metrics)
-                .unwrap_or(0),
+            metrics_count: self.metrics.get_summary().map_or(0, |s| s.total_metrics),
             bind_address: self.config.bind_address(),
         }
     }

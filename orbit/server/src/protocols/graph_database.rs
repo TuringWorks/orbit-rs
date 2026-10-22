@@ -622,7 +622,7 @@ impl GraphActor {
                 } => {
                     let step = PlanStep {
                         operation: "DropIndex".to_string(),
-                        description: format!("Drop index {}", name),
+                        description: format!("Drop index {name}"),
                         estimated_rows: 0,
                         estimated_cost: 5.0,
                         children: vec![],
@@ -636,7 +636,7 @@ impl GraphActor {
                 } => {
                     let step = PlanStep {
                         operation: "DropConstraint".to_string(),
-                        description: format!("Drop constraint {}", name),
+                        description: format!("Drop constraint {name}"),
                         estimated_rows: 0,
                         estimated_cost: 5.0,
                         children: vec![],

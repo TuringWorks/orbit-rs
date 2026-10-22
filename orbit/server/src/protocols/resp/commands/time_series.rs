@@ -192,8 +192,7 @@ impl TimeSeries {
             match self.config.duplicate_policy {
                 DuplicatePolicy::Block => {
                     return Err(format!(
-                        "TSDB: duplicate timestamp {} already exists",
-                        timestamp
+                        "TSDB: duplicate timestamp {timestamp} already exists"
                     ));
                 }
                 DuplicatePolicy::First => {
@@ -341,8 +340,7 @@ impl TimeSeriesCommands {
                     let policy_str = self.get_string_arg(args, i, "TS.CREATE")?;
                     duplicate_policy = DuplicatePolicy::from_str(&policy_str).ok_or_else(|| {
                         crate::protocols::error::ProtocolError::RespError(format!(
-                            "ERR unknown duplicate policy '{}'",
-                            policy_str
+                            "ERR unknown duplicate policy '{policy_str}'"
                         ))
                     })?;
                 }
@@ -363,8 +361,7 @@ impl TimeSeriesCommands {
 
         if ts_guard.contains_key(&key) {
             return Err(crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: key '{}' already exists",
-                key
+                "ERR TSDB: key '{key}' already exists"
             )));
         }
 
@@ -393,13 +390,11 @@ impl TimeSeriesCommands {
         let timestamp = if timestamp_str == "*" {
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as i64)
-                .unwrap_or(0)
+                .map_or(0, |d| d.as_millis() as i64)
         } else {
             timestamp_str.parse::<i64>().map_err(|_| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR invalid timestamp '{}'",
-                    timestamp_str
+                    "ERR invalid timestamp '{timestamp_str}'"
                 ))
             })?
         };
@@ -420,7 +415,7 @@ impl TimeSeriesCommands {
 
         let ts = ts_guard.get_mut(&key).unwrap();
         ts.add_sample(timestamp, value)
-            .map_err(|e| crate::protocols::error::ProtocolError::RespError(format!("ERR {}", e)))?;
+            .map_err(|e| crate::protocols::error::ProtocolError::RespError(format!("ERR {e}")))?;
 
         debug!("TS.ADD {} {} {} -> OK", key, timestamp, value);
         Ok(RespValue::Integer(timestamp))
@@ -437,8 +432,7 @@ impl TimeSeriesCommands {
 
         let ts = ts_guard.get(&key).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: key '{}' does not exist",
-                key
+                "ERR TSDB: key '{key}' does not exist"
             ))
         })?;
 
@@ -539,8 +533,7 @@ impl TimeSeriesCommands {
                     aggregation =
                         Some(AggregationType::from_str(&agg_type_str).ok_or_else(|| {
                             crate::protocols::error::ProtocolError::RespError(format!(
-                                "ERR unknown aggregation type '{}'",
-                                agg_type_str
+                                "ERR unknown aggregation type '{agg_type_str}'"
                             ))
                         })?);
                     i += 1;
@@ -556,8 +549,7 @@ impl TimeSeriesCommands {
 
         let ts = ts_guard.get(&key).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: key '{}' does not exist",
-                key
+                "ERR TSDB: key '{key}' does not exist"
             ))
         })?;
 
@@ -648,8 +640,7 @@ impl TimeSeriesCommands {
                     aggregation =
                         Some(AggregationType::from_str(&agg_type_str).ok_or_else(|| {
                             crate::protocols::error::ProtocolError::RespError(format!(
-                                "ERR unknown aggregation type '{}'",
-                                agg_type_str
+                                "ERR unknown aggregation type '{agg_type_str}'"
                             ))
                         })?);
                     i += 1;
@@ -665,8 +656,7 @@ impl TimeSeriesCommands {
 
         let ts = ts_guard.get(&key).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: key '{}' does not exist",
-                key
+                "ERR TSDB: key '{key}' does not exist"
             ))
         })?;
 
@@ -766,13 +756,9 @@ impl TimeSeriesCommands {
 
         for (key, ts) in ts_guard.iter() {
             // Check if time series matches all filters
-            let matches = filters.iter().all(|(label, value)| {
-                ts.config
-                    .labels
-                    .get(label)
-                    .map(|v| v == value)
-                    .unwrap_or(false)
-            });
+            let matches = filters
+                .iter()
+                .all(|(label, value)| ts.config.labels.get(label).is_some_and(|v| v == value));
 
             if matches || filters.is_empty() {
                 let samples = ts.range(from, to);
@@ -889,8 +875,7 @@ impl TimeSeriesCommands {
 
         let ts = ts_guard.get(&key).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: key '{}' does not exist",
-                key
+                "ERR TSDB: key '{key}' does not exist"
             ))
         })?;
 
@@ -944,8 +929,7 @@ impl TimeSeriesCommands {
 
         let ts = ts_guard.get_mut(&key).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: key '{}' does not exist",
-                key
+                "ERR TSDB: key '{key}' does not exist"
             ))
         })?;
 
@@ -977,8 +961,7 @@ impl TimeSeriesCommands {
             let timestamp = if timestamp_str == "*" {
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis() as i64)
-                    .unwrap_or(0)
+                    .map_or(0, |d| d.as_millis() as i64)
             } else {
                 timestamp_str.parse::<i64>().unwrap_or(0)
             };
@@ -1028,8 +1011,7 @@ impl TimeSeriesCommands {
                 timestamp = Some(if ts_str == "*" {
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis() as i64)
-                        .unwrap_or(0)
+                        .map_or(0, |d| d.as_millis() as i64)
                 } else {
                     ts_str.parse::<i64>().unwrap_or(0)
                 });
@@ -1043,8 +1025,7 @@ impl TimeSeriesCommands {
         let timestamp = timestamp.unwrap_or_else(|| {
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as i64)
-                .unwrap_or(0)
+                .map_or(0, |d| d.as_millis() as i64)
         });
 
         let ts_storage = get_time_series();
@@ -1064,11 +1045,11 @@ impl TimeSeriesCommands {
         let ts = ts_guard.get_mut(&key).unwrap();
 
         // Get current value and add increment
-        let current_value = ts.last().map(|dp| dp.value).unwrap_or(0.0);
+        let current_value = ts.last().map_or(0.0, |dp| dp.value);
         let new_value = current_value + increment;
 
         ts.add_sample(timestamp, new_value)
-            .map_err(|e| crate::protocols::error::ProtocolError::RespError(format!("ERR {}", e)))?;
+            .map_err(|e| crate::protocols::error::ProtocolError::RespError(format!("ERR {e}")))?;
 
         debug!("TS.INCRBY {} {} -> {}", key, increment, new_value);
         Ok(RespValue::Integer(timestamp))
@@ -1095,8 +1076,7 @@ impl TimeSeriesCommands {
                 timestamp = Some(if ts_str == "*" {
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis() as i64)
-                        .unwrap_or(0)
+                        .map_or(0, |d| d.as_millis() as i64)
                 } else {
                     ts_str.parse::<i64>().unwrap_or(0)
                 });
@@ -1110,8 +1090,7 @@ impl TimeSeriesCommands {
         let timestamp = timestamp.unwrap_or_else(|| {
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as i64)
-                .unwrap_or(0)
+                .map_or(0, |d| d.as_millis() as i64)
         });
 
         let ts_storage = get_time_series();
@@ -1131,11 +1110,11 @@ impl TimeSeriesCommands {
         let ts = ts_guard.get_mut(&key).unwrap();
 
         // Get current value and subtract decrement
-        let current_value = ts.last().map(|dp| dp.value).unwrap_or(0.0);
+        let current_value = ts.last().map_or(0.0, |dp| dp.value);
         let new_value = current_value - decrement;
 
         ts.add_sample(timestamp, new_value)
-            .map_err(|e| crate::protocols::error::ProtocolError::RespError(format!("ERR {}", e)))?;
+            .map_err(|e| crate::protocols::error::ProtocolError::RespError(format!("ERR {e}")))?;
 
         debug!("TS.DECRBY {} {} -> {}", key, decrement, new_value);
         Ok(RespValue::Integer(timestamp))
@@ -1165,8 +1144,7 @@ impl TimeSeriesCommands {
         let agg_type_str = self.get_string_arg(args, 3, "TS.CREATERULE")?;
         let aggregation = AggregationType::from_str(&agg_type_str).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR unknown aggregation type '{}'",
-                agg_type_str
+                "ERR unknown aggregation type '{agg_type_str}'"
             ))
         })?;
 
@@ -1177,14 +1155,12 @@ impl TimeSeriesCommands {
         let ts_guard = ts_storage.read().await;
         if !ts_guard.contains_key(&source_key) {
             return Err(crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: source key '{}' does not exist",
-                source_key
+                "ERR TSDB: source key '{source_key}' does not exist"
             )));
         }
         if !ts_guard.contains_key(&dest_key) {
             return Err(crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: destination key '{}' does not exist",
-                dest_key
+                "ERR TSDB: destination key '{dest_key}' does not exist"
             )));
         }
         drop(ts_guard);
@@ -1199,8 +1175,7 @@ impl TimeSeriesCommands {
 
         if rule_exists {
             return Err(crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: rule already exists from '{}' to '{}'",
-                source_key, dest_key
+                "ERR TSDB: rule already exists from '{source_key}' to '{dest_key}'"
             )));
         }
 
@@ -1239,8 +1214,7 @@ impl TimeSeriesCommands {
 
         if rules_guard.len() == initial_len {
             return Err(crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR TSDB: rule from '{}' to '{}' does not exist",
-                source_key, dest_key
+                "ERR TSDB: rule from '{source_key}' to '{dest_key}' does not exist"
             )));
         }
 
@@ -1261,8 +1235,7 @@ impl TimeSeriesCommands {
             "+" => Ok(i64::MAX),
             _ => ts_str.parse::<i64>().map_err(|_| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR invalid timestamp '{}'",
-                    ts_str
+                    "ERR invalid timestamp '{ts_str}'"
                 ))
             }),
         }

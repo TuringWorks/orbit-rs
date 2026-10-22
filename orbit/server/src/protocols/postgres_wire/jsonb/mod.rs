@@ -168,11 +168,10 @@ impl JsonbValue {
             JsonbValue::Null => serde_json::Value::Null,
             JsonbValue::Bool(b) => serde_json::Value::Bool(*b),
             JsonbValue::Number(n) => serde_json::Number::from_f64(*n)
-                .map(serde_json::Value::Number)
-                .unwrap_or(serde_json::Value::Null),
+                .map_or(serde_json::Value::Null, serde_json::Value::Number),
             JsonbValue::String(s) => serde_json::Value::String(s.clone()),
             JsonbValue::Array(arr) => {
-                serde_json::Value::Array(arr.iter().map(|v| v.to_serde_value()).collect())
+                serde_json::Value::Array(arr.iter().map(JsonbValue::to_serde_value).collect())
             }
             JsonbValue::Object(obj) => serde_json::Value::Object(
                 obj.iter()

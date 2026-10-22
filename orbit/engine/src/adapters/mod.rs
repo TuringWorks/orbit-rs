@@ -319,8 +319,7 @@ impl TransactionAdapter {
             }
         } else {
             Err(EngineError::not_found(format!(
-                "Transaction '{}' not found",
-                protocol_tx_id
+                "Transaction '{protocol_tx_id}' not found"
             )))
         }
     }
@@ -338,8 +337,7 @@ impl TransactionAdapter {
             }
         } else {
             Err(EngineError::not_found(format!(
-                "Transaction '{}' not found",
-                protocol_tx_id
+                "Transaction '{protocol_tx_id}' not found"
             )))
         }
     }

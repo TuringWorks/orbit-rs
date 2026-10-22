@@ -165,7 +165,7 @@ impl CqlGraphEngine {
                 .unwrap_or(1.0);
 
             self.graph.add_edge(from, to, weight, Some(label.clone()));
-            self.edge_labels.insert(format!("e{}", idx), label);
+            self.edge_labels.insert(format!("e{idx}"), label);
         }
 
         Ok(())
@@ -494,8 +494,8 @@ impl Default for CqlGraphEngine {
 
 fn extract_string(row: &HashMap<String, SqlValue>, column: &str) -> ProtocolResult<String> {
     row.get(column)
-        .map(|v| v.to_postgres_string())
-        .ok_or_else(|| ProtocolError::PostgresError(format!("Column '{}' not found", column)))
+        .map(super::super::postgres_wire::sql::types::SqlValue::to_postgres_string)
+        .ok_or_else(|| ProtocolError::PostgresError(format!("Column '{column}' not found")))
 }
 
 fn extract_float(row: &HashMap<String, SqlValue>, column: &str) -> Option<f64> {

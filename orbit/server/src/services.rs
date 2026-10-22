@@ -78,7 +78,7 @@ impl ServerConnectionService {
                                 // Convert reference
                                 let reference_proto = req.reference.ok_or_else(|| OrbitError::internal("Missing reference"))?;
                                 let reference = orbit_proto::converters::AddressableReferenceConverter::from_proto(&reference_proto)
-                                    .map_err(|e| OrbitError::internal(format!("Invalid reference: {}", e)))?;
+                                    .map_err(|e| OrbitError::internal(format!("Invalid reference: {e}")))?;
 
                                 // Deserialize arguments
                                 let args: Vec<serde_json::Value> = serde_json::from_str(&req.arguments)

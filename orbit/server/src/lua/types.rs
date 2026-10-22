@@ -175,18 +175,18 @@ impl LuaValue {
             LuaValue::Number(f) => RespValue::BulkString(Bytes::from(f.to_string().into_bytes())),
             LuaValue::String(s) => RespValue::BulkString(Bytes::from(s.as_bytes().to_vec())),
             LuaValue::Binary(b) => RespValue::BulkString(Bytes::from(b.clone())),
-            LuaValue::Array(arr) => RespValue::Array(arr.iter().map(|v| v.to_resp()).collect()),
+            LuaValue::Array(arr) => RespValue::Array(arr.iter().map(LuaValue::to_resp).collect()),
             LuaValue::Table(table) => {
                 // Convert table to array of key-value pairs
                 let mut pairs = Vec::new();
-                for (k, v) in table.iter() {
+                for (k, v) in table {
                     pairs.push(RespValue::BulkString(Bytes::from(k.as_bytes().to_vec())));
                     pairs.push(v.to_resp());
                 }
                 RespValue::Array(pairs)
             }
             LuaValue::Function(name) => {
-                RespValue::BulkString(Bytes::from(format!("function:{}", name).into_bytes()))
+                RespValue::BulkString(Bytes::from(format!("function:{name}").into_bytes()))
             }
         }
     }
@@ -217,12 +217,12 @@ impl LuaValue {
             RespValue::Attribute(_attr) => LuaValue::Nil, // Ignore attributes for now
             RespValue::Map(map) => {
                 let mut table = HashMap::new();
-                for (k, v) in map.iter() {
+                for (k, v) in map {
                     // Use string representation of key
                     let key_str = match k {
                         RespValue::SimpleString(s) | RespValue::Error(s) => s.clone(),
                         RespValue::BulkString(b) => String::from_utf8_lossy(b).to_string(),
-                        _ => format!("{:?}", k),
+                        _ => format!("{k:?}"),
                     };
                     table.insert(key_str, LuaValue::from_resp(v));
                 }
@@ -240,10 +240,10 @@ impl fmt::Display for LuaValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LuaValue::Nil => write!(f, "nil"),
-            LuaValue::Boolean(b) => write!(f, "{}", b),
-            LuaValue::Integer(i) => write!(f, "{}", i),
-            LuaValue::Number(n) => write!(f, "{}", n),
-            LuaValue::String(s) => write!(f, "\"{}\"", s),
+            LuaValue::Boolean(b) => write!(f, "{b}"),
+            LuaValue::Integer(i) => write!(f, "{i}"),
+            LuaValue::Number(n) => write!(f, "{n}"),
+            LuaValue::String(s) => write!(f, "\"{s}\""),
             LuaValue::Binary(b) => write!(f, "<binary {} bytes>", b.len()),
             LuaValue::Array(arr) => {
                 write!(f, "[")?;
@@ -251,7 +251,7 @@ impl fmt::Display for LuaValue {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", v)?;
+                    write!(f, "{v}")?;
                 }
                 write!(f, "]")
             }
@@ -261,11 +261,11 @@ impl fmt::Display for LuaValue {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}: {}", k, v)?;
+                    write!(f, "{k}: {v}")?;
                 }
                 write!(f, "}}")
             }
-            LuaValue::Function(name) => write!(f, "function:{}", name),
+            LuaValue::Function(name) => write!(f, "function:{name}"),
         }
     }
 }

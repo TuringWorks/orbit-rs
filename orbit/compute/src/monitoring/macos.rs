@@ -716,7 +716,7 @@ impl MacOSSystemMonitor {
             // Convert to string, removing null terminator
             buffer.truncate(size.saturating_sub(1));
             String::from_utf8(buffer).map_err(|e| ComputeError::Serialization {
-                message: format!("Invalid UTF-8 in sysctl value: {}", e),
+                message: format!("Invalid UTF-8 in sysctl value: {e}"),
             })
         }
     }

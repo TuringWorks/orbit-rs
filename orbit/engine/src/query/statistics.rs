@@ -138,8 +138,7 @@ impl StatisticsCollector {
     pub fn estimate_row_count(&self, table_name: &str) -> u64 {
         self.table_stats
             .get(table_name)
-            .map(|stats| stats.row_count)
-            .unwrap_or(1000) // Default estimate
+            .map_or(1000, |stats| stats.row_count) // Default estimate
     }
 
     /// Clear all statistics

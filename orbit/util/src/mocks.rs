@@ -147,7 +147,7 @@ impl MockOrbitClient {
             if !actor.is_active {
                 actor.is_active = true;
                 if self.config.verbose_logging {
-                    eprintln!("🔄 Mock: Activated actor {} ({})", actor_id, actor_type);
+                    eprintln!("🔄 Mock: Activated actor {actor_id} ({actor_type})");
                 }
             }
             actor.clone()
@@ -156,7 +156,7 @@ impl MockOrbitClient {
             actor.is_active = true;
 
             if self.config.verbose_logging {
-                eprintln!("✨ Mock: Created new actor {} ({})", actor_id, actor_type);
+                eprintln!("✨ Mock: Created new actor {actor_id} ({actor_type})");
             }
 
             registry.insert(actor_id.to_string(), actor.clone());
@@ -178,12 +178,12 @@ impl MockOrbitClient {
             actor.last_access = std::time::SystemTime::now();
 
             if self.config.verbose_logging {
-                eprintln!("📝 Mock: Updated actor {} state", actor_id);
+                eprintln!("📝 Mock: Updated actor {actor_id} state");
             }
 
             Ok(())
         } else {
-            Err(format!("Actor {} not found", actor_id))
+            Err(format!("Actor {actor_id} not found"))
         }
     }
 
@@ -203,18 +203,14 @@ impl MockOrbitClient {
 
         if self.should_fail() {
             return Err(format!(
-                "Mock failure: Actor invocation failed for {}.{}",
-                actor_type, method
+                "Mock failure: Actor invocation failed for {actor_type}.{method}"
             ));
         }
 
         let actor = self.get_or_create_actor(actor_id, actor_type).await;
 
         if self.config.verbose_logging {
-            eprintln!(
-                "📞 Mock: Invoking {}.{}() on actor {}",
-                actor_type, method, actor_id
-            );
+            eprintln!("📞 Mock: Invoking {actor_type}.{method}() on actor {actor_id}");
         }
 
         // Simulate different method behaviors
@@ -248,7 +244,7 @@ impl MockOrbitClient {
                 let current_value: i64 = actor
                     .state
                     .get("value")
-                    .and_then(|v| v.as_i64())
+                    .and_then(serde_json::Value::as_i64)
                     .unwrap_or(0);
                 let increment_amount: i64 =
                     serde_json::from_value(serde_json::to_value(args).unwrap_or_default())
@@ -276,7 +272,7 @@ impl MockOrbitClient {
                 let value: i64 = actor
                     .state
                     .get("value")
-                    .and_then(|v| v.as_i64())
+                    .and_then(serde_json::Value::as_i64)
                     .unwrap_or(0);
                 serde_json::from_value(serde_json::json!(value)).unwrap_or_default()
             }
@@ -320,12 +316,12 @@ impl MockOrbitClient {
             actor.is_active = false;
 
             if self.config.verbose_logging {
-                eprintln!("😴 Mock: Deactivated actor {}", actor_id);
+                eprintln!("😴 Mock: Deactivated actor {actor_id}");
             }
 
             Ok(())
         } else {
-            Err(format!("Actor {} not found", actor_id))
+            Err(format!("Actor {actor_id} not found"))
         }
     }
 
@@ -403,7 +399,7 @@ impl MockOrbitServer {
             types.push(actor_type.to_string());
 
             if self.config.verbose_logging {
-                eprintln!("📋 Mock: Registered actor type {}", actor_type);
+                eprintln!("📋 Mock: Registered actor type {actor_type}");
             }
         }
         Ok(())

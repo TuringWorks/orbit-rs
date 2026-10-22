@@ -286,33 +286,30 @@ impl OrbitServer {
                 {
                     // Check if we have a RocksDB provider configured
                     // The addressable provider is registered as "rocksdb_addressable"
-                    match persistence_registry
+                    if let Ok(_provider) = persistence_registry
                         .get_addressable_provider("rocksdb_addressable")
                         .await
                     {
-                        Ok(_provider) => {
-                            // Create a separate RocksDB instance for PostgreSQL table storage
-                            // Use the same data directory structure as the server but with postgresql subdirectory
-                            let pg_data_path = "./orbit_integrated_data/postgresql";
+                        // Create a separate RocksDB instance for PostgreSQL table storage
+                        // Use the same data directory structure as the server but with postgresql subdirectory
+                        let pg_data_path = "./orbit_integrated_data/postgresql";
 
-                            match RocksDbTableStorage::new(pg_data_path) {
-                                Ok(storage) => {
-                                    tracing::info!(
-                                        "PostgreSQL using persistent RocksDB storage at: {}",
-                                        pg_data_path
-                                    );
-                                    QueryEngine::new_with_persistent_storage(Arc::new(storage))
-                                }
-                                Err(e) => {
-                                    tracing::warn!("Failed to create PostgreSQL persistent storage, falling back to memory: {}", e);
-                                    QueryEngine::new()
-                                }
+                        match RocksDbTableStorage::new(pg_data_path) {
+                            Ok(storage) => {
+                                tracing::info!(
+                                    "PostgreSQL using persistent RocksDB storage at: {}",
+                                    pg_data_path
+                                );
+                                QueryEngine::new_with_persistent_storage(Arc::new(storage))
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to create PostgreSQL persistent storage, falling back to memory: {}", e);
+                                QueryEngine::new()
                             }
                         }
-                        Err(_) => {
-                            tracing::info!("PostgreSQL using in-memory storage (no RocksDB persistence configured)");
-                            QueryEngine::new()
-                        }
+                    } else {
+                        tracing::info!("PostgreSQL using in-memory storage (no RocksDB persistence configured)");
+                        QueryEngine::new()
                     }
                 }
                 #[cfg(not(feature = "storage-rocksdb"))]
@@ -369,7 +366,7 @@ impl OrbitServer {
         // Start gRPC server (non-blocking)
         let grpc_addr = format!("{}:{}", self.config.bind_address, self.config.port)
             .parse()
-            .map_err(|e| OrbitError::configuration(format!("Invalid bind address: {}", e)))?;
+            .map_err(|e| OrbitError::configuration(format!("Invalid bind address: {e}")))?;
 
         tracing::info!("Starting Orbit gRPC server on {}", grpc_addr);
 
@@ -378,7 +375,7 @@ impl OrbitServer {
             .register_encoded_file_descriptor_set(orbit_proto::FILE_DESCRIPTOR_SET)
             .build_v1()
             .map_err(|e| {
-                OrbitError::configuration(format!("Failed to build reflection service: {}", e))
+                OrbitError::configuration(format!("Failed to build reflection service: {e}"))
             })?;
 
         let mut server_builder = Server::builder();
@@ -389,12 +386,12 @@ impl OrbitServer {
                 let cert = tokio::fs::read_to_string(&tls.cert_file)
                     .await
                     .map_err(|e| {
-                        OrbitError::configuration(format!("Failed to read cert file: {}", e))
+                        OrbitError::configuration(format!("Failed to read cert file: {e}"))
                     })?;
                 let key = tokio::fs::read_to_string(&tls.key_file)
                     .await
                     .map_err(|e| {
-                        OrbitError::configuration(format!("Failed to read key file: {}", e))
+                        OrbitError::configuration(format!("Failed to read key file: {e}"))
                     })?;
 
                 let identity = Identity::from_pem(cert, key);
@@ -403,7 +400,7 @@ impl OrbitServer {
                 if tls.require_client_cert {
                     if let Some(ref ca_path) = tls.ca_cert_file {
                         let ca_cert = tokio::fs::read_to_string(ca_path).await.map_err(|e| {
-                            OrbitError::configuration(format!("Failed to read CA cert file: {}", e))
+                            OrbitError::configuration(format!("Failed to read CA cert file: {e}"))
                         })?;
                         let client_ca_root = Certificate::from_pem(ca_cert);
                         tls_config = tls_config.client_ca_root(client_ca_root);
@@ -411,7 +408,7 @@ impl OrbitServer {
                 }
 
                 server_builder = server_builder.tls_config(tls_config).map_err(|e| {
-                    OrbitError::configuration(format!("Failed to configure TLS: {}", e))
+                    OrbitError::configuration(format!("Failed to configure TLS: {e}"))
                 })?;
 
                 tracing::info!(
@@ -590,7 +587,7 @@ impl OrbitServer {
             let (result, _index, _remaining) = futures::future::select_all(server_tasks).await;
             if let Err(e) = result {
                 tracing::error!("One of the servers failed: {}", e);
-                return Err(OrbitError::network(format!("Server task failed: {}", e)));
+                return Err(OrbitError::network(format!("Server task failed: {e}")));
             }
         }
 

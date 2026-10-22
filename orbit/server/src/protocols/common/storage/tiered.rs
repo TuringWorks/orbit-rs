@@ -116,9 +116,9 @@ impl TieredTableStorage {
 
         // Get schema for this table
         let schemas = self.schemas.read().await;
-        let schema = schemas.get(table_name).ok_or_else(|| {
-            ProtocolError::Other(format!("Table schema not found: {}", table_name))
-        })?;
+        let schema = schemas
+            .get(table_name)
+            .ok_or_else(|| ProtocolError::Other(format!("Table schema not found: {table_name}")))?;
 
         // Convert TableSchema columns to HybridColumnSchema
         let hybrid_columns: Vec<HybridColumnSchema> = schema
@@ -226,8 +226,7 @@ impl TableStorage for TieredTableStorage {
                 Err(e) => {
                     error!("Failed to open RocksDB at {:?}: {}", db_path, e);
                     return Err(ProtocolError::Other(format!(
-                        "Failed to initialize RocksDB: {}",
-                        e
+                        "Failed to initialize RocksDB: {e}"
                     )));
                 }
             }
@@ -298,10 +297,10 @@ impl TableStorage for TieredTableStorage {
 
             let key = format!("schema:{}", schema.name);
             let value = serde_json::to_vec(schema)
-                .map_err(|e| ProtocolError::Other(format!("Failed to serialize schema: {}", e)))?;
+                .map_err(|e| ProtocolError::Other(format!("Failed to serialize schema: {e}")))?;
 
             db.put_cf(schemas_cf, key.as_bytes(), &value).map_err(|e| {
-                ProtocolError::Other(format!("Failed to persist schema to RocksDB: {}", e))
+                ProtocolError::Other(format!("Failed to persist schema to RocksDB: {e}"))
             })?;
         }
 
@@ -342,7 +341,7 @@ impl TableStorage for TieredTableStorage {
         let schema = self.schemas.read().await;
         let table_schema = schema
             .get(table_name)
-            .ok_or_else(|| ProtocolError::Other(format!("Table not found: {}", table_name)))?;
+            .ok_or_else(|| ProtocolError::Other(format!("Table not found: {table_name}")))?;
 
         let mut values = Vec::new();
         for col in &table_schema.columns {
@@ -362,7 +361,7 @@ impl TableStorage for TieredTableStorage {
                 .ok_or_else(|| ProtocolError::Other("Data column family not found".to_string()))?;
 
             let row_id = format!("{}:{}", table_name, uuid::Uuid::new_v4().simple());
-            let key = format!("row:{}:{}", table_name, row_id);
+            let key = format!("row:{table_name}:{row_id}");
 
             // Serialize row data as JSON
             let mut row_json = serde_json::Map::new();
@@ -385,10 +384,10 @@ impl TableStorage for TieredTableStorage {
             }
 
             let value = serde_json::to_vec(&row_json)
-                .map_err(|e| ProtocolError::Other(format!("Failed to serialize row: {}", e)))?;
+                .map_err(|e| ProtocolError::Other(format!("Failed to serialize row: {e}")))?;
 
             db.put_cf(data_cf, key.as_bytes(), &value).map_err(|e| {
-                ProtocolError::Other(format!("Failed to persist row to RocksDB: {}", e))
+                ProtocolError::Other(format!("Failed to persist row to RocksDB: {e}"))
             })?;
         }
 
@@ -421,7 +420,7 @@ impl TableStorage for TieredTableStorage {
         let schema = self.schemas.read().await;
         let table_schema = schema
             .get(table_name)
-            .ok_or_else(|| ProtocolError::Other(format!("Table not found: {}", table_name)))?;
+            .ok_or_else(|| ProtocolError::Other(format!("Table not found: {table_name}")))?;
 
         // Scan all data from hot tier
         let row_values_list = manager.scan_all().await?;

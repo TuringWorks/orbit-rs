@@ -125,7 +125,7 @@ impl Decoder for MongoCodec {
         let body_len = message_length as usize - 16;
         let mut body_slice = vec![0u8; body_len];
         std::io::Read::read_exact(&mut cursor, &mut body_slice)
-            .map_err(|e| OrbitError::network(format!("IO error: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("IO error: {e}")))?;
 
         // Consume bytes from src
         src.advance(message_length as usize);
@@ -152,7 +152,7 @@ impl Decoder for MongoCodec {
                 let pos = body_cursor.position();
                 let mut reader = &body_cursor.get_ref()[pos as usize..];
                 let query = bson::Document::from_reader(&mut reader)
-                    .map_err(|e| OrbitError::network(format!("Invalid BSON query: {}", e)))?;
+                    .map_err(|e| OrbitError::network(format!("Invalid BSON query: {e}")))?;
 
                 // Update cursor position after reading BSON
                 // BSON document starts with length (i32)
@@ -169,7 +169,7 @@ impl Decoder for MongoCodec {
                         let pos = body_cursor.position();
                         let mut reader = &body_cursor.get_ref()[pos as usize..];
                         Some(bson::Document::from_reader(&mut reader).map_err(|e| {
-                            OrbitError::network(format!("Invalid BSON selector: {}", e))
+                            OrbitError::network(format!("Invalid BSON selector: {e}"))
                         })?)
                     } else {
                         None
@@ -210,7 +210,7 @@ impl Decoder for MongoCodec {
                             let pos = body_cursor.position();
                             let mut reader = &body_cursor.get_ref()[pos as usize..];
                             let doc = bson::Document::from_reader(&mut reader).map_err(|e| {
-                                OrbitError::network(format!("Invalid BSON body: {}", e))
+                                OrbitError::network(format!("Invalid BSON body: {e}"))
                             })?;
 
                             let doc_size = u32::from_le_bytes(
@@ -242,8 +242,7 @@ impl Decoder for MongoCodec {
                                 let doc =
                                     bson::Document::from_reader(&mut reader).map_err(|e| {
                                         OrbitError::network(format!(
-                                            "Invalid BSON sequence doc: {}",
-                                            e
+                                            "Invalid BSON sequence doc: {e}"
                                         ))
                                     })?;
 
@@ -264,8 +263,7 @@ impl Decoder for MongoCodec {
                         }
                         _ => {
                             return Err(OrbitError::network(format!(
-                                "Unknown OP_MSG section kind: {}",
-                                kind
+                                "Unknown OP_MSG section kind: {kind}"
                             )));
                         }
                     }
@@ -302,7 +300,7 @@ impl Decoder for MongoCodec {
                         let mut decoder = flate2::read::ZlibDecoder::new(compressed_data);
                         let mut buf = Vec::with_capacity(uncompressed_size as usize);
                         decoder.read_to_end(&mut buf).map_err(|e| {
-                            OrbitError::network(format!("Zlib decompression failed: {}", e))
+                            OrbitError::network(format!("Zlib decompression failed: {e}"))
                         })?;
                         buf
                     }
@@ -316,8 +314,7 @@ impl Decoder for MongoCodec {
                     }
                     _ => {
                         return Err(OrbitError::network(format!(
-                            "Unknown compressor ID: {}",
-                            compressor_id
+                            "Unknown compressor ID: {compressor_id}"
                         )))
                     }
                 };
@@ -394,7 +391,7 @@ impl Encoder<MongoMessage> for MongoCodec {
                 for doc in &documents {
                     let mut buf = Vec::new();
                     doc.to_writer(&mut buf)
-                        .map_err(|e| OrbitError::network(format!("BSON encode error: {}", e)))?;
+                        .map_err(|e| OrbitError::network(format!("BSON encode error: {e}")))?;
                     doc_bytes.extend_from_slice(&buf);
                 }
                 body_len += doc_bytes.len();
@@ -428,7 +425,7 @@ impl Encoder<MongoMessage> for MongoCodec {
                             body_buf.put_u8(KIND_BODY);
                             let mut buf = Vec::new();
                             doc.to_writer(&mut buf).map_err(|e| {
-                                OrbitError::network(format!("BSON encode error: {}", e))
+                                OrbitError::network(format!("BSON encode error: {e}"))
                             })?;
                             body_buf.put_slice(&buf);
                         }
@@ -446,7 +443,7 @@ impl Encoder<MongoMessage> for MongoCodec {
                             for doc in documents {
                                 let mut buf = Vec::new();
                                 doc.to_writer(&mut buf).map_err(|e| {
-                                    OrbitError::network(format!("BSON encode error: {}", e))
+                                    OrbitError::network(format!("BSON encode error: {e}"))
                                 })?;
                                 seq_buf.put_slice(&buf);
                             }

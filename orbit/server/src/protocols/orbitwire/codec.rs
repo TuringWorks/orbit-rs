@@ -143,13 +143,13 @@ impl std::fmt::Display for CodecError {
         match self {
             CodecError::InvalidMagic => write!(f, "Invalid magic bytes"),
             CodecError::VersionMismatch { expected, got } => {
-                write!(f, "Version mismatch: expected {}, got {}", expected, got)
+                write!(f, "Version mismatch: expected {expected}, got {got}")
             }
             CodecError::FrameTooLarge => write!(f, "Frame too large"),
             CodecError::DecompressionError => write!(f, "Decompression error"),
             CodecError::CompressionError => write!(f, "Compression error"),
-            CodecError::IoError(e) => write!(f, "IO error: {}", e),
-            CodecError::FrameError(e) => write!(f, "Frame error: {}", e),
+            CodecError::IoError(e) => write!(f, "IO error: {e}"),
+            CodecError::FrameError(e) => write!(f, "Frame error: {e}"),
         }
     }
 }

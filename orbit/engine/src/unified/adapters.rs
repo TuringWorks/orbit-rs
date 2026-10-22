@@ -140,7 +140,7 @@ impl RedisAdapter {
         if namespace == self.default_namespace {
             key.to_string()
         } else {
-            format!("{}:{}", namespace, key)
+            format!("{namespace}:{key}")
         }
     }
 
@@ -411,7 +411,10 @@ impl RedisAdapter {
             _ => BTreeMap::new(),
         };
 
-        let current = map.get(field).and_then(|v| v.as_int()).unwrap_or(0);
+        let current = map
+            .get(field)
+            .and_then(super::types::UniversalValue::as_int)
+            .unwrap_or(0);
 
         let new_value = current + delta;
         map.insert(field.to_string(), UniversalValue::Int(new_value));
@@ -948,9 +951,7 @@ impl RedisAdapter {
 
         let regex_pattern = pattern.replace("*", ".*").replace("?", ".");
 
-        regex::Regex::new(&format!("^{}$", regex_pattern))
-            .map(|re| re.is_match(key))
-            .unwrap_or(false)
+        regex::Regex::new(&format!("^{regex_pattern}$")).is_ok_and(|re| re.is_match(key))
     }
 }
 
@@ -1055,7 +1056,7 @@ impl SqlAdapter {
                 _ => None,
             })
             .ok_or_else(|| {
-                UnifiedStorageError::InvalidData(format!("Missing primary key: {}", primary_key))
+                UnifiedStorageError::InvalidData(format!("Missing primary key: {primary_key}"))
             })?;
 
         self.base
@@ -1267,7 +1268,7 @@ impl CqlAdapter {
     /// Get the full namespace for a table
     fn full_namespace(&self, table: &str) -> String {
         if let Some(ref ks) = self.current_keyspace {
-            format!("{}:{}", ks, table)
+            format!("{ks}:{table}")
         } else {
             table.to_string()
         }
@@ -1290,10 +1291,7 @@ impl CqlAdapter {
                 _ => None,
             })
             .ok_or_else(|| {
-                UnifiedStorageError::InvalidData(format!(
-                    "Missing partition key: {}",
-                    partition_key
-                ))
+                UnifiedStorageError::InvalidData(format!("Missing partition key: {partition_key}"))
             })?;
 
         self.base

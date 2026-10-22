@@ -2875,7 +2875,7 @@ fn parse_signed_integer(parser: &mut SqlParser) -> ParseResult<i64> {
 
     if let Some(Token::NumericLiteral(n)) = &parser.current_token {
         let value: i64 = n.parse().map_err(|_| ParseError {
-            message: format!("Invalid integer value: {}", n),
+            message: format!("Invalid integer value: {n}"),
             position: parser.position,
             expected: vec!["integer".to_string()],
             found: parser.current_token.clone(),
@@ -5317,7 +5317,7 @@ pub fn parse_create_operator(parser: &mut SqlParser) -> ParseResult<Statement> {
         let mut name = String::new();
         while !parser.matches(&[Token::LeftParen]) {
             if let Some(tok) = &parser.current_token {
-                name.push_str(&format!("{:?}", tok));
+                name.push_str(&format!("{tok:?}"));
             }
             parser.advance()?;
         }

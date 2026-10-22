@@ -46,8 +46,7 @@ impl CypherServer {
         let listener = TcpListener::bind(&self.bind_addr).await.map_err(|e| {
             error!("Failed to bind Cypher server to {}: {}", self.bind_addr, e);
             crate::protocols::error::ProtocolError::Other(format!(
-                "Failed to bind Cypher server: {}",
-                e
+                "Failed to bind Cypher server: {e}"
             ))
         })?;
 

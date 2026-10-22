@@ -107,7 +107,7 @@ async fn reconcile_cluster(
         }
     })
     .await
-    .map_err(|e| ControllerError::FinalizerError(format!("{}", e)))
+    .map_err(|e| ControllerError::FinalizerError(format!("{e}")))
 }
 
 async fn cluster_reconcile(cluster: &OrbitCluster, ctx: Arc<ControllerContext>) -> Result<Action> {
@@ -166,7 +166,7 @@ async fn cluster_reconcile(cluster: &OrbitCluster, ctx: Arc<ControllerContext>) 
             &object_ref,
         )
         .await
-        .map_err(|e| ControllerError::Generic(format!("Failed to publish event: {}", e)))?;
+        .map_err(|e| ControllerError::Generic(format!("Failed to publish event: {e}")))?;
 
     Ok(Action::requeue(Duration::from_secs(300)))
 }
@@ -194,14 +194,14 @@ async fn cluster_cleanup(cluster: &OrbitCluster, ctx: Arc<ControllerContext>) ->
     // Delete Services
     let services: Api<Service> = Api::namespaced(client.clone(), &ns);
     let _ = services
-        .delete(&format!("{}-headless", name), &Default::default())
+        .delete(&format!("{name}-headless"), &Default::default())
         .await;
     let _ = services.delete(&name, &Default::default()).await;
 
     // Delete ConfigMap
     let configmaps: Api<ConfigMap> = Api::namespaced(client.clone(), &ns);
     let _ = configmaps
-        .delete(&format!("{}-config", name), &Default::default())
+        .delete(&format!("{name}-config"), &Default::default())
         .await;
 
     // Delete ServiceAccount
@@ -240,8 +240,7 @@ async fn create_service_account(
         }
         Err(e) => {
             return Err(ControllerError::Generic(format!(
-                "Failed to create ServiceAccount: {}",
-                e
+                "Failed to create ServiceAccount: {e}"
             )))
         }
     }
@@ -292,7 +291,7 @@ async fn create_config_map(
 
     let cm = ConfigMap {
         metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-            name: Some(format!("{}-config", name)),
+            name: Some(format!("{name}-config")),
             namespace: Some(ns.to_string()),
             labels: Some(create_labels(cluster)),
             owner_references: Some(vec![cluster.controller_owner_ref(&()).unwrap()]),
@@ -309,14 +308,13 @@ async fn create_config_map(
             // Update existing ConfigMap
             let patch = Patch::Merge(&cm);
             configmaps
-                .patch(&format!("{}-config", name), &PatchParams::default(), &patch)
+                .patch(&format!("{name}-config"), &PatchParams::default(), &patch)
                 .await?;
             info!("Updated ConfigMap {}-config", name);
         }
         Err(e) => {
             return Err(ControllerError::Generic(format!(
-                "Failed to create ConfigMap: {}",
-                e
+                "Failed to create ConfigMap: {e}"
             )))
         }
     }
@@ -334,7 +332,7 @@ async fn create_headless_service(
 
     let service = Service {
         metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta {
-            name: Some(format!("{}-headless", name)),
+            name: Some(format!("{name}-headless")),
             namespace: Some(ns.to_string()),
             labels: Some(create_labels(cluster)),
             owner_references: Some(vec![cluster.controller_owner_ref(&()).unwrap()]),
@@ -380,8 +378,7 @@ async fn create_headless_service(
         }
         Err(e) => {
             return Err(ControllerError::Generic(format!(
-                "Failed to create headless Service: {}",
-                e
+                "Failed to create headless Service: {e}"
             )))
         }
     }
@@ -446,8 +443,7 @@ async fn create_external_service(
         }
         Err(e) => {
             return Err(ControllerError::Generic(format!(
-                "Failed to create external Service: {}",
-                e
+                "Failed to create external Service: {e}"
             )))
         }
     }
@@ -676,7 +672,7 @@ fn build_pod_volumes(name: &str) -> Vec<k8s_openapi::api::core::v1::Volume> {
     vec![k8s_openapi::api::core::v1::Volume {
         name: "config".to_string(),
         config_map: Some(k8s_openapi::api::core::v1::ConfigMapVolumeSource {
-            name: format!("{}-config", name),
+            name: format!("{name}-config"),
             default_mode: Some(0o644),
             ..Default::default()
         }),
@@ -691,7 +687,7 @@ fn build_statefulset_spec(
     pod_spec: PodSpec,
 ) -> StatefulSetSpec {
     StatefulSetSpec {
-        service_name: format!("{}-headless", name),
+        service_name: format!("{name}-headless"),
         replicas: Some(cluster.spec.replicas),
         selector: k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector {
             match_labels: Some(create_selector_labels(cluster)),
@@ -807,8 +803,7 @@ async fn deploy_statefulset(
         }
         Err(e) => {
             return Err(ControllerError::Generic(format!(
-                "Failed to create StatefulSet: {}",
-                e
+                "Failed to create StatefulSet: {e}"
             )))
         }
     }
@@ -834,7 +829,7 @@ async fn update_cluster_status(
         }
         .to_string(),
         last_transition_time: Some(chrono::Utc::now()),
-        reason: Some(format!("{:?}", phase)),
+        reason: Some(format!("{phase:?}")),
         message: Some(message.to_string()),
     };
 

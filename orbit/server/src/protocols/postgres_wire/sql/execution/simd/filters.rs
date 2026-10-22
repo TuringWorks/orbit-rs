@@ -34,7 +34,7 @@ impl SimdFilter<i32> for SimdFilterI32 {
     }
 
     fn filter_ne(&self, values: &[i32], target: i32, result: &mut Vec<usize>) {
-        filter_ne_scalar(values, target, result)
+        filter_ne_scalar(values, target, result);
     }
 
     fn filter_lt(&self, values: &[i32], target: i32, result: &mut Vec<usize>) {
@@ -46,7 +46,7 @@ impl SimdFilter<i32> for SimdFilterI32 {
     }
 
     fn filter_le(&self, values: &[i32], target: i32, result: &mut Vec<usize>) {
-        filter_le_scalar(values, target, result)
+        filter_le_scalar(values, target, result);
     }
 
     fn filter_gt(&self, values: &[i32], target: i32, result: &mut Vec<usize>) {
@@ -58,7 +58,7 @@ impl SimdFilter<i32> for SimdFilterI32 {
     }
 
     fn filter_ge(&self, values: &[i32], target: i32, result: &mut Vec<usize>) {
-        filter_ge_scalar(values, target, result)
+        filter_ge_scalar(values, target, result);
     }
 }
 
@@ -258,27 +258,27 @@ impl Default for SimdFilterI64 {
 
 impl SimdFilter<i64> for SimdFilterI64 {
     fn filter_eq(&self, values: &[i64], target: i64, result: &mut Vec<usize>) {
-        filter_eq_scalar(values, target, result)
+        filter_eq_scalar(values, target, result);
     }
 
     fn filter_ne(&self, values: &[i64], target: i64, result: &mut Vec<usize>) {
-        filter_ne_scalar(values, target, result)
+        filter_ne_scalar(values, target, result);
     }
 
     fn filter_lt(&self, values: &[i64], target: i64, result: &mut Vec<usize>) {
-        filter_lt_scalar(values, target, result)
+        filter_lt_scalar(values, target, result);
     }
 
     fn filter_le(&self, values: &[i64], target: i64, result: &mut Vec<usize>) {
-        filter_le_scalar(values, target, result)
+        filter_le_scalar(values, target, result);
     }
 
     fn filter_gt(&self, values: &[i64], target: i64, result: &mut Vec<usize>) {
-        filter_gt_scalar(values, target, result)
+        filter_gt_scalar(values, target, result);
     }
 
     fn filter_ge(&self, values: &[i64], target: i64, result: &mut Vec<usize>) {
-        filter_ge_scalar(values, target, result)
+        filter_ge_scalar(values, target, result);
     }
 }
 
@@ -304,27 +304,27 @@ impl Default for SimdFilterF64 {
 
 impl SimdFilter<f64> for SimdFilterF64 {
     fn filter_eq(&self, values: &[f64], target: f64, result: &mut Vec<usize>) {
-        filter_eq_scalar(values, target, result)
+        filter_eq_scalar(values, target, result);
     }
 
     fn filter_ne(&self, values: &[f64], target: f64, result: &mut Vec<usize>) {
-        filter_ne_scalar(values, target, result)
+        filter_ne_scalar(values, target, result);
     }
 
     fn filter_lt(&self, values: &[f64], target: f64, result: &mut Vec<usize>) {
-        filter_lt_scalar(values, target, result)
+        filter_lt_scalar(values, target, result);
     }
 
     fn filter_le(&self, values: &[f64], target: f64, result: &mut Vec<usize>) {
-        filter_le_scalar(values, target, result)
+        filter_le_scalar(values, target, result);
     }
 
     fn filter_gt(&self, values: &[f64], target: f64, result: &mut Vec<usize>) {
-        filter_gt_scalar(values, target, result)
+        filter_gt_scalar(values, target, result);
     }
 
     fn filter_ge(&self, values: &[f64], target: f64, result: &mut Vec<usize>) {
-        filter_ge_scalar(values, target, result)
+        filter_ge_scalar(values, target, result);
     }
 }
 
