@@ -585,12 +585,27 @@ impl OrbitServer {
             }));
         }
 
-        // Wait for any server to finish (which likely means an error occurred)
+        // Wait for any server to finish or for a process shutdown signal. The
+        // signal path marks the node unhealthy before listener tasks are
+        // dropped, so load balancers stop routing new work first.
         if !server_tasks.is_empty() {
-            let (result, _index, _remaining) = futures::future::select_all(server_tasks).await;
-            if let Err(e) = result {
-                tracing::error!("One of the servers failed: {}", e);
-                return Err(OrbitError::network(format!("Server task failed: {}", e)));
+            let server_tasks_future = futures::future::select_all(server_tasks);
+            tokio::pin!(server_tasks_future);
+            tokio::select! {
+                result = &mut server_tasks_future => {
+                    let (result, _index, _remaining) = result;
+                    if let Err(e) = result {
+                        tracing::error!("One of the servers failed: {}", e);
+                        return Err(OrbitError::network(format!("Server task failed: {}", e)));
+                    }
+                }
+                signal = tokio::signal::ctrl_c() => {
+                    match signal {
+                        Ok(()) => tracing::info!("Shutdown signal received"),
+                        Err(e) => tracing::warn!("Unable to listen for shutdown signal: {}", e),
+                    }
+                    self.shutdown().await?;
+                }
             }
         }
 

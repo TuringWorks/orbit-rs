@@ -636,6 +636,9 @@ fn select_setting_function(select_lower: &str, select_raw: &str) -> Option<Query
 
 #[cfg(test)]
 mod tests {
+    /// The role list is process-wide, so tests that read or change it take turns.
+    static ROLE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     use super::*;
 
     fn single(r: Option<QueryResult>) -> Option<String> {
@@ -757,6 +760,7 @@ mod tests {
 
     #[test]
     fn pgadmin_browser_probes() {
+        let _guard = ROLE_TEST_LOCK.lock();
         let cases = [
             ("SELECT db.oid as did, db.datname as name, ta.spcname as spcname FROM pg_catalog.pg_database db LEFT OUTER JOIN pg_catalog.pg_tablespace ta ON db.dattablespace = ta.oid ORDER BY datname", 8, 1),
             ("SELECT r.oid, r.rolname, r.rolcanlogin, r.rolsuper, d.description FROM pg_catalog.pg_roles r LEFT JOIN pg_catalog.pg_shdescription d ON d.objoid = r.oid ORDER BY r.rolcanlogin", 5, 1),
@@ -788,6 +792,7 @@ mod tests {
 
     #[test]
     fn role_commands_update_the_roles_tree() {
+        let _guard = ROLE_TEST_LOCK.lock();
         let tag = |sql| match try_handle(sql, "d", "u") {
             Some(QueryResult::Command { tag }) => tag,
             other => panic!("unexpected {other:?}"),
