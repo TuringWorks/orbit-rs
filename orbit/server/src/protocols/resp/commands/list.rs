@@ -98,7 +98,7 @@ impl ListCommands {
         let result = self
             .base
             .local_registry
-            .execute_list(&key, "lpush", &[serde_json::to_value(&values).unwrap()])
+            .execute_list(&key, "lpush", &[serde_json::json!(values)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
@@ -114,7 +114,7 @@ impl ListCommands {
             .await
         {
             if let Err(e) = actor_ref
-                .invoke::<usize>("lpush", vec![serde_json::to_value(&values).unwrap()])
+                .invoke::<usize>("lpush", vec![serde_json::json!(values)])
                 .await
             {
                 tracing::error!("Failed to persist LPUSH to OrbitClient: {}", e);
@@ -143,7 +143,7 @@ impl ListCommands {
         let result = self
             .base
             .local_registry
-            .execute_list(&key, "rpush", &[serde_json::to_value(&values).unwrap()])
+            .execute_list(&key, "rpush", &[serde_json::json!(values)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
@@ -159,7 +159,7 @@ impl ListCommands {
             .await
         {
             if let Err(e) = actor_ref
-                .invoke::<usize>("rpush", vec![serde_json::to_value(&values).unwrap()])
+                .invoke::<usize>("rpush", vec![serde_json::json!(values)])
                 .await
             {
                 tracing::error!("Failed to persist RPUSH to OrbitClient: {}", e);
@@ -189,7 +189,7 @@ impl ListCommands {
         let result = self
             .base
             .local_registry
-            .execute_list(&key, "lpop", &[serde_json::to_value(count).unwrap()])
+            .execute_list(&key, "lpop", &[serde_json::json!(count)])
             .await;
 
         let popped_items: Result<Vec<String>, _> = result
@@ -207,7 +207,7 @@ impl ListCommands {
             .await
         {
             if let Err(e) = actor_ref
-                .invoke::<Vec<String>>("lpop", vec![serde_json::to_value(count).unwrap()])
+                .invoke::<Vec<String>>("lpop", vec![serde_json::json!(count)])
                 .await
             {
                 tracing::error!("Failed to persist LPOP to OrbitClient: {}", e);
@@ -254,7 +254,7 @@ impl ListCommands {
         let result = self
             .base
             .local_registry
-            .execute_list(&key, "rpop", &[serde_json::to_value(count).unwrap()])
+            .execute_list(&key, "rpop", &[serde_json::json!(count)])
             .await;
 
         let popped_items: Result<Vec<String>, _> = result
@@ -272,7 +272,7 @@ impl ListCommands {
             .await
         {
             if let Err(e) = actor_ref
-                .invoke::<Vec<String>>("rpop", vec![serde_json::to_value(count).unwrap()])
+                .invoke::<Vec<String>>("rpop", vec![serde_json::json!(count)])
                 .await
             {
                 tracing::error!("Failed to persist RPOP to OrbitClient: {}", e);
@@ -314,8 +314,8 @@ impl ListCommands {
                 &key,
                 "lrange",
                 &[
-                    serde_json::to_value(start).unwrap(),
-                    serde_json::to_value(stop).unwrap(),
+                    serde_json::json!(start),
+                    serde_json::json!(stop),
                 ],
             )
             .await;
@@ -340,8 +340,8 @@ impl ListCommands {
                         .invoke::<Vec<String>>(
                             "lrange",
                             vec![
-                                serde_json::to_value(start).unwrap(),
-                                serde_json::to_value(stop).unwrap(),
+                                serde_json::json!(start),
+                                serde_json::json!(stop),
                             ],
                         )
                         .await
@@ -391,8 +391,8 @@ impl ListCommands {
                     .invoke::<Vec<String>>(
                         "lrange",
                         vec![
-                            serde_json::to_value(start).unwrap(),
-                            serde_json::to_value(stop).unwrap(),
+                            serde_json::json!(start),
+                            serde_json::json!(stop),
                         ],
                     )
                     .await
@@ -466,7 +466,7 @@ impl ListCommands {
         let result = self
             .base
             .local_registry
-            .execute_list(&key, "lindex", &[serde_json::to_value(index).unwrap()])
+            .execute_list(&key, "lindex", &[serde_json::json!(index)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
@@ -488,7 +488,7 @@ impl ListCommands {
                 .await
             {
                 if let Ok(Some(remote_value)) = actor_ref
-                    .invoke::<Option<String>>("lindex", vec![serde_json::to_value(index).unwrap()])
+                    .invoke::<Option<String>>("lindex", vec![serde_json::json!(index)])
                     .await
                 {
                     debug!("LINDEX {} {} -> {} (OrbitClient)", key, index, remote_value);
@@ -541,8 +541,8 @@ impl ListCommands {
                 .invoke::<bool>(
                     "lset",
                     vec![
-                        serde_json::to_value(index).unwrap(),
-                        serde_json::to_value(value.clone()).unwrap(),
+                        serde_json::json!(index),
+                        serde_json::json!(value),
                     ],
                 )
                 .await
@@ -598,8 +598,8 @@ impl ListCommands {
                 .invoke::<usize>(
                     "lrem",
                     vec![
-                        serde_json::to_value(count).unwrap(),
-                        serde_json::to_value(element.clone()).unwrap(),
+                        serde_json::json!(count),
+                        serde_json::json!(element),
                     ],
                 )
                 .await
@@ -644,8 +644,8 @@ impl ListCommands {
                 .invoke::<()>(
                     "ltrim",
                     vec![
-                        serde_json::to_value(start).unwrap(),
-                        serde_json::to_value(stop).unwrap(),
+                        serde_json::json!(start),
+                        serde_json::json!(stop),
                     ],
                 )
                 .await

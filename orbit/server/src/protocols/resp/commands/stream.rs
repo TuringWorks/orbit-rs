@@ -165,7 +165,7 @@ impl StreamCommands {
         let id_value = if entry_id == "*" {
             serde_json::Value::Null
         } else {
-            serde_json::to_value(&entry_id).unwrap()
+            serde_json::json!(entry_id)
         };
 
         let result = self
@@ -174,7 +174,7 @@ impl StreamCommands {
             .execute_stream(
                 &key,
                 "xadd",
-                &[id_value, serde_json::to_value(&fields).unwrap()],
+                &[id_value, serde_json::json!(fields)],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
@@ -233,11 +233,11 @@ impl StreamCommands {
         };
 
         let mut rpc_args = vec![
-            serde_json::to_value(&start).unwrap(),
-            serde_json::to_value(&end).unwrap(),
+            serde_json::json!(start),
+            serde_json::json!(end),
         ];
         if let Some(c) = count {
-            rpc_args.push(serde_json::to_value(c).unwrap());
+            rpc_args.push(serde_json::json!(c));
         }
 
         let result = self
@@ -284,11 +284,11 @@ impl StreamCommands {
         };
 
         let mut rpc_args = vec![
-            serde_json::to_value(&end).unwrap(),
-            serde_json::to_value(&start).unwrap(),
+            serde_json::json!(end),
+            serde_json::json!(start),
         ];
         if let Some(c) = count {
-            rpc_args.push(serde_json::to_value(c).unwrap());
+            rpc_args.push(serde_json::json!(c));
         }
 
         let result = self
@@ -382,9 +382,9 @@ impl StreamCommands {
                 id
             };
 
-            let mut rpc_args = vec![serde_json::to_value(read_id).unwrap()];
+            let mut rpc_args = vec![serde_json::json!(read_id)];
             if let Some(c) = count {
-                rpc_args.push(serde_json::to_value(c).unwrap());
+                rpc_args.push(serde_json::json!(c));
             }
 
             let result = self
@@ -457,8 +457,8 @@ impl StreamCommands {
                 &key,
                 "xtrim",
                 &[
-                    serde_json::to_value(max_len).unwrap(),
-                    serde_json::to_value(approximate).unwrap(),
+                    serde_json::json!(max_len),
+                    serde_json::json!(approximate),
                 ],
             )
             .await
@@ -486,7 +486,7 @@ impl StreamCommands {
         let result = self
             .base
             .local_registry
-            .execute_stream(&key, "xdel", &[serde_json::to_value(&ids).unwrap()])
+            .execute_stream(&key, "xdel", &[serde_json::json!(ids)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
 
@@ -566,8 +566,8 @@ impl StreamCommands {
                         &key,
                         "xgroup_create",
                         &[
-                            serde_json::to_value(&group_name).unwrap(),
-                            serde_json::to_value(&start_id).unwrap(),
+                            serde_json::json!(group_name),
+                            serde_json::json!(start_id),
                         ],
                     )
                     .await
@@ -592,7 +592,7 @@ impl StreamCommands {
                     .execute_stream(
                         &key,
                         "xgroup_destroy",
-                        &[serde_json::to_value(&group_name).unwrap()],
+                        &[serde_json::json!(group_name)],
                     )
                     .await
                     .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
@@ -693,12 +693,12 @@ impl StreamCommands {
         let mut results = Vec::new();
         for (key, id) in keys.iter().zip(ids.iter()) {
             let mut rpc_args = vec![
-                serde_json::to_value(&group_name).unwrap(),
-                serde_json::to_value(&consumer_name).unwrap(),
-                serde_json::to_value(id).unwrap(),
+                serde_json::json!(group_name),
+                serde_json::json!(consumer_name),
+                serde_json::json!(id),
             ];
             if let Some(c) = count {
-                rpc_args.push(serde_json::to_value(c).unwrap());
+                rpc_args.push(serde_json::json!(c));
             }
 
             let result = self
@@ -761,8 +761,8 @@ impl StreamCommands {
                 &key,
                 "xack",
                 &[
-                    serde_json::to_value(&group_name).unwrap(),
-                    serde_json::to_value(&ids).unwrap(),
+                    serde_json::json!(group_name),
+                    serde_json::json!(ids),
                 ],
             )
             .await
@@ -791,7 +791,7 @@ impl StreamCommands {
             .execute_stream(
                 &key,
                 "xpending",
-                &[serde_json::to_value(&group_name).unwrap()],
+                &[serde_json::json!(group_name)],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("{e}")))?;
@@ -846,7 +846,7 @@ impl StreamCommands {
         let _result = self
             .base
             .local_registry
-            .execute_stream(&key, "xsetid", &[serde_json::to_value(&last_id).unwrap()])
+            .execute_stream(&key, "xsetid", &[serde_json::json!(last_id)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("{e}")))?;
 

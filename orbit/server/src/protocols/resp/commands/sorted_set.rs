@@ -117,8 +117,8 @@ impl SortedSetCommands {
                     &key,
                     "zadd",
                     &[
-                        serde_json::to_value(member.clone()).unwrap(),
-                        serde_json::to_value(score).unwrap(),
+                        serde_json::json!(member),
+                        serde_json::json!(score),
                     ],
                 )
                 .await
@@ -173,7 +173,7 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zscore",
-                &[serde_json::to_value(member.clone()).unwrap()],
+                &[serde_json::json!(member)],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
@@ -217,9 +217,9 @@ impl SortedSetCommands {
                 &key,
                 "zrange",
                 &[
-                    serde_json::to_value(start).unwrap(),
-                    serde_json::to_value(stop).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
+                    serde_json::json!(start),
+                    serde_json::json!(stop),
+                    serde_json::json!(with_scores),
                 ],
             )
             .await
@@ -267,8 +267,8 @@ impl SortedSetCommands {
                 &key,
                 "zincrby",
                 &[
-                    serde_json::to_value(member.clone()).unwrap(),
-                    serde_json::to_value(increment).unwrap(),
+                    serde_json::json!(member),
+                    serde_json::json!(increment),
                 ],
             )
             .await
@@ -301,7 +301,7 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(&key, "zrem", &[serde_json::to_value(&members).unwrap()])
+            .execute_sorted_set(&key, "zrem", &[serde_json::json!(members)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
@@ -328,8 +328,8 @@ impl SortedSetCommands {
                 &key,
                 "zcount",
                 &[
-                    serde_json::to_value(min).unwrap(),
-                    serde_json::to_value(max).unwrap(),
+                    serde_json::json!(min),
+                    serde_json::json!(max),
                 ],
             )
             .await
@@ -356,7 +356,7 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zrank",
-                &[serde_json::to_value(member.clone()).unwrap()],
+                &[serde_json::json!(member)],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
@@ -388,7 +388,7 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zrevrank",
-                &[serde_json::to_value(member.clone()).unwrap()],
+                &[serde_json::json!(member)],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
@@ -430,9 +430,9 @@ impl SortedSetCommands {
                 &key,
                 "zrevrange",
                 &[
-                    serde_json::to_value(start).unwrap(),
-                    serde_json::to_value(stop).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
+                    serde_json::json!(start),
+                    serde_json::json!(stop),
+                    serde_json::json!(with_scores),
                 ],
             )
             .await
@@ -492,9 +492,9 @@ impl SortedSetCommands {
                 &key,
                 "zrangebyscore",
                 &[
-                    serde_json::to_value(min).unwrap(),
-                    serde_json::to_value(max).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
+                    serde_json::json!(min),
+                    serde_json::json!(max),
+                    serde_json::json!(with_scores),
                 ],
             )
             .await
@@ -554,9 +554,9 @@ impl SortedSetCommands {
                 &key,
                 "zrevrangebyscore",
                 &[
-                    serde_json::to_value(max).unwrap(),
-                    serde_json::to_value(min).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
+                    serde_json::json!(max),
+                    serde_json::json!(min),
+                    serde_json::json!(with_scores),
                 ],
             )
             .await
@@ -603,8 +603,8 @@ impl SortedSetCommands {
                 &key,
                 "zremrangebyrank",
                 &[
-                    serde_json::to_value(start).unwrap(),
-                    serde_json::to_value(stop).unwrap(),
+                    serde_json::json!(start),
+                    serde_json::json!(stop),
                 ],
             )
             .await
@@ -636,8 +636,8 @@ impl SortedSetCommands {
                 &key,
                 "zremrangebyscore",
                 &[
-                    serde_json::to_value(min).unwrap(),
-                    serde_json::to_value(max).unwrap(),
+                    serde_json::json!(min),
+                    serde_json::json!(max),
                 ],
             )
             .await
@@ -672,7 +672,7 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(&key, "zpopmin", &[serde_json::to_value(count).unwrap()])
+            .execute_sorted_set(&key, "zpopmin", &[serde_json::json!(count)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
@@ -715,7 +715,7 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(&key, "zpopmax", &[serde_json::to_value(count).unwrap()])
+            .execute_sorted_set(&key, "zpopmax", &[serde_json::json!(count)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
@@ -759,7 +759,7 @@ impl SortedSetCommands {
             let result = self
                 .base
                 .local_registry
-                .execute_sorted_set(&key, "zpopmin", &[serde_json::to_value(1).unwrap()])
+                .execute_sorted_set(&key, "zpopmin", &[serde_json::json!(1)])
                 .await
                 .map_err(|e| {
                     ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
@@ -811,7 +811,7 @@ impl SortedSetCommands {
             let result = self
                 .base
                 .local_registry
-                .execute_sorted_set(&key, "zpopmax", &[serde_json::to_value(1).unwrap()])
+                .execute_sorted_set(&key, "zpopmax", &[serde_json::json!(1)])
                 .await
                 .map_err(|e| {
                     ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
@@ -859,8 +859,8 @@ impl SortedSetCommands {
                 &key,
                 "zlexcount",
                 &[
-                    serde_json::to_value(min.clone()).unwrap(),
-                    serde_json::to_value(max.clone()).unwrap(),
+                    serde_json::json!(min),
+                    serde_json::json!(max),
                 ],
             )
             .await
@@ -893,8 +893,8 @@ impl SortedSetCommands {
                 &key,
                 "zscan",
                 &[
-                    serde_json::to_value(cursor).unwrap(),
-                    serde_json::to_value(count).unwrap(),
+                    serde_json::json!(cursor),
+                    serde_json::json!(count),
                 ],
             )
             .await
@@ -942,7 +942,7 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(&key, "zmscore", &[serde_json::to_value(&members).unwrap()])
+            .execute_sorted_set(&key, "zmscore", &[serde_json::json!(members)])
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
@@ -996,16 +996,16 @@ impl SortedSetCommands {
         }
 
         let mut invoke_args = vec![
-            serde_json::to_value(min.clone()).unwrap(),
-            serde_json::to_value(max.clone()).unwrap(),
+            serde_json::json!(min),
+            serde_json::json!(max),
         ];
         if let Some(off) = offset {
-            invoke_args.push(serde_json::to_value(off).unwrap());
+            invoke_args.push(serde_json::json!(off));
         } else {
             invoke_args.push(serde_json::Value::Null);
         }
         if let Some(cnt) = count {
-            invoke_args.push(serde_json::to_value(cnt).unwrap());
+            invoke_args.push(serde_json::json!(cnt));
         }
 
         let result = self
@@ -1063,16 +1063,16 @@ impl SortedSetCommands {
         }
 
         let mut invoke_args = vec![
-            serde_json::to_value(max.clone()).unwrap(),
-            serde_json::to_value(min.clone()).unwrap(),
+            serde_json::json!(max),
+            serde_json::json!(min),
         ];
         if let Some(off) = offset {
-            invoke_args.push(serde_json::to_value(off).unwrap());
+            invoke_args.push(serde_json::json!(off));
         } else {
             invoke_args.push(serde_json::Value::Null);
         }
         if let Some(cnt) = count {
-            invoke_args.push(serde_json::to_value(cnt).unwrap());
+            invoke_args.push(serde_json::json!(cnt));
         }
 
         let result = self
@@ -1116,8 +1116,8 @@ impl SortedSetCommands {
                 &key,
                 "zremrangebylex",
                 &[
-                    serde_json::to_value(min.clone()).unwrap(),
-                    serde_json::to_value(max.clone()).unwrap(),
+                    serde_json::json!(min),
+                    serde_json::json!(max),
                 ],
             )
             .await
@@ -1165,8 +1165,8 @@ impl SortedSetCommands {
                 &key,
                 "zrandmember",
                 &[
-                    serde_json::to_value(count).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
+                    serde_json::json!(count),
+                    serde_json::json!(with_scores),
                 ],
             )
             .await
@@ -1610,8 +1610,8 @@ impl SortedSetCommands {
                     &destination,
                     "zadd",
                     &[
-                        serde_json::to_value(member).unwrap(),
-                        serde_json::to_value(score).unwrap(),
+                        serde_json::json!(member),
+                        serde_json::json!(score),
                     ],
                 )
                 .await
@@ -1732,8 +1732,8 @@ impl SortedSetCommands {
                     &destination,
                     "zadd",
                     &[
-                        serde_json::to_value(member).unwrap(),
-                        serde_json::to_value(score).unwrap(),
+                        serde_json::json!(member),
+                        serde_json::json!(score),
                     ],
                 )
                 .await
@@ -1807,8 +1807,8 @@ impl SortedSetCommands {
                     &destination,
                     "zadd",
                     &[
-                        serde_json::to_value(member).unwrap(),
-                        serde_json::to_value(score).unwrap(),
+                        serde_json::json!(member),
+                        serde_json::json!(score),
                     ],
                 )
                 .await

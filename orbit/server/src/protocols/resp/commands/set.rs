@@ -76,7 +76,7 @@ impl SetCommands {
         let result = self
             .base
             .local_registry
-            .execute_set(&key, "sadd", &[serde_json::to_value(&members).unwrap()])
+            .execute_set(&key, "sadd", &[serde_json::json!(members)])
             .await;
 
         let added_count: Result<usize, _> = result
@@ -96,7 +96,7 @@ impl SetCommands {
                     .await
                 {
                     if let Err(e) = actor_ref
-                        .invoke::<usize>("sadd", vec![serde_json::to_value(&members).unwrap()])
+                        .invoke::<usize>("sadd", vec![serde_json::json!(members)])
                         .await
                     {
                         tracing::error!("Failed to persist SADD to OrbitClient: {}", e);
@@ -127,7 +127,7 @@ impl SetCommands {
         let result = self
             .base
             .local_registry
-            .execute_set(&key, "srem", &[serde_json::to_value(&members).unwrap()])
+            .execute_set(&key, "srem", &[serde_json::json!(members)])
             .await;
 
         let removed_count: Result<usize, _> = result
@@ -147,7 +147,7 @@ impl SetCommands {
                     .await
                 {
                     if let Err(e) = actor_ref
-                        .invoke::<usize>("srem", vec![serde_json::to_value(&members).unwrap()])
+                        .invoke::<usize>("srem", vec![serde_json::json!(members)])
                         .await
                     {
                         tracing::error!("Failed to persist SREM to OrbitClient: {}", e);
@@ -277,7 +277,7 @@ impl SetCommands {
             .execute_set(
                 &key,
                 "sismember",
-                &[serde_json::to_value(member.clone()).unwrap()],
+                &[serde_json::json!(member)],
             )
             .await
             .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
