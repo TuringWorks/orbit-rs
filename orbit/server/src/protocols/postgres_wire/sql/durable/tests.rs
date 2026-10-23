@@ -618,3 +618,269 @@ mod durability {
         assert_eq!(q(&e, "SELECT id, v FROM d").await, vec![vec!["2", "new"]]);
     }
 }
+
+mod concurrency {
+    use super::*;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    async fn counter() -> Arc<DurableEngine> {
+        let e = Arc::new(DurableEngine::in_memory());
+        x(&e, "CREATE TABLE c (id INTEGER PRIMARY KEY, n INTEGER)").await;
+        x(&e, "INSERT INTO c VALUES (1, 0)").await;
+        e
+    }
+
+    #[tokio::test]
+    async fn readers_are_not_blocked_by_an_open_writer_and_see_only_committed_data() {
+        let e = counter().await;
+        let mut writer = Session::default();
+        run(&e, &mut writer, "BEGIN").await.unwrap();
+        run(&e, &mut writer, "UPDATE c SET n = 5 WHERE id = 1")
+            .await
+            .unwrap();
+        // the writer holds the gate; a reader still answers at once, from the committed state
+        let read = tokio::time::timeout(Duration::from_secs(2), async {
+            q(&e, "SELECT n FROM c").await
+        })
+        .await;
+        assert_eq!(
+            read.expect("a reader must not wait for a writer"),
+            vec![vec!["0"]]
+        );
+        // the writer sees its own change
+        assert_eq!(
+            cells(run(&e, &mut writer, "SELECT n FROM c").await.unwrap()),
+            vec![vec!["5"]]
+        );
+        run(&e, &mut writer, "COMMIT").await.unwrap();
+        assert_eq!(q(&e, "SELECT n FROM c").await, vec![vec!["5"]]);
+    }
+
+    #[tokio::test]
+    async fn a_second_writer_waits_for_the_first() {
+        let e = counter().await;
+        let mut a = Session::default();
+        run(&e, &mut a, "BEGIN").await.unwrap();
+        run(&e, &mut a, "UPDATE c SET n = n + 1 WHERE id = 1")
+            .await
+            .unwrap();
+        let e2 = Arc::clone(&e);
+        let b = tokio::spawn(async move {
+            let mut s = Session::default();
+            run(&e2, &mut s, "UPDATE c SET n = n + 10 WHERE id = 1")
+                .await
+                .unwrap();
+        });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert!(
+            !b.is_finished(),
+            "the second writer must wait for the first to finish"
+        );
+        run(&e, &mut a, "COMMIT").await.unwrap();
+        b.await.unwrap();
+        assert_eq!(
+            q(&e, "SELECT n FROM c").await,
+            vec![vec!["11"]],
+            "neither update is lost"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_increments_lose_nothing() {
+        let e = counter().await;
+        let mut tasks = Vec::new();
+        for _ in 0..8 {
+            let e = Arc::clone(&e);
+            tasks.push(tokio::spawn(async move {
+                for _ in 0..25 {
+                    let mut s = Session::default();
+                    run(&e, &mut s, "BEGIN").await.unwrap();
+                    run(&e, &mut s, "UPDATE c SET n = n + 1 WHERE id = 1")
+                        .await
+                        .unwrap();
+                    run(&e, &mut s, "COMMIT").await.unwrap();
+                }
+            }));
+        }
+        for t in tasks {
+            t.await.unwrap();
+        }
+        assert_eq!(q(&e, "SELECT n FROM c").await, vec![vec!["200"]]);
+    }
+
+    #[tokio::test]
+    async fn read_committed_sees_new_commits_between_statements() {
+        let e = counter().await;
+        let mut r = Session::default();
+        run(&e, &mut r, "BEGIN").await.unwrap();
+        assert_eq!(
+            cells(run(&e, &mut r, "SELECT n FROM c").await.unwrap()),
+            vec![vec!["0"]]
+        );
+        x(&e, "UPDATE c SET n = 7 WHERE id = 1").await;
+        assert_eq!(
+            cells(run(&e, &mut r, "SELECT n FROM c").await.unwrap()),
+            vec![vec!["7"]]
+        );
+        run(&e, &mut r, "COMMIT").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn repeatable_read_keeps_its_snapshot_and_refuses_a_stale_write() {
+        let e = counter().await;
+        let mut r = Session::default();
+        run(&e, &mut r, "BEGIN ISOLATION LEVEL REPEATABLE READ")
+            .await
+            .unwrap();
+        assert_eq!(
+            cells(run(&e, &mut r, "SELECT n FROM c").await.unwrap()),
+            vec![vec!["0"]]
+        );
+        x(&e, "UPDATE c SET n = 7 WHERE id = 1").await;
+        assert_eq!(
+            cells(run(&e, &mut r, "SELECT n FROM c").await.unwrap()),
+            vec![vec!["0"]],
+            "the snapshot does not move"
+        );
+        let stale = msg(run(&e, &mut r, "UPDATE c SET n = 1 WHERE id = 1").await);
+        assert!(stale.contains("[40001]"), "{stale}");
+        run(&e, &mut r, "ROLLBACK").await.unwrap();
+        assert_eq!(q(&e, "SELECT n FROM c").await, vec![vec!["7"]]);
+        // a fresh repeatable-read transaction can write
+        let mut r2 = Session::default();
+        run(&e, &mut r2, "BEGIN ISOLATION LEVEL REPEATABLE READ")
+            .await
+            .unwrap();
+        run(&e, &mut r2, "UPDATE c SET n = 8 WHERE id = 1")
+            .await
+            .unwrap();
+        run(&e, &mut r2, "COMMIT").await.unwrap();
+        assert_eq!(q(&e, "SELECT n FROM c").await, vec![vec!["8"]]);
+    }
+
+    #[tokio::test]
+    async fn a_session_dropped_mid_transaction_releases_the_writer() {
+        let e = counter().await;
+        {
+            let mut s = Session::default();
+            run(&e, &mut s, "BEGIN").await.unwrap();
+            run(&e, &mut s, "UPDATE c SET n = 99 WHERE id = 1")
+                .await
+                .unwrap();
+        }
+        let done = tokio::time::timeout(Duration::from_secs(2), async {
+            x(&e, "UPDATE c SET n = 1 WHERE id = 1").await
+        })
+        .await;
+        assert!(
+            done.is_ok(),
+            "the gate must be free after the session is dropped"
+        );
+        assert_eq!(q(&e, "SELECT n FROM c").await, vec![vec!["1"]]);
+    }
+}
+
+mod replication_unit {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    /// A store that records every committed batch, as a replicated store would ship it.
+    #[derive(Default)]
+    struct Capture(Arc<Mutex<Vec<Vec<Op>>>>);
+
+    #[async_trait::async_trait]
+    impl Persist for Capture {
+        async fn commit(&self, ops: &[Op]) -> Result<(), String> {
+            self.0.lock().unwrap().push(ops.to_vec());
+            Ok(())
+        }
+        fn load(&self) -> Result<Loaded, String> {
+            Ok(Loaded::default())
+        }
+    }
+
+    #[tokio::test]
+    async fn replaying_the_committed_ops_reproduces_the_database() {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let a = DurableEngine::open(Box::new(Capture(Arc::clone(&log)))).unwrap();
+        x(
+            &a,
+            "CREATE TABLE p (id SERIAL PRIMARY KEY, name VARCHAR UNIQUE, n INTEGER)",
+        )
+        .await;
+        x(
+            &a,
+            "CREATE TABLE o (id SERIAL PRIMARY KEY, p_id INTEGER, amt INTEGER)",
+        )
+        .await;
+        x(
+            &a,
+            "INSERT INTO p (name, n) VALUES ('a', 1), ('b', 2), ('c', 3)",
+        )
+        .await;
+        x(
+            &a,
+            "INSERT INTO o (p_id, amt) VALUES (1, 10), (1, 20), (2, 5)",
+        )
+        .await;
+        x(&a, "UPDATE p SET n = n * 10 WHERE name <> 'a'").await;
+        x(&a, "DELETE FROM o WHERE amt = 5").await;
+        x(&a, "ALTER TABLE p ADD COLUMN note VARCHAR DEFAULT 'x'").await;
+        x(&a, "ALTER TABLE o DROP COLUMN amt").await;
+        x(&a, "CREATE INDEX o_p ON o (p_id)").await;
+        let mut s = Session::default();
+        run(&a, &mut s, "BEGIN").await.unwrap();
+        run(&a, &mut s, "INSERT INTO p (name) VALUES ('d')")
+            .await
+            .unwrap();
+        run(&a, &mut s, "TRUNCATE TABLE o").await.unwrap();
+        run(&a, &mut s, "COMMIT").await.unwrap();
+        x(&a, "DROP TABLE o").await;
+        x(&a, "CREATE TABLE o (id SERIAL PRIMARY KEY, label VARCHAR)").await;
+        x(&a, "INSERT INTO o (label) VALUES ('fresh')").await;
+
+        let b = DurableEngine::in_memory();
+        for batch in log.lock().unwrap().iter() {
+            b.apply_replicated(batch).unwrap();
+        }
+        for sql in [
+            "SELECT id, name, n, note FROM p ORDER BY id",
+            "SELECT id, label FROM o ORDER BY id",
+        ] {
+            assert_eq!(q(&a, sql).await, q(&b, sql).await, "{sql}");
+        }
+        // the replica enforces the same unique index and, once it takes over, continues the sequences
+        assert!(run(
+            &b,
+            &mut Session::default(),
+            "INSERT INTO p (name) VALUES ('a')"
+        )
+        .await
+        .is_err());
+        b.became_leader();
+        let next_a = cells(
+            run(
+                &a,
+                &mut Session::default(),
+                "INSERT INTO p (name) VALUES ('e') RETURNING id",
+            )
+            .await
+            .unwrap(),
+        );
+        let next_b = cells(
+            run(
+                &b,
+                &mut Session::default(),
+                "INSERT INTO p (name) VALUES ('f') RETURNING id",
+            )
+            .await
+            .unwrap(),
+        );
+        let (ia, ib): (i64, i64) = (next_a[0][0].parse().unwrap(), next_b[0][0].parse().unwrap());
+        assert!(
+            ib > 4,
+            "a promoted replica must not reuse ids, got {ib} (leader handed out {ia})"
+        );
+    }
+}

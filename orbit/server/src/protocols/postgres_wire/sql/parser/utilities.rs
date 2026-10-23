@@ -15,10 +15,7 @@ pub fn keyword_as_name(token: &Token) -> Option<String> {
     if let Some(n) = token_to_identifier_name(token) {
         return Some(n);
     }
-    let repr = format!("{token:?}");
-    repr.chars()
-        .all(|c| c.is_ascii_alphanumeric())
-        .then(|| repr.to_lowercase())
+    crate::protocols::postgres_wire::sql::lexer::keyword_text(token)
 }
 
 pub fn token_to_identifier_name(token: &Token) -> Option<String> {
@@ -140,9 +137,107 @@ pub fn token_to_identifier_name(token: &Token) -> Option<String> {
         Token::Schema => Some("schema".to_string()),
         Token::Database => Some("database".to_string()),
         Token::Level => Some("level".to_string()),
-        _ => None,
+        // Any other keyword is a valid name unless PostgreSQL reserves it (`label`, `owner`, `comment`, ...).
+        other => {
+            let word = crate::protocols::postgres_wire::sql::lexer::keyword_text(other)?;
+            (!RESERVED_WORDS.contains(&word.as_str())).then_some(word)
+        }
     }
 }
+
+/// Words PostgreSQL does not allow as an unquoted name, plus the words that start or join clauses
+/// here, so that `FROM t WHERE ...` or `FROM a JOIN b` never read the keyword as an alias.
+const RESERVED_WORDS: &[&str] = &[
+    "all",
+    "analyse",
+    "analyze",
+    "and",
+    "any",
+    "array",
+    "as",
+    "asc",
+    "asymmetric",
+    "between",
+    "both",
+    "case",
+    "cast",
+    "check",
+    "collate",
+    "column",
+    "constraint",
+    "create",
+    "cross",
+    "current",
+    "default",
+    "deferrable",
+    "desc",
+    "distinct",
+    "do",
+    "else",
+    "end",
+    "except",
+    "exists",
+    "false",
+    "fetch",
+    "filter",
+    "for",
+    "foreign",
+    "from",
+    "full",
+    "grant",
+    "group",
+    "having",
+    "ilike",
+    "in",
+    "initially",
+    "inner",
+    "intersect",
+    "into",
+    "is",
+    "isnull",
+    "join",
+    "lateral",
+    "leading",
+    "left",
+    "like",
+    "limit",
+    "natural",
+    "not",
+    "notnull",
+    "null",
+    "offset",
+    "on",
+    "only",
+    "or",
+    "order",
+    "outer",
+    "over",
+    "placing",
+    "primary",
+    "references",
+    "returning",
+    "right",
+    "select",
+    "set",
+    "similar",
+    "some",
+    "symmetric",
+    "table",
+    "then",
+    "to",
+    "trailing",
+    "true",
+    "union",
+    "unique",
+    "using",
+    "values",
+    "variadic",
+    "when",
+    "where",
+    "window",
+    "with",
+    "within",
+];
 
 /// Parse a table name (with optional schema qualification)
 pub fn parse_table_name(parser: &mut SqlParser) -> ParseResult<TableName> {

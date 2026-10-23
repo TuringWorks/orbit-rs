@@ -965,7 +965,12 @@ impl ExpressionParser {
             Token::JsonObject => Some("json_object".to_string()),
             Token::JsonArrayAgg => Some("json_arrayagg".to_string()),
             Token::JsonObjectAgg => Some("json_objectagg".to_string()),
-            _ => None,
+            // everything else follows the shared rule: a keyword is a name unless PostgreSQL reserves it
+            other => {
+                crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name(
+                    other,
+                )
+            }
         }
     }
 

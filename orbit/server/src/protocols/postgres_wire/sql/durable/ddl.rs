@@ -16,9 +16,7 @@ use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::sync::Mutex;
 
 fn tag(t: &str) -> R<QueryResult> {
-    Ok(QueryResult::Command {
-        tag: t.to_string(),
-    })
+    Ok(QueryResult::Command { tag: t.to_string() })
 }
 
 /// Table names are matched case-insensitively and without a schema qualifier.
