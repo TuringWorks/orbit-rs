@@ -179,10 +179,21 @@ async fn dashboard_handler(State(_state): State<ServerState>) -> impl IntoRespon
     <title>Orbit Metrics Dashboard</title>
     <meta charset="utf-8">
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .header { background: #2196F3; color: white; padding: 20px; margin-bottom: 20px; }
-        .metric { margin: 10px 0; padding: 10px; background: #f5f5f5; }
-        .status { color: #4CAF50; font-weight: bold; }
+        body { font-family: Arial, sans-serif;
+        margin: 40px;
+        }
+        .header { background: #2196F3;
+        color: white;
+        padding: 20px;
+        margin-bottom: 20px;
+        }
+        .metric { margin: 10px 0;
+        padding: 10px;
+        background: #f5f5f5;
+        }
+        .status { color: #4CAF50;
+        font-weight: bold;
+        }
     </style>
 </head>
 <body>

@@ -283,20 +283,8 @@ fn validate_identifier(ident: &str) -> Result<String, String> {
 /// filter-validation context so a future forbidden-keyword set in the same
 /// module cannot be confused with it.
 const FILTER_FORBIDDEN_KEYWORDS: &[&str] = &[
-    "drop",
-    "delete",
-    "update",
-    "insert",
-    "select",
-    "union",
-    "alter",
-    "create",
-    "truncate",
-    "exec",
-    "execute",
-    "merge",
-    "grant",
-    "revoke",
+    "drop", "delete", "update", "insert", "select", "union", "alter", "create", "truncate", "exec",
+    "execute", "merge", "grant", "revoke",
 ];
 
 /// Returns true if `token` is one of the SQL statement keywords that must
@@ -373,9 +361,8 @@ impl Query {
     /// builder that emits empty SQL, which would mask programming errors.
     pub fn new(table: impl Into<String>) -> Self {
         let table = table.into();
-        validate_sql_identifier(&table).unwrap_or_else(|e| {
-            panic!("Query::new: invalid table identifier: {}", e)
-        });
+        validate_sql_identifier(&table)
+            .unwrap_or_else(|e| panic!("Query::new: invalid table identifier: {}", e));
         Self {
             table,
             columns: Vec::new(),

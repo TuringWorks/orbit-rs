@@ -55,7 +55,7 @@ supervision_strategy = "OneForOne"
 enabled = true
 port = 50051
 max_concurrent_streams = 1000
-max_message_size = 4194304  # 4MB
+max_message_size = 4194304    # 4MB
 
 # gRPC Keep-Alive (optional)
 # [protocols.grpc.keep_alive]
@@ -119,18 +119,18 @@ connection_timeout_secs = 30
 
 [protocols.redis.commands]
 enabled_groups = [
-    "generic",
-    "string",
-    "list",
-    "hash",
-    "set",
-    "zset",
-    "vector",
-    "search",
-    "json",
-    "graph",
-    "stream",
-    "pubsub"
+  "generic",
+  "string",
+  "list",
+  "hash",
+  "set",
+  "zset",
+  "vector",
+  "search",
+  "json",
+  "graph",
+  "stream",
+  "pubsub",
 ]
 disabled_commands = []
 command_timeout_secs = 30
@@ -312,7 +312,7 @@ enable_simd = true
 # -----------------------------------------------------------------------------
 [logging]
 level = "info"
-format = "plain"  # Options: plain, json
+format = "plain" # Options: plain, json
 
 [[logging.outputs]]
 output_type = "stdout"
@@ -365,8 +365,8 @@ connection_timeout_secs = 30
 idle_timeout_secs = 300
 max_lifetime_secs = 3600
 health_check_interval_secs = 30
-load_balancing_strategy = "LeastConnections"  # Options: RoundRobin, LeastConnections, Random, Weighted
-tier = "Application"  # Options: Application, System, Critical
+load_balancing_strategy = "LeastConnections" # Options: RoundRobin, LeastConnections, Random, Weighted
+tier = "Application"                         # Options: Application, System, Critical
 enable_dynamic_sizing = true
 target_utilization = 0.75
 
@@ -413,7 +413,7 @@ circuit_breaker_timeout = 300
 
 [persistence.dynamic.failover]
 enable_auto_failover = true
-strategy = "Priority"  # Options: RoundRobin, Priority, LowestLatency, LoadBased
+strategy = "Priority"       # Options: RoundRobin, Priority, LowestLatency, LoadBased
 max_attempts = 3
 retry_delay = 10
 enable_failback = true
@@ -698,16 +698,24 @@ backend = "s3"  # Options: s3, azure, gcs, minio
 # Tier migration configuration
 [unified_storage.tier_migration]
 enabled = true
-hot_to_warm_after_secs = 3600        # Move to warm after 1 hour of inactivity
-warm_to_cold_after_secs = 604800     # Move to cold after 7 days of inactivity
+hot_to_warm_after_secs = 3600    # Move to warm after 1 hour of inactivity
+warm_to_cold_after_secs = 604800 # Move to cold after 7 days of inactivity
 background_migration = true
 migration_batch_size = 1000
 
 # Cross-protocol configuration
 [unified_storage.cross_protocol]
 enabled = true
-shared_protocols = ["redis", "postgresql", "mysql", "cql", "cypher", "aql", "rest"]
-namespace_strategy = "auto"  # Options: auto, explicit
+shared_protocols = [
+  "redis",
+  "postgresql",
+  "mysql",
+  "cql",
+  "cypher",
+  "aql",
+  "rest",
+]
+namespace_strategy = "auto" # Options: auto, explicit
 default_namespace = "default"
 enable_schema_inference = true
 schema_cache_size = 10000
@@ -717,7 +725,7 @@ schema_cache_size = 10000
 enabled = true
 check_interval_secs = 60
 batch_size = 1000
-default_ttl_secs = 0  # 0 = no default TTL
+default_ttl_secs = 0     # 0 = no default TTL
 
 # Actor tier placement (advanced)
 [unified_storage.actor_placement]

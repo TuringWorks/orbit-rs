@@ -103,27 +103,23 @@ async fn test_large_dataset_join() {
     let left_size = 10000;
     let right_size = 5000;
 
-    let left = vec![
-        ColumnarColumn {
-            name: "id".to_string(),
-            i32_values: Some((0..left_size as i32).collect()),
-            i64_values: None,
-            f64_values: None,
-            string_values: None,
-            null_bitmap: None,
-        },
-    ];
+    let left = vec![ColumnarColumn {
+        name: "id".to_string(),
+        i32_values: Some((0..left_size as i32).collect()),
+        i64_values: None,
+        f64_values: None,
+        string_values: None,
+        null_bitmap: None,
+    }];
 
-    let right = vec![
-        ColumnarColumn {
-            name: "id".to_string(),
-            i32_values: Some((0..right_size as i32).map(|i| i * 2).collect()),
-            i64_values: None,
-            f64_values: None,
-            string_values: None,
-            null_bitmap: None,
-        },
-    ];
+    let right = vec![ColumnarColumn {
+        name: "id".to_string(),
+        i32_values: Some((0..right_size as i32).map(|i| i * 2).collect()),
+        i64_values: None,
+        f64_values: None,
+        string_values: None,
+        null_bitmap: None,
+    }];
 
     let results = joins
         .hash_join(&left, &right, "id", "id", JoinType::Inner)
@@ -193,4 +189,3 @@ fn test_placeholder() {
     // Placeholder test when GPU acceleration is not enabled
     assert!(true);
 }
-

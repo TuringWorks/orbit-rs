@@ -81,7 +81,9 @@ impl BoaRuntime {
         // If eval is not allowed, replace it with a function that throws
         if !self.config.allow_eval {
             let disable_eval = r#"
-                eval = function() { throw new Error("eval() is disabled for security"); };
+                eval = function() {
+                throw new Error("eval() is disabled for security");
+                };
             "#;
             let _ = context.eval(Source::from_bytes(disable_eval));
         }

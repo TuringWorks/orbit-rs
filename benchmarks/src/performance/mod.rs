@@ -261,8 +261,7 @@ pub struct BatchStats {
 
 // Re-export connection pool types from orbit-shared for benchmarking
 pub use orbit_shared::pooling::{
-    AdvancedConnectionPool as ConnectionPool,
-    AdvancedPoolConfig as ConnectionPoolConfig,
+    AdvancedConnectionPool as ConnectionPool, AdvancedPoolConfig as ConnectionPoolConfig,
     ConnectionPoolMetrics as PoolStats,
 };
 
@@ -297,17 +296,15 @@ impl ResourceManager {
             .map_err(|e| PerformanceError::Internal(format!("Concurrency limiter error: {}", e)))?;
 
         // Atomically check and update memory usage using compare-exchange loop
-        let memory_result = self.current_memory.fetch_update(
-            Ordering::SeqCst,
-            Ordering::SeqCst,
-            |current| {
-                if current + memory_estimate > self.max_memory {
-                    None // Reject - would exceed limit
-                } else {
-                    Some(current + memory_estimate)
-                }
-            },
-        );
+        let memory_result =
+            self.current_memory
+                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+                    if current + memory_estimate > self.max_memory {
+                        None // Reject - would exceed limit
+                    } else {
+                        Some(current + memory_estimate)
+                    }
+                });
 
         match memory_result {
             Ok(_) => Ok(ResourceGuard {

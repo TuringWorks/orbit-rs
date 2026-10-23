@@ -84,7 +84,12 @@ fn role_table(user: &str) -> Vec<(String, String, bool, bool)> {
     let created = ROLES.lock().map(|r| r.clone()).unwrap_or_default();
     std::iter::once((ROLE_OID.to_string(), user.to_string(), true, true))
         .chain(created.into_iter().enumerate().map(|(i, r)| {
-            ((FIRST_USER_OID + i).to_string(), r.name, r.login, r.superuser)
+            (
+                (FIRST_USER_OID + i).to_string(),
+                r.name,
+                r.login,
+                r.superuser,
+            )
         }))
         .collect()
 }
@@ -117,7 +122,11 @@ fn role_command(lower: &str) -> Option<QueryResult> {
     let pos = roles.iter().position(|r| r.name == name);
     match (*verb, pos) {
         ("create", None) => {
-            let mut role = Role { name, login: *kind == "user", superuser: false };
+            let mut role = Role {
+                name,
+                login: *kind == "user",
+                superuser: false,
+            };
             apply_role_options(&mut role, rest);
             roles.push(role);
         }
@@ -127,7 +136,11 @@ fn role_command(lower: &str) -> Option<QueryResult> {
             })
         }
         ("alter", Some(i)) => {
-            if let Some(new) = rest.iter().position(|w| *w == "rename").and_then(|k| rest.get(k + 2)) {
+            if let Some(new) = rest
+                .iter()
+                .position(|w| *w == "rename")
+                .and_then(|k| rest.get(k + 2))
+            {
                 roles[i].name = new.trim_matches(['"', ';']).to_string();
             } else {
                 apply_role_options(&mut roles[i], rest);
@@ -430,7 +443,13 @@ fn browser_probe(lower: &str, database: &str, user: &str) -> Option<QueryResult>
         let rows = table
             .iter()
             .map(|(oid, name, login, sup)| {
-                vec![Some(oid.as_str()), Some(name.as_str()), Some(flag(*login)), Some(flag(*sup)), None]
+                vec![
+                    Some(oid.as_str()),
+                    Some(name.as_str()),
+                    Some(flag(*login)),
+                    Some(flag(*sup)),
+                    None,
+                ]
             })
             .collect();
         return Some(typed_rows(
@@ -447,11 +466,23 @@ fn browser_probe(lower: &str, database: &str, user: &str) -> Option<QueryResult>
     if lower.contains("pg_catalog.pg_namespace nsp") && lower.contains("has_schema_privilege") {
         // The Schemas node excludes system schemas; the Catalogs node lists them.
         let rows: Vec<Vec<Option<&str>>> = if lower.contains("nspname not like") {
-            vec![vec![Some("2200"), Some("public"), Some("t"), Some("t"), None]]
+            vec![vec![
+                Some("2200"),
+                Some("public"),
+                Some("t"),
+                Some("t"),
+                None,
+            ]]
         } else {
             vec![
                 vec![Some("11"), Some("pg_catalog"), Some("f"), Some("t"), None],
-                vec![Some("13000"), Some("information_schema"), Some("f"), Some("t"), None],
+                vec![
+                    Some("13000"),
+                    Some("information_schema"),
+                    Some("f"),
+                    Some("t"),
+                    None,
+                ],
             ]
         };
         return Some(typed_rows(
@@ -465,8 +496,7 @@ fn browser_probe(lower: &str, database: &str, user: &str) -> Option<QueryResult>
             rows,
         ));
     }
-    if lower.contains("pg_catalog.pg_publication") || lower.contains("pg_available_extensions()")
-    {
+    if lower.contains("pg_catalog.pg_publication") || lower.contains("pg_available_extensions()") {
         return Some(typed_rows(&[("oid", INT4), ("name", TEXT)], Vec::new()));
     }
     if EMPTY_CATALOGS.iter().any(|t| lower.contains(t)) {
@@ -797,7 +827,10 @@ mod tests {
             Some(QueryResult::Command { tag }) => tag,
             other => panic!("unexpected {other:?}"),
         };
-        assert_eq!(tag("CREATE ROLE zz_test WITH LOGIN SUPERUSER"), "CREATE ROLE");
+        assert_eq!(
+            tag("CREATE ROLE zz_test WITH LOGIN SUPERUSER"),
+            "CREATE ROLE"
+        );
         assert!(tag("CREATE ROLE zz_test").starts_with("ERROR:"));
         let tree = "SELECT r.oid, r.rolname, r.rolcanlogin, r.rolsuper, d.description FROM pg_catalog.pg_roles r";
         match try_handle(tree, "d", "u") {

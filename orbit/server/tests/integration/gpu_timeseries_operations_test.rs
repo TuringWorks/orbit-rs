@@ -221,4 +221,3 @@ fn test_placeholder() {
     // Placeholder test when GPU acceleration is not enabled
     assert!(true);
 }
-

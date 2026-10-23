@@ -120,7 +120,10 @@ impl DefaultPinManager {
                 let flags = libc::MLOCK_ONFAULT;
                 let result = unsafe { libc::mlock2(addr as *mut libc::c_void, len, flags as i32) };
                 if result != 0 {
-                    return Err(anyhow!("mlock2 failed: {}", std::io::Error::last_os_error()));
+                    return Err(anyhow!(
+                        "mlock2 failed: {}",
+                        std::io::Error::last_os_error()
+                    ));
                 }
             } else {
                 let result = unsafe { libc::mlock(addr as *mut libc::c_void, len) };
@@ -145,7 +148,10 @@ impl DefaultPinManager {
     fn unpin_memory(&self, addr: *mut u8, len: usize) -> Result<()> {
         let result = unsafe { libc::munlock(addr as *mut libc::c_void, len) };
         if result != 0 {
-            return Err(anyhow!("munlock failed: {}", std::io::Error::last_os_error()));
+            return Err(anyhow!(
+                "munlock failed: {}",
+                std::io::Error::last_os_error()
+            ));
         }
         Ok(())
     }
@@ -154,25 +160,23 @@ impl DefaultPinManager {
         #[cfg(target_os = "linux")]
         {
             // Advise the kernel to use huge pages for this mapping
-            let result = unsafe {
-                libc::madvise(
-                    addr as *mut libc::c_void,
-                    len,
-                    libc::MADV_HUGEPAGE,
-                )
-            };
+            let result =
+                unsafe { libc::madvise(addr as *mut libc::c_void, len, libc::MADV_HUGEPAGE) };
             if result != 0 {
                 // Non-fatal - huge pages are a hint, not a requirement
-                eprintln!("Warning: madvise(MADV_HUGEPAGE) failed: {}", 
-                         std::io::Error::last_os_error());
+                eprintln!(
+                    "Warning: madvise(MADV_HUGEPAGE) failed: {}",
+                    std::io::Error::last_os_error()
+                );
             }
         }
-        
+
         Ok(())
     }
 
     fn evict_low_priority_slices(&self, needed_bytes: usize) -> Result<()> {
-        let mut candidates: Vec<_> = self.pinned_slices
+        let mut candidates: Vec<_> = self
+            .pinned_slices
             .iter()
             .filter(|entry| matches!(entry.value().priority, PinPriority::Background))
             .map(|entry| *entry.key())
@@ -193,7 +197,8 @@ impl DefaultPinManager {
 
             if let Some((_, slice)) = self.pinned_slices.remove(&key) {
                 let _ = self.unpin_memory(slice.addr, slice.len);
-                self.budget_used_bytes.fetch_sub(slice.len as u64, Ordering::Relaxed);
+                self.budget_used_bytes
+                    .fetch_sub(slice.len as u64, Ordering::Relaxed);
                 freed_bytes += slice.len;
 
                 // Update eviction statistics
@@ -205,8 +210,11 @@ impl DefaultPinManager {
         }
 
         if freed_bytes < needed_bytes {
-            return Err(anyhow!("Could not free enough memory: needed {}, freed {}", 
-                              needed_bytes, freed_bytes));
+            return Err(anyhow!(
+                "Could not free enough memory: needed {}, freed {}",
+                needed_bytes,
+                freed_bytes
+            ));
         }
 
         Ok(())
@@ -253,13 +261,18 @@ impl PinManager for DefaultPinManager {
                 };
 
                 // Update budget and store slice
-                self.budget_used_bytes.fetch_add(len as u64, Ordering::Relaxed);
+                self.budget_used_bytes
+                    .fetch_add(len as u64, Ordering::Relaxed);
                 self.pinned_slices.insert(key, slice);
 
                 Ok(())
             }
             Err(e) => {
-                tracing::warn!("Cannot pin slice {:?}: slice lookup not yet implemented ({})", key, e);
+                tracing::warn!(
+                    "Cannot pin slice {:?}: slice lookup not yet implemented ({})",
+                    key,
+                    e
+                );
                 // For now, we'll simulate success but not actually pin anything
                 // This allows the system to function without actual memory pinning
                 Ok(())
@@ -270,7 +283,8 @@ impl PinManager for DefaultPinManager {
     fn unpin_slice(&self, key: PinKey) {
         if let Some((_, slice)) = self.pinned_slices.remove(&key) {
             let _ = self.unpin_memory(slice.addr, slice.len);
-            self.budget_used_bytes.fetch_sub(slice.len as u64, Ordering::Relaxed);
+            self.budget_used_bytes
+                .fetch_sub(slice.len as u64, Ordering::Relaxed);
         }
     }
 
@@ -288,14 +302,15 @@ impl PinManager for DefaultPinManager {
         // Collect per-priority stats
         for entry in self.pinned_slices.iter() {
             let slice = entry.value();
-            let priority_stats = by_priority
-                .entry(slice.priority)
-                .or_insert_with(|| PinPriorityStats {
-                    pinned_count: 0,
-                    pinned_bytes: 0,
-                    eviction_count: 0,
-                    average_pin_time_ms: 0.0,
-                });
+            let priority_stats =
+                by_priority
+                    .entry(slice.priority)
+                    .or_insert_with(|| PinPriorityStats {
+                        pinned_count: 0,
+                        pinned_bytes: 0,
+                        eviction_count: 0,
+                        average_pin_time_ms: 0.0,
+                    });
 
             priority_stats.pinned_count += 1;
             priority_stats.pinned_bytes += slice.len as u64;
@@ -369,7 +384,7 @@ mod tests {
     fn test_pin_manager_creation() {
         let manager = DefaultPinManager::new(1024 * 1024 * 1024); // 1GB budget
         let stats = manager.stats();
-        
+
         assert_eq!(stats.total_pinned_count, 0);
         assert_eq!(stats.budget_total_bytes, 1024 * 1024 * 1024);
         assert_eq!(stats.budget_used_bytes, 0);
@@ -378,7 +393,7 @@ mod tests {
     #[test]
     fn test_pin_opts_defaults() {
         let opts = PinOpts::default();
-        
+
         assert_eq!(opts.priority, PinPriority::QueryCritical);
         assert_eq!(opts.lifetime_class, LifetimeClass::Session);
         assert!(opts.onfault);

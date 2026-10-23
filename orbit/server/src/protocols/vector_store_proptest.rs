@@ -45,12 +45,12 @@ mod proptests {
         ) {
             // Skip if vectors have different dimensions
             prop_assume!(v1.len() == v2.len());
-            
+
             let dist1 = calculate_euclidean_distance(&v1, &v2);
             let dist2 = calculate_euclidean_distance(&v2, &v1);
-            
+
             // Distance should be symmetric (within floating point precision)
-            prop_assert!((dist1 - dist2).abs() < 1e-6, 
+            prop_assert!((dist1 - dist2).abs() < 1e-6,
                         "Euclidean distance not symmetric: {} vs {}", dist1, dist2);
         }
 
@@ -63,9 +63,9 @@ mod proptests {
             prop_assume!(v1.len() == v2.len());
             prop_assume!(!v1.iter().all(|&x| x == 0.0)); // Non-zero vector
             prop_assume!(!v2.iter().all(|&x| x == 0.0)); // Non-zero vector
-            
+
             let similarity = calculate_cosine_similarity(&v1, &v2);
-            
+
             prop_assert!(similarity >= -1.0 && similarity <= 1.0,
                         "Cosine similarity out of bounds: {}", similarity);
         }
@@ -74,9 +74,9 @@ mod proptests {
         #[test]
         fn test_cosine_similarity_identity(v in arb_vector()) {
             prop_assume!(!v.iter().all(|&x| x == 0.0)); // Non-zero vector
-            
+
             let similarity = calculate_cosine_similarity(&v, &v);
-            
+
             // Should be very close to 1.0 (within floating point precision)
             prop_assert!((similarity - 1.0).abs() < 1e-6,
                         "Self cosine similarity not 1.0: {}", similarity);
@@ -86,8 +86,8 @@ mod proptests {
         #[test]
         fn test_euclidean_distance_identity(v in arb_vector()) {
             let distance = calculate_euclidean_distance(&v, &v);
-            
-            prop_assert!(distance < 1e-6, 
+
+            prop_assert!(distance < 1e-6,
                         "Self euclidean distance not zero: {}", distance);
         }
 
@@ -98,10 +98,10 @@ mod proptests {
             v2 in arb_vector()
         ) {
             prop_assume!(v1.len() == v2.len());
-            
+
             let dot1 = calculate_dot_product(&v1, &v2);
             let dot2 = calculate_dot_product(&v2, &v1);
-            
+
             prop_assert!((dot1 - dot2).abs() < 1e-6,
                         "Dot product not commutative: {} vs {}", dot1, dot2);
         }
@@ -110,10 +110,10 @@ mod proptests {
         #[test]
         fn test_vector_normalization(v in arb_vector()) {
             prop_assume!(!v.iter().all(|&x| x == 0.0)); // Non-zero vector
-            
+
             let normalized = normalize_vector(&v);
             let magnitude = (normalized.iter().map(|x| x * x).sum::<f32>()).sqrt();
-            
+
             prop_assert!((magnitude - 1.0).abs() < 1e-5,
                         "Normalized vector magnitude not 1.0: {}", magnitude);
         }
@@ -126,11 +126,11 @@ mod proptests {
             v3 in arb_vector()
         ) {
             prop_assume!(v1.len() == v2.len() && v2.len() == v3.len());
-            
+
             let d12 = calculate_euclidean_distance(&v1, &v2);
             let d23 = calculate_euclidean_distance(&v2, &v3);
             let d13 = calculate_euclidean_distance(&v1, &v3);
-            
+
             // Triangle inequality: d(a,c) <= d(a,b) + d(b,c)
             prop_assert!(d13 <= d12 + d23 + 1e-6, // Small epsilon for floating point errors
                         "Triangle inequality violated: {} > {} + {}", d13, d12, d23);
@@ -140,26 +140,26 @@ mod proptests {
         #[test]
         fn test_vector_index_operations(vectors in prop::collection::vec(arb_vector_with_metadata(), 1..=100)) {
             prop_assume!(!vectors.is_empty());
-            
+
             let mut index = VectorIndex::new(VectorIndexConfig::new(
                 "test_index".to_string(),
                 vectors[0].data.len(),
                 SimilarityMetric::Cosine,
             ));
-            
+
             // Add all vectors to index
             for vector in &vectors {
                 let _ = index.add_vector(vector.clone());
             }
-            
+
             // Search for the first vector - should find itself
             if let Ok(results) = index.search(&vectors[0].data, 5) {
                 prop_assert!(!results.is_empty(), "Search should find at least one result");
-                
+
                 // First result should be the vector itself (or very similar)
                 if let Some(first_result) = results.first() {
                     prop_assert!(first_result.score >= 0.99 || first_result.score <= 0.01,
-                                "First result should have high similarity or low distance: {}", 
+                                "First result should have high similarity or low distance: {}",
                                 first_result.score);
                 }
             }
@@ -170,10 +170,10 @@ mod proptests {
         fn test_vector_serialization_roundtrip(vector in arb_vector_with_metadata()) {
             let json = serde_json::to_string(&vector).unwrap();
             let deserialized: Vector = serde_json::from_str(&json).unwrap();
-            
+
             prop_assert_eq!(vector.id, deserialized.id);
             prop_assert_eq!(vector.data.len(), deserialized.data.len());
-            
+
             for (a, b) in vector.data.iter().zip(deserialized.data.iter()) {
                 prop_assert!((a - b).abs() < 1e-6, "Vector data mismatch after serialization");
             }
@@ -187,25 +187,25 @@ mod proptests {
         ) {
             prop_assume!(vectors.len() >= 2);
             prop_assume!(vectors.iter().all(|v| v.len() == query.len()));
-            
+
             // Calculate similarities for all metrics
             let mut cosine_scores: Vec<(usize, f32)> = vectors.iter().enumerate()
                 .map(|(i, v)| (i, calculate_cosine_similarity(&query, v)))
                 .collect();
-            
+
             let mut euclidean_scores: Vec<(usize, f32)> = vectors.iter().enumerate()
                 .map(|(i, v)| (i, -calculate_euclidean_distance(&query, v))) // Negative for descending order
                 .collect();
-            
+
             // Sort by similarity (descending)
             cosine_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
             euclidean_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-            
+
             // The relative ordering should be somewhat consistent for most vectors
             // This is a weak property test - we don't expect perfect correlation
             let top_cosine = cosine_scores[0].0;
             let top_euclidean = euclidean_scores[0].0;
-            
+
             // At least check that the results are in valid ranges
             prop_assert!(cosine_scores[0].1 >= -1.0 && cosine_scores[0].1 <= 1.0);
             prop_assert!(euclidean_scores[0].1 <= 0.0); // Negative distance should be <= 0
@@ -225,7 +225,7 @@ mod proptests {
         let dot_product = calculate_dot_product(v1, v2);
         let magnitude1 = (v1.iter().map(|x| x.powi(2)).sum::<f32>()).sqrt();
         let magnitude2 = (v2.iter().map(|x| x.powi(2)).sum::<f32>()).sqrt();
-        
+
         if magnitude1 == 0.0 || magnitude2 == 0.0 {
             0.0
         } else {

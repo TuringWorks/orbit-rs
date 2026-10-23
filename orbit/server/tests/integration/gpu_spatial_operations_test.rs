@@ -6,7 +6,7 @@
 #![cfg(feature = "gpu-acceleration")]
 
 use orbit_compute::spatial_operations::{
-    GPUSpatialOperations, GPUPoint, GPUPolygon, SpatialOperationsConfig,
+    GPUPoint, GPUPolygon, GPUSpatialOperations, SpatialOperationsConfig,
 };
 
 #[tokio::test]
@@ -92,7 +92,7 @@ async fn test_point_in_polygon_cpu() {
         .unwrap();
 
     assert_eq!(results.len(), 3);
-    assert!(results[0].result);  // Inside
+    assert!(results[0].result); // Inside
     assert!(!results[1].result); // Outside
     assert!(!results[2].result); // Outside
 }
@@ -122,8 +122,8 @@ async fn test_point_in_polygon_with_hole() {
     };
 
     let points = vec![
-        GPUPoint { x: 5.0, y: 5.0 },  // Inside exterior, inside hole (should be outside)
-        GPUPoint { x: 1.0, y: 1.0 },  // Inside exterior, outside hole (should be inside)
+        GPUPoint { x: 5.0, y: 5.0 }, // Inside exterior, inside hole (should be outside)
+        GPUPoint { x: 1.0, y: 1.0 }, // Inside exterior, outside hole (should be inside)
         GPUPoint { x: 15.0, y: 15.0 }, // Outside exterior (should be outside)
     ];
 
@@ -134,7 +134,7 @@ async fn test_point_in_polygon_with_hole() {
 
     assert_eq!(results.len(), 3);
     assert!(!results[0].result); // Inside hole, so outside polygon
-    assert!(results[1].result);  // Inside exterior, outside hole
+    assert!(results[1].result); // Inside exterior, outside hole
     assert!(!results[2].result); // Outside exterior
 }
 
@@ -172,4 +172,3 @@ async fn test_large_dataset_cpu_parallel() {
         assert_eq!(result.index, idx);
     }
 }
-

@@ -23,22 +23,25 @@ use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // Import orbit components
-use orbit_server::{OrbitServerBuilder};
 use orbit_client::OrbitClient;
+use orbit_server::OrbitServerBuilder;
 use orbit_shared::{
+    pooling::{
+        AdvancedConnectionPool, AdvancedPoolConfig, CircuitBreakerConfig, LoadBalancingStrategy,
+        PoolTier,
+    },
     ActorSystemConfig,
-    pooling::{AdvancedConnectionPool, AdvancedPoolConfig, CircuitBreakerConfig, LoadBalancingStrategy, PoolTier}
 };
 
 // Import protocol servers
 use orbit_protocols::{
-    postgres_wire::{PostgresServer, query_engine::QueryEngine},
-    resp::RespServer,
-    rest::RestServer,
+    arangodb::ArangoServer,
     cql::{CqlAdapter, CqlConfig},
     mysql::{MySqlAdapter, MySqlConfig},
     neo4j::BoltServer,
-    arangodb::ArangoServer,
+    postgres_wire::{query_engine::QueryEngine, PostgresServer},
+    resp::RespServer,
+    rest::RestServer,
 };
 
 // Import configuration
@@ -118,11 +121,7 @@ struct Args {
     enable_redis: bool,
 
     /// Redis port
-    #[arg(
-        long,
-        value_name = "PORT", 
-        help = "Redis server port (default: 6379)"
-    )]
+    #[arg(long, value_name = "PORT", help = "Redis server port (default: 6379)")]
     redis_port: Option<u16>,
 
     /// Enable REST API server (enabled by default)
@@ -148,11 +147,7 @@ struct Args {
     enable_cql: bool,
 
     /// CQL port
-    #[arg(
-        long,
-        value_name = "PORT",
-        help = "CQL server port (default: 9042)"
-    )]
+    #[arg(long, value_name = "PORT", help = "CQL server port (default: 9042)")]
     cql_port: Option<u16>,
 
     /// Enable MySQL server (enabled by default)
@@ -163,11 +158,7 @@ struct Args {
     enable_mysql: bool,
 
     /// MySQL port
-    #[arg(
-        long,
-        value_name = "PORT",
-        help = "MySQL server port (default: 3306)"
-    )]
+    #[arg(long, value_name = "PORT", help = "MySQL server port (default: 3306)")]
     mysql_port: Option<u16>,
 
     /// Enable Neo4j Bolt server (enabled by default)
@@ -243,10 +234,7 @@ struct Args {
     log_level: String,
 
     /// Generate example configuration file
-    #[arg(
-        long,
-        help = "Generate example configuration file and exit"
-    )]
+    #[arg(long, help = "Generate example configuration file and exit")]
     generate_config: bool,
 }
 
@@ -261,12 +249,12 @@ struct ProtocolConnection {
 struct MultiProtocolServer {
     config: OrbitServerConfig,
     orbit_client: OrbitClient,
-    
+
     // Advanced connection pools per protocol
     postgres_pool: Option<AdvancedConnectionPool<ProtocolConnection>>,
     redis_pool: Option<AdvancedConnectionPool<ProtocolConnection>>,
     rest_pool: Option<AdvancedConnectionPool<ProtocolConnection>>,
-    
+
     // Protocol servers
     postgres_server: Option<PostgresServer>,
     redis_server: Option<RespServer>,
@@ -286,9 +274,9 @@ impl MultiProtocolServer {
             mailbox_size: config.actor_system.mailbox_size,
             ..Default::default()
         };
-        
+
         let orbit_client = OrbitClient::new(actor_config).await?;
-        
+
         Ok(Self {
             config,
             orbit_client: orbit_client.clone(),
@@ -304,27 +292,29 @@ impl MultiProtocolServer {
             arango_server: None,
         })
     }
-    
+
     /// Initialize connection pools for all enabled protocols
     async fn initialize_connection_pools(&mut self) -> Result<(), Box<dyn Error>> {
         if !self.config.pooling.enabled {
             info!("🔗 Connection pooling disabled, using direct connections");
             return Ok(());
         }
-        
+
         info!("🔗 Initializing advanced connection pools...");
-        
+
         // Initialize PostgreSQL connection pool
         if let Some(pg_config) = &self.config.protocols.postgresql {
             if pg_config.enabled {
                 info!("  🐘 Creating PostgreSQL connection pool...");
                 let pool_config = self.create_pool_config("postgresql");
-                let postgres_pool = self.create_connection_pool("postgresql", pool_config).await?;
+                let postgres_pool = self
+                    .create_connection_pool("postgresql", pool_config)
+                    .await?;
                 self.postgres_pool = Some(postgres_pool);
                 info!("    ✅ PostgreSQL connection pool initialized");
             }
         }
-        
+
         // Initialize Redis connection pool
         if let Some(redis_config) = &self.config.protocols.redis {
             if redis_config.enabled {
@@ -335,7 +325,7 @@ impl MultiProtocolServer {
                 info!("    ✅ Redis connection pool initialized");
             }
         }
-        
+
         // Initialize REST connection pool
         if let Some(rest_config) = &self.config.protocols.rest {
             if rest_config.enabled {
@@ -346,18 +336,18 @@ impl MultiProtocolServer {
                 info!("    ✅ REST connection pool initialized");
             }
         }
-        
+
         info!("✅ All connection pools initialized");
         Ok(())
     }
-    
+
     /// Create pool configuration for a specific protocol
     fn create_pool_config(&self, protocol: &str) -> AdvancedPoolConfig {
         let base_config = &self.config.pooling;
-        
+
         // Check for protocol-specific overrides
         let protocol_override = base_config.protocol_overrides.get(protocol);
-        
+
         AdvancedPoolConfig {
             min_connections: protocol_override
                 .and_then(|o| o.min_connections)
@@ -368,14 +358,20 @@ impl MultiProtocolServer {
             connection_timeout: std::time::Duration::from_secs(base_config.connection_timeout_secs),
             idle_timeout: std::time::Duration::from_secs(base_config.idle_timeout_secs),
             max_lifetime: std::time::Duration::from_secs(base_config.max_lifetime_secs),
-            health_check_interval: std::time::Duration::from_secs(base_config.health_check_interval_secs),
+            health_check_interval: std::time::Duration::from_secs(
+                base_config.health_check_interval_secs,
+            ),
             load_balancing_strategy: protocol_override
                 .and_then(|o| o.load_balancing_strategy)
                 .unwrap_or(base_config.load_balancing_strategy),
             circuit_breaker: CircuitBreakerConfig {
                 failure_threshold: base_config.circuit_breaker.failure_threshold,
-                failure_window: std::time::Duration::from_secs(base_config.circuit_breaker.failure_window_secs),
-                recovery_timeout: std::time::Duration::from_secs(base_config.circuit_breaker.recovery_timeout_secs),
+                failure_window: std::time::Duration::from_secs(
+                    base_config.circuit_breaker.failure_window_secs,
+                ),
+                recovery_timeout: std::time::Duration::from_secs(
+                    base_config.circuit_breaker.recovery_timeout_secs,
+                ),
                 success_threshold: base_config.circuit_breaker.success_threshold,
                 half_open_max_calls: base_config.circuit_breaker.half_open_max_calls,
             },
@@ -384,7 +380,7 @@ impl MultiProtocolServer {
             tier: base_config.tier,
         }
     }
-    
+
     /// Create a connection pool for a specific protocol
     async fn create_connection_pool(
         &self,
@@ -393,7 +389,7 @@ impl MultiProtocolServer {
     ) -> Result<AdvancedConnectionPool<ProtocolConnection>, Box<dyn Error>> {
         let orbit_client = self.orbit_client.clone();
         let protocol_name = protocol.to_string();
-        
+
         let pool = AdvancedConnectionPool::new(config, move |node_id| {
             let client = orbit_client.clone();
             let protocol = protocol_name.clone();
@@ -405,61 +401,69 @@ impl MultiProtocolServer {
                 })
             })
         });
-        
+
         // Add default nodes based on configuration
         let base_config = &self.config.pooling;
         if let Some(protocol_override) = base_config.protocol_overrides.get(protocol) {
             for node in &protocol_override.nodes {
-                pool.add_node(node.node_id.clone(), node.max_connections).await;
+                pool.add_node(node.node_id.clone(), node.max_connections)
+                    .await;
             }
         } else {
             // Add default single node
-            pool.add_node(format!("{}-primary", protocol), config.max_connections / 2).await;
+            pool.add_node(format!("{}-primary", protocol), config.max_connections / 2)
+                .await;
         }
-        
+
         // Start pool maintenance
         pool.start_maintenance().await;
-        
+
         Ok(pool)
     }
-    
+
     /// Initialize all configured protocol servers
     async fn initialize_servers(&mut self) -> Result<(), Box<dyn Error>> {
         info!("🔧 Initializing protocol servers...");
-        
+
         // Initialize PostgreSQL server
         if let Some(pg_config) = &self.config.protocols.postgresql {
             if pg_config.enabled {
                 info!("  🐘 Setting up PostgreSQL wire protocol server...");
-                
+
                 // Create query engine with orbit client
                 let query_engine = QueryEngine::new(self.orbit_client.clone());
-                
+
                 let postgres_server = PostgresServer::new_with_query_engine(
                     format!("{}:{}", self.config.server.bind_address, pg_config.port),
                     query_engine,
                 );
-                
+
                 self.postgres_server = Some(postgres_server);
-                info!("    ✅ PostgreSQL server initialized on port {}", pg_config.port);
+                info!(
+                    "    ✅ PostgreSQL server initialized on port {}",
+                    pg_config.port
+                );
             }
         }
-        
+
         // Initialize Redis server
         if let Some(redis_config) = &self.config.protocols.redis {
             if redis_config.enabled {
                 info!("  🔴 Setting up Redis RESP protocol server...");
-                
+
                 let redis_server = RespServer::new(
                     format!("{}:{}", self.config.server.bind_address, redis_config.port),
                     self.orbit_client.clone(),
                 );
-                
+
                 self.redis_server = Some(redis_server);
-                info!("    ✅ Redis server initialized on port {}", redis_config.port);
+                info!(
+                    "    ✅ Redis server initialized on port {}",
+                    redis_config.port
+                );
             }
         }
-        
+
         // Initialize REST server
         if let Some(rest_config) = &self.config.protocols.rest {
             if rest_config.enabled {
@@ -471,7 +475,10 @@ impl MultiProtocolServer {
                 );
 
                 self.rest_server = Some(rest_server);
-                info!("    ✅ REST server initialized on port {}", rest_config.port);
+                info!(
+                    "    ✅ REST server initialized on port {}",
+                    rest_config.port
+                );
             }
         }
 
@@ -481,7 +488,8 @@ impl MultiProtocolServer {
                 info!("  🗂️  Setting up CQL (Cassandra) protocol server...");
 
                 let cql_adapter_config = CqlConfig {
-                    listen_addr: format!("{}:{}", self.config.server.bind_address, cql_config.port).parse()?,
+                    listen_addr: format!("{}:{}", self.config.server.bind_address, cql_config.port)
+                        .parse()?,
                     max_connections: cql_config.max_connections,
                     authentication_enabled: cql_config.authentication_enabled,
                     protocol_version: cql_config.protocol_version,
@@ -500,7 +508,11 @@ impl MultiProtocolServer {
                 info!("  🐬 Setting up MySQL wire protocol server...");
 
                 let mysql_adapter_config = MySqlConfig {
-                    listen_addr: format!("{}:{}", self.config.server.bind_address, mysql_config.port).parse()?,
+                    listen_addr: format!(
+                        "{}:{}",
+                        self.config.server.bind_address, mysql_config.port
+                    )
+                    .parse()?,
                     max_connections: mysql_config.max_connections,
                     authentication_enabled: mysql_config.authentication_enabled,
                     server_version: mysql_config.server_version.clone(),
@@ -509,7 +521,10 @@ impl MultiProtocolServer {
                 let mysql_server = MySqlAdapter::new(mysql_adapter_config).await?;
 
                 self.mysql_server = Some(mysql_server);
-                info!("    ✅ MySQL server initialized on port {}", mysql_config.port);
+                info!(
+                    "    ✅ MySQL server initialized on port {}",
+                    mysql_config.port
+                );
             }
         }
 
@@ -518,12 +533,16 @@ impl MultiProtocolServer {
             if cypher_config.enabled {
                 info!("  ⚡ Setting up Neo4j Bolt protocol server...");
 
-                let bolt_server = BoltServer::new(
-                    format!("{}:{}", self.config.server.bind_address, cypher_config.port),
-                );
+                let bolt_server = BoltServer::new(format!(
+                    "{}:{}",
+                    self.config.server.bind_address, cypher_config.port
+                ));
 
                 self.bolt_server = Some(bolt_server);
-                info!("    ✅ Neo4j Bolt server initialized on port {}", cypher_config.port);
+                info!(
+                    "    ✅ Neo4j Bolt server initialized on port {}",
+                    cypher_config.port
+                );
             }
         }
 
@@ -532,25 +551,29 @@ impl MultiProtocolServer {
             if aql_config.enabled {
                 info!("  🥑 Setting up ArangoDB HTTP protocol server...");
 
-                let arango_server = ArangoServer::new(
-                    format!("{}:{}", self.config.server.bind_address, aql_config.port),
-                );
+                let arango_server = ArangoServer::new(format!(
+                    "{}:{}",
+                    self.config.server.bind_address, aql_config.port
+                ));
 
                 self.arango_server = Some(arango_server);
-                info!("    ✅ ArangoDB server initialized on port {}", aql_config.port);
+                info!(
+                    "    ✅ ArangoDB server initialized on port {}",
+                    aql_config.port
+                );
             }
         }
 
         info!("✅ All protocol servers initialized");
         Ok(())
     }
-    
+
     /// Start all configured servers
     async fn start_servers(self) -> Result<(), Box<dyn Error>> {
         info!("🚀 Starting all protocol servers...");
-        
+
         let mut handles = vec![];
-        
+
         // Start PostgreSQL server
         if let Some(postgres_server) = self.postgres_server {
             let handle = tokio::spawn(async move {
@@ -561,7 +584,7 @@ impl MultiProtocolServer {
             });
             handles.push(handle);
         }
-        
+
         // Start Redis server
         if let Some(redis_server) = self.redis_server {
             let handle = tokio::spawn(async move {
@@ -572,7 +595,7 @@ impl MultiProtocolServer {
             });
             handles.push(handle);
         }
-        
+
         // Start REST server
         if let Some(rest_server) = self.rest_server {
             let handle = tokio::spawn(async move {
@@ -637,7 +660,7 @@ impl MultiProtocolServer {
                 .with_port(grpc_config.port)
                 .build()
                 .await?;
-                
+
             let grpc_handle = tokio::spawn(async move {
                 if let Err(e) = orbit_server.start().await {
                     error!("gRPC server error: {}", e);
@@ -645,10 +668,10 @@ impl MultiProtocolServer {
             });
             handles.push(grpc_handle);
         }
-        
+
         info!("🎯 All servers started successfully!");
         info!("🔄 Server is ready to handle multi-protocol requests");
-        
+
         // Wait for shutdown signal
         tokio::select! {
             _ = signal::ctrl_c() => {
@@ -660,7 +683,7 @@ impl MultiProtocolServer {
                 }
             }
         }
-        
+
         info!("👋 Orbit multi-protocol server shutdown complete");
         Ok(())
     }
@@ -681,7 +704,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let log_level = if args.dev_mode {
         "debug,orbit_server=trace,orbit_shared=debug,orbit_protocols=debug".to_string()
     } else {
-        format!("{},orbit_server=info,orbit_shared=info,orbit_protocols=info", args.log_level)
+        format!(
+            "{},orbit_server=info,orbit_shared=info,orbit_protocols=info",
+            args.log_level
+        )
     };
 
     tracing_subscriber::registry()
@@ -715,7 +741,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Validate configuration
     config.validate()?;
-    
+
     info!("📖 Configuration loaded and validated");
 
     // Print enabled protocols
@@ -723,13 +749,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Create and initialize multi-protocol server
     let mut server = MultiProtocolServer::new(config).await?;
-    
+
     // Initialize connection pools first
     server.initialize_connection_pools().await?;
-    
+
     // Then initialize protocol servers
     server.initialize_servers().await?;
-    
+
     // Start all servers (this blocks until shutdown)
     server.start_servers().await?;
 
@@ -742,7 +768,10 @@ async fn load_config(args: &Args) -> Result<OrbitServerConfig, Box<dyn Error>> {
         info!("📖 Loading config from: {:?}", args.config);
         OrbitServerConfig::load_from_file(&args.config).await
     } else {
-        info!("📄 Config file not found: {:?}. Using defaults.", args.config);
+        info!(
+            "📄 Config file not found: {:?}. Using defaults.",
+            args.config
+        );
         Ok(OrbitServerConfig::default())
     }
 }
@@ -923,24 +952,30 @@ fn apply_cli_overrides(config: &mut OrbitServerConfig, args: &Args) {
 /// Print information about enabled protocols
 fn print_enabled_protocols(config: &OrbitServerConfig, args: &Args) {
     let enabled = config.enabled_protocols();
-    
+
     info!("🎯 Enabled Protocol Servers:");
-    
+
     if enabled.contains(&"grpc") {
         let port = config.protocols.grpc.as_ref().unwrap().port;
         info!("  📡 gRPC Actor API:         {}:{}", args.bind, port);
     }
-    
+
     if enabled.contains(&"postgresql") {
         let port = config.protocols.postgresql.as_ref().unwrap().port;
-        info!("  🐘 PostgreSQL Wire:       {}:{} (psql compatible + pgvector)", args.bind, port);
+        info!(
+            "  🐘 PostgreSQL Wire:       {}:{} (psql compatible + pgvector)",
+            args.bind, port
+        );
     }
-    
+
     if enabled.contains(&"redis") {
         let port = config.protocols.redis.as_ref().unwrap().port;
-        info!("  🔴 Redis RESP:            {}:{} (redis-cli compatible + vectors)", args.bind, port);
+        info!(
+            "  🔴 Redis RESP:            {}:{} (redis-cli compatible + vectors)",
+            args.bind, port
+        );
     }
-    
+
     if enabled.contains(&"rest") {
         let port = config.protocols.rest.as_ref().unwrap().port;
         info!("  🌍 HTTP REST API:         {}:{}", args.bind, port);
@@ -948,22 +983,31 @@ fn print_enabled_protocols(config: &OrbitServerConfig, args: &Args) {
 
     if enabled.contains(&"cql") {
         let port = config.protocols.cql.as_ref().unwrap().port;
-        info!("  🗂️  CQL (Cassandra):      {}:{} (cqlsh compatible)", args.bind, port);
+        info!(
+            "  🗂️  CQL (Cassandra):      {}:{} (cqlsh compatible)",
+            args.bind, port
+        );
     }
 
     if enabled.contains(&"mysql") {
         let port = config.protocols.mysql.as_ref().unwrap().port;
-        info!("  🐬 MySQL Wire:            {}:{} (mysql compatible)", args.bind, port);
+        info!(
+            "  🐬 MySQL Wire:            {}:{} (mysql compatible)",
+            args.bind, port
+        );
     }
 
-    info!("  📊 Prometheus Metrics:    {}:{}", args.bind, args.metrics_port);
-    
+    info!(
+        "  📊 Prometheus Metrics:    {}:{}",
+        args.bind, args.metrics_port
+    );
+
     if !args.seed_nodes.is_empty() {
         info!("🌱 Cluster Mode: Seed nodes: {:?}", args.seed_nodes);
     } else {
         info!("🏝️  Standalone Mode: No clustering configured");
     }
-    
+
     info!(""); // Empty line for readability
     info!("🎉 Ready to serve multi-protocol database workloads!");
     info!("   • Connect with psql for SQL queries and pgvector operations");
@@ -984,7 +1028,7 @@ mod tests {
         let server = MultiProtocolServer::new(config).await;
         assert!(server.is_ok());
     }
-    
+
     #[test]
     fn test_cli_overrides() {
         let mut config = OrbitServerConfig::default();
@@ -1005,9 +1049,9 @@ mod tests {
             log_level: "info".to_string(),
             generate_config: false,
         };
-        
+
         apply_cli_overrides(&mut config, &args);
-        
+
         assert_eq!(config.server.bind_address, "127.0.0.1");
         assert_eq!(config.server.node_id, Some("test-node".to_string()));
         assert_eq!(config.protocols.grpc.as_ref().unwrap().port, 50052);

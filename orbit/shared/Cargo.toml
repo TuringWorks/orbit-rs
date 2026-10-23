@@ -22,7 +22,13 @@ async-trait.workspace = true
 uuid.workspace = true
 # SQLx updated to 0.9+ which resolves RSA vulnerability (RUSTSEC-2023-0071)
 # No longer needs custom fork
-sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "sqlite", "chrono", "uuid"] }
+sqlx = { version = "0.9", default-features = false, features = [
+  "runtime-tokio",
+  "tls-rustls",
+  "sqlite",
+  "chrono",
+  "uuid",
+] }
 tokio-util = "0.7"
 md5 = "0.8"
 tempfile = "3.0"

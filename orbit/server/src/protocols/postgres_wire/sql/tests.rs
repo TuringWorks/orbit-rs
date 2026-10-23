@@ -1012,9 +1012,16 @@ mod tests {
         let sql = r#"CREATE TABLE IF NOT EXISTS "order" ("id" SERIAL PRIMARY KEY, "user" INTEGER, "default" VARCHAR)"#;
         let mut engine = SqlEngine::new();
         let result = engine.parse(sql);
-        assert!(result.is_ok(), "Failed to parse quoted identifiers: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Failed to parse quoted identifiers: {:?}",
+            result
+        );
         let insert = r#"INSERT INTO "order" ("id", "user") VALUES (1, 2) RETURNING "id""#;
-        assert!(engine.parse(insert).is_ok(), "Failed to parse quoted INSERT");
+        assert!(
+            engine.parse(insert).is_ok(),
+            "Failed to parse quoted INSERT"
+        );
     }
 
     #[test]

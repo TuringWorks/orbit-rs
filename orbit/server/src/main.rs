@@ -852,7 +852,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Start MongoDB server (port 27017)
     let mongodb_bind =
         std::env::var("ORBIT_MONGODB_BIND").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let mongodb_bind_addr = format!("{mongodb_bind}:{}", protocol_port("ORBIT_MONGODB_PORT", None, 27017));
+    let mongodb_bind_addr = format!(
+        "{mongodb_bind}:{}",
+        protocol_port("ORBIT_MONGODB_PORT", None, 27017)
+    );
     let mongodb_server = MongoDbServer::new(mongodb_bind_addr.clone())
         .with_tls_config(toml_config.server.tls.clone());
     let mongodb_handle = tokio::spawn(async move {

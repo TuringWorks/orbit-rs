@@ -1507,11 +1507,21 @@ fn parse_column_definition(parser: &mut SqlParser) -> ParseResult<ColumnDefiniti
         });
     };
 
+    // SERIAL types parse as plain integers; remember them so the column can be filled from a sequence
+    let serial = matches!(
+        &parser.current_token,
+        Some(Token::Identifier(t)) if matches!(t.to_uppercase().as_str(), "SERIAL" | "BIGSERIAL" | "SMALLSERIAL")
+    );
+
     // Parse data type
     let data_type = utilities::parse_data_type(parser)?;
 
     // Parse column constraints
     let mut constraints = Vec::new();
+    if serial {
+        constraints.push(ColumnConstraint::Serial);
+        constraints.push(ColumnConstraint::NotNull);
+    }
 
     while parser.matches(&[
         Token::Not,

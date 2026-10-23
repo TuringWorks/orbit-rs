@@ -7,7 +7,7 @@ use std::thread::ThreadId;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
-use super::pin_manager::{PinKey, LifetimeClass};
+use super::pin_manager::{LifetimeClass, PinKey};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GcTrigger {
@@ -75,14 +75,14 @@ impl EpochManager {
     pub async fn retire_slice(&self, slice: RetiredSlice) {
         let epoch = self.current_epoch.load(Ordering::Acquire);
         let list_index = (epoch as usize) % self.epoch_history_size;
-        
+
         let mut retire_list = self.retire_lists[list_index].lock().await;
         retire_list.push(slice);
     }
 
     pub fn advance_epoch(&self) -> u64 {
         let new_epoch = self.current_epoch.fetch_add(1, Ordering::AcqRel) + 1;
-        
+
         // Start background GC for old epochs
         let epoch_mgr = self;
         tokio::spawn(async move {
@@ -90,13 +90,14 @@ impl EpochManager {
                 eprintln!("Error in epoch GC: {}", e);
             }
         });
-        
+
         new_epoch
     }
 
     async fn gc_old_slices(&self, current_epoch: u64) -> Result<()> {
         // Find minimum reader epoch
-        let min_reader_epoch = self.reader_epochs
+        let min_reader_epoch = self
+            .reader_epochs
             .iter()
             .map(|entry| *entry.value())
             .min()
@@ -108,7 +109,7 @@ impl EpochManager {
         for epoch in 0..safe_gc_epoch {
             let list_index = (epoch as usize) % self.epoch_history_size;
             let mut retire_list = self.retire_lists[list_index].lock().await;
-            
+
             // Process all retired slices from this epoch
             let mut processed_count = 0;
             while let Some(retired_slice) = retire_list.pop() {
@@ -116,9 +117,12 @@ impl EpochManager {
                 (retired_slice.unmap_fn)();
                 processed_count += 1;
             }
-            
+
             if processed_count > 0 {
-                println!("Garbage collected {} slices from epoch {}", processed_count, epoch);
+                println!(
+                    "Garbage collected {} slices from epoch {}",
+                    processed_count, epoch
+                );
             }
         }
 
@@ -171,11 +175,12 @@ impl DefaultLifetimeManager {
             }
             GcTrigger::MemoryPressure(threshold) => {
                 if let Some(max_memory) = policy.max_memory_mb {
-                    let current_usage = self.memory_usage_by_class
+                    let current_usage = self
+                        .memory_usage_by_class
                         .get(&policy.class)
                         .map(|usage| usage.load(Ordering::Relaxed))
                         .unwrap_or(0);
-                    
+
                     let max_bytes = max_memory * 1024 * 1024;
                     return (current_usage as f64 / max_bytes as f64) > threshold as f64;
                 }
@@ -220,7 +225,9 @@ impl LifetimeManager for DefaultLifetimeManager {
     }
 
     fn retire_slice(&self, key: PinKey) -> Result<()> {
-        let policy = self.slice_policies.remove(&key)
+        let policy = self
+            .slice_policies
+            .remove(&key)
             .ok_or_else(|| anyhow!("Slice {} not registered", key.0))?
             .1;
 
@@ -296,7 +303,7 @@ mod tests {
     #[tokio::test]
     async fn test_epoch_manager() {
         let epoch_mgr = EpochManager::new(8);
-        
+
         let initial_epoch = epoch_mgr.get_current_epoch();
         assert_eq!(initial_epoch, 0);
 
@@ -309,12 +316,12 @@ mod tests {
     #[tokio::test]
     async fn test_read_guard() {
         let epoch_mgr = EpochManager::new(8);
-        
+
         {
             let _guard = epoch_mgr.enter_read().await;
             assert_eq!(epoch_mgr.reader_epochs.len(), 1);
         }
-        
+
         // Guard should be dropped and reader removed
         assert_eq!(epoch_mgr.reader_epochs.len(), 0);
     }
@@ -322,7 +329,7 @@ mod tests {
     #[tokio::test]
     async fn test_lifetime_manager() {
         let lifetime_mgr = DefaultLifetimeManager::new();
-        
+
         let key = PinKey(123);
         let policy = LifetimePolicy {
             class: LifetimeClass::Session,

@@ -4,9 +4,9 @@
 
 #![cfg(target_os = "macos")]
 
+use orbit_compute::AccelerationStrategy;
 use orbit_engine::query::{Query, QueryOptimizer, VectorizedExecutor};
 use orbit_engine::storage::{Column, ColumnBatch, FilterPredicate, NullBitmap, SqlValue};
-use orbit_compute::AccelerationStrategy;
 
 /// Helper to create test data
 fn create_test_data(row_count: usize) -> ColumnBatch {
@@ -23,7 +23,11 @@ fn create_test_data(row_count: usize) -> ColumnBatch {
             NullBitmap::new_all_valid(row_count),
         ],
         row_count,
-        column_names: Some(vec!["id".to_string(), "value".to_string(), "score".to_string()]),
+        column_names: Some(vec![
+            "id".to_string(),
+            "value".to_string(),
+            "score".to_string(),
+        ]),
     }
 }
 
@@ -57,7 +61,10 @@ async fn test_gpu_simple_filter_eq() {
     let result_batch = result.unwrap();
 
     // Should have exactly 1 row (id=42)
-    assert_eq!(result_batch.row_count, 1, "Expected exactly 1 row with id=42");
+    assert_eq!(
+        result_batch.row_count, 1,
+        "Expected exactly 1 row with id=42"
+    );
 
     // Verify the values
     if let Column::Int32(ids) = &result_batch.columns[0] {
@@ -77,7 +84,10 @@ async fn test_gpu_filter_gt() {
     let query = Query {
         table: "test".to_string(),
         projection: Some(vec!["id".to_string()]),
-        filter: Some(FilterPredicate::Gt("value".to_string(), SqlValue::Int32(100))),
+        filter: Some(FilterPredicate::Gt(
+            "value".to_string(),
+            SqlValue::Int32(100),
+        )),
         limit: None,
         offset: None,
     };
@@ -149,7 +159,10 @@ async fn test_gpu_with_limit_and_offset() {
     let query = Query {
         table: "test".to_string(),
         projection: Some(vec!["id".to_string()]),
-        filter: Some(FilterPredicate::Gt("value".to_string(), SqlValue::Int32(100))),
+        filter: Some(FilterPredicate::Gt(
+            "value".to_string(),
+            SqlValue::Int32(100),
+        )),
         limit: Some(10),
         offset: Some(5),
     };
@@ -185,7 +198,10 @@ async fn test_gpu_large_dataset() {
     let query = Query {
         table: "large_test".to_string(),
         projection: Some(vec!["id".to_string(), "value".to_string()]),
-        filter: Some(FilterPredicate::Lt("value".to_string(), SqlValue::Int32(1000))),
+        filter: Some(FilterPredicate::Lt(
+            "value".to_string(),
+            SqlValue::Int32(1000),
+        )),
         limit: None,
         offset: None,
     };
@@ -219,7 +235,11 @@ async fn test_gpu_vs_cpu_consistency() {
 
     let query = Query {
         table: "test".to_string(),
-        projection: Some(vec!["id".to_string(), "value".to_string(), "score".to_string()]),
+        projection: Some(vec![
+            "id".to_string(),
+            "value".to_string(),
+            "score".to_string(),
+        ]),
         filter: Some(FilterPredicate::And(vec![
             FilterPredicate::Gt("id".to_string(), SqlValue::Int32(20)),
             FilterPredicate::Lt("id".to_string(), SqlValue::Int32(80)),
@@ -298,13 +318,19 @@ async fn test_gpu_fallback_on_unsupported_operation() {
         .await;
 
     // Should succeed (with CPU fallback for OR)
-    assert!(result.is_ok(), "Query with OR should succeed via CPU fallback");
+    assert!(
+        result.is_ok(),
+        "Query with OR should succeed via CPU fallback"
+    );
     let result_batch = result.unwrap();
 
     // Note: OR implementation is currently simplified (returns first predicate only)
     // Full OR would return 2 rows (id=10 and id=20)
     // Current implementation returns 1 row (id=10)
-    assert_eq!(result_batch.row_count, 1, "Expected 1 row from simplified OR filter");
+    assert_eq!(
+        result_batch.row_count, 1,
+        "Expected 1 row from simplified OR filter"
+    );
 }
 
 #[tokio::test]
@@ -336,7 +362,10 @@ async fn test_gpu_empty_result() {
         .unwrap();
 
     // Should return empty result
-    assert_eq!(result.row_count, 0, "Query for non-existent value should return 0 rows");
+    assert_eq!(
+        result.row_count, 0,
+        "Query for non-existent value should return 0 rows"
+    );
 }
 
 #[tokio::test]
@@ -383,7 +412,10 @@ async fn test_gpu_i64_filter() {
 
     // large_value >= 50000 means id >= 500
     // That gives us ids 500-999 (500 rows)
-    assert_eq!(result.row_count, 500, "Expected 500 rows where large_value >= 50000");
+    assert_eq!(
+        result.row_count, 500,
+        "Expected 500 rows where large_value >= 50000"
+    );
 }
 
 #[tokio::test]

@@ -4,14 +4,14 @@
 //! without requiring a full orbit-server cluster. It's designed specifically for the
 //! RESP server example to provide Redis-compatible functionality.
 
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde_json::Value;
 use tracing::debug;
 
-use orbit_shared::*;
 use crate::protocols::resp::actors::*;
+use orbit_shared::*;
 
 /// Local actor registry for RESP actors
 pub struct LocalActorRegistry {
@@ -42,11 +42,21 @@ impl LocalActorRegistry {
     }
 
     /// Execute a method on a KeyValueActor
-    pub async fn invoke_keyvalue_actor(&self, key: &str, method: &str, args: &[Value]) -> OrbitResult<Value> {
+    pub async fn invoke_keyvalue_actor(
+        &self,
+        key: &str,
+        method: &str,
+        args: &[Value],
+    ) -> OrbitResult<Value> {
         let mut actors = self.keyvalue_actors.write().await;
-        let actor = actors.entry(key.to_string()).or_insert_with(KeyValueActor::new);
+        let actor = actors
+            .entry(key.to_string())
+            .or_insert_with(KeyValueActor::new);
 
-        debug!("Invoking KeyValueActor method '{}' on key '{}'", method, key);
+        debug!(
+            "Invoking KeyValueActor method '{}' on key '{}'",
+            method, key
+        );
 
         match method {
             "get_value" => {
@@ -174,7 +184,12 @@ impl LocalActorRegistry {
     }
 
     /// Execute a method on a HashActor
-    pub async fn invoke_hash_actor(&self, key: &str, method: &str, args: &[Value]) -> OrbitResult<Value> {
+    pub async fn invoke_hash_actor(
+        &self,
+        key: &str,
+        method: &str,
+        args: &[Value],
+    ) -> OrbitResult<Value> {
         let mut actors = self.hash_actors.write().await;
         let actor = actors.entry(key.to_string()).or_insert_with(HashActor::new);
 
@@ -268,7 +283,12 @@ impl LocalActorRegistry {
     }
 
     /// Execute a method on a ListActor
-    pub async fn invoke_list_actor(&self, key: &str, method: &str, args: &[Value]) -> OrbitResult<Value> {
+    pub async fn invoke_list_actor(
+        &self,
+        key: &str,
+        method: &str,
+        args: &[Value],
+    ) -> OrbitResult<Value> {
         let mut actors = self.list_actors.write().await;
         let actor = actors.entry(key.to_string()).or_insert_with(ListActor::new);
 
@@ -414,7 +434,12 @@ impl LocalActorRegistry {
     }
 
     /// Execute a method on a SetActor
-    pub async fn invoke_set_actor(&self, key: &str, method: &str, args: &[Value]) -> OrbitResult<Value> {
+    pub async fn invoke_set_actor(
+        &self,
+        key: &str,
+        method: &str,
+        args: &[Value],
+    ) -> OrbitResult<Value> {
         let mut actors = self.set_actors.write().await;
         let actor = actors.entry(key.to_string()).or_insert_with(SetActor::new);
 
@@ -474,11 +499,21 @@ impl LocalActorRegistry {
     }
 
     /// Execute a method on a SortedSetActor
-    pub async fn invoke_sorted_set_actor(&self, key: &str, method: &str, args: &[Value]) -> OrbitResult<Value> {
+    pub async fn invoke_sorted_set_actor(
+        &self,
+        key: &str,
+        method: &str,
+        args: &[Value],
+    ) -> OrbitResult<Value> {
         let mut actors = self.sorted_set_actors.write().await;
-        let actor = actors.entry(key.to_string()).or_insert_with(SortedSetActor::new);
+        let actor = actors
+            .entry(key.to_string())
+            .or_insert_with(SortedSetActor::new);
 
-        debug!("Invoking SortedSetActor method '{}' on key '{}'", method, key);
+        debug!(
+            "Invoking SortedSetActor method '{}' on key '{}'",
+            method, key
+        );
 
         match method {
             "zadd" => {
@@ -560,7 +595,9 @@ impl LocalActorRegistry {
                 let min_score: f64 = serde_json::from_value(args[0].clone())?;
                 let max_score: f64 = serde_json::from_value(args[1].clone())?;
                 let with_scores: bool = serde_json::from_value(args[2].clone())?;
-                let result = actor.zrangebyscore(min_score, max_score, with_scores).await?;
+                let result = actor
+                    .zrangebyscore(min_score, max_score, with_scores)
+                    .await?;
                 Ok(serde_json::to_value(result)?)
             }
             "zcount" => {
@@ -597,9 +634,16 @@ impl LocalActorRegistry {
     }
 
     /// Execute a method on a PubSubActor
-    pub async fn invoke_pubsub_actor(&self, key: &str, method: &str, args: &[Value]) -> OrbitResult<Value> {
+    pub async fn invoke_pubsub_actor(
+        &self,
+        key: &str,
+        method: &str,
+        args: &[Value],
+    ) -> OrbitResult<Value> {
         let mut actors = self.pubsub_actors.write().await;
-        let actor = actors.entry(key.to_string()).or_insert_with(PubSubActor::new);
+        let actor = actors
+            .entry(key.to_string())
+            .or_insert_with(PubSubActor::new);
 
         debug!("Invoking PubSubActor method '{}' on key '{}'", method, key);
 
@@ -653,7 +697,10 @@ impl LocalActorRegistry {
     }
 
     /// Route and execute an invocation
-    pub async fn execute_invocation(&self, invocation: &AddressableInvocation) -> OrbitResult<Value> {
+    pub async fn execute_invocation(
+        &self,
+        invocation: &AddressableInvocation,
+    ) -> OrbitResult<Value> {
         let key = match &invocation.reference.key {
             Key::StringKey { key } => key.clone(),
             Key::Int32Key { key } => key.to_string(),
@@ -661,31 +708,41 @@ impl LocalActorRegistry {
             Key::UuidKey { key } => key.to_string(),
         };
 
-        let args: Vec<Value> = invocation.args.iter().map(|arg| arg.value.clone()).collect();
+        let args: Vec<Value> = invocation
+            .args
+            .iter()
+            .map(|arg| arg.value.clone())
+            .collect();
 
         match invocation.reference.addressable_type.as_str() {
             "KeyValueActor" => {
-                self.invoke_keyvalue_actor(&key, &invocation.method, &args).await
+                self.invoke_keyvalue_actor(&key, &invocation.method, &args)
+                    .await
             }
             "HashActor" => {
-                self.invoke_hash_actor(&key, &invocation.method, &args).await
+                self.invoke_hash_actor(&key, &invocation.method, &args)
+                    .await
             }
             "ListActor" => {
-                self.invoke_list_actor(&key, &invocation.method, &args).await
+                self.invoke_list_actor(&key, &invocation.method, &args)
+                    .await
             }
-            "SetActor" => {
-                self.invoke_set_actor(&key, &invocation.method, &args).await
-            }
+            "SetActor" => self.invoke_set_actor(&key, &invocation.method, &args).await,
             "SortedSetActor" => {
-                self.invoke_sorted_set_actor(&key, &invocation.method, &args).await
+                self.invoke_sorted_set_actor(&key, &invocation.method, &args)
+                    .await
             }
             "PubSubActor" => {
-                self.invoke_pubsub_actor(&key, &invocation.method, &args).await
+                self.invoke_pubsub_actor(&key, &invocation.method, &args)
+                    .await
             }
             _ => Err(OrbitError::InvocationFailed {
                 addressable_type: invocation.reference.addressable_type.clone(),
                 method: invocation.method.clone(),
-                reason: format!("Unknown actor type: {}", invocation.reference.addressable_type),
+                reason: format!(
+                    "Unknown actor type: {}",
+                    invocation.reference.addressable_type
+                ),
             }),
         }
     }
@@ -700,7 +757,11 @@ impl Default for LocalActorRegistry {
 /// RESP-specific InvocationSystem that uses local actor registry
 pub struct RespInvocationSystem {
     registry: Arc<LocalActorRegistry>,
-    pending_invocations: Arc<RwLock<HashMap<u64, tokio::sync::oneshot::Sender<orbit_client::invocation::InvocationResult>>>>,
+    pending_invocations: Arc<
+        RwLock<
+            HashMap<u64, tokio::sync::oneshot::Sender<orbit_client::invocation::InvocationResult>>,
+        >,
+    >,
     invocation_counter: Arc<std::sync::atomic::AtomicU64>,
 }
 
@@ -765,13 +826,18 @@ impl RespInvocationSystem {
         };
 
         // Complete the pending invocation
-        self.complete_invocation(invocation_id, result.clone()).await;
+        self.complete_invocation(invocation_id, result.clone())
+            .await;
 
         Ok(result)
     }
 
     /// Complete a pending invocation with a result
-    async fn complete_invocation(&self, invocation_id: u64, result: orbit_client::invocation::InvocationResult) {
+    async fn complete_invocation(
+        &self,
+        invocation_id: u64,
+        result: orbit_client::invocation::InvocationResult,
+    ) {
         let mut pending = self.pending_invocations.write().await;
         if let Some(sender) = pending.remove(&invocation_id) {
             let _ = sender.send(result);
@@ -794,7 +860,7 @@ impl Default for RespInvocationSystem {
 pub async fn create_resp_orbit_client(namespace: &str) -> OrbitResult<orbit_client::OrbitClient> {
     // Create a specialized invocation system for RESP
     let resp_invocation_system = Arc::new(RespInvocationSystem::new());
-    
+
     // Create an OrbitClient builder
     let client = orbit_client::OrbitClient::builder()
         .with_namespace(namespace)
@@ -805,6 +871,6 @@ pub async fn create_resp_orbit_client(namespace: &str) -> OrbitResult<orbit_clie
     // TODO: Replace the client's invocation system with our RESP-aware one
     // This would require modifying OrbitClient to allow custom invocation systems
     // For now, we'll return the client as-is, but the invocation system needs to be patched
-    
+
     Ok(client)
 }

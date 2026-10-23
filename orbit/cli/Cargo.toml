@@ -21,8 +21,8 @@ tokio = { version = "1.48", features = ["full"] }
 
 # CLI and TUI
 clap = { version = "4.5", features = ["derive", "cargo"] }
-rustyline = "14.0"  # Interactive line editing with history
-nu-ansi-term = "0.50"  # ANSI color codes
+rustyline = "14.0"                                         # Interactive line editing with history
+nu-ansi-term = "0.50"                                      # ANSI color codes
 
 # Syntax highlighting
 syntect = "5.3"

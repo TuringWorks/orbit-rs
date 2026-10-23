@@ -122,7 +122,10 @@ impl OrbitServerBuilder {
     }
 
     /// Serve this node's Raft consensus over the gRPC port, so peers can request votes and send heartbeats to it.
-    pub fn with_raft_consensus(mut self, consensus: Arc<orbit_shared::consensus::RaftConsensus>) -> Self {
+    pub fn with_raft_consensus(
+        mut self,
+        consensus: Arc<orbit_shared::consensus::RaftConsensus>,
+    ) -> Self {
         self.raft_consensus = Some(consensus);
         self
     }
@@ -441,11 +444,9 @@ impl OrbitServer {
             .add_service(health_service_server::HealthServiceServer::new(
                 self.health_service.clone(),
             ))
-            .add_optional_service(
-                self.raft_consensus
-                    .clone()
-                    .map(|consensus| orbit_shared::raft_transport::GrpcRaftHandler::new(consensus).into_server()),
-            )
+            .add_optional_service(self.raft_consensus.clone().map(|consensus| {
+                orbit_shared::raft_transport::GrpcRaftHandler::new(consensus).into_server()
+            }))
             .add_service(reflection_service)
             .serve(grpc_addr);
 

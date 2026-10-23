@@ -26,8 +26,10 @@ pub struct OrbitWorld {
 impl OrbitWorld {
     /// Create a new SQL executor for testing
     pub async fn create_sql_executor(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let storage = Arc::new(orbit_server::protocols::postgres_wire::storage::memory::MemoryStorage::new());
-        self.sql_executor = Some(orbit_server::protocols::postgres_wire::sql::SqlExecutor::new(storage).await?);
+        let storage =
+            Arc::new(orbit_server::protocols::postgres_wire::storage::memory::MemoryStorage::new());
+        self.sql_executor =
+            Some(orbit_server::protocols::postgres_wire::sql::SqlExecutor::new(storage).await?);
         Ok(())
     }
 
@@ -86,14 +88,24 @@ async fn when_insert_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let headers = data_table.raw().first().unwrap();
     let columns = headers.join(", ");
-    
+
     for row in data_table.raw().iter().skip(1) {
-        let values = row.iter()
-            .map(|v| if v.parse::<f64>().is_ok() { v.to_string() } else { format!("'{}'", v) })
+        let values = row
+            .iter()
+            .map(|v| {
+                if v.parse::<f64>().is_ok() {
+                    v.to_string()
+                } else {
+                    format!("'{}'", v)
+                }
+            })
             .collect::<Vec<_>>()
             .join(", ");
-        
-        let sql = format!("INSERT INTO {} ({}) VALUES ({})", table_name, columns, values);
+
+        let sql = format!(
+            "INSERT INTO {} ({}) VALUES ({})",
+            table_name, columns, values
+        );
         world.execute_sql(&sql).await?;
     }
     Ok(())
@@ -140,7 +152,11 @@ async fn then_result_has_rows(
             if let Some(rows_array) = rows.as_array() {
                 let actual_count = rows_array.len();
                 if actual_count != expected_count {
-                    return Err(format!("Expected {} rows but got {}", expected_count, actual_count).into());
+                    return Err(format!(
+                        "Expected {} rows but got {}",
+                        expected_count, actual_count
+                    )
+                    .into());
                 }
             } else {
                 return Err("Result does not contain rows array".into());
@@ -162,43 +178,45 @@ async fn then_table_has_rows(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let sql = format!("SELECT COUNT(*) as count FROM {}", table_name);
     world.execute_sql(&sql).await?;
-    
-    let result = world.last_result.as_ref()
+
+    let result = world
+        .last_result
+        .as_ref()
         .ok_or("No query result available")?;
-    
+
     let actual_count = extract_table_count(result)?;
-    
+
     if actual_count != expected_count {
-        return Err(format!("Expected {} rows in table {} but got {}", 
-                         expected_count, table_name, actual_count).into());
+        return Err(format!(
+            "Expected {} rows in table {} but got {}",
+            expected_count, table_name, actual_count
+        )
+        .into());
     }
-    
+
     Ok(())
 }
 
 /// Extract the count value from a table count query result
 fn extract_table_count(result: &serde_json::Value) -> Result<usize, Box<dyn std::error::Error>> {
-    let rows = result.get("rows")
+    let rows = result
+        .get("rows")
         .ok_or("Result does not contain rows field")?;
-    
-    let rows_array = rows.as_array()
-        .ok_or("Rows field is not an array")?;
-    
-    let first_row = rows_array.first()
-        .ok_or("No rows in result")?;
-    
-    let row_array = first_row.as_array()
-        .ok_or("First row is not an array")?;
-    
-    let count_value = row_array.first()
-        .ok_or("No count value in first row")?;
-    
-    let count_str = count_value.as_str()
-        .ok_or("Count value is not a string")?;
-    
-    let count = count_str.parse::<usize>()
+
+    let rows_array = rows.as_array().ok_or("Rows field is not an array")?;
+
+    let first_row = rows_array.first().ok_or("No rows in result")?;
+
+    let row_array = first_row.as_array().ok_or("First row is not an array")?;
+
+    let count_value = row_array.first().ok_or("No count value in first row")?;
+
+    let count_str = count_value.as_str().ok_or("Count value is not a string")?;
+
+    let count = count_str
+        .parse::<usize>()
         .map_err(|e| format!("Failed to parse count: {}", e))?;
-    
+
     Ok(count)
 }
 
@@ -231,10 +249,10 @@ async fn when_add_vector(
             .split(',')
             .map(|s| s.trim().parse::<f32>())
             .collect();
-        
+
         let data = values?;
         let vector = orbit_server::protocols::vector_store::Vector::new(vector_id, data);
-        
+
         let mut index = store.write().await;
         match index.add_vector(vector) {
             Ok(_) => {
@@ -263,9 +281,9 @@ async fn when_search_vectors(
             .split(',')
             .map(|s| s.trim().parse::<f32>())
             .collect();
-        
+
         let query_data = values?;
-        
+
         let index = store.read().await;
         match index.search(&query_data, limit) {
             Ok(results) => {
@@ -291,8 +309,11 @@ async fn then_find_similar_vectors(
         if let Some(results_array) = result.as_array() {
             let actual_count = results_array.len();
             if actual_count != expected_count {
-                return Err(format!("Expected {} similar vectors but found {}", 
-                                 expected_count, actual_count).into());
+                return Err(format!(
+                    "Expected {} similar vectors but found {}",
+                    expected_count, actual_count
+                )
+                .into());
             }
         } else {
             return Err("Search result is not an array".into());
@@ -312,50 +333,67 @@ async fn then_first_result_has_id(
     let results_array = get_results_array(&result)?;
     let first_result = get_first_result(&results_array)?;
     let actual_id = extract_vector_id(&first_result)?;
-    
+
     validate_expected_id(&actual_id, &expected_id)?;
     Ok(())
 }
 
 /// Extract search result from world, returning error if none exists
 fn get_search_result(world: &OrbitWorld) -> Result<&serde_json::Value, Box<dyn std::error::Error>> {
-    world.last_result.as_ref()
+    world
+        .last_result
+        .as_ref()
         .ok_or_else(|| "No search result available".into())
 }
 
 /// Extract results array from JSON value, returning error if not an array
-fn get_results_array(result: &serde_json::Value) -> Result<&Vec<serde_json::Value>, Box<dyn std::error::Error>> {
-    result.as_array()
+fn get_results_array(
+    result: &serde_json::Value,
+) -> Result<&Vec<serde_json::Value>, Box<dyn std::error::Error>> {
+    result
+        .as_array()
         .ok_or_else(|| "Search result is not an array".into())
 }
 
 /// Extract first result from results array, returning error if empty
-fn get_first_result(results_array: &[serde_json::Value]) -> Result<&serde_json::Value, Box<dyn std::error::Error>> {
-    results_array.first()
+fn get_first_result(
+    results_array: &[serde_json::Value],
+) -> Result<&serde_json::Value, Box<dyn std::error::Error>> {
+    results_array
+        .first()
         .ok_or_else(|| "No results found".into())
 }
 
 /// Extract vector ID from result object
-fn extract_vector_id(first_result: &serde_json::Value) -> Result<String, Box<dyn std::error::Error>> {
-    let vector_obj = first_result.get("vector")
+fn extract_vector_id(
+    first_result: &serde_json::Value,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let vector_obj = first_result
+        .get("vector")
         .ok_or("First result does not contain vector object")?;
-    
-    let actual_id = vector_obj.get("id")
+
+    let actual_id = vector_obj
+        .get("id")
         .ok_or("First result does not contain vector ID")?;
-    
-    actual_id.as_str()
+
+    actual_id
+        .as_str()
         .ok_or("Vector ID is not a string")
         .map(|s| s.to_string())
         .map_err(|e| e.into())
 }
 
 /// Validate that actual ID matches expected ID
-fn validate_expected_id(actual_id: &str, expected_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn validate_expected_id(
+    actual_id: &str,
+    expected_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     if actual_id != expected_id {
         return Err(format!(
-            "Expected first result ID '{}' but got '{}'", 
+            "Expected first result ID '{}' but got '{}'",
             expected_id, actual_id
-        ).into());
+        )
+        .into());
     }
     Ok(())
 }
@@ -373,17 +411,36 @@ mod tests {
     async fn test_bdd_step_definitions() {
         // This test ensures that the BDD step definitions compile and can be used
         let mut world = OrbitWorld::default();
-        
+
         // Test SQL operations
         given_empty_database(&mut world).await.unwrap();
-        given_table_with_columns(&mut world, "users".to_string(), "id INTEGER, name TEXT".to_string()).await.unwrap();
-        when_execute_sql(&mut world, "INSERT INTO users VALUES (1, 'Alice')".to_string()).await.unwrap();
+        given_table_with_columns(
+            &mut world,
+            "users".to_string(),
+            "id INTEGER, name TEXT".to_string(),
+        )
+        .await
+        .unwrap();
+        when_execute_sql(
+            &mut world,
+            "INSERT INTO users VALUES (1, 'Alice')".to_string(),
+        )
+        .await
+        .unwrap();
         then_operation_succeeds(&mut world).await.unwrap();
-        
+
         // Test vector operations
         given_vector_store(&mut world, 3).await.unwrap();
-        when_add_vector(&mut world, "vec1".to_string(), "[1.0, 2.0, 3.0]".to_string()).await.unwrap();
-        when_search_vectors(&mut world, "[1.0, 2.0, 3.0]".to_string(), 1).await.unwrap();
+        when_add_vector(
+            &mut world,
+            "vec1".to_string(),
+            "[1.0, 2.0, 3.0]".to_string(),
+        )
+        .await
+        .unwrap();
+        when_search_vectors(&mut world, "[1.0, 2.0, 3.0]".to_string(), 1)
+            .await
+            .unwrap();
         then_find_similar_vectors(&mut world, 1).await.unwrap();
     }
 }

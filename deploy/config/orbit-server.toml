@@ -95,8 +95,18 @@ connection_timeout_secs = 30
 
 [protocols.redis.commands]
 enabled_groups = [
-    "generic", "string", "list", "hash", "set", "zset",
-    "vector", "search", "json", "graph", "stream", "pubsub"
+  "generic",
+  "string",
+  "list",
+  "hash",
+  "set",
+  "zset",
+  "vector",
+  "search",
+  "json",
+  "graph",
+  "stream",
+  "pubsub",
 ]
 disabled_commands = []
 command_timeout_secs = 30
