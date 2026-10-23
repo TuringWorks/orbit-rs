@@ -348,9 +348,9 @@ async fn then_first_result_has_id(
     expected_id: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let result = get_search_result(world)?;
-    let results_array = get_results_array(&result)?;
-    let first_result = get_first_result(&results_array)?;
-    let actual_id = extract_vector_id(&first_result)?;
+    let results_array = get_results_array(result)?;
+    let first_result = get_first_result(results_array)?;
+    let actual_id = extract_vector_id(first_result)?;
 
     validate_expected_id(&actual_id, &expected_id)?;
     Ok(())
@@ -419,46 +419,4 @@ fn validate_expected_id(
 #[tokio::main]
 async fn main() {
     OrbitWorld::run(concat!(env!("CARGO_MANIFEST_DIR"), "/bdd/features")).await;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_bdd_step_definitions() {
-        // This test ensures that the BDD step definitions compile and can be used
-        let mut world = OrbitWorld::default();
-
-        // Test SQL operations
-        given_empty_database(&mut world).await.unwrap();
-        given_table_with_columns(
-            &mut world,
-            "users".to_string(),
-            "id INTEGER, name TEXT".to_string(),
-        )
-        .await
-        .unwrap();
-        when_execute_sql(
-            &mut world,
-            "INSERT INTO users VALUES (1, 'Alice')".to_string(),
-        )
-        .await
-        .unwrap();
-        then_operation_succeeds(&mut world).await.unwrap();
-
-        // Test vector operations
-        given_vector_store(&mut world, 3).await.unwrap();
-        when_add_vector(
-            &mut world,
-            "vec1".to_string(),
-            "[1.0, 2.0, 3.0]".to_string(),
-        )
-        .await
-        .unwrap();
-        when_search_vectors(&mut world, "[1.0, 2.0, 3.0]".to_string(), 1)
-            .await
-            .unwrap();
-        then_find_similar_vectors(&mut world, 1).await.unwrap();
-    }
 }
