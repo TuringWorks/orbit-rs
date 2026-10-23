@@ -4,7 +4,6 @@ use super::ddl::table_key;
 use super::query::{ctx_for, rel_to_result, Rel, RelCol, Runner};
 use super::value::coerce;
 use super::{err, DbError, Op, QueryResult, Row, Seqs, State, Table, R};
-use std::sync::Mutex;
 use crate::protocols::postgres_wire::sql::ast::{
     Assignment, AssignmentTarget, ConflictAction, ConflictTarget, DeleteStatement, Expression,
     FromClause, InsertSource, InsertStatement, SelectItem, SelectStatement, UpdateStatement,
@@ -12,6 +11,7 @@ use crate::protocols::postgres_wire::sql::ast::{
 use crate::protocols::postgres_wire::sql::expression_evaluator::EvaluationContext;
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 fn rel_cols(t: &Table, qual: &str) -> Vec<RelCol> {
     t.cols
@@ -375,11 +375,7 @@ fn matching(
     Ok(out)
 }
 
-pub(crate) fn update(
-    st: &mut State,
-    ops: &mut Vec<Op>,
-    upd: &UpdateStatement,
-) -> R<QueryResult> {
+pub(crate) fn update(st: &mut State, ops: &mut Vec<Op>, upd: &UpdateStatement) -> R<QueryResult> {
     if upd.from.is_some() {
         return err("0A000", "UPDATE ... FROM is not supported yet");
     }
@@ -415,11 +411,7 @@ pub(crate) fn update(
     Ok(result("UPDATE ", count, ret))
 }
 
-pub(crate) fn delete(
-    st: &mut State,
-    ops: &mut Vec<Op>,
-    del: &DeleteStatement,
-) -> R<QueryResult> {
+pub(crate) fn delete(st: &mut State, ops: &mut Vec<Op>, del: &DeleteStatement) -> R<QueryResult> {
     if del.using.is_some() {
         return err("0A000", "DELETE ... USING is not supported yet");
     }

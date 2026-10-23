@@ -543,6 +543,31 @@ pub struct Lexer {
     keywords: HashMap<String, Token>,
 }
 
+/// The keyword a token was lexed from, in lower case, or `None` for tokens that are not keywords
+/// (operators, punctuation, literals, identifiers).
+pub fn keyword_text(token: &Token) -> Option<String> {
+    use std::sync::OnceLock;
+    static BY_TOKEN: OnceLock<HashMap<String, String>> = OnceLock::new();
+    let table = BY_TOKEN.get_or_init(|| {
+        let lexer = Lexer::new("");
+        let mut out: HashMap<String, String> = HashMap::new();
+        for (word, tok) in &lexer.keywords {
+            let key = format!("{tok:?}");
+            let word = word.to_lowercase();
+            // several spellings can lex to one token; prefer the one that matches its name
+            match out.get(&key) {
+                Some(existing)
+                    if *existing == key.to_lowercase() || existing.len() <= word.len() => {}
+                _ => {
+                    out.insert(key, word);
+                }
+            }
+        }
+        out
+    });
+    table.get(&format!("{token:?}")).cloned()
+}
+
 impl Lexer {
     /// Create a new lexer with SQL input
     pub fn new(input: &str) -> Self {

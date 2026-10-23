@@ -499,11 +499,7 @@ impl DurableEngine {
         stmt: &Statement,
         text: &str,
     ) -> ProtocolResult<QueryResult> {
-        let tag = |t: &str| {
-            Ok(QueryResult::Command {
-                tag: t.to_string(),
-            })
-        };
+        let tag = |t: &str| Ok(QueryResult::Command { tag: t.to_string() });
         match stmt {
             Statement::Begin(b) => {
                 if session.txn.is_none() {
@@ -590,7 +586,13 @@ impl DurableEngine {
     }
 
     /// Run `stmt` inside `txn`. A statement that fails leaves the transaction's data as it was.
-    async fn run_in(&self, txn: &mut Txn, stmt: &Statement, text: &str, write: bool) -> R<QueryResult> {
+    async fn run_in(
+        &self,
+        txn: &mut Txn,
+        stmt: &Statement,
+        text: &str,
+        write: bool,
+    ) -> R<QueryResult> {
         if write {
             self.begin_write(txn).await?;
         } else if txn.pin && txn.work.is_none() && txn.base.is_none() {
@@ -628,7 +630,13 @@ impl DurableEngine {
         }
     }
 
-    fn exec_write(&self, st: &mut State, ops: &mut Vec<Op>, stmt: &Statement, text: &str) -> R<QueryResult> {
+    fn exec_write(
+        &self,
+        st: &mut State,
+        ops: &mut Vec<Op>,
+        stmt: &Statement,
+        text: &str,
+    ) -> R<QueryResult> {
         match stmt {
             Statement::Select(sel) => query::run_select_statement(st, sel),
             Statement::Insert(ins) => dml::insert(st, ops, &self.seqs, ins),

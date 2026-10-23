@@ -1494,7 +1494,7 @@ fn parse_column_definition(parser: &mut SqlParser) -> ParseResult<ColumnDefiniti
     let name = if let Some(col_name) = parser
         .current_token
         .as_ref()
-        .and_then(utilities::token_to_identifier_name)
+        .and_then(utilities::keyword_as_name)
     {
         parser.advance()?;
         col_name
