@@ -128,6 +128,7 @@ impl SqlParser {
             Some(Token::Commit) => self.parse_commit_statement(),
             Some(Token::Rollback) => self.parse_rollback_statement(),
             Some(Token::Savepoint) => self.parse_savepoint_statement(),
+            Some(Token::Release) => tcl::parse_release_savepoint(self),
             Some(Token::Abort) => {
                 self.advance()?;
                 Ok(Statement::Rollback(

@@ -3,17 +3,25 @@
 use super::ddl::table_key;
 use super::query::{ctx_for, rel_to_result, Rel, RelCol, Runner};
 use super::value::coerce;
-use super::{err, DbError, Op, Persist, QueryResult, Row, State, Table, Txn, Undo, R};
+use super::{err, DbError, Op, QueryResult, Row, Seqs, State, Table, R};
+use std::sync::Mutex;
 use crate::protocols::postgres_wire::sql::ast::{
-    Assignment, AssignmentTarget, ConflictAction, ConflictTarget, DeleteStatement, Expression, FromClause, InsertSource, InsertStatement, SelectItem,
-    SelectStatement, UpdateStatement,
+    Assignment, AssignmentTarget, ConflictAction, ConflictTarget, DeleteStatement, Expression,
+    FromClause, InsertSource, InsertStatement, SelectItem, SelectStatement, UpdateStatement,
 };
 use crate::protocols::postgres_wire::sql::expression_evaluator::EvaluationContext;
 use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::collections::HashMap;
 
 fn rel_cols(t: &Table, qual: &str) -> Vec<RelCol> {
-    t.cols.iter().map(|c| RelCol { qual: Some(qual.to_string()), name: c.name.clone(), ty: Some(c.ty.clone()) }).collect()
+    t.cols
+        .iter()
+        .map(|c| RelCol {
+            qual: Some(qual.to_string()),
+            name: c.name.clone(),
+            ty: Some(c.ty.clone()),
+        })
+        .collect()
 }
 
 fn lookup<'a>(st: &'a State, key: &str) -> R<&'a Table> {
@@ -26,12 +34,22 @@ fn lookup<'a>(st: &'a State, key: &str) -> R<&'a Table> {
 /// Evaluate a `RETURNING` list against `rows` of table `t`.
 fn returning(st: &State, t: &Table, items: &[SelectItem], rows: Vec<Row>) -> R<Rel> {
     let mut r = Runner::new(st);
-    r.with_cte(&t.name, Rel { cols: rel_cols(t, &t.name), rows });
+    r.with_cte(
+        &t.name,
+        Rel {
+            cols: rel_cols(t, &t.name),
+            rows,
+        },
+    );
     let sel = SelectStatement {
         with: None,
         select_list: items.to_vec(),
         distinct: None,
-        from_clause: Some(FromClause::Table { name: crate::protocols::postgres_wire::sql::ast::TableName::new(t.name.clone()), alias: None, time_travel: None }),
+        from_clause: Some(FromClause::Table {
+            name: crate::protocols::postgres_wire::sql::ast::TableName::new(t.name.clone()),
+            alias: None,
+            time_travel: None,
+        }),
         where_clause: None,
         group_by: None,
         having: None,
@@ -48,7 +66,11 @@ fn returning(st: &State, t: &Table, items: &[SelectItem], rows: Vec<Row>) -> R<R
 fn result(tag: &str, count: usize, ret: Option<Rel>) -> QueryResult {
     match ret {
         Some(rel) => match rel_to_result(rel) {
-            QueryResult::Typed { columns, rows } => QueryResult::Returning { tag: format!("{tag}{count}"), columns, rows },
+            QueryResult::Typed { columns, rows } => QueryResult::Returning {
+                tag: format!("{tag}{count}"),
+                columns,
+                rows,
+            },
             other => other,
         },
         None => match tag {
@@ -62,24 +84,45 @@ fn result(tag: &str, count: usize, ret: Option<Rel>) -> QueryResult {
 fn not_null_check(t: &Table, row: &Row) -> R<()> {
     for (c, v) in t.cols.iter().zip(row) {
         if c.not_null && v.is_null() {
-            return err("23502", format!("null value in column \"{}\" of relation \"{}\" violates not-null constraint", c.name, t.name));
+            return err(
+                "23502",
+                format!(
+                    "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
+                    c.name, t.name
+                ),
+            );
         }
     }
     Ok(())
 }
 
 fn unique_violation(t: &Table, idx: &str) -> DbError {
-    DbError { code: "23505", message: format!("duplicate key value violates unique constraint \"{idx}\" on table \"{}\"", t.name) }
+    DbError {
+        code: "23505",
+        message: format!(
+            "duplicate key value violates unique constraint \"{idx}\" on table \"{}\"",
+            t.name
+        ),
+    }
 }
 
 /// The columns a statement's `RETURNING` list produces, without running the statement.
-pub(crate) fn describe_returning(st: &State, table: &crate::protocols::postgres_wire::sql::ast::TableName, items: &[SelectItem]) -> R<Vec<(String, i32)>> {
+pub(crate) fn describe_returning(
+    st: &State,
+    table: &crate::protocols::postgres_wire::sql::ast::TableName,
+    items: &[SelectItem],
+) -> R<Vec<(String, i32)>> {
     let t = lookup(st, &table_key(table))?;
     let rel = returning(st, t, items, Vec::new())?;
     Ok(super::query::rel_columns(&rel))
 }
 
-pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: &InsertStatement) -> R<QueryResult> {
+pub(crate) fn insert(
+    st: &mut State,
+    ops: &mut Vec<Op>,
+    seqs: &Mutex<Seqs>,
+    ins: &InsertStatement,
+) -> R<QueryResult> {
     let key = table_key(&ins.table);
     let (cols, ncols, tname) = {
         let t = lookup(st, &key)?;
@@ -89,7 +132,14 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
         (_, InsertSource::DefaultValues) => vec![],
         (Some(names), _) => names
             .iter()
-            .map(|n| cols.iter().position(|c| c.name == n.to_lowercase()).ok_or_else(|| DbError { code: "42703", message: format!("column \"{n}\" of relation \"{tname}\" does not exist") }))
+            .map(|n| {
+                cols.iter()
+                    .position(|c| c.name == n.to_lowercase())
+                    .ok_or_else(|| DbError {
+                        code: "42703",
+                        message: format!("column \"{n}\" of relation \"{tname}\" does not exist"),
+                    })
+            })
             .collect::<R<_>>()?,
         (None, _) => (0..ncols).collect(),
     };
@@ -103,7 +153,14 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
                 let mut out = Vec::with_capacity(rows.len());
                 for row in rows {
                     if row.len() != target.len() {
-                        return err("42601", if row.len() > target.len() { "INSERT has more expressions than target columns" } else { "INSERT has more target columns than expressions" });
+                        return err(
+                            "42601",
+                            if row.len() > target.len() {
+                                "INSERT has more expressions than target columns"
+                            } else {
+                                "INSERT has more target columns than expressions"
+                            },
+                        );
                     }
                     let mut vals = Vec::with_capacity(row.len());
                     for e in row {
@@ -130,7 +187,10 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
         let mut row: Row = vec![SqlValue::Null; ncols];
         let mut given = vec![false; ncols];
         for (&i, v) in target.iter().zip(vals) {
-            row[i] = coerce(v, &cols[i].ty).map_err(|m| DbError { code: "22P02", message: m })?;
+            row[i] = coerce(v, &cols[i].ty).map_err(|m| DbError {
+                code: "22P02",
+                message: m,
+            })?;
             given[i] = true;
         }
         for i in 0..ncols {
@@ -138,11 +198,17 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
                 continue;
             }
             if let Some(seq) = &cols[i].serial {
-                let n = st.nextval(seq, persist)?;
-                row[i] = coerce(SqlValue::BigInt(n), &cols[i].ty).map_err(|m| DbError { code: "22003", message: m })?;
+                let n = seqs.lock().expect("sequences").alloc(seq)?;
+                row[i] = coerce(SqlValue::BigInt(n), &cols[i].ty).map_err(|m| DbError {
+                    code: "22003",
+                    message: m,
+                })?;
             } else if let Some(d) = &cols[i].default {
                 let v = Runner::new(st).eval(d, &EvaluationContext::empty())?;
-                row[i] = coerce(v, &cols[i].ty).map_err(|m| DbError { code: "22P02", message: m })?;
+                row[i] = coerce(v, &cols[i].ty).map_err(|m| DbError {
+                    code: "22P02",
+                    message: m,
+                })?;
             }
         }
         {
@@ -152,7 +218,8 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
         // uniqueness
         let conflict = {
             let t = lookup(st, &key)?;
-            t.unique_conflict(&row, None).map(|(i, id)| (i.name.clone(), i.cols.clone(), id))
+            t.unique_conflict(&row, None)
+                .map(|(i, id)| (i.name.clone(), i.cols.clone(), id))
         };
         if let Some((iname, icols, existing)) = conflict {
             let Some(oc) = &ins.on_conflict else {
@@ -162,7 +229,10 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
             // a conflict on a different unique index than the one named is still an error
             let matches_target = match &oc.target {
                 Some(ConflictTarget::Columns(c)) => {
-                    let want: Vec<usize> = c.iter().filter_map(|n| cols.iter().position(|x| x.name == n.to_lowercase())).collect();
+                    let want: Vec<usize> = c
+                        .iter()
+                        .filter_map(|n| cols.iter().position(|x| x.name == n.to_lowercase()))
+                        .collect();
                     want == icols
                 }
                 Some(ConflictTarget::Constraint(n)) => n.to_lowercase() == iname,
@@ -175,7 +245,11 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
             match &oc.action {
                 ConflictAction::DoNothing => continue,
                 ConflictAction::DoUpdate { set, where_clause } => {
-                    let old = lookup(st, &key)?.rows.get(&existing).cloned().expect("existing row");
+                    let old = lookup(st, &key)?
+                        .rows
+                        .get(&existing)
+                        .cloned()
+                        .expect("existing row");
                     let new = {
                         let t = lookup(st, &key)?;
                         let mut map: HashMap<String, SqlValue> = HashMap::new();
@@ -195,7 +269,7 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
                         }
                         apply_assignments(&mut r, t, &old, set, &ctx)?
                     };
-                    write_update(st, txn, &key, existing, old, new.clone())?;
+                    write_update(st, ops, &key, existing, old, new.clone())?;
                     affected += 1;
                     inserted.push(new);
                     continue;
@@ -207,8 +281,11 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
         t.next_rowid += 1;
         t.index_add(rowid, &row);
         t.rows.insert(rowid, row.clone());
-        txn.ops.push(Op::PutRow { table: t.id, rowid, row: row.clone() });
-        txn.undo.push(Undo::Inserted { table: key.clone(), rowid });
+        ops.push(Op::PutRow {
+            table: t.id,
+            rowid,
+            row: row.clone(),
+        });
         affected += 1;
         inserted.push(row);
     }
@@ -219,24 +296,46 @@ pub(crate) fn insert(st: &mut State, txn: &mut Txn, persist: &dyn Persist, ins: 
     Ok(result("INSERT 0 ", affected, ret))
 }
 
-fn apply_assignments(r: &mut Runner, t: &Table, old: &Row, set: &[Assignment], ctx: &EvaluationContext) -> R<Row> {
+fn apply_assignments(
+    r: &mut Runner,
+    t: &Table,
+    old: &Row,
+    set: &[Assignment],
+    ctx: &EvaluationContext,
+) -> R<Row> {
     let mut new = old.clone();
     for a in set {
         let AssignmentTarget::Column(name) = &a.target else {
             return err("0A000", "multi-column SET is not supported");
         };
         let Some(i) = t.col_index(name) else {
-            return err("42703", format!("column \"{name}\" of relation \"{}\" does not exist", t.name));
+            return err(
+                "42703",
+                format!(
+                    "column \"{name}\" of relation \"{}\" does not exist",
+                    t.name
+                ),
+            );
         };
         let v = r.eval(&a.value, ctx)?;
-        new[i] = coerce(v, &t.cols[i].ty).map_err(|m| DbError { code: "22P02", message: m })?;
+        new[i] = coerce(v, &t.cols[i].ty).map_err(|m| DbError {
+            code: "22P02",
+            message: m,
+        })?;
     }
     not_null_check(t, &new)?;
     Ok(new)
 }
 
 /// Replace row `rowid` with `new`, keeping indexes consistent and recording undo and the write.
-fn write_update(st: &mut State, txn: &mut Txn, key: &str, rowid: u64, old: Row, new: Row) -> R<()> {
+fn write_update(
+    st: &mut State,
+    ops: &mut Vec<Op>,
+    key: &str,
+    rowid: u64,
+    old: Row,
+    new: Row,
+) -> R<()> {
     let t = st.tables.get_mut(key).expect("table");
     t.index_remove(rowid, &old);
     if let Some((idx, _)) = t.unique_conflict(&new, Some(rowid)) {
@@ -246,13 +345,21 @@ fn write_update(st: &mut State, txn: &mut Txn, key: &str, rowid: u64, old: Row, 
     }
     t.index_add(rowid, &new);
     t.rows.insert(rowid, new.clone());
-    txn.ops.push(Op::PutRow { table: t.id, rowid, row: new });
-    txn.undo.push(Undo::Updated { table: key.to_string(), rowid, old });
+    ops.push(Op::PutRow {
+        table: t.id,
+        rowid,
+        row: new,
+    });
     Ok(())
 }
 
 /// Rows of `t` matching `where_clause`, as `(row id, row)`, evaluated against the committed state.
-fn matching(st: &State, t: &Table, qual: &str, where_clause: &Option<Expression>) -> R<Vec<(u64, Row)>> {
+fn matching(
+    st: &State,
+    t: &Table,
+    qual: &str,
+    where_clause: &Option<Expression>,
+) -> R<Vec<(u64, Row)>> {
     let cols = rel_cols(t, qual);
     let mut r = Runner::new(st);
     let mut out = Vec::new();
@@ -268,12 +375,20 @@ fn matching(st: &State, t: &Table, qual: &str, where_clause: &Option<Expression>
     Ok(out)
 }
 
-pub(crate) fn update(st: &mut State, txn: &mut Txn, upd: &UpdateStatement) -> R<QueryResult> {
+pub(crate) fn update(
+    st: &mut State,
+    ops: &mut Vec<Op>,
+    upd: &UpdateStatement,
+) -> R<QueryResult> {
     if upd.from.is_some() {
         return err("0A000", "UPDATE ... FROM is not supported yet");
     }
     let key = table_key(&upd.table);
-    let qual = upd.alias.clone().unwrap_or_else(|| key.clone()).to_lowercase();
+    let qual = upd
+        .alias
+        .clone()
+        .unwrap_or_else(|| key.clone())
+        .to_lowercase();
     let plan: Vec<(u64, Row, Row)> = {
         let t = lookup(st, &key)?;
         let cols = rel_cols(t, &qual);
@@ -290,7 +405,7 @@ pub(crate) fn update(st: &mut State, txn: &mut Txn, upd: &UpdateStatement) -> R<
     let count = plan.len();
     let mut after = Vec::with_capacity(count);
     for (id, old, new) in plan {
-        write_update(st, txn, &key, id, old, new.clone())?;
+        write_update(st, ops, &key, id, old, new.clone())?;
         after.push(new);
     }
     let ret = match &upd.returning {
@@ -300,12 +415,20 @@ pub(crate) fn update(st: &mut State, txn: &mut Txn, upd: &UpdateStatement) -> R<
     Ok(result("UPDATE ", count, ret))
 }
 
-pub(crate) fn delete(st: &mut State, txn: &mut Txn, del: &DeleteStatement) -> R<QueryResult> {
+pub(crate) fn delete(
+    st: &mut State,
+    ops: &mut Vec<Op>,
+    del: &DeleteStatement,
+) -> R<QueryResult> {
     if del.using.is_some() {
         return err("0A000", "DELETE ... USING is not supported yet");
     }
     let key = table_key(&del.table);
-    let qual = del.alias.clone().unwrap_or_else(|| key.clone()).to_lowercase();
+    let qual = del
+        .alias
+        .clone()
+        .unwrap_or_else(|| key.clone())
+        .to_lowercase();
     let hits = {
         let t = lookup(st, &key)?;
         matching(st, t, &qual, &del.where_clause)?
@@ -317,8 +440,10 @@ pub(crate) fn delete(st: &mut State, txn: &mut Txn, del: &DeleteStatement) -> R<
         for (id, row) in hits {
             t.index_remove(id, &row);
             t.rows.remove(&id);
-            txn.ops.push(Op::DelRow { table: t.id, rowid: id });
-            txn.undo.push(Undo::Deleted { table: key.clone(), rowid: id, row: row.clone() });
+            ops.push(Op::DelRow {
+                table: t.id,
+                rowid: id,
+            });
             gone.push(row);
         }
     }

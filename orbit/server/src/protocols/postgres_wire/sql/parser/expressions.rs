@@ -96,8 +96,25 @@ impl ExpressionParser {
                 Token::NotEqual => BinaryOperator::NotEqual,
                 Token::Is => {
                     *pos += 1;
-                    if *pos < tokens.len() && matches!(tokens[*pos], Token::Not) {
+                    let negated = *pos < tokens.len() && matches!(tokens[*pos], Token::Not);
+                    if negated {
                         *pos += 1;
+                    }
+                    if *pos < tokens.len() && matches!(tokens[*pos], Token::Distinct) {
+                        // IS [NOT] DISTINCT FROM
+                        *pos += 1;
+                        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::From) {
+                            return Err(crate::protocols::error::ProtocolError::ParseError(
+                                "Expected FROM after IS DISTINCT".to_string(),
+                            ));
+                        }
+                        *pos += 1;
+                        if negated {
+                            BinaryOperator::IsNotDistinctFrom
+                        } else {
+                            BinaryOperator::IsDistinctFrom
+                        }
+                    } else if negated {
                         BinaryOperator::IsNot
                     } else {
                         BinaryOperator::Is
@@ -106,7 +123,13 @@ impl ExpressionParser {
                 _ => break,
             };
 
-            if !matches!(operator, BinaryOperator::Is | BinaryOperator::IsNot) {
+            if !matches!(
+                operator,
+                BinaryOperator::Is
+                    | BinaryOperator::IsNot
+                    | BinaryOperator::IsDistinctFrom
+                    | BinaryOperator::IsNotDistinctFrom
+            ) {
                 *pos += 1;
             }
 
@@ -130,17 +153,24 @@ impl ExpressionParser {
         let mut left = self.parse_additive_expression(tokens, pos)?;
 
         while *pos < tokens.len() {
-            if matches!(&tokens[*pos], Token::In) {
+            // `x NOT IN (...)` puts NOT before IN
+            let not_in = matches!(&tokens[*pos], Token::Not)
+                && *pos + 1 < tokens.len()
+                && matches!(&tokens[*pos + 1], Token::In);
+            if not_in || matches!(&tokens[*pos], Token::In) {
                 // Handle IN operator specially to support both value lists and subqueries
+                if not_in {
+                    *pos += 1; // consume NOT
+                }
                 *pos += 1; // consume IN
 
-                // Check for NOT IN
-                let negated = if *pos < tokens.len() && matches!(&tokens[*pos], Token::Not) {
-                    *pos += 1;
-                    true
-                } else {
-                    false
-                };
+                let negated = not_in
+                    || if *pos < tokens.len() && matches!(&tokens[*pos], Token::Not) {
+                        *pos += 1;
+                        true
+                    } else {
+                        false
+                    };
 
                 // Parse IN list or subquery
                 if *pos >= tokens.len() {

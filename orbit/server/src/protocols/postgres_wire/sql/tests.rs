@@ -1008,6 +1008,79 @@ mod tests {
     }
 
     #[test]
+    fn test_serial_columns_keep_their_sequence() {
+        use crate::protocols::postgres_wire::sql::ast::{ColumnConstraint, Statement};
+        let sql = "CREATE TABLE t (id SERIAL PRIMARY KEY, big BIGSERIAL, n INTEGER)";
+        let stmts = crate::protocols::postgres_wire::sql::parser::SqlParser::new()
+            .parse_multiple(sql)
+            .unwrap();
+        let Statement::CreateTable(ct) = &stmts[0] else {
+            panic!("not a CREATE TABLE")
+        };
+        assert!(ct.columns[0]
+            .constraints
+            .contains(&ColumnConstraint::Serial));
+        assert!(ct.columns[0]
+            .constraints
+            .contains(&ColumnConstraint::NotNull));
+        assert!(ct.columns[1]
+            .constraints
+            .contains(&ColumnConstraint::Serial));
+        assert!(!ct.columns[2]
+            .constraints
+            .contains(&ColumnConstraint::Serial));
+    }
+
+    #[test]
+    fn test_any_word_is_an_alias_after_as() {
+        use crate::protocols::postgres_wire::sql::ast::{SelectItem, Statement};
+        let sql =
+            "SELECT id AS owner, name AS position, x AS type FROM res_partner AS user ORDER BY id";
+        let stmts = crate::protocols::postgres_wire::sql::parser::SqlParser::new()
+            .parse_multiple(sql)
+            .unwrap();
+        let Statement::Select(sel) = &stmts[0] else {
+            panic!("not a SELECT")
+        };
+        let aliases: Vec<_> = sel
+            .select_list
+            .iter()
+            .map(|i| match i {
+                SelectItem::Expression { alias, .. } => alias.clone().unwrap_or_default(),
+                _ => String::new(),
+            })
+            .collect();
+        assert_eq!(aliases, ["owner", "position", "type"]);
+    }
+
+    #[test]
+    fn test_not_in_and_is_distinct_from_in_a_select() {
+        for sql in [
+            "SELECT id FROM t WHERE state NOT IN ('a', 'b') OR state IS NULL",
+            "SELECT id FROM t WHERE a IS DISTINCT FROM b",
+            "SELECT id FROM t WHERE a IS NOT DISTINCT FROM b AND c NOT IN (SELECT id FROM u)",
+        ] {
+            let result =
+                crate::protocols::postgres_wire::sql::parser::SqlParser::new().parse_multiple(sql);
+            assert!(result.is_ok(), "Failed to parse {sql}: {result:?}");
+        }
+    }
+
+    #[test]
+    fn test_release_savepoint() {
+        use crate::protocols::postgres_wire::sql::ast::Statement;
+        for sql in ["RELEASE SAVEPOINT sp", "RELEASE sp"] {
+            let stmts = crate::protocols::postgres_wire::sql::parser::SqlParser::new()
+                .parse_multiple(sql)
+                .unwrap();
+            assert!(
+                matches!(&stmts[0], Statement::ReleaseSavepoint(r) if r.name == "sp"),
+                "{sql}"
+            );
+        }
+    }
+
+    #[test]
     fn test_quoted_identifiers_are_names() {
         let sql = r#"CREATE TABLE IF NOT EXISTS "order" ("id" SERIAL PRIMARY KEY, "user" INTEGER, "default" VARCHAR)"#;
         let mut engine = SqlEngine::new();

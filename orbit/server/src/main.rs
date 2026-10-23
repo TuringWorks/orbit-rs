@@ -1370,7 +1370,10 @@ async fn start_postgresql_server(
     // The durable SQL engine keeps committed state in RocksDB and runs every statement it supports.
     // ORBIT_SQL_ENGINE=legacy selects the previous executors, which only persist table definitions and inserts.
     #[cfg(feature = "storage-rocksdb")]
-    let query_engine = if std::env::var("ORBIT_SQL_ENGINE").map(|v| v == "legacy").unwrap_or(false) {
+    let query_engine = if std::env::var("ORBIT_SQL_ENGINE")
+        .map(|v| v == "legacy")
+        .unwrap_or(false)
+    {
         info!("[PostgreSQL] Using the legacy SQL executors (ORBIT_SQL_ENGINE=legacy)");
         query_engine
     } else {

@@ -4,10 +4,13 @@ use super::value::{canonical, cmp, group_key, oid_of_type, oid_of_value, truthy}
 use super::{err, Row, State, R};
 use crate::protocols::postgres_wire::query_engine::QueryResult;
 use crate::protocols::postgres_wire::sql::ast::{
-    BinaryOperator, CaseExpression, DistinctClause, Expression, FromClause, FunctionCall, FunctionName, InList, JoinCondition, JoinType,
-    NullsOrder, OrderByItem, SelectItem, SelectStatement, SetOperator, SortDirection, WhenClause,
+    BinaryOperator, CaseExpression, DistinctClause, Expression, FromClause, FunctionCall,
+    FunctionName, InList, JoinCondition, JoinType, NullsOrder, OrderByItem, SelectItem,
+    SelectStatement, SetOperator, SortDirection, WhenClause,
 };
-use crate::protocols::postgres_wire::sql::expression_evaluator::{EvaluationContext, ExpressionEvaluator};
+use crate::protocols::postgres_wire::sql::expression_evaluator::{
+    EvaluationContext, ExpressionEvaluator,
+};
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 use rust_decimal::Decimal;
 use std::cmp::Ordering;
@@ -54,7 +57,19 @@ fn fname(f: &FunctionCall) -> String {
 }
 
 fn is_agg_name(n: &str) -> bool {
-    matches!(n, "count" | "sum" | "avg" | "min" | "max" | "string_agg" | "array_agg" | "bool_and" | "bool_or" | "every")
+    matches!(
+        n,
+        "count"
+            | "sum"
+            | "avg"
+            | "min"
+            | "max"
+            | "string_agg"
+            | "array_agg"
+            | "bool_and"
+            | "bool_or"
+            | "every"
+    )
 }
 
 /// Visit `e` and its sub-expressions (not entering subqueries).
@@ -90,7 +105,9 @@ fn walk(e: &Expression, f: &mut dyn FnMut(&Expression)) {
                 l.iter().for_each(|x| walk(x, f));
             }
         }
-        Expression::Between { expr, low, high, .. } => {
+        Expression::Between {
+            expr, low, high, ..
+        } => {
             walk(expr, f);
             walk(low, f);
             walk(high, f);
@@ -108,19 +125,42 @@ fn walk(e: &Expression, f: &mut dyn FnMut(&Expression)) {
 
 /// Rebuild `e`, replacing any node for which `f` returns `Some`. `cx` is handed to `f` so the
 /// callback can use the runner without borrowing it.
-fn map_expr<C>(e: &Expression, cx: &mut C, f: &mut dyn FnMut(&mut C, &Expression) -> R<Option<Expression>>) -> R<Expression> {
+fn map_expr<C>(
+    e: &Expression,
+    cx: &mut C,
+    f: &mut dyn FnMut(&mut C, &Expression) -> R<Option<Expression>>,
+) -> R<Expression> {
     if let Some(r) = f(cx, e)? {
         return Ok(r);
     }
-    fn bx<C>(x: &Expression, cx: &mut C, f: &mut dyn FnMut(&mut C, &Expression) -> R<Option<Expression>>) -> R<Box<Expression>> {
+    fn bx<C>(
+        x: &Expression,
+        cx: &mut C,
+        f: &mut dyn FnMut(&mut C, &Expression) -> R<Option<Expression>>,
+    ) -> R<Box<Expression>> {
         map_expr(x, cx, f).map(Box::new)
     }
     Ok(match e {
-        Expression::Binary { left, operator, right } => Expression::Binary { left: bx(left, cx, f)?, operator: operator.clone(), right: bx(right, cx, f)? },
-        Expression::Unary { operator, operand } => Expression::Unary { operator: operator.clone(), operand: bx(operand, cx, f)? },
+        Expression::Binary {
+            left,
+            operator,
+            right,
+        } => Expression::Binary {
+            left: bx(left, cx, f)?,
+            operator: operator.clone(),
+            right: bx(right, cx, f)?,
+        },
+        Expression::Unary { operator, operand } => Expression::Unary {
+            operator: operator.clone(),
+            operand: bx(operand, cx, f)?,
+        },
         Expression::Function(c) => {
             let mut c2 = (**c).clone();
-            c2.args = c.args.iter().map(|a| map_expr(a, cx, f)).collect::<R<_>>()?;
+            c2.args = c
+                .args
+                .iter()
+                .map(|a| map_expr(a, cx, f))
+                .collect::<R<_>>()?;
             if let Some(fl) = &c.filter {
                 c2.filter = Some(bx(fl, cx, f)?);
             }
@@ -131,30 +171,67 @@ fn map_expr<C>(e: &Expression, cx: &mut C, f: &mut dyn FnMut(&mut C, &Expression
             when_clauses: c
                 .when_clauses
                 .iter()
-                .map(|w| Ok(WhenClause { condition: bx(&w.condition, cx, f)?, result: bx(&w.result, cx, f)? }))
+                .map(|w| {
+                    Ok(WhenClause {
+                        condition: bx(&w.condition, cx, f)?,
+                        result: bx(&w.result, cx, f)?,
+                    })
+                })
                 .collect::<R<_>>()?,
             else_clause: c.else_clause.as_ref().map(|o| bx(o, cx, f)).transpose()?,
         }),
-        Expression::In { expr, list, negated } => Expression::In {
+        Expression::In {
+            expr,
+            list,
+            negated,
+        } => Expression::In {
             expr: bx(expr, cx, f)?,
             list: match list {
-                InList::Expressions(l) => InList::Expressions(l.iter().map(|x| map_expr(x, cx, f)).collect::<R<_>>()?),
+                InList::Expressions(l) => {
+                    InList::Expressions(l.iter().map(|x| map_expr(x, cx, f)).collect::<R<_>>()?)
+                }
                 other => other.clone(),
             },
             negated: *negated,
         },
-        Expression::Between { expr, low, high, negated } => Expression::Between { expr: bx(expr, cx, f)?, low: bx(low, cx, f)?, high: bx(high, cx, f)?, negated: *negated },
-        Expression::Like { expr, pattern, escape, case_insensitive, negated } => Expression::Like {
+        Expression::Between {
+            expr,
+            low,
+            high,
+            negated,
+        } => Expression::Between {
+            expr: bx(expr, cx, f)?,
+            low: bx(low, cx, f)?,
+            high: bx(high, cx, f)?,
+            negated: *negated,
+        },
+        Expression::Like {
+            expr,
+            pattern,
+            escape,
+            case_insensitive,
+            negated,
+        } => Expression::Like {
             expr: bx(expr, cx, f)?,
             pattern: bx(pattern, cx, f)?,
             escape: escape.clone(),
             case_insensitive: *case_insensitive,
             negated: *negated,
         },
-        Expression::IsNull { expr, negated } => Expression::IsNull { expr: bx(expr, cx, f)?, negated: *negated },
-        Expression::Cast { expr, target_type } => Expression::Cast { expr: bx(expr, cx, f)?, target_type: target_type.clone() },
-        Expression::Array(v) => Expression::Array(v.iter().map(|x| map_expr(x, cx, f)).collect::<R<_>>()?),
-        Expression::Row(v) => Expression::Row(v.iter().map(|x| map_expr(x, cx, f)).collect::<R<_>>()?),
+        Expression::IsNull { expr, negated } => Expression::IsNull {
+            expr: bx(expr, cx, f)?,
+            negated: *negated,
+        },
+        Expression::Cast { expr, target_type } => Expression::Cast {
+            expr: bx(expr, cx, f)?,
+            target_type: target_type.clone(),
+        },
+        Expression::Array(v) => {
+            Expression::Array(v.iter().map(|x| map_expr(x, cx, f)).collect::<R<_>>()?)
+        }
+        Expression::Row(v) => {
+            Expression::Row(v.iter().map(|x| map_expr(x, cx, f)).collect::<R<_>>()?)
+        }
         other => other.clone(),
     })
 }
@@ -174,7 +251,15 @@ fn contains_agg(e: &Expression) -> bool {
 fn has_subquery(e: &Expression) -> bool {
     let mut found = false;
     walk(e, &mut |x| {
-        if matches!(x, Expression::Subquery(_) | Expression::Exists(_) | Expression::In { list: InList::Subquery(_), .. }) {
+        if matches!(
+            x,
+            Expression::Subquery(_)
+                | Expression::Exists(_)
+                | Expression::In {
+                    list: InList::Subquery(_),
+                    ..
+                }
+        ) {
             found = true;
         }
     });
@@ -202,12 +287,20 @@ pub(crate) fn expr_type(e: &Expression, cols: &[RelCol]) -> Option<SqlType> {
     };
     match e {
         Expression::Literal(v) => (!v.is_null()).then(|| v.sql_type()),
-        Expression::Column(c) => find_col(cols, c.table.as_deref(), &c.name).and_then(|i| cols[i].ty.clone()),
+        Expression::Column(c) => {
+            find_col(cols, c.table.as_deref(), &c.name).and_then(|i| cols[i].ty.clone())
+        }
         Expression::Cast { target_type, .. } => Some(target_type.clone()),
-        Expression::Binary { left, operator, right } => match operator {
-            BinaryOperator::Plus | BinaryOperator::Minus | BinaryOperator::Multiply | BinaryOperator::Divide | BinaryOperator::Modulo => {
-                numeric(expr_type(left, cols), expr_type(right, cols))
-            }
+        Expression::Binary {
+            left,
+            operator,
+            right,
+        } => match operator {
+            BinaryOperator::Plus
+            | BinaryOperator::Minus
+            | BinaryOperator::Multiply
+            | BinaryOperator::Divide
+            | BinaryOperator::Modulo => numeric(expr_type(left, cols), expr_type(right, cols)),
             BinaryOperator::Concat => Some(SqlType::Text),
             BinaryOperator::Equal
             | BinaryOperator::NotEqual
@@ -227,13 +320,29 @@ pub(crate) fn expr_type(e: &Expression, cols: &[RelCol]) -> Option<SqlType> {
             _ => None,
         },
         Expression::Unary { operator, operand } => match operator {
-            UnaryOperator::Not | UnaryOperator::IsNull | UnaryOperator::IsNotNull | UnaryOperator::IsTrue | UnaryOperator::IsNotTrue | UnaryOperator::IsFalse => Some(SqlType::Boolean),
+            UnaryOperator::Not
+            | UnaryOperator::IsNull
+            | UnaryOperator::IsNotNull
+            | UnaryOperator::IsTrue
+            | UnaryOperator::IsNotTrue
+            | UnaryOperator::IsFalse => Some(SqlType::Boolean),
             UnaryOperator::Minus | UnaryOperator::Plus => expr_type(operand, cols),
             _ => None,
         },
-        Expression::IsNull { .. } | Expression::Exists(_) | Expression::In { .. } | Expression::Between { .. } | Expression::Like { .. } => Some(SqlType::Boolean),
-        Expression::Case(c) => c.when_clauses.first().and_then(|w| expr_type(&w.result, cols)),
-        Expression::CurrentTimestamp(_) | Expression::LocalTimestamp(_) => Some(SqlType::Timestamp { with_timezone: true }),
+        Expression::IsNull { .. }
+        | Expression::Exists(_)
+        | Expression::In { .. }
+        | Expression::Between { .. }
+        | Expression::Like { .. } => Some(SqlType::Boolean),
+        Expression::Case(c) => c
+            .when_clauses
+            .first()
+            .and_then(|w| expr_type(&w.result, cols)),
+        Expression::CurrentTimestamp(_) | Expression::LocalTimestamp(_) => {
+            Some(SqlType::Timestamp {
+                with_timezone: true,
+            })
+        }
         Expression::CurrentDate => Some(SqlType::Date),
         Expression::Function(f) => {
             let first = f.args.first().and_then(|a| expr_type(a, cols));
@@ -241,18 +350,33 @@ pub(crate) fn expr_type(e: &Expression, cols: &[RelCol]) -> Option<SqlType> {
                 "count" => Some(SqlType::BigInt),
                 "sum" => match first {
                     Some(SqlType::SmallInt | SqlType::Integer) => Some(SqlType::BigInt),
-                    Some(SqlType::BigInt | SqlType::Decimal { .. } | SqlType::Numeric { .. }) => Some(SqlType::Numeric { precision: None, scale: None }),
+                    Some(SqlType::BigInt | SqlType::Decimal { .. } | SqlType::Numeric { .. }) => {
+                        Some(SqlType::Numeric {
+                            precision: None,
+                            scale: None,
+                        })
+                    }
                     other => other,
                 },
                 "avg" => match first {
-                    Some(SqlType::Real | SqlType::DoublePrecision) => Some(SqlType::DoublePrecision),
-                    _ => Some(SqlType::Numeric { precision: None, scale: None }),
+                    Some(SqlType::Real | SqlType::DoublePrecision) => {
+                        Some(SqlType::DoublePrecision)
+                    }
+                    _ => Some(SqlType::Numeric {
+                        precision: None,
+                        scale: None,
+                    }),
                 },
-                "min" | "max" | "coalesce" | "nullif" | "greatest" | "least" | "abs" | "round" | "ceil" | "floor" => first,
+                "min" | "max" | "coalesce" | "nullif" | "greatest" | "least" | "abs" | "round"
+                | "ceil" | "floor" => first,
                 "bool_and" | "bool_or" | "every" => Some(SqlType::Boolean),
-                "string_agg" | "lower" | "upper" | "trim" | "ltrim" | "rtrim" | "concat" | "concat_ws" | "substr" | "substring" | "replace" | "left" | "right" | "to_char" | "format" | "initcap" | "md5" => Some(SqlType::Text),
+                "string_agg" | "lower" | "upper" | "trim" | "ltrim" | "rtrim" | "concat"
+                | "concat_ws" | "substr" | "substring" | "replace" | "left" | "right"
+                | "to_char" | "format" | "initcap" | "md5" => Some(SqlType::Text),
                 "length" | "char_length" | "strpos" | "position" => Some(SqlType::Integer),
-                "now" | "current_timestamp" => Some(SqlType::Timestamp { with_timezone: true }),
+                "now" | "current_timestamp" => Some(SqlType::Timestamp {
+                    with_timezone: true,
+                }),
                 _ => None,
             }
         }
@@ -287,7 +411,11 @@ pub(crate) fn rel_columns(rel: &Rel) -> Vec<(String, i32)> {
         .map(|(i, c)| {
             let oid = match &c.ty {
                 Some(t) => oid_of_type(t),
-                None => rel.rows.iter().find_map(|r| (!r[i].is_null()).then(|| oid_of_value(&r[i]))).unwrap_or(25),
+                None => rel
+                    .rows
+                    .iter()
+                    .find_map(|r| (!r[i].is_null()).then(|| oid_of_value(&r[i])))
+                    .unwrap_or(25),
             };
             (c.name.clone(), oid)
         })
@@ -305,14 +433,29 @@ pub(crate) fn rel_to_result(rel: Rel) -> QueryResult {
     let rows = rel
         .rows
         .into_iter()
-        .map(|r| r.into_iter().map(|v| if v.is_null() { None } else { Some(v.to_postgres_string()) }).collect())
+        .map(|r| {
+            r.into_iter()
+                .map(|v| {
+                    if v.is_null() {
+                        None
+                    } else {
+                        Some(v.to_postgres_string())
+                    }
+                })
+                .collect()
+        })
         .collect();
     QueryResult::Typed { columns, rows }
 }
 
 impl<'a> Runner<'a> {
     pub fn new(st: &'a State) -> Self {
-        Self { st, ev: ExpressionEvaluator::new(), ctes: HashMap::new(), describe: false }
+        Self {
+            st,
+            ev: ExpressionEvaluator::new(),
+            ctes: HashMap::new(),
+            describe: false,
+        }
     }
 
     /// A runner that reads every table as empty, for finding a statement's result columns.
@@ -343,18 +486,40 @@ impl<'a> Runner<'a> {
                 Expression::Subquery(s) => {
                     let rel = me.select(s, Some(&outer))?;
                     if rel.rows.len() > 1 {
-                        return err("21000", "more than one row returned by a subquery used as an expression");
+                        return err(
+                            "21000",
+                            "more than one row returned by a subquery used as an expression",
+                        );
                     }
-                    Some(Expression::Literal(rel.rows.first().and_then(|r| r.first().cloned()).unwrap_or(SqlValue::Null)))
+                    Some(Expression::Literal(
+                        rel.rows
+                            .first()
+                            .and_then(|r| r.first().cloned())
+                            .unwrap_or(SqlValue::Null),
+                    ))
                 }
                 Expression::Exists(s) => {
                     let rel = me.select(s, Some(&outer))?;
                     Some(Expression::Literal(SqlValue::Boolean(!rel.rows.is_empty())))
                 }
-                Expression::In { expr, list: InList::Subquery(s), negated } => {
+                Expression::In {
+                    expr,
+                    list: InList::Subquery(s),
+                    negated,
+                } => {
                     let rel = me.select(s, Some(&outer))?;
-                    let items = rel.rows.into_iter().map(|r| Expression::Literal(r.into_iter().next().unwrap_or(SqlValue::Null))).collect();
-                    Some(Expression::In { expr: expr.clone(), list: InList::Expressions(items), negated: *negated })
+                    let items = rel
+                        .rows
+                        .into_iter()
+                        .map(|r| {
+                            Expression::Literal(r.into_iter().next().unwrap_or(SqlValue::Null))
+                        })
+                        .collect();
+                    Some(Expression::In {
+                        expr: expr.clone(),
+                        list: InList::Expressions(items),
+                        negated: *negated,
+                    })
                 }
                 _ => None,
             })
@@ -363,11 +528,15 @@ impl<'a> Runner<'a> {
 
     fn add_ctes(&mut self, sel: &SelectStatement, outer: Outer) -> R<Vec<String>> {
         let mut added = Vec::new();
-        let Some(with) = &sel.with else { return Ok(added) };
+        let Some(with) = &sel.with else {
+            return Ok(added);
+        };
         for cte in &with.ctes {
             let name = cte.name.to_lowercase();
             let rel = match (&cte.query.set_operation, with.recursive) {
-                (Some(op), true) if matches!(op.operator, SetOperator::Union | SetOperator::UnionAll) => {
+                (Some(op), true)
+                    if matches!(op.operator, SetOperator::Union | SetOperator::UnionAll) =>
+                {
                     let mut base_q = (*cte.query).clone();
                     base_q.set_operation = None;
                     let mut acc = self.select(&base_q, outer)?;
@@ -402,14 +571,23 @@ impl<'a> Runner<'a> {
 
     pub fn select(&mut self, sel: &SelectStatement, outer: Outer) -> R<Rel> {
         let added = self.add_ctes(sel, outer)?;
-        let out = if let Some(op) = &sel.set_operation { self.set_operation(sel, op, outer) } else { self.select_core(sel, outer) };
+        let out = if let Some(op) = &sel.set_operation {
+            self.set_operation(sel, op, outer)
+        } else {
+            self.select_core(sel, outer)
+        };
         for n in added {
             self.ctes.remove(&n);
         }
         out
     }
 
-    fn set_operation(&mut self, sel: &SelectStatement, op: &crate::protocols::postgres_wire::sql::ast::SetOperation, outer: Outer) -> R<Rel> {
+    fn set_operation(
+        &mut self,
+        sel: &SelectStatement,
+        op: &crate::protocols::postgres_wire::sql::ast::SetOperation,
+        outer: Outer,
+    ) -> R<Rel> {
         let mut left_q = sel.clone();
         left_q.set_operation = None;
         left_q.with = None;
@@ -419,7 +597,10 @@ impl<'a> Runner<'a> {
         let left = self.select_core(&left_q, outer)?;
         let right = self.select(&op.right, outer)?;
         if left.cols.len() != right.cols.len() {
-            return err("42601", "each UNION query must have the same number of columns");
+            return err(
+                "42601",
+                "each UNION query must have the same number of columns",
+            );
         }
         let mut rows = left.rows.clone();
         let keys = |rows: &[Row]| rows.iter().map(|r| group_key(r)).collect::<HashSet<_>>();
@@ -444,10 +625,16 @@ impl<'a> Runner<'a> {
                 }
             }
         }
-        let mut rel = Rel { cols: left.cols, rows };
+        let mut rel = Rel {
+            cols: left.cols,
+            rows,
+        };
         // ORDER BY / LIMIT of the first query apply to the combined result, by output column.
         if let Some(ob) = &sel.order_by {
-            let keys: Vec<(OrderKey, &OrderByItem)> = ob.iter().map(|o| Ok((resolve_order(&o.expression, &rel.cols, &[]), o))).collect::<R<_>>()?;
+            let keys: Vec<(OrderKey, &OrderByItem)> = ob
+                .iter()
+                .map(|o| Ok((resolve_order(&o.expression, &rel.cols, &[]), o)))
+                .collect::<R<_>>()?;
             let mut keyed: Vec<(Vec<SqlValue>, Row)> = Vec::new();
             for r in rel.rows.drain(..) {
                 let mut k = Vec::new();
@@ -462,7 +649,10 @@ impl<'a> Runner<'a> {
                 }
                 keyed.push((k, r));
             }
-            sort_keyed(&mut keyed, &keys.iter().map(|(_, o)| *o).collect::<Vec<_>>());
+            sort_keyed(
+                &mut keyed,
+                &keys.iter().map(|(_, o)| *o).collect::<Vec<_>>(),
+            );
             rel.rows = keyed.into_iter().map(|(_, r)| r).collect();
         }
         self.apply_limit(&mut rel.rows, sel)?;
@@ -482,7 +672,10 @@ impl<'a> Runner<'a> {
         if let Some(l) = &sel.limit {
             if let Some(e) = &l.count {
                 let n = self.eval(e, &empty)?;
-                let n = super::value::as_i64(&n).ok_or_else(|| super::DbError { code: "22023", message: "LIMIT must be a number".into() })?;
+                let n = super::value::as_i64(&n).ok_or_else(|| super::DbError {
+                    code: "22023",
+                    message: "LIMIT must be a number".into(),
+                })?;
                 if n < 0 {
                     return err("2201W", "LIMIT must not be negative");
                 }
@@ -495,7 +688,10 @@ impl<'a> Runner<'a> {
     fn select_core(&mut self, sel: &SelectStatement, outer: Outer) -> R<Rel> {
         let src = match &sel.from_clause {
             Some(f) => self.from(f, outer)?,
-            None => Rel { cols: vec![], rows: vec![vec![]] },
+            None => Rel {
+                cols: vec![],
+                rows: vec![vec![]],
+            },
         };
         let mut rows = Vec::with_capacity(src.rows.len());
         match &sel.where_clause {
@@ -526,7 +722,11 @@ impl<'a> Runner<'a> {
                 }
                 SelectItem::QualifiedWildcard { qualifier } => {
                     let q = qualifier.to_lowercase();
-                    for (i, c) in cols.iter().enumerate().filter(|(_, c)| c.qual.as_deref() == Some(q.as_str())) {
+                    for (i, c) in cols
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, c)| c.qual.as_deref() == Some(q.as_str()))
+                    {
                         plan.push((c.name.clone(), c.ty.clone(), Out::Src(i)));
                     }
                 }
@@ -542,14 +742,29 @@ impl<'a> Runner<'a> {
                 }
             }
         }
-        let out_cols: Vec<RelCol> = plan.iter().map(|(n, t, _)| RelCol { qual: None, name: n.clone(), ty: t.clone() }).collect();
+        let out_cols: Vec<RelCol> = plan
+            .iter()
+            .map(|(n, t, _)| RelCol {
+                qual: None,
+                name: n.clone(),
+                ty: t.clone(),
+            })
+            .collect();
         let order: Vec<OrderByItem> = sel.order_by.clone().unwrap_or_default();
-        let select_exprs: Vec<Option<&Expression>> = plan.iter().map(|(_, _, o)| if let Out::Expr(e) = o { Some(e) } else { None }).collect();
-        let keys: Vec<OrderKey> = order.iter().map(|o| resolve_order_exprs(&o.expression, &out_cols, &select_exprs)).collect();
+        let select_exprs: Vec<Option<&Expression>> = plan
+            .iter()
+            .map(|(_, _, o)| if let Out::Expr(e) = o { Some(e) } else { None })
+            .collect();
+        let keys: Vec<OrderKey> = order
+            .iter()
+            .map(|o| resolve_order_exprs(&o.expression, &out_cols, &select_exprs))
+            .collect();
 
         let grouped = sel.group_by.is_some()
             || sel.having.is_some()
-            || plan.iter().any(|(_, _, o)| matches!(o, Out::Expr(e) if contains_agg(e)))
+            || plan
+                .iter()
+                .any(|(_, _, o)| matches!(o, Out::Expr(e) if contains_agg(e)))
             || order.iter().any(|o| contains_agg(&o.expression));
 
         let mut keyed: Vec<(Vec<SqlValue>, Row)> = Vec::new();
@@ -560,10 +775,14 @@ impl<'a> Runner<'a> {
                 .clone()
                 .unwrap_or_default()
                 .into_iter()
-                .map(|g| match resolve_order_exprs(&g, &out_cols, &select_exprs) {
-                    OrderKey::Out(i) => select_exprs.get(i).copied().flatten().cloned().unwrap_or(g),
-                    OrderKey::Expr(e) => e,
-                })
+                .map(
+                    |g| match resolve_order_exprs(&g, &out_cols, &select_exprs) {
+                        OrderKey::Out(i) => {
+                            select_exprs.get(i).copied().flatten().cloned().unwrap_or(g)
+                        }
+                        OrderKey::Expr(e) => e,
+                    },
+                )
                 .collect();
             let mut order_of: Vec<String> = Vec::new();
             let mut groups: HashMap<String, Vec<usize>> = HashMap::new();
@@ -585,7 +804,10 @@ impl<'a> Runner<'a> {
             }
             for key in order_of {
                 let idxs = &groups[&key];
-                let ctxs: Vec<EvaluationContext> = idxs.iter().map(|&i| ctx_for(&cols, &rows[i], outer)).collect();
+                let ctxs: Vec<EvaluationContext> = idxs
+                    .iter()
+                    .map(|&i| ctx_for(&cols, &rows[i], outer))
+                    .collect();
                 let rep = match ctxs.first() {
                     Some(c) => c.clone(),
                     None => ctx_for(&cols, &vec![SqlValue::Null; cols.len()], outer),
@@ -599,7 +821,11 @@ impl<'a> Runner<'a> {
                 let mut out = Vec::with_capacity(plan.len());
                 for (_, _, o) in &plan {
                     out.push(match o {
-                        Out::Src(i) => rep.current_row.get(&cols[*i].name).cloned().unwrap_or(SqlValue::Null),
+                        Out::Src(i) => rep
+                            .current_row
+                            .get(&cols[*i].name)
+                            .cloned()
+                            .unwrap_or(SqlValue::Null),
                         Out::Expr(e) => self.eval_grouped(e, &rep, &ctxs)?,
                     });
                 }
@@ -658,11 +884,19 @@ impl<'a> Runner<'a> {
         }
         let mut out_rows: Vec<Row> = keyed.into_iter().map(|(_, r)| r).collect();
         self.apply_limit(&mut out_rows, sel)?;
-        Ok(Rel { cols: out_cols, rows: out_rows })
+        Ok(Rel {
+            cols: out_cols,
+            rows: out_rows,
+        })
     }
 
     /// Evaluate an expression for a group: aggregates are computed over the group's rows and the rest over its first row.
-    fn eval_grouped(&mut self, e: &Expression, rep: &EvaluationContext, ctxs: &[EvaluationContext]) -> R<SqlValue> {
+    fn eval_grouped(
+        &mut self,
+        e: &Expression,
+        rep: &EvaluationContext,
+        ctxs: &[EvaluationContext],
+    ) -> R<SqlValue> {
         if !contains_agg(e) {
             return self.eval(e, rep);
         }
@@ -689,7 +923,8 @@ impl<'a> Runner<'a> {
                 idxs.push(i);
             }
         }
-        let star = f.args.is_empty() || matches!(f.args.first(), Some(Expression::Column(c)) if c.name == "*");
+        let star = f.args.is_empty()
+            || matches!(f.args.first(), Some(Expression::Column(c)) if c.name == "*");
         if name == "count" && star {
             return Ok(SqlValue::BigInt(idxs.len() as i64));
         }
@@ -742,32 +977,60 @@ impl<'a> Runner<'a> {
                     SqlValue::Null
                 } else {
                     let sep = match f.args.get(1) {
-                        Some(e) => self.eval(e, &EvaluationContext::empty())?.to_postgres_string(),
+                        Some(e) => self
+                            .eval(e, &EvaluationContext::empty())?
+                            .to_postgres_string(),
                         None => ",".into(),
                     };
-                    SqlValue::Text(values.iter().map(SqlValue::to_postgres_string).collect::<Vec<_>>().join(&sep))
+                    SqlValue::Text(
+                        values
+                            .iter()
+                            .map(SqlValue::to_postgres_string)
+                            .collect::<Vec<_>>()
+                            .join(&sep),
+                    )
                 }
             }
             "sum" | "avg" => {
                 if values.is_empty() {
                     return Ok(SqlValue::Null);
                 }
-                let floats = values.iter().any(|v| matches!(v, SqlValue::Real(_) | SqlValue::DoublePrecision(_)));
+                let floats = values
+                    .iter()
+                    .any(|v| matches!(v, SqlValue::Real(_) | SqlValue::DoublePrecision(_)));
                 if floats {
                     let s: f64 = values.iter().filter_map(super::value::as_f64).sum();
-                    return Ok(SqlValue::DoublePrecision(if name == "avg" { s / values.len() as f64 } else { s }));
+                    return Ok(SqlValue::DoublePrecision(if name == "avg" {
+                        s / values.len() as f64
+                    } else {
+                        s
+                    }));
                 }
                 let mut total = Decimal::ZERO;
                 for v in &values {
                     total += match v {
                         SqlValue::Decimal(d) => *d,
-                        other => Decimal::from(super::value::as_i64(other).ok_or_else(|| super::DbError { code: "42883", message: format!("{name}() needs numbers") })?),
+                        other => Decimal::from(super::value::as_i64(other).ok_or_else(|| {
+                            super::DbError {
+                                code: "42883",
+                                message: format!("{name}() needs numbers"),
+                            }
+                        })?),
                     };
                 }
                 if name == "avg" {
-                    SqlValue::Decimal((total / Decimal::from(values.len() as i64)).round_dp(16).normalize())
-                } else if values.iter().all(|v| matches!(v, SqlValue::SmallInt(_) | SqlValue::Integer(_))) {
-                    SqlValue::BigInt(rust_decimal::prelude::ToPrimitive::to_i64(&total).unwrap_or(0))
+                    SqlValue::Decimal(
+                        (total / Decimal::from(values.len() as i64))
+                            .round_dp(16)
+                            .normalize(),
+                    )
+                } else if values
+                    .iter()
+                    .all(|v| matches!(v, SqlValue::SmallInt(_) | SqlValue::Integer(_)))
+                {
+                    SqlValue::BigInt(
+                        rust_decimal::prelude::ToPrimitive::to_i64(&total).unwrap_or(0),
+                    )
                 } else {
                     SqlValue::Decimal(total)
                 }
@@ -782,7 +1045,10 @@ impl<'a> Runner<'a> {
         match f {
             FromClause::Table { name, alias, .. } => {
                 let key = name.name.to_lowercase();
-                let qual = alias.as_ref().map(|a| a.name.to_lowercase()).unwrap_or_else(|| key.clone());
+                let qual = alias
+                    .as_ref()
+                    .map(|a| a.name.to_lowercase())
+                    .unwrap_or_else(|| key.clone());
                 if let Some(c) = self.ctes.get(&key) {
                     let mut rel = c.clone();
                     for col in &mut rel.cols {
@@ -793,13 +1059,28 @@ impl<'a> Runner<'a> {
                 let Some(t) = self.st.tables.get(&key) else {
                     return err("42P01", format!("relation \"{key}\" does not exist"));
                 };
-                let mut cols: Vec<RelCol> = t.cols.iter().map(|c| RelCol { qual: Some(qual.clone()), name: c.name.clone(), ty: Some(c.ty.clone()) }).collect();
+                let mut cols: Vec<RelCol> = t
+                    .cols
+                    .iter()
+                    .map(|c| RelCol {
+                        qual: Some(qual.clone()),
+                        name: c.name.clone(),
+                        ty: Some(c.ty.clone()),
+                    })
+                    .collect();
                 if let Some(a) = alias.as_ref().and_then(|a| a.columns.as_ref()) {
                     for (c, n) in cols.iter_mut().zip(a) {
                         c.name = n.to_lowercase();
                     }
                 }
-                Ok(Rel { cols, rows: if self.describe { Vec::new() } else { t.rows.values().cloned().collect() } })
+                Ok(Rel {
+                    cols,
+                    rows: if self.describe {
+                        Vec::new()
+                    } else {
+                        t.rows.values().cloned().collect()
+                    },
+                })
             }
             FromClause::Subquery { query, alias, .. } => {
                 let mut rel = self.select(query, outer)?;
@@ -820,11 +1101,33 @@ impl<'a> Runner<'a> {
                 let width = rows.first().map_or(0, Vec::len);
                 let q = alias.as_ref().map(|a| a.name.to_lowercase());
                 let names: Vec<String> = (0..width)
-                    .map(|i| alias.as_ref().and_then(|a| a.columns.as_ref()).and_then(|c| c.get(i)).map(|s| s.to_lowercase()).unwrap_or_else(|| format!("column{}", i + 1)))
+                    .map(|i| {
+                        alias
+                            .as_ref()
+                            .and_then(|a| a.columns.as_ref())
+                            .and_then(|c| c.get(i))
+                            .map(|s| s.to_lowercase())
+                            .unwrap_or_else(|| format!("column{}", i + 1))
+                    })
                     .collect();
-                Ok(Rel { cols: names.into_iter().map(|name| RelCol { qual: q.clone(), name, ty: None }).collect(), rows })
+                Ok(Rel {
+                    cols: names
+                        .into_iter()
+                        .map(|name| RelCol {
+                            qual: q.clone(),
+                            name,
+                            ty: None,
+                        })
+                        .collect(),
+                    rows,
+                })
             }
-            FromClause::Join { left, join_type, right, condition } => {
+            FromClause::Join {
+                left,
+                join_type,
+                right,
+                condition,
+            } => {
                 let l = self.from(left, outer)?;
                 let r = self.from(right, outer)?;
                 self.join(l, r, join_type, condition, outer)
@@ -833,22 +1136,51 @@ impl<'a> Runner<'a> {
         }
     }
 
-    fn join(&mut self, l: Rel, r: Rel, jt: &JoinType, cond: &JoinCondition, outer: Outer) -> R<Rel> {
+    fn join(
+        &mut self,
+        l: Rel,
+        r: Rel,
+        jt: &JoinType,
+        cond: &JoinCondition,
+        outer: Outer,
+    ) -> R<Rel> {
         let cols: Vec<RelCol> = l.cols.iter().chain(r.cols.iter()).cloned().collect();
         let on: Option<Expression> = match cond {
             JoinCondition::On(e) => Some(e.clone()),
             JoinCondition::Using(names) => names
                 .iter()
                 .map(|n| {
-                    let lq = l.cols.iter().find(|c| c.name == n.to_lowercase()).and_then(|c| c.qual.clone());
-                    let rq = r.cols.iter().find(|c| c.name == n.to_lowercase()).and_then(|c| c.qual.clone());
+                    let lq = l
+                        .cols
+                        .iter()
+                        .find(|c| c.name == n.to_lowercase())
+                        .and_then(|c| c.qual.clone());
+                    let rq = r
+                        .cols
+                        .iter()
+                        .find(|c| c.name == n.to_lowercase())
+                        .and_then(|c| c.qual.clone());
                     Expression::Binary {
-                        left: Box::new(Expression::Column(crate::protocols::postgres_wire::sql::ast::ColumnRef { table: lq, name: n.to_lowercase() })),
+                        left: Box::new(Expression::Column(
+                            crate::protocols::postgres_wire::sql::ast::ColumnRef {
+                                table: lq,
+                                name: n.to_lowercase(),
+                            },
+                        )),
                         operator: BinaryOperator::Equal,
-                        right: Box::new(Expression::Column(crate::protocols::postgres_wire::sql::ast::ColumnRef { table: rq, name: n.to_lowercase() })),
+                        right: Box::new(Expression::Column(
+                            crate::protocols::postgres_wire::sql::ast::ColumnRef {
+                                table: rq,
+                                name: n.to_lowercase(),
+                            },
+                        )),
                     }
                 })
-                .reduce(|a, b| Expression::Binary { left: Box::new(a), operator: BinaryOperator::And, right: Box::new(b) }),
+                .reduce(|a, b| Expression::Binary {
+                    left: Box::new(a),
+                    operator: BinaryOperator::And,
+                    right: Box::new(b),
+                }),
             JoinCondition::Natural => return err("0A000", "NATURAL JOIN is not supported"),
         };
         let cross = matches!(jt, JoinType::Cross) || on.is_none();
@@ -874,7 +1206,10 @@ impl<'a> Runner<'a> {
                     if lrow[li].is_null() {
                         vec![]
                     } else {
-                        rindex.get(&canonical(&lrow[li])).cloned().unwrap_or_default()
+                        rindex
+                            .get(&canonical(&lrow[li]))
+                            .cloned()
+                            .unwrap_or_default()
                     }
                 }
                 (None, _) => (0..r.rows.len()).collect(),
@@ -918,14 +1253,20 @@ impl<'a> Runner<'a> {
 fn find_col(cols: &[RelCol], qual: Option<&str>, name: &str) -> Option<usize> {
     let n = name.to_lowercase();
     let q = qual.map(str::to_lowercase);
-    cols.iter().position(|c| c.name == n && (q.is_none() || c.qual == q))
+    cols.iter()
+        .position(|c| c.name == n && (q.is_none() || c.qual == q))
 }
 
 /// `(left index, right index)` when `on` has a top-level equality between a left and a right column.
 fn equi_keys(on: &Expression, l: &[RelCol], r: &[RelCol]) -> Option<(usize, usize)> {
     let mut conj = Vec::new();
     fn split<'e>(e: &'e Expression, out: &mut Vec<&'e Expression>) {
-        if let Expression::Binary { left, operator: BinaryOperator::And, right } = e {
+        if let Expression::Binary {
+            left,
+            operator: BinaryOperator::And,
+            right,
+        } = e
+        {
             split(left, out);
             split(right, out);
         } else {
@@ -934,7 +1275,12 @@ fn equi_keys(on: &Expression, l: &[RelCol], r: &[RelCol]) -> Option<(usize, usiz
     }
     split(on, &mut conj);
     for c in conj {
-        if let Expression::Binary { left, operator: BinaryOperator::Equal, right } = c {
+        if let Expression::Binary {
+            left,
+            operator: BinaryOperator::Equal,
+            right,
+        } = c
+        {
             if let (Expression::Column(a), Expression::Column(b)) = (&**left, &**right) {
                 let la = find_col(l, a.table.as_deref(), &a.name);
                 let rb = find_col(r, b.table.as_deref(), &b.name);
@@ -967,16 +1313,22 @@ fn dedupe(rows: &mut Vec<Row>) {
 }
 
 /// An ORDER BY term is an output column when it is an ordinal or an output name; otherwise an expression.
-fn resolve_order_exprs(e: &Expression, out: &[RelCol], _select: &[Option<&Expression>]) -> OrderKey {
+fn resolve_order_exprs(
+    e: &Expression,
+    out: &[RelCol],
+    _select: &[Option<&Expression>],
+) -> OrderKey {
     match e {
         Expression::Literal(v) => match super::value::as_i64(v) {
             Some(n) if n >= 1 && (n as usize) <= out.len() => OrderKey::Out(n as usize - 1),
             _ => OrderKey::Expr(e.clone()),
         },
-        Expression::Column(c) if c.table.is_none() => match out.iter().position(|o| o.name == c.name.to_lowercase()) {
-            Some(i) => OrderKey::Out(i),
-            None => OrderKey::Expr(e.clone()),
-        },
+        Expression::Column(c) if c.table.is_none() => {
+            match out.iter().position(|o| o.name == c.name.to_lowercase()) {
+                Some(i) => OrderKey::Out(i),
+                None => OrderKey::Expr(e.clone()),
+            }
+        }
         _ => OrderKey::Expr(e.clone()),
     }
 }
@@ -997,8 +1349,20 @@ fn order_cmp(a: &[SqlValue], b: &[SqlValue], items: &[&OrderByItem]) -> Ordering
         };
         match (x.is_null(), y.is_null()) {
             (true, true) => continue,
-            (true, false) => return if nulls_first { Ordering::Less } else { Ordering::Greater },
-            (false, true) => return if nulls_first { Ordering::Greater } else { Ordering::Less },
+            (true, false) => {
+                return if nulls_first {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                }
+            }
+            (false, true) => {
+                return if nulls_first {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            }
             _ => {
                 let c = cmp(x, y);
                 let c = if desc { c.reverse() } else { c };

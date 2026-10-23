@@ -160,7 +160,10 @@ pub struct QueryEngine {
 impl QueryEngine {
     /// Run SQL statements through `engine` (committed state in durable storage) instead of the legacy executors.
     #[must_use]
-    pub fn with_durable(mut self, engine: Arc<crate::protocols::postgres_wire::sql::durable::DurableEngine>) -> Self {
+    pub fn with_durable(
+        mut self,
+        engine: Arc<crate::protocols::postgres_wire::sql::durable::DurableEngine>,
+    ) -> Self {
         self.durable = Some(engine);
         self
     }
@@ -170,7 +173,11 @@ impl QueryEngine {
     pub fn describe(&self, sql: &str) -> Option<Vec<(String, i32)>> {
         use crate::protocols::postgres_wire::sql::parser::SqlParser;
         let engine = self.durable.as_ref()?;
-        let stmt = SqlParser::new().parse_multiple(sql.trim().trim_end_matches(';')).ok()?.into_iter().next()?;
+        let stmt = SqlParser::new()
+            .parse_multiple(sql.trim().trim_end_matches(';'))
+            .ok()?
+            .into_iter()
+            .next()?;
         engine.describe(&stmt)
     }
 
