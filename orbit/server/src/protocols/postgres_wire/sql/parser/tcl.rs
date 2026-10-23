@@ -13,7 +13,12 @@ use crate::protocols::postgres_wire::sql::lexer::Token;
 /// Parse BEGIN statement
 /// BEGIN [WORK | TRANSACTION] [ISOLATION LEVEL level] [READ WRITE | READ ONLY]
 pub fn parse_begin(parser: &mut SqlParser) -> ParseResult<Statement> {
-    parser.expect(Token::Begin)?;
+    // START TRANSACTION is the standard spelling of BEGIN; client drivers such as rust-postgres open every transaction with it.
+    if parser.matches(&[Token::Start]) {
+        parser.advance()?;
+    } else {
+        parser.expect(Token::Begin)?;
+    }
 
     // Optional WORK or TRANSACTION
     if parser.matches(&[Token::Work, Token::Transaction]) {

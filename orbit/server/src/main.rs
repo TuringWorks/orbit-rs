@@ -318,19 +318,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
     log_protocol_configuration(&args);
 
     // Initialize cluster/Raft if seed nodes are provided
+    let mut raft_consensus = None;
     if !args.seed_nodes.is_empty() {
         info!(
             "[Cluster] Initializing cluster with seed nodes: {:?}",
             args.seed_nodes
         );
-        initialize_cluster(&args).await?;
+        raft_consensus = Some(initialize_cluster(&args).await?);
     } else {
         info!("[Cluster] Starting as standalone node (no seed nodes configured)");
     }
 
     // Build and start gRPC server
     // We disable internal protocol servers because we start them manually with specific storage configurations
-    let mut server = OrbitServerBuilder::new()
+    let mut server_builder = OrbitServerBuilder::new();
+    if let Some(consensus) = raft_consensus {
+        server_builder = server_builder.with_raft_consensus(consensus);
+    }
+    let mut server = server_builder
         .with_bind_address(&args.bind)
         .with_port(args.grpc_port)
         .with_postgres_enabled(false)
@@ -734,7 +739,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_ref()
         .is_none_or(|config| config.enabled)
     {
-        let cypher_bind_addr = format!("{}:7687", args.bind);
+        let cypher_port = protocol_port(
+            "ORBIT_CYPHER_PORT",
+            toml_config.protocols.cypher.as_ref().map(|c| c.port),
+            7687,
+        );
+        let cypher_bind_addr = format!("{}:{}", args.bind, cypher_port);
         let cypher_storage: Arc<dyn CypherStorageProvider> = if unified_storage_enabled {
             // Use unified storage for cross-protocol data access
             if let StorageMode::Unified { cypher_unified, .. } = &storage_mode {
@@ -774,7 +784,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_ref()
         .is_none_or(|config| config.enabled)
     {
-        let aql_bind_addr = format!("{}:8529", args.bind);
+        let aql_port = protocol_port(
+            "ORBIT_AQL_PORT",
+            toml_config.protocols.aql.as_ref().map(|c| c.port),
+            8529,
+        );
+        let aql_bind_addr = format!("{}:{}", args.bind, aql_port);
         let aql_storage: Arc<dyn AqlStorageProvider> = if unified_storage_enabled {
             // Use unified storage for cross-protocol data access
             if let StorageMode::Unified { aql_unified, .. } = &storage_mode {
@@ -837,7 +852,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Start MongoDB server (port 27017)
     let mongodb_bind =
         std::env::var("ORBIT_MONGODB_BIND").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let mongodb_bind_addr = format!("{mongodb_bind}:27017");
+    let mongodb_bind_addr = format!("{mongodb_bind}:{}", protocol_port("ORBIT_MONGODB_PORT", None, 27017));
     let mongodb_server = MongoDbServer::new(mongodb_bind_addr.clone())
         .with_tls_config(toml_config.server.tls.clone());
     let mongodb_handle = tokio::spawn(async move {
@@ -1222,8 +1237,19 @@ fn log_protocol_configuration(args: &Args) {
     debug!("  - Metrics: {}:{}/metrics", args.bind, args.metrics_port);
 }
 
+/// Port of a protocol adapter that has no command-line flag: the environment variable wins, then the configured port, then the default.
+fn protocol_port(env_var: &str, configured: Option<u16>, default: u16) -> u16 {
+    std::env::var(env_var)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .or(configured)
+        .unwrap_or(default)
+}
+
 /// Initialize cluster with Raft consensus
-async fn initialize_cluster(args: &Args) -> Result<(), Box<dyn Error>> {
+async fn initialize_cluster(
+    args: &Args,
+) -> Result<Arc<orbit_shared::consensus::RaftConsensus>, Box<dyn Error>> {
     use orbit_shared::cluster_manager::{EnhancedClusterManager, QuorumConfig};
     use orbit_shared::consensus::RaftConfig;
     use orbit_shared::raft_transport::GrpcRaftTransport;
@@ -1326,11 +1352,8 @@ async fn initialize_cluster(args: &Args) -> Result<(), Box<dyn Error>> {
     info!("[Cluster] Cluster manager started successfully with Raft consensus");
     info!("[Cluster] Node {} is ready for cluster operations", node_id);
 
-    // Store cluster manager in a global context if needed
-    // For now, we'll just log that it's initialized
-    // TODO: Store cluster_manager in server context for use by other components
-
-    Ok(())
+    // The gRPC server mounts this consensus so that peers can reach it.
+    Ok(cluster_manager.raft_consensus.clone())
 }
 
 /// Start PostgreSQL Wire Protocol server

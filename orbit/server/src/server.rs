@@ -110,13 +110,21 @@ impl Default for OrbitServerConfig {
 /// Builder for configuring and creating an Orbit server
 pub struct OrbitServerBuilder {
     config: OrbitServerConfig,
+    raft_consensus: Option<Arc<orbit_shared::consensus::RaftConsensus>>,
 }
 
 impl OrbitServerBuilder {
     pub fn new() -> Self {
         Self {
             config: OrbitServerConfig::default(),
+            raft_consensus: None,
         }
+    }
+
+    /// Serve this node's Raft consensus over the gRPC port, so peers can request votes and send heartbeats to it.
+    pub fn with_raft_consensus(mut self, consensus: Arc<orbit_shared::consensus::RaftConsensus>) -> Self {
+        self.raft_consensus = Some(consensus);
+        self
     }
 
     pub fn with_namespace<S: Into<String>>(mut self, namespace: S) -> Self {
@@ -213,7 +221,9 @@ impl OrbitServerBuilder {
     }
 
     pub async fn build(self) -> OrbitResult<OrbitServer> {
-        OrbitServer::new(self.config).await
+        let mut server = OrbitServer::new(self.config).await?;
+        server.raft_consensus = self.raft_consensus;
+        Ok(server)
     }
 }
 
@@ -239,6 +249,8 @@ pub struct OrbitServer {
     persistence_registry: Arc<PersistenceProviderRegistry>,
     /// PostgreSQL wire protocol server (initialized at startup)
     postgres_server: Option<PostgresServer>,
+    /// Raft consensus of this node, served on the gRPC port when the node is part of a cluster
+    raft_consensus: Option<Arc<orbit_shared::consensus::RaftConsensus>>,
 }
 
 impl OrbitServer {
@@ -343,6 +355,7 @@ impl OrbitServer {
             actor_registry,
             persistence_registry,
             postgres_server,
+            raft_consensus: None,
         };
 
         Ok(server)
@@ -428,6 +441,11 @@ impl OrbitServer {
             .add_service(health_service_server::HealthServiceServer::new(
                 self.health_service.clone(),
             ))
+            .add_optional_service(
+                self.raft_consensus
+                    .clone()
+                    .map(|consensus| orbit_shared::raft_transport::GrpcRaftHandler::new(consensus).into_server()),
+            )
             .add_service(reflection_service)
             .serve(grpc_addr);
 

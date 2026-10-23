@@ -66,7 +66,16 @@ impl SqlParser {
     pub fn parse_multiple(&mut self, input: &str) -> ProtocolResult<Vec<Statement>> {
         // Tokenize the input
         let mut lexer = Lexer::new(input);
-        self.tokens = lexer.tokenize();
+        // A double-quoted identifier is an ordinary name to the parser, wherever a name is accepted ("order", "id", "uuid-ossp");
+        // the lexer keeps the distinction for its own callers.
+        self.tokens = lexer
+            .tokenize()
+            .into_iter()
+            .map(|t| match t {
+                Token::QuotedIdentifier(name) => Token::Identifier(name),
+                other => other,
+            })
+            .collect();
         self.position = 0;
         self.current_token = self.tokens.first().cloned();
 
@@ -115,7 +124,7 @@ impl SqlParser {
             Some(Token::Revoke) => self.parse_revoke_statement(),
 
             // TCL Statements
-            Some(Token::Begin) => self.parse_begin_statement(),
+            Some(Token::Begin) | Some(Token::Start) => self.parse_begin_statement(),
             Some(Token::Commit) => self.parse_commit_statement(),
             Some(Token::Rollback) => self.parse_rollback_statement(),
             Some(Token::Savepoint) => self.parse_savepoint_statement(),
