@@ -248,18 +248,35 @@ fn contains_agg(e: &Expression) -> bool {
     found
 }
 
+/// Functions whose value is a property of the session or server, not of the data.
+fn session_function(f: &FunctionCall) -> Option<SqlValue> {
+    if !f.args.is_empty() {
+        return None;
+    }
+    Some(SqlValue::Text(match fname(f).as_str() {
+        "current_schema" => "public".into(),
+        "current_database" => "orbit".into(),
+        "current_user" | "session_user" | "user" => "orbit".into(),
+        "version" => "PostgreSQL 18.0 (orbit-rs)".into(),
+        _ => return None,
+    }))
+}
+
 fn has_subquery(e: &Expression) -> bool {
     let mut found = false;
     walk(e, &mut |x| {
-        if matches!(
-            x,
-            Expression::Subquery(_)
-                | Expression::Exists(_)
-                | Expression::In {
-                    list: InList::Subquery(_),
-                    ..
-                }
-        ) {
+        let session = matches!(x, Expression::Function(f) if session_function(f).is_some());
+        if session
+            || matches!(
+                x,
+                Expression::Subquery(_)
+                    | Expression::Exists(_)
+                    | Expression::In {
+                        list: InList::Subquery(_),
+                        ..
+                    }
+            )
+        {
             found = true;
         }
     });
@@ -501,6 +518,9 @@ impl<'a> Runner<'a> {
                 Expression::Exists(s) => {
                     let rel = me.select(s, Some(&outer))?;
                     Some(Expression::Literal(SqlValue::Boolean(!rel.rows.is_empty())))
+                }
+                Expression::Function(f) if session_function(f).is_some() => {
+                    session_function(f).map(Expression::Literal)
                 }
                 Expression::In {
                     expr,
@@ -1039,6 +1059,70 @@ impl<'a> Runner<'a> {
         })
     }
 
+    /// The parts of `information_schema` that tools use to find out what tables and columns exist.
+    fn information_schema(&self, view: &str, qual: &str) -> R<Rel> {
+        let col = |n: &str, t: SqlType| RelCol {
+            qual: Some(qual.to_string()),
+            name: n.to_string(),
+            ty: Some(t),
+        };
+        let text = |s: &str| SqlValue::Text(s.to_string());
+        let mut names: Vec<&String> = self.st.tables.keys().collect();
+        names.sort();
+        match view {
+            "columns" => {
+                let cols = vec![
+                    col("table_catalog", SqlType::Text),
+                    col("table_schema", SqlType::Text),
+                    col("table_name", SqlType::Text),
+                    col("column_name", SqlType::Text),
+                    col("ordinal_position", SqlType::Integer),
+                    col("column_default", SqlType::Text),
+                    col("is_nullable", SqlType::Text),
+                    col("data_type", SqlType::Text),
+                ];
+                let mut rows = Vec::new();
+                for n in names {
+                    let t = &self.st.tables[n];
+                    for (i, c) in t.cols.iter().enumerate() {
+                        let default = match &c.serial {
+                            Some(seq) => text(&format!("nextval('{seq}'::regclass)")),
+                            None => SqlValue::Null,
+                        };
+                        rows.push(vec![
+                            text("orbit"),
+                            text("public"),
+                            text(&t.name),
+                            text(&c.name),
+                            SqlValue::Integer(i as i32 + 1),
+                            default,
+                            text(if c.not_null { "NO" } else { "YES" }),
+                            text(&data_type_name(&c.ty)),
+                        ]);
+                    }
+                }
+                Ok(Rel { cols, rows })
+            }
+            "tables" => {
+                let cols = vec![
+                    col("table_catalog", SqlType::Text),
+                    col("table_schema", SqlType::Text),
+                    col("table_name", SqlType::Text),
+                    col("table_type", SqlType::Text),
+                ];
+                let rows = names
+                    .iter()
+                    .map(|n| vec![text("orbit"), text("public"), text(n), text("BASE TABLE")])
+                    .collect();
+                Ok(Rel { cols, rows })
+            }
+            other => err(
+                "42P01",
+                format!("relation \"information_schema.{other}\" does not exist"),
+            ),
+        }
+    }
+
     // ---- FROM ----
 
     fn from(&mut self, f: &FromClause, outer: Outer) -> R<Rel> {
@@ -1055,6 +1139,11 @@ impl<'a> Runner<'a> {
                         col.qual = Some(qual.clone());
                     }
                     return Ok(rel);
+                }
+                if name.schema.as_deref().map(str::to_lowercase).as_deref()
+                    == Some("information_schema")
+                {
+                    return self.information_schema(&key, &qual);
                 }
                 let Some(t) = self.st.tables.get(&key) else {
                     return err("42P01", format!("relation \"{key}\" does not exist"));
@@ -1381,4 +1470,32 @@ fn sort_keyed(rows: &mut [(Vec<SqlValue>, Row)], items: &[&OrderByItem]) {
 
 fn sort_keyed_pairs(rows: &mut [(SqlValue, Vec<SqlValue>)], items: &[&OrderByItem]) {
     rows.sort_by(|a, b| order_cmp(&a.1, &b.1, items));
+}
+
+/// The name `information_schema.columns.data_type` gives a column type.
+fn data_type_name(t: &SqlType) -> String {
+    match t {
+        SqlType::SmallInt => "smallint",
+        SqlType::Integer => "integer",
+        SqlType::BigInt => "bigint",
+        SqlType::Decimal { .. } | SqlType::Numeric { .. } => "numeric",
+        SqlType::Real => "real",
+        SqlType::DoublePrecision => "double precision",
+        SqlType::Boolean => "boolean",
+        SqlType::Char(_) => "character",
+        SqlType::Varchar(_) => "character varying",
+        SqlType::Text => "text",
+        SqlType::Bytea => "bytea",
+        SqlType::Date => "date",
+        SqlType::Time { .. } => "time without time zone",
+        SqlType::Timestamp {
+            with_timezone: true,
+        } => "timestamp with time zone",
+        SqlType::Timestamp { .. } => "timestamp without time zone",
+        SqlType::Json => "json",
+        SqlType::Jsonb => "jsonb",
+        SqlType::Uuid => "uuid",
+        _ => "USER-DEFINED",
+    }
+    .to_string()
 }

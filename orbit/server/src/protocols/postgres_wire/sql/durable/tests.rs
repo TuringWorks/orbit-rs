@@ -1079,3 +1079,50 @@ mod foreign_keys {
         );
     }
 }
+
+mod catalog {
+    use super::*;
+
+    #[tokio::test]
+    async fn information_schema_lists_tables_and_columns_as_symphony_asks() {
+        let e = DurableEngine::in_memory();
+        x(
+            &e,
+            "CREATE TABLE res_partner (id SERIAL PRIMARY KEY, name VARCHAR NOT NULL, note TEXT)",
+        )
+        .await;
+        x(
+            &e,
+            "CREATE TABLE res_users (id SERIAL PRIMARY KEY, login VARCHAR)",
+        )
+        .await;
+        // the exact query Symphony sends to PostgreSQL to learn what exists
+        let got = q(&e, "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema() ORDER BY table_name, ordinal_position").await;
+        assert_eq!(
+            got,
+            vec![
+                vec!["res_partner", "id"],
+                vec!["res_partner", "name"],
+                vec!["res_partner", "note"],
+                vec!["res_users", "id"],
+                vec!["res_users", "login"]
+            ]
+        );
+        assert_eq!(q(&e, "SELECT column_name, is_nullable, data_type FROM information_schema.columns WHERE table_name = 'res_partner' ORDER BY ordinal_position").await,
+            vec![vec!["id", "NO", "integer"], vec!["name", "NO", "character varying"], vec!["note", "YES", "text"]]);
+        assert_eq!(q(&e, "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name").await, vec![vec!["res_partner"], vec!["res_users"]]);
+        assert_eq!(
+            q(&e, "SELECT current_schema(), current_database()").await,
+            vec![vec!["public", "orbit"]]
+        );
+        x(&e, "ALTER TABLE res_partner ADD COLUMN extra VARCHAR").await;
+        assert_eq!(
+            q(
+                &e,
+                "SELECT count(*) FROM information_schema.columns WHERE table_name = 'res_partner'"
+            )
+            .await,
+            vec![vec!["4"]]
+        );
+    }
+}
