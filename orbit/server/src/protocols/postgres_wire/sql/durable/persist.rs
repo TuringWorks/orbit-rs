@@ -1,13 +1,16 @@
 //! Durable storage for the SQL engine: a committed transaction is one atomic, synced write batch.
 
 use crate::protocols::postgres_wire::sql::types::SqlValue;
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// One change made by a transaction. A transaction's `Op`s are the unit that is written atomically
 /// (and, later, the unit that is replicated).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Op {
-    /// A DDL statement, stored as text and replayed in order at start-up.
+    /// A DDL statement, stored as text and replayed in order at start-up and on replicas. It comes
+    /// before the row changes it causes, so a replica applying the ops in order ends in the same state.
     Ddl(String),
     PutRow {
         table: u32,
@@ -23,6 +26,7 @@ pub enum Op {
         table: u32,
     },
     /// Raise a sequence's persisted high-water mark; values below it may have been handed out.
+    /// A value of 0 forgets the sequence (its table was dropped).
     SeqHighWater {
         name: String,
         value: i64,
@@ -37,18 +41,27 @@ pub struct Loaded {
     pub seqs: HashMap<String, i64>,
 }
 
+#[async_trait]
 pub trait Persist: Send + Sync {
-    /// Write `ops` atomically and durably. Returns only when the data would survive a crash.
-    fn commit(&self, ops: &[Op]) -> Result<(), String>;
+    /// Write `ops` atomically and durably. Returns only when the data would survive a crash (and,
+    /// for a replicated store, when a majority of nodes has it).
+    async fn commit(&self, ops: &[Op]) -> Result<(), String>;
     fn load(&self) -> Result<Loaded, String>;
+    /// `true` when committed ops reach the engine through [`DurableEngine::apply_replicated`]
+    /// (on every node, including the one that proposed them) instead of being applied by the
+    /// engine that ran the transaction.
+    fn replicated(&self) -> bool {
+        false
+    }
 }
 
 /// Keeps nothing; used for in-memory engines and tests.
 #[derive(Default)]
 pub struct NoPersist;
 
+#[async_trait]
 impl Persist for NoPersist {
-    fn commit(&self, _ops: &[Op]) -> Result<(), String> {
+    async fn commit(&self, _ops: &[Op]) -> Result<(), String> {
         Ok(())
     }
     fn load(&self) -> Result<Loaded, String> {
@@ -62,6 +75,7 @@ pub use rocks::RocksPersist;
 #[cfg(feature = "storage-rocksdb")]
 mod rocks {
     use super::{Loaded, Op, Persist};
+    use async_trait::async_trait;
     use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, WriteBatch, WriteOptions, DB};
     use std::path::Path;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -112,8 +126,9 @@ mod rocks {
         }
     }
 
+    #[async_trait]
     impl Persist for RocksPersist {
-        fn commit(&self, ops: &[Op]) -> Result<(), String> {
+        async fn commit(&self, ops: &[Op]) -> Result<(), String> {
             if ops.is_empty() {
                 return Ok(());
             }

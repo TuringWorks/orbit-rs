@@ -3,7 +3,8 @@
 use super::ddl::table_key;
 use super::query::{ctx_for, rel_to_result, Rel, RelCol, Runner};
 use super::value::coerce;
-use super::{err, DbError, Op, Persist, QueryResult, Row, State, Table, Txn, Undo, R};
+use super::{err, DbError, Op, QueryResult, Row, Seqs, State, Table, R};
+use std::sync::Mutex;
 use crate::protocols::postgres_wire::sql::ast::{
     Assignment, AssignmentTarget, ConflictAction, ConflictTarget, DeleteStatement, Expression,
     FromClause, InsertSource, InsertStatement, SelectItem, SelectStatement, UpdateStatement,
@@ -118,8 +119,8 @@ pub(crate) fn describe_returning(
 
 pub(crate) fn insert(
     st: &mut State,
-    txn: &mut Txn,
-    persist: &dyn Persist,
+    ops: &mut Vec<Op>,
+    seqs: &Mutex<Seqs>,
     ins: &InsertStatement,
 ) -> R<QueryResult> {
     let key = table_key(&ins.table);
@@ -197,7 +198,7 @@ pub(crate) fn insert(
                 continue;
             }
             if let Some(seq) = &cols[i].serial {
-                let n = st.nextval(seq, persist)?;
+                let n = seqs.lock().expect("sequences").alloc(seq)?;
                 row[i] = coerce(SqlValue::BigInt(n), &cols[i].ty).map_err(|m| DbError {
                     code: "22003",
                     message: m,
@@ -268,7 +269,7 @@ pub(crate) fn insert(
                         }
                         apply_assignments(&mut r, t, &old, set, &ctx)?
                     };
-                    write_update(st, txn, &key, existing, old, new.clone())?;
+                    write_update(st, ops, &key, existing, old, new.clone())?;
                     affected += 1;
                     inserted.push(new);
                     continue;
@@ -280,14 +281,10 @@ pub(crate) fn insert(
         t.next_rowid += 1;
         t.index_add(rowid, &row);
         t.rows.insert(rowid, row.clone());
-        txn.ops.push(Op::PutRow {
+        ops.push(Op::PutRow {
             table: t.id,
             rowid,
             row: row.clone(),
-        });
-        txn.undo.push(Undo::Inserted {
-            table: key.clone(),
-            rowid,
         });
         affected += 1;
         inserted.push(row);
@@ -331,7 +328,14 @@ fn apply_assignments(
 }
 
 /// Replace row `rowid` with `new`, keeping indexes consistent and recording undo and the write.
-fn write_update(st: &mut State, txn: &mut Txn, key: &str, rowid: u64, old: Row, new: Row) -> R<()> {
+fn write_update(
+    st: &mut State,
+    ops: &mut Vec<Op>,
+    key: &str,
+    rowid: u64,
+    old: Row,
+    new: Row,
+) -> R<()> {
     let t = st.tables.get_mut(key).expect("table");
     t.index_remove(rowid, &old);
     if let Some((idx, _)) = t.unique_conflict(&new, Some(rowid)) {
@@ -341,15 +345,10 @@ fn write_update(st: &mut State, txn: &mut Txn, key: &str, rowid: u64, old: Row, 
     }
     t.index_add(rowid, &new);
     t.rows.insert(rowid, new.clone());
-    txn.ops.push(Op::PutRow {
+    ops.push(Op::PutRow {
         table: t.id,
         rowid,
         row: new,
-    });
-    txn.undo.push(Undo::Updated {
-        table: key.to_string(),
-        rowid,
-        old,
     });
     Ok(())
 }
@@ -376,7 +375,11 @@ fn matching(
     Ok(out)
 }
 
-pub(crate) fn update(st: &mut State, txn: &mut Txn, upd: &UpdateStatement) -> R<QueryResult> {
+pub(crate) fn update(
+    st: &mut State,
+    ops: &mut Vec<Op>,
+    upd: &UpdateStatement,
+) -> R<QueryResult> {
     if upd.from.is_some() {
         return err("0A000", "UPDATE ... FROM is not supported yet");
     }
@@ -402,7 +405,7 @@ pub(crate) fn update(st: &mut State, txn: &mut Txn, upd: &UpdateStatement) -> R<
     let count = plan.len();
     let mut after = Vec::with_capacity(count);
     for (id, old, new) in plan {
-        write_update(st, txn, &key, id, old, new.clone())?;
+        write_update(st, ops, &key, id, old, new.clone())?;
         after.push(new);
     }
     let ret = match &upd.returning {
@@ -412,7 +415,11 @@ pub(crate) fn update(st: &mut State, txn: &mut Txn, upd: &UpdateStatement) -> R<
     Ok(result("UPDATE ", count, ret))
 }
 
-pub(crate) fn delete(st: &mut State, txn: &mut Txn, del: &DeleteStatement) -> R<QueryResult> {
+pub(crate) fn delete(
+    st: &mut State,
+    ops: &mut Vec<Op>,
+    del: &DeleteStatement,
+) -> R<QueryResult> {
     if del.using.is_some() {
         return err("0A000", "DELETE ... USING is not supported yet");
     }
@@ -433,14 +440,9 @@ pub(crate) fn delete(st: &mut State, txn: &mut Txn, del: &DeleteStatement) -> R<
         for (id, row) in hits {
             t.index_remove(id, &row);
             t.rows.remove(&id);
-            txn.ops.push(Op::DelRow {
+            ops.push(Op::DelRow {
                 table: t.id,
                 rowid: id,
-            });
-            txn.undo.push(Undo::Deleted {
-                table: key.clone(),
-                rowid: id,
-                row: row.clone(),
             });
             gone.push(row);
         }
