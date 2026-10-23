@@ -169,7 +169,7 @@ impl QueryPlan {
             QueryPlan::Filter { input, .. } => input.estimated_cost(),
             QueryPlan::Project { input, .. } => input.estimated_cost(),
             QueryPlan::Limit { input, .. } => input.estimated_cost(),
-            QueryPlan::Union { inputs, .. } => inputs.iter().map(|p| p.estimated_cost()).sum(),
+            QueryPlan::Union { inputs, .. } => inputs.iter().map(QueryPlan::estimated_cost).sum(),
             QueryPlan::Vectorized {
                 input,
                 use_simd,
@@ -198,12 +198,9 @@ impl QueryPlan {
             } => {
                 let filter_str = filter
                     .as_ref()
-                    .map(|f| format!(" [filter: {}]", f))
+                    .map(|f| format!(" [filter: {f}]"))
                     .unwrap_or_default();
-                format!(
-                    "{}SeqScan on {}{} (rows={})",
-                    prefix, table, filter_str, estimated_rows
-                )
+                format!("{prefix}SeqScan on {table}{filter_str} (rows={estimated_rows})")
             }
             QueryPlan::IndexScan {
                 table,
@@ -213,11 +210,10 @@ impl QueryPlan {
             } => {
                 let filter_str = filter
                     .as_ref()
-                    .map(|f| format!(" [filter: {}]", f))
+                    .map(|f| format!(" [filter: {f}]"))
                     .unwrap_or_default();
                 format!(
-                    "{}IndexScan using {} on {}{} (rows={})",
-                    prefix, index, table, filter_str, estimated_rows
+                    "{prefix}IndexScan using {index} on {table}{filter_str} (rows={estimated_rows})"
                 )
             }
             QueryPlan::NestedLoop {
@@ -353,10 +349,7 @@ impl QueryPlan {
                     .map(|p| p.format(indent + 2))
                     .collect::<Vec<_>>()
                     .join("\n");
-                format!(
-                    "{}{} (rows={})\n{}",
-                    prefix, union_type, estimated_rows, inputs_str
-                )
+                format!("{prefix}{union_type} (rows={estimated_rows})\n{inputs_str}")
             }
             QueryPlan::Vectorized {
                 input,

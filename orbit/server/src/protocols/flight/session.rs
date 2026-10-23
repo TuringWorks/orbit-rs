@@ -157,8 +157,7 @@ impl FlightSession {
                     Ok(())
                 } else {
                     Err(FlightSqlError::not_found(format!(
-                        "Savepoint '{}' not found",
-                        name
+                        "Savepoint '{name}' not found"
                     )))
                 }
             }
@@ -177,8 +176,7 @@ impl FlightSession {
                     Ok(())
                 } else {
                     Err(FlightSqlError::not_found(format!(
-                        "Savepoint '{}' not found",
-                        name
+                        "Savepoint '{name}' not found"
                     )))
                 }
             }

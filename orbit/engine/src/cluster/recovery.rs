@@ -904,9 +904,10 @@ impl TransactionRecoveryManager {
         let mut current_leader = self.current_leader.write().await;
         *current_leader = leader.clone();
 
-        match leader {
-            Some(leader_id) => info!("Updated cluster leader to: {}", leader_id),
-            None => info!("Cleared cluster leader"),
+        if let Some(leader_id) = leader {
+            info!("Updated cluster leader to: {}", leader_id)
+        } else {
+            info!("Cleared cluster leader")
         }
 
         Ok(())

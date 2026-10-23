@@ -3,6 +3,7 @@
 // Provides caching of prepared statements to improve performance
 // by avoiding repeated parsing and planning of common queries.
 
+use orbit_util::RwLockExt;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
@@ -68,7 +69,7 @@ impl PreparedStatementCache {
     pub fn get_or_prepare(&self, query: &str, param_count: u16, column_count: u16) -> u32 {
         // Check if statement already exists
         {
-            let query_map = self.query_to_id.read().unwrap();
+            let query_map = self.query_to_id.read_recover();
             if let Some(&statement_id) = query_map.get(query) {
                 // Update access time and count
                 if let Ok(mut statements) = self.statements.write() {
@@ -83,7 +84,7 @@ impl PreparedStatementCache {
 
         // Create new statement
         let statement_id = {
-            let mut next_id = self.next_id.write().unwrap();
+            let mut next_id = self.next_id.write_recover();
             let id = *next_id;
             *next_id += 1;
             id
@@ -103,12 +104,10 @@ impl PreparedStatementCache {
 
         // Insert new statement
         self.statements
-            .write()
-            .unwrap()
+            .write_recover()
             .insert(statement_id, cached_stmt);
         self.query_to_id
-            .write()
-            .unwrap()
+            .write_recover()
             .insert(query.to_string(), statement_id);
 
         statement_id
@@ -116,7 +115,7 @@ impl PreparedStatementCache {
 
     /// Get a cached statement by ID
     pub fn get(&self, statement_id: u32) -> Option<CachedStatement> {
-        let mut statements = self.statements.write().unwrap();
+        let mut statements = self.statements.write_recover();
         if let Some(stmt) = statements.get_mut(&statement_id) {
             stmt.last_accessed = Instant::now();
             stmt.access_count += 1;
@@ -128,17 +127,17 @@ impl PreparedStatementCache {
 
     /// Remove a statement from cache
     pub fn remove(&self, statement_id: u32) {
-        let mut statements = self.statements.write().unwrap();
+        let mut statements = self.statements.write_recover();
         if let Some(stmt) = statements.remove(&statement_id) {
-            self.query_to_id.write().unwrap().remove(&stmt.query);
+            self.query_to_id.write_recover().remove(&stmt.query);
         }
     }
 
     /// Clear expired statements
     pub fn clear_expired(&self) {
         let now = Instant::now();
-        let mut statements = self.statements.write().unwrap();
-        let mut query_map = self.query_to_id.write().unwrap();
+        let mut statements = self.statements.write_recover();
+        let mut query_map = self.query_to_id.write_recover();
 
         statements.retain(|_, stmt| {
             let keep = now.duration_since(stmt.last_accessed) < self.config.ttl;
@@ -151,12 +150,12 @@ impl PreparedStatementCache {
 
     /// Evict least recently used statement if cache is full
     fn maybe_evict(&self) {
-        let statements = self.statements.read().unwrap();
+        let statements = self.statements.read_recover();
         if statements.len() >= self.config.max_size && self.config.enable_lru {
             drop(statements); // Release read lock
 
             // Find LRU statement
-            let statements = self.statements.read().unwrap();
+            let statements = self.statements.read_recover();
             if let Some((&lru_id, _)) = statements.iter().min_by_key(|(_, stmt)| stmt.last_accessed)
             {
                 drop(statements); // Release read lock
@@ -167,7 +166,7 @@ impl PreparedStatementCache {
 
     /// Get cache statistics
     pub fn stats(&self) -> CacheStats {
-        let statements = self.statements.read().unwrap();
+        let statements = self.statements.read_recover();
         CacheStats {
             size: statements.len(),
             max_size: self.config.max_size,
@@ -177,8 +176,8 @@ impl PreparedStatementCache {
 
     /// Clear all cached statements
     pub fn clear(&self) {
-        self.statements.write().unwrap().clear();
-        self.query_to_id.write().unwrap().clear();
+        self.statements.write_recover().clear();
+        self.query_to_id.write_recover().clear();
     }
 }
 

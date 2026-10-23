@@ -10,6 +10,7 @@ use super::{
 use orbit_shared::{
     AddressableLease, AddressableReference, NodeId, NodeInfo, NodeLease, NodeStatus,
 };
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -235,7 +236,7 @@ impl WriteAheadLog {
             .append(true)
             .open(path)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to open WAL file: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to open WAL file: {e}")))?;
 
         // Determine the next sequence number by reading existing entries
         let sequence = Self::get_last_sequence(path).await.unwrap_or(0) + 1;
@@ -255,7 +256,7 @@ impl WriteAheadLog {
 
         let content = tokio::fs::read(path)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to read WAL file: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to read WAL file: {e}")))?;
         let mut last_sequence = 0u64;
         let mut offset = 0;
 
@@ -293,7 +294,7 @@ impl WriteAheadLog {
         };
 
         let serialized = serde_json::to_vec(&entry)
-            .map_err(|e| OrbitError::internal(format!("WAL serialization error: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("WAL serialization error: {e}")))?;
 
         // Write entry length followed by entry data
         let len_bytes = (serialized.len() as u32).to_le_bytes();
@@ -321,11 +322,11 @@ impl WriteAheadLog {
             self.file
                 .write_all(&self.buffer)
                 .await
-                .map_err(|e| OrbitError::internal(format!("WAL flush error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("WAL flush error: {e}")))?;
             self.file
                 .sync_all()
                 .await
-                .map_err(|e| OrbitError::internal(format!("WAL sync error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("WAL sync error: {e}")))?;
             self.buffer.clear();
         }
         Ok(())
@@ -384,7 +385,7 @@ impl PersistenceProvider for CowBTreeAddressableProvider {
         let data_dir = PathBuf::from(&self.config.data_dir);
         tokio::fs::create_dir_all(&data_dir)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {e}")))?;
 
         // Initialize WAL
         let wal_path = data_dir.join("orbit.wal");
@@ -473,7 +474,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
 
         // Insert into B+ tree
         let success = {
-            let mut root = self.root.write().unwrap();
+            let mut root = self.root.write_recover();
             root.insert_addressable_lease(key, lease.clone())
         };
 
@@ -489,7 +490,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let key = Self::reference_to_key(reference);
 
         let result = {
-            let root = self.root.read().unwrap();
+            let root = self.root.read_recover();
             match root.find_key_index(&key) {
                 Ok(idx) => root.addressable_values[idx].clone(),
                 Err(_) => None,
@@ -518,7 +519,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
 
         // Update in B+ tree
         {
-            let mut root = self.root.write().unwrap();
+            let mut root = self.root.write_recover();
             root.insert_addressable_lease(key, lease.clone());
         }
 
@@ -541,7 +542,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
 
         // Remove from B+ tree
         let removed = {
-            let mut root = self.root.write().unwrap();
+            let mut root = self.root.write_recover();
             match root.find_key_index(&key) {
                 Ok(idx) => {
                     root.keys.remove(idx);
@@ -561,7 +562,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let start = Instant::now();
 
         let leases = {
-            let root = self.root.read().unwrap();
+            let root = self.root.read_recover();
             let mut leases = Vec::new();
             for lease in root.addressable_values.iter().flatten() {
                 if &lease.node_id == node_id {
@@ -579,10 +580,10 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let start = Instant::now();
 
         let leases = {
-            let root = self.root.read().unwrap();
+            let root = self.root.read_recover();
             root.addressable_values
                 .iter()
-                .filter_map(|v| v.clone())
+                .filter_map(std::clone::Clone::clone)
                 .collect::<Vec<AddressableLease>>()
         };
 
@@ -595,7 +596,7 @@ impl AddressableDirectoryProvider for CowBTreeAddressableProvider {
         let now = chrono::Utc::now();
 
         let count = {
-            let mut root = self.root.write().unwrap();
+            let mut root = self.root.write_recover();
             let mut indices_to_remove = Vec::new();
             let mut count = 0;
 
@@ -671,7 +672,7 @@ impl PersistenceProvider for CowBTreeClusterProvider {
         let data_dir = PathBuf::from(&self.config.data_dir);
         tokio::fs::create_dir_all(&data_dir)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to create data directory: {e}")))?;
 
         // Initialize WAL
         let wal_path = data_dir.join("cluster_nodes.wal");
@@ -721,14 +722,14 @@ impl PersistenceProvider for CowBTreeClusterProvider {
 impl ClusterNodeProvider for CowBTreeClusterProvider {
     async fn store_node(&self, node: &NodeInfo) -> OrbitResult<()> {
         let key = node.id.to_string();
-        let mut root = self.root.write().unwrap();
+        let mut root = self.root.write_recover();
         root.insert_node_info(key, node.clone());
         Ok(())
     }
 
     async fn get_node(&self, node_id: &NodeId) -> OrbitResult<Option<NodeInfo>> {
         let key = node_id.to_string();
-        let root = self.root.read().unwrap();
+        let root = self.root.read_recover();
         let result = match root.find_key_index(&key) {
             Ok(idx) => root.node_values[idx].clone(),
             Err(_) => None,
@@ -742,7 +743,7 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
 
     async fn remove_node(&self, node_id: &NodeId) -> OrbitResult<bool> {
         let key = node_id.to_string();
-        let mut root = self.root.write().unwrap();
+        let mut root = self.root.write_recover();
         let removed = match root.find_key_index(&key) {
             Ok(idx) => {
                 root.keys.remove(idx);
@@ -755,25 +756,29 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
     }
 
     async fn list_active_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
-        let root = self.root.read().unwrap();
+        let root = self.root.read_recover();
         let nodes: Vec<NodeInfo> = root
             .node_values
             .iter()
-            .filter_map(|v| v.clone())
+            .filter_map(std::clone::Clone::clone)
             .filter(|node| node.status == NodeStatus::Active)
             .collect();
         Ok(nodes)
     }
 
     async fn list_all_nodes(&self) -> OrbitResult<Vec<NodeInfo>> {
-        let root = self.root.read().unwrap();
-        let nodes: Vec<NodeInfo> = root.node_values.iter().filter_map(|v| v.clone()).collect();
+        let root = self.root.read_recover();
+        let nodes: Vec<NodeInfo> = root
+            .node_values
+            .iter()
+            .filter_map(std::clone::Clone::clone)
+            .collect();
         Ok(nodes)
     }
 
     async fn cleanup_expired_nodes(&self) -> OrbitResult<u64> {
         let mut count = 0;
-        let mut root = self.root.write().unwrap();
+        let mut root = self.root.write_recover();
         let mut indices_to_remove = Vec::new();
 
         for (i, value) in root.node_values.iter().enumerate() {
@@ -797,7 +802,7 @@ impl ClusterNodeProvider for CowBTreeClusterProvider {
 
     async fn renew_node_lease(&self, node_id: &NodeId, lease: &NodeLease) -> OrbitResult<()> {
         let key = node_id.to_string();
-        let mut root = self.root.write().unwrap();
+        let mut root = self.root.write_recover();
 
         if let Ok(idx) = root.find_key_index(&key) {
             if let Some(node) = &mut root.node_values[idx] {

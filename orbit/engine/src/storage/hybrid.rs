@@ -67,8 +67,7 @@ impl PrimaryKey {
                 "Decimal type not yet supported as primary key".to_string(),
             )),
             _ => Err(EngineError::storage(format!(
-                "Type {:?} cannot be used as primary key",
-                value
+                "Type {value:?} cannot be used as primary key"
             ))),
         }
     }
@@ -765,11 +764,7 @@ impl HybridStorageManager {
         let mut column_names = Vec::new();
 
         // Scan hot tier if needed
-        if time_range
-            .as_ref()
-            .map(|r| r.overlaps_hot())
-            .unwrap_or(true)
-        {
+        if time_range.as_ref().is_none_or(TimeRange::overlaps_hot) {
             let hot = self.hot_store.read().await;
             // Note: Hot tier uses simple FilterPredicate, so we scan all and filter in warm/cold
             // TODO: Convert StorageFilterPredicate to simple FilterPredicate for hot tier
@@ -798,11 +793,7 @@ impl HybridStorageManager {
         }
 
         // Scan warm tier if needed
-        if time_range
-            .as_ref()
-            .map(|r| r.overlaps_warm())
-            .unwrap_or(true)
-        {
+        if time_range.as_ref().is_none_or(TimeRange::overlaps_warm) {
             let warm = self.warm_store.read().await;
             if let Some(ref batch) = *warm {
                 // Extract column names if not yet set
@@ -931,7 +922,7 @@ impl HybridStorageManager {
                     .column_names
                     .as_ref()
                     .and_then(|names| names.iter().position(|n| n == &column))
-                    .ok_or_else(|| EngineError::storage(format!("Column {} not found", column)))?;
+                    .ok_or_else(|| EngineError::storage(format!("Column {column} not found")))?;
 
                 // Execute aggregation using vectorized executor
                 let result = self
@@ -1083,7 +1074,7 @@ impl HybridStorageManager {
             .as_ref()
             .and_then(|names| names.iter().position(|n| n == column_name))
             .ok_or_else(|| {
-                EngineError::storage(format!("Column {} not found in batch", column_name))
+                EngineError::storage(format!("Column {column_name} not found in batch"))
             })?;
 
         let null_bitmap = &batch.null_bitmaps[col_idx];
@@ -1128,8 +1119,7 @@ impl HybridStorageManager {
             (Binary(a), Binary(b)) => Ok(a.cmp(b)),
 
             _ => Err(EngineError::storage(format!(
-                "Cannot compare values of different types: {:?} and {:?}",
-                a, b
+                "Cannot compare values of different types: {a:?} and {b:?}"
             ))),
         }
     }

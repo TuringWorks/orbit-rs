@@ -4,6 +4,7 @@
 //! sampling across CPU, GPU, and Neural Engine compute units, enabling optimal
 //! compute resource allocation through continuous performance monitoring.
 
+use orbit_util::RwLockExt;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
@@ -730,11 +731,11 @@ impl AdaptiveWorkloadScheduler {
 
     /// Get current system conditions
     async fn get_current_system_conditions(&self) -> Result<SystemConditions, ComputeError> {
-        let cpu_load = *self.system_monitor.cpu_load.read().unwrap();
-        let gpu_load = *self.system_monitor.gpu_load.read().unwrap();
-        let memory_usage = *self.system_monitor.memory_usage.read().unwrap();
-        let thermal_status = self.system_monitor.thermal_status.read().unwrap().clone();
-        let power_state = self.system_monitor.power_state.read().unwrap().clone();
+        let cpu_load = *self.system_monitor.cpu_load.read_recover();
+        let gpu_load = *self.system_monitor.gpu_load.read_recover();
+        let memory_usage = *self.system_monitor.memory_usage.read_recover();
+        let thermal_status = self.system_monitor.thermal_status.read_recover().clone();
+        let power_state = self.system_monitor.power_state.read_recover().clone();
 
         Ok(SystemConditions {
             cpu_temperature_c: thermal_status.cpu_temperature,
@@ -1067,7 +1068,7 @@ impl AdaptiveWorkloadScheduler {
         &self,
         workload_type: &WorkloadType,
     ) -> Option<WorkloadProfile> {
-        let db = self.performance_db.read().unwrap();
+        let db = self.performance_db.read_recover();
         db.workload_profiles.get(workload_type).cloned()
     }
 
@@ -1076,7 +1077,7 @@ impl AdaptiveWorkloadScheduler {
         &self,
         sample: PerformanceSample,
     ) -> Result<(), ComputeError> {
-        let mut db = self.performance_db.write().unwrap();
+        let mut db = self.performance_db.write_recover();
 
         // Add to recent samples
         db.recent_samples.push_back(sample);
@@ -1101,7 +1102,7 @@ impl AdaptiveWorkloadScheduler {
         compute_unit: &ComputeUnit,
         sample: &PerformanceSample,
     ) -> Result<(), ComputeError> {
-        let mut db = self.performance_db.write().unwrap();
+        let mut db = self.performance_db.write_recover();
 
         let profile = db
             .workload_profiles

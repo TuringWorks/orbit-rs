@@ -315,7 +315,7 @@ impl TableStorage for MemoryTableStorage {
         if let Some(table_rows) = table_data.get_mut(table_name) {
             // For now, update all rows (condition support to be added later)
             for row in table_rows.iter_mut() {
-                for (key, value) in updates.iter() {
+                for (key, value) in updates {
                     row.insert(key.clone(), value.clone());
                 }
                 count += 1;

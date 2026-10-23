@@ -30,12 +30,14 @@ impl SortedSetCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<String> {
-        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(super::super::types::RespValue::as_string)
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     fn get_float_arg(
@@ -114,18 +116,15 @@ impl SortedSetCommands {
                 .execute_sorted_set(
                     &key,
                     "zadd",
-                    &[
-                        serde_json::to_value(member.clone()).unwrap(),
-                        serde_json::to_value(score).unwrap(),
-                    ],
+                    &[serde_json::json!(member), serde_json::json!(score)],
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
 
             let was_added: bool = serde_json::from_value(result)
-                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
                 .unwrap_or(false);
 
             if was_added {
@@ -148,10 +147,10 @@ impl SortedSetCommands {
             .local_registry
             .execute_sorted_set(&key, "zcard", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let size: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0);
 
         debug!("ZCARD {} -> {}", key, size);
@@ -168,30 +167,23 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(
-                &key,
-                "zscore",
-                &[serde_json::to_value(member.clone()).unwrap()],
-            )
+            .execute_sorted_set(&key, "zscore", &[serde_json::json!(member)])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let score: Option<f64> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .ok()
             .flatten();
 
-        match score {
-            Some(s) => {
-                debug!("ZSCORE {} {} -> {}", key, member, s);
-                Ok(RespValue::BulkString(Bytes::from(
-                    s.to_string().into_bytes(),
-                )))
-            }
-            None => {
-                debug!("ZSCORE {} {} -> null", key, member);
-                Ok(RespValue::null())
-            }
+        if let Some(s) = score {
+            debug!("ZSCORE {} {} -> {}", key, member, s);
+            Ok(RespValue::BulkString(Bytes::from(
+                s.to_string().into_bytes(),
+            )))
+        } else {
+            debug!("ZSCORE {} {} -> null", key, member);
+            Ok(RespValue::null())
         }
     }
 
@@ -209,8 +201,7 @@ impl SortedSetCommands {
         let with_scores = args.len() == 4
             && args[3]
                 .as_string()
-                .map(|s| s.to_uppercase() == "WITHSCORES")
-                .unwrap_or(false);
+                .is_some_and(|s| s.to_uppercase() == "WITHSCORES");
 
         let result = self
             .base
@@ -219,17 +210,17 @@ impl SortedSetCommands {
                 &key,
                 "zrange",
                 &[
-                    serde_json::to_value(start).unwrap(),
-                    serde_json::to_value(stop).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
+                    serde_json::json!(start),
+                    serde_json::json!(stop),
+                    serde_json::json!(with_scores),
                 ],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         // zrange returns Vec<(String, Option<f64>)>
         let members_with_scores: Vec<(String, Option<f64>)> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         let mut result_values: Vec<RespValue> = Vec::new();
@@ -268,16 +259,13 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zincrby",
-                &[
-                    serde_json::to_value(member.clone()).unwrap(),
-                    serde_json::to_value(increment).unwrap(),
-                ],
+                &[serde_json::json!(member), serde_json::json!(increment)],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let new_score: f64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0.0);
 
         debug!("ZINCRBY {} {} {} -> {}", key, increment, member, new_score);
@@ -303,12 +291,12 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(&key, "zrem", &[serde_json::to_value(&members).unwrap()])
+            .execute_sorted_set(&key, "zrem", &[serde_json::json!(members)])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let removed: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0);
 
         debug!("ZREM {} {:?} -> {} removed", key, members, removed);
@@ -329,16 +317,13 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zcount",
-                &[
-                    serde_json::to_value(min).unwrap(),
-                    serde_json::to_value(max).unwrap(),
-                ],
+                &[serde_json::json!(min), serde_json::json!(max)],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let count: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0);
 
         debug!("ZCOUNT {} {} {} -> {}", key, min, max, count);
@@ -355,28 +340,21 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(
-                &key,
-                "zrank",
-                &[serde_json::to_value(member.clone()).unwrap()],
-            )
+            .execute_sorted_set(&key, "zrank", &[serde_json::json!(member)])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let rank: Option<i64> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .ok()
             .flatten();
 
-        match rank {
-            Some(r) => {
-                debug!("ZRANK {} {} -> {}", key, member, r);
-                Ok(RespValue::Integer(r))
-            }
-            None => {
-                debug!("ZRANK {} {} -> null", key, member);
-                Ok(RespValue::null())
-            }
+        if let Some(r) = rank {
+            debug!("ZRANK {} {} -> {}", key, member, r);
+            Ok(RespValue::Integer(r))
+        } else {
+            debug!("ZRANK {} {} -> null", key, member);
+            Ok(RespValue::null())
         }
     }
 
@@ -390,28 +368,21 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(
-                &key,
-                "zrevrank",
-                &[serde_json::to_value(member.clone()).unwrap()],
-            )
+            .execute_sorted_set(&key, "zrevrank", &[serde_json::json!(member)])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let rank: Option<i64> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .ok()
             .flatten();
 
-        match rank {
-            Some(r) => {
-                debug!("ZREVRANK {} {} -> {}", key, member, r);
-                Ok(RespValue::Integer(r))
-            }
-            None => {
-                debug!("ZREVRANK {} {} -> null", key, member);
-                Ok(RespValue::null())
-            }
+        if let Some(r) = rank {
+            debug!("ZREVRANK {} {} -> {}", key, member, r);
+            Ok(RespValue::Integer(r))
+        } else {
+            debug!("ZREVRANK {} {} -> null", key, member);
+            Ok(RespValue::null())
         }
     }
 
@@ -429,8 +400,7 @@ impl SortedSetCommands {
         let with_scores = args.len() == 4
             && args[3]
                 .as_string()
-                .map(|s| s.to_uppercase() == "WITHSCORES")
-                .unwrap_or(false);
+                .is_some_and(|s| s.to_uppercase() == "WITHSCORES");
 
         let result = self
             .base
@@ -439,16 +409,16 @@ impl SortedSetCommands {
                 &key,
                 "zrevrange",
                 &[
-                    serde_json::to_value(start).unwrap(),
-                    serde_json::to_value(stop).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
+                    serde_json::json!(start),
+                    serde_json::json!(stop),
+                    serde_json::json!(with_scores),
                 ],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let members_with_scores: Vec<(String, Option<f64>)> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         let mut result_values: Vec<RespValue> = Vec::new();
@@ -501,16 +471,16 @@ impl SortedSetCommands {
                 &key,
                 "zrangebyscore",
                 &[
-                    serde_json::to_value(min).unwrap(),
-                    serde_json::to_value(max).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
+                    serde_json::json!(min),
+                    serde_json::json!(max),
+                    serde_json::json!(with_scores),
                 ],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let members_with_scores: Vec<(String, Option<f64>)> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         let mut result_values: Vec<RespValue> = Vec::new();
@@ -563,16 +533,16 @@ impl SortedSetCommands {
                 &key,
                 "zrevrangebyscore",
                 &[
-                    serde_json::to_value(max).unwrap(),
-                    serde_json::to_value(min).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
+                    serde_json::json!(max),
+                    serde_json::json!(min),
+                    serde_json::json!(with_scores),
                 ],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let members_with_scores: Vec<(String, Option<f64>)> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         let mut result_values: Vec<RespValue> = Vec::new();
@@ -611,16 +581,13 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zremrangebyrank",
-                &[
-                    serde_json::to_value(start).unwrap(),
-                    serde_json::to_value(stop).unwrap(),
-                ],
+                &[serde_json::json!(start), serde_json::json!(stop)],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let removed: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0);
 
         debug!(
@@ -644,16 +611,13 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zremrangebyscore",
-                &[
-                    serde_json::to_value(min).unwrap(),
-                    serde_json::to_value(max).unwrap(),
-                ],
+                &[serde_json::json!(min), serde_json::json!(max)],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let removed: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0);
 
         debug!(
@@ -681,12 +645,12 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(&key, "zpopmin", &[serde_json::to_value(count).unwrap()])
+            .execute_sorted_set(&key, "zpopmin", &[serde_json::json!(count)])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let members_with_scores: Vec<(String, f64)> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         let mut result_values: Vec<RespValue> = Vec::new();
@@ -724,12 +688,12 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(&key, "zpopmax", &[serde_json::to_value(count).unwrap()])
+            .execute_sorted_set(&key, "zpopmax", &[serde_json::json!(count)])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let members_with_scores: Vec<(String, f64)> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         let mut result_values: Vec<RespValue> = Vec::new();
@@ -768,14 +732,14 @@ impl SortedSetCommands {
             let result = self
                 .base
                 .local_registry
-                .execute_sorted_set(&key, "zpopmin", &[serde_json::to_value(1).unwrap()])
+                .execute_sorted_set(&key, "zpopmin", &[serde_json::json!(1)])
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
 
             let members_with_scores: Vec<(String, f64)> = serde_json::from_value(result)
-                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
                 .unwrap_or_default();
 
             if !members_with_scores.is_empty() {
@@ -820,14 +784,14 @@ impl SortedSetCommands {
             let result = self
                 .base
                 .local_registry
-                .execute_sorted_set(&key, "zpopmax", &[serde_json::to_value(1).unwrap()])
+                .execute_sorted_set(&key, "zpopmax", &[serde_json::json!(1)])
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
 
             let members_with_scores: Vec<(String, f64)> = serde_json::from_value(result)
-                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
                 .unwrap_or_default();
 
             if !members_with_scores.is_empty() {
@@ -867,16 +831,13 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zlexcount",
-                &[
-                    serde_json::to_value(min.clone()).unwrap(),
-                    serde_json::to_value(max.clone()).unwrap(),
-                ],
+                &[serde_json::json!(min), serde_json::json!(max)],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let count: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0);
 
         debug!("ZLEXCOUNT {} {} {} -> {}", key, min, max, count);
@@ -901,16 +862,13 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zscan",
-                &[
-                    serde_json::to_value(cursor).unwrap(),
-                    serde_json::to_value(count).unwrap(),
-                ],
+                &[serde_json::json!(cursor), serde_json::json!(count)],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let (next_cursor, members): (usize, Vec<(String, f64)>) = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or((0, Vec::new()));
 
         let mut member_array: Vec<RespValue> = Vec::new();
@@ -951,12 +909,12 @@ impl SortedSetCommands {
         let result = self
             .base
             .local_registry
-            .execute_sorted_set(&key, "zmscore", &[serde_json::to_value(&members).unwrap()])
+            .execute_sorted_set(&key, "zmscore", &[serde_json::json!(members)])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let scores: Vec<Option<f64>> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         let result_values: Vec<RespValue> = scores
@@ -1004,17 +962,14 @@ impl SortedSetCommands {
             i += 1;
         }
 
-        let mut invoke_args = vec![
-            serde_json::to_value(min.clone()).unwrap(),
-            serde_json::to_value(max.clone()).unwrap(),
-        ];
+        let mut invoke_args = vec![serde_json::json!(min), serde_json::json!(max)];
         if let Some(off) = offset {
-            invoke_args.push(serde_json::to_value(off).unwrap());
+            invoke_args.push(serde_json::json!(off));
         } else {
             invoke_args.push(serde_json::Value::Null);
         }
         if let Some(cnt) = count {
-            invoke_args.push(serde_json::to_value(cnt).unwrap());
+            invoke_args.push(serde_json::json!(cnt));
         }
 
         let result = self
@@ -1022,10 +977,10 @@ impl SortedSetCommands {
             .local_registry
             .execute_sorted_set(&key, "zrangebylex", &invoke_args)
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let members: Vec<String> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         let result_values: Vec<RespValue> = members
@@ -1071,17 +1026,14 @@ impl SortedSetCommands {
             i += 1;
         }
 
-        let mut invoke_args = vec![
-            serde_json::to_value(max.clone()).unwrap(),
-            serde_json::to_value(min.clone()).unwrap(),
-        ];
+        let mut invoke_args = vec![serde_json::json!(max), serde_json::json!(min)];
         if let Some(off) = offset {
-            invoke_args.push(serde_json::to_value(off).unwrap());
+            invoke_args.push(serde_json::json!(off));
         } else {
             invoke_args.push(serde_json::Value::Null);
         }
         if let Some(cnt) = count {
-            invoke_args.push(serde_json::to_value(cnt).unwrap());
+            invoke_args.push(serde_json::json!(cnt));
         }
 
         let result = self
@@ -1089,10 +1041,10 @@ impl SortedSetCommands {
             .local_registry
             .execute_sorted_set(&key, "zrevrangebylex", &invoke_args)
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let members: Vec<String> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         let result_values: Vec<RespValue> = members
@@ -1124,16 +1076,13 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zremrangebylex",
-                &[
-                    serde_json::to_value(min.clone()).unwrap(),
-                    serde_json::to_value(max.clone()).unwrap(),
-                ],
+                &[serde_json::json!(min), serde_json::json!(max)],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let removed: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or(0);
 
         debug!(
@@ -1173,16 +1122,13 @@ impl SortedSetCommands {
             .execute_sorted_set(
                 &key,
                 "zrandmember",
-                &[
-                    serde_json::to_value(count).unwrap(),
-                    serde_json::to_value(with_scores).unwrap(),
-                ],
+                &[serde_json::json!(count), serde_json::json!(with_scores)],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let members_with_scores: Vec<(String, Option<f64>)> = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))
             .unwrap_or_default();
 
         // If count == 1 and no WITHSCORES, return single bulk string
@@ -1618,14 +1564,11 @@ impl SortedSetCommands {
                 .execute_sorted_set(
                     &destination,
                     "zadd",
-                    &[
-                        serde_json::to_value(member).unwrap(),
-                        serde_json::to_value(score).unwrap(),
-                    ],
+                    &[serde_json::json!(member), serde_json::json!(score)],
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
             added += 1;
         }
@@ -1740,14 +1683,11 @@ impl SortedSetCommands {
                 .execute_sorted_set(
                     &destination,
                     "zadd",
-                    &[
-                        serde_json::to_value(member).unwrap(),
-                        serde_json::to_value(score).unwrap(),
-                    ],
+                    &[serde_json::json!(member), serde_json::json!(score)],
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
             added += 1;
         }
@@ -1815,14 +1755,11 @@ impl SortedSetCommands {
                 .execute_sorted_set(
                     &destination,
                     "zadd",
-                    &[
-                        serde_json::to_value(member).unwrap(),
-                        serde_json::to_value(score).unwrap(),
-                    ],
+                    &[serde_json::json!(member), serde_json::json!(score)],
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
             added += 1;
         }
@@ -1868,8 +1805,7 @@ impl CommandHandler for SortedSetCommands {
             "ZINTERSTORE" => self.cmd_zinterstore(args).await,
             "ZDIFFSTORE" => self.cmd_zdiffstore(args).await,
             _ => Err(ProtocolError::RespError(format!(
-                "ERR sorted set command '{}' not yet implemented",
-                command_name
+                "ERR sorted set command '{command_name}' not yet implemented"
             ))),
         }
     }

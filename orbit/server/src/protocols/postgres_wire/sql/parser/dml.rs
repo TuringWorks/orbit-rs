@@ -296,7 +296,7 @@ fn parse_traverse_clause(parser: &mut SqlParser) -> ParseResult<TraverseClause> 
             "ANY" => TraverseDirection::Any,
             _ => {
                 return Err(ParseError {
-                    message: format!("Expected OUTBOUND, INBOUND, or ANY, found {}", name),
+                    message: format!("Expected OUTBOUND, INBOUND, or ANY, found {name}"),
                     position: parser.position,
                     expected: vec![
                         "OUTBOUND".to_string(),
@@ -320,7 +320,7 @@ fn parse_traverse_clause(parser: &mut SqlParser) -> ParseResult<TraverseClause> 
     // Parse Min Steps
     let min_steps = if let Some(Token::NumericLiteral(s)) = &parser.current_token {
         s.parse::<u32>().map_err(|_| ParseError {
-            message: format!("Invalid integer for min steps: {}", s),
+            message: format!("Invalid integer for min steps: {s}"),
             position: parser.position,
             expected: vec!["integer".to_string()],
             found: parser.current_token.clone(),
@@ -341,7 +341,7 @@ fn parse_traverse_clause(parser: &mut SqlParser) -> ParseResult<TraverseClause> 
     // Parse Max Steps
     let max_steps = if let Some(Token::NumericLiteral(s)) = &parser.current_token {
         s.parse::<u32>().map_err(|_| ParseError {
-            message: format!("Invalid integer for max steps: {}", s),
+            message: format!("Invalid integer for max steps: {s}"),
             position: parser.position,
             expected: vec!["integer".to_string()],
             found: parser.current_token.clone(),

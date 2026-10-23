@@ -3,6 +3,7 @@
 //! This module provides real-time monitoring of system resources, thermal state,
 //! power management, and hardware utilization on macOS systems using native APIs.
 
+use orbit_util::RwLockExt;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
@@ -336,32 +337,32 @@ impl MacOSSystemMonitor {
     ) -> Result<(), ComputeError> {
         // Update CPU load
         if let Ok(load) = Self::get_cpu_load() {
-            *cpu_load.write().unwrap() = load;
+            *cpu_load.write_recover() = load;
         }
 
         // Update memory usage
         if let Ok(memory) = Self::get_memory_usage() {
-            *memory_usage.write().unwrap() = memory;
+            *memory_usage.write_recover() = memory;
         }
 
         // Update GPU loads
         if config.gpu_monitoring {
             if let Ok(gpu_load_map) = Self::get_gpu_loads() {
-                *gpu_loads.write().unwrap() = gpu_load_map;
+                *gpu_loads.write_recover() = gpu_load_map;
             }
         }
 
         // Update thermal status
         if config.temperature_monitoring {
             if let Ok(thermal) = Self::get_thermal_status().await {
-                *thermal_status.write().unwrap() = thermal;
+                *thermal_status.write_recover() = thermal;
             }
         }
 
         // Update power state
         if config.power_monitoring {
             if let Ok(power) = Self::get_power_state() {
-                *power_state.write().unwrap() = power;
+                *power_state.write_recover() = power;
             }
         }
 
@@ -376,7 +377,7 @@ impl MacOSSystemMonitor {
 
         if should_update_system_info {
             if let Ok(info) = Self::collect_system_info() {
-                *system_info.write().unwrap() = info;
+                *system_info.write_recover() = info;
                 unsafe {
                     LAST_SYSTEM_INFO_UPDATE = Some(Instant::now());
                 }
@@ -716,7 +717,7 @@ impl MacOSSystemMonitor {
             // Convert to string, removing null terminator
             buffer.truncate(size.saturating_sub(1));
             String::from_utf8(buffer).map_err(|e| ComputeError::Serialization {
-                message: format!("Invalid UTF-8 in sysctl value: {}", e),
+                message: format!("Invalid UTF-8 in sysctl value: {e}"),
             })
         }
     }
@@ -755,7 +756,7 @@ impl MacOSSystemMonitor {
     /// Update system information cache
     async fn update_system_info(&self) -> Result<(), ComputeError> {
         let info = Self::collect_system_info()?;
-        *self.system_info.write().unwrap() = info;
+        *self.system_info.write_recover() = info;
         Ok(())
     }
 
@@ -841,13 +842,13 @@ impl MacOSSystemMonitor {
 
     /// Get current system conditions
     pub async fn get_current_conditions(&self) -> Result<SystemConditions, ComputeError> {
-        let cpu_load = *self.cpu_load.read().unwrap();
-        let memory_usage = *self.memory_usage.read().unwrap();
-        let thermal_status = self.thermal_status.read().unwrap().clone();
-        let power_state = self.power_state.read().unwrap().clone();
+        let cpu_load = *self.cpu_load.read_recover();
+        let memory_usage = *self.memory_usage.read_recover();
+        let thermal_status = self.thermal_status.read_recover().clone();
+        let power_state = self.power_state.read_recover().clone();
 
         // Get average GPU load
-        let gpu_loads = self.gpu_loads.read().unwrap();
+        let gpu_loads = self.gpu_loads.read_recover();
         let avg_gpu_load = if gpu_loads.is_empty() {
             0.0
         } else {
@@ -868,7 +869,7 @@ impl MacOSSystemMonitor {
 
     /// Get system information
     pub fn get_system_info(&self) -> MacOSSystemInfo {
-        self.system_info.read().unwrap().clone()
+        self.system_info.read_recover().clone()
     }
 }
 

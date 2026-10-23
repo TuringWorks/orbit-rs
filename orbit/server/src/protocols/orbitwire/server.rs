@@ -55,7 +55,7 @@ impl OrbitWireServer {
     pub async fn start(&self) -> Result<(), ServerError> {
         let addr: SocketAddr = format!("{}:{}", self.config.bind_address, self.config.port)
             .parse()
-            .map_err(|e| ServerError::BindError(format!("Invalid address: {}", e)))?;
+            .map_err(|e| ServerError::BindError(format!("Invalid address: {e}")))?;
 
         let listener = TcpListener::bind(addr)
             .await
@@ -536,8 +536,8 @@ pub enum ServerError {
 impl std::fmt::Display for ServerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ServerError::BindError(e) => write!(f, "Bind error: {}", e),
-            ServerError::IoError(e) => write!(f, "IO error: {}", e),
+            ServerError::BindError(e) => write!(f, "Bind error: {e}"),
+            ServerError::IoError(e) => write!(f, "IO error: {e}"),
         }
     }
 }
@@ -558,11 +558,11 @@ impl std::fmt::Display for HandlerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             HandlerError::UnsupportedMessageType(t) => {
-                write!(f, "Unsupported message type: {:?}", t)
+                write!(f, "Unsupported message type: {t:?}")
             }
-            HandlerError::InvalidMessage(e) => write!(f, "Invalid message: {}", e),
-            HandlerError::SessionError(e) => write!(f, "Session error: {}", e),
-            HandlerError::Fatal(e) => write!(f, "Fatal error: {}", e),
+            HandlerError::InvalidMessage(e) => write!(f, "Invalid message: {e}"),
+            HandlerError::SessionError(e) => write!(f, "Session error: {e}"),
+            HandlerError::Fatal(e) => write!(f, "Fatal error: {e}"),
         }
     }
 }

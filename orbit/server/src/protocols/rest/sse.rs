@@ -132,7 +132,7 @@ fn create_event_stream(
     async_stream::stream! {
         // Send initial status message
         let status = SseMessage::Status {
-            message: format!("Connected with subscription ID: {}", subscription_id),
+            message: format!("Connected with subscription ID: {subscription_id}"),
         };
 
         if let Ok(json) = serde_json::to_string(&status) {
@@ -153,7 +153,7 @@ fn create_event_stream(
                 timestamp: chrono::Utc::now().timestamp_millis(),
                 operation: "Insert".to_string(),
                 table: "demo_table".to_string(),
-                row_id: format!("{}", i),
+                row_id: format!("{i}"),
                 new_values: Some(serde_json::json!({
                     "id": i,
                     "name": format!("Item {}", i)

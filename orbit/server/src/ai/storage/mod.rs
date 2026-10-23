@@ -26,17 +26,15 @@ pub struct SmartStorageManager {
 #[async_trait::async_trait]
 impl AISubsystem for SmartStorageManager {
     async fn handle_decision(&self, decision: AIDecision) -> OrbitResult<()> {
-        match decision {
-            AIDecision::ReorganizeStorage {
-                table: _,
-                strategy: _,
-            } => {
-                info!("Handling storage reorganization decision");
-                // TODO: Apply storage reorganization
-            }
-            _ => {
-                // Not applicable
-            }
+        if let AIDecision::ReorganizeStorage {
+            table: _,
+            strategy: _,
+        } = decision
+        {
+            info!("Handling storage reorganization decision");
+            // TODO: Apply storage reorganization
+        } else {
+            // Not applicable
         }
         Ok(())
     }

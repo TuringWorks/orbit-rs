@@ -230,8 +230,7 @@ impl VectorizedExecutor {
     ) -> ProtocolResult<ColumnBatch> {
         if column_index >= batch.columns.len() {
             return Err(ProtocolError::PostgresError(format!(
-                "Column index {} out of bounds",
-                column_index
+                "Column index {column_index} out of bounds"
             )));
         }
 
@@ -277,8 +276,7 @@ impl VectorizedExecutor {
         for &idx in column_indices {
             if idx >= batch.columns.len() {
                 return Err(ProtocolError::PostgresError(format!(
-                    "Column index {} out of bounds",
-                    idx
+                    "Column index {idx} out of bounds"
                 )));
             }
 
@@ -313,8 +311,7 @@ impl VectorizedExecutor {
     ) -> ProtocolResult<SqlValue> {
         if column_index >= batch.columns.len() {
             return Err(ProtocolError::PostgresError(format!(
-                "Column index {} out of bounds",
-                column_index
+                "Column index {column_index} out of bounds"
             )));
         }
 
@@ -324,15 +321,15 @@ impl VectorizedExecutor {
         match (column, function) {
             (Column::Int32(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_i32.sum(values, null_bitmap);
-                Ok(result.map(SqlValue::Integer).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Integer))
             }
             (Column::Int32(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_i32.min(values, null_bitmap);
-                Ok(result.map(SqlValue::Integer).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Integer))
             }
             (Column::Int32(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_i32.max(values, null_bitmap);
-                Ok(result.map(SqlValue::Integer).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Integer))
             }
             (Column::Int32(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_i32.count(null_bitmap);
@@ -340,15 +337,15 @@ impl VectorizedExecutor {
             }
             (Column::Int64(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_i64.sum(values, null_bitmap);
-                Ok(result.map(SqlValue::BigInt).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::BigInt))
             }
             (Column::Int64(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_i64.min(values, null_bitmap);
-                Ok(result.map(SqlValue::BigInt).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::BigInt))
             }
             (Column::Int64(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_i64.max(values, null_bitmap);
-                Ok(result.map(SqlValue::BigInt).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::BigInt))
             }
             (Column::Int64(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_i64.count(null_bitmap);
@@ -356,21 +353,15 @@ impl VectorizedExecutor {
             }
             (Column::Float64(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_f64.sum(values, null_bitmap);
-                Ok(result
-                    .map(SqlValue::DoublePrecision)
-                    .unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::DoublePrecision))
             }
             (Column::Float64(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_f64.min(values, null_bitmap);
-                Ok(result
-                    .map(SqlValue::DoublePrecision)
-                    .unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::DoublePrecision))
             }
             (Column::Float64(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_f64.max(values, null_bitmap);
-                Ok(result
-                    .map(SqlValue::DoublePrecision)
-                    .unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::DoublePrecision))
             }
             (Column::Float64(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_f64.count(null_bitmap);
@@ -424,13 +415,11 @@ impl VectorizedExecutor {
                 }
                 // For non-numeric types, average doesn't make sense
                 Err(ProtocolError::PostgresError(format!(
-                    "AVG not supported for column type: {:?}",
-                    column
+                    "AVG not supported for column type: {column:?}"
                 )))
             }
             _ => Err(ProtocolError::PostgresError(format!(
-                "Unsupported column type for {:?}",
-                function
+                "Unsupported column type for {function:?}"
             ))),
         }
     }
@@ -476,11 +465,11 @@ impl VectorizedExecutor {
                 ComparisonOp::NotEqual => self.simd_filter_i32.filter_ne(values, target, result),
                 ComparisonOp::LessThan => self.simd_filter_i32.filter_lt(values, target, result),
                 ComparisonOp::LessThanOrEqual => {
-                    self.simd_filter_i32.filter_le(values, target, result)
+                    self.simd_filter_i32.filter_le(values, target, result);
                 }
                 ComparisonOp::GreaterThan => self.simd_filter_i32.filter_gt(values, target, result),
                 ComparisonOp::GreaterThanOrEqual => {
-                    self.simd_filter_i32.filter_ge(values, target, result)
+                    self.simd_filter_i32.filter_ge(values, target, result);
                 }
             }
         } else {
@@ -504,7 +493,7 @@ impl VectorizedExecutor {
             ComparisonOp::LessThanOrEqual => self.simd_filter_i64.filter_le(values, target, result),
             ComparisonOp::GreaterThan => self.simd_filter_i64.filter_gt(values, target, result),
             ComparisonOp::GreaterThanOrEqual => {
-                self.simd_filter_i64.filter_ge(values, target, result)
+                self.simd_filter_i64.filter_ge(values, target, result);
             }
         }
         Ok(())
@@ -525,7 +514,7 @@ impl VectorizedExecutor {
             ComparisonOp::LessThanOrEqual => self.simd_filter_f64.filter_le(values, target, result),
             ComparisonOp::GreaterThan => self.simd_filter_f64.filter_gt(values, target, result),
             ComparisonOp::GreaterThanOrEqual => {
-                self.simd_filter_f64.filter_ge(values, target, result)
+                self.simd_filter_f64.filter_ge(values, target, result);
             }
         }
         Ok(())

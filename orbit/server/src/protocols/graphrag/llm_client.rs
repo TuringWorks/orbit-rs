@@ -98,21 +98,20 @@ impl LLMClient for OpenAIClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| OrbitError::internal(format!("OpenAI API request failed: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("OpenAI API request failed: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(OrbitError::internal(format!(
-                "OpenAI API error ({}): {}",
-                status, error_text
+                "OpenAI API error ({status}): {error_text}"
             )));
         }
 
         let json: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to parse OpenAI response: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to parse OpenAI response: {e}")))?;
 
         let text = json["choices"][0]["message"]["content"]
             .as_str()
@@ -126,7 +125,7 @@ impl LLMClient for OpenAIClient {
             tokens_used,
             finish_reason: json["choices"][0]["finish_reason"]
                 .as_str()
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             model: self.model.clone(),
         })
     }
@@ -171,7 +170,7 @@ impl LLMClient for OllamaClient {
 
         let mut prompt = request.prompt;
         if let Some(system_msg) = request.system_message {
-            prompt = format!("{}\n\n{}", system_msg, prompt);
+            prompt = format!("{system_msg}\n\n{prompt}");
         }
 
         let body = serde_json::json!({
@@ -189,21 +188,20 @@ impl LLMClient for OllamaClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| OrbitError::internal(format!("Ollama API request failed: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Ollama API request failed: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(OrbitError::internal(format!(
-                "Ollama API error ({}): {}",
-                status, error_text
+                "Ollama API error ({status}): {error_text}"
             )));
         }
 
         let json: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to parse Ollama response: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to parse Ollama response: {e}")))?;
 
         let text = json["response"]
             .as_str()
@@ -251,7 +249,7 @@ impl LLMClient for LocalLLMClient {
 
         let mut prompt = request.prompt;
         if let Some(system_msg) = request.system_message {
-            prompt = format!("{}\n\n{}", system_msg, prompt);
+            prompt = format!("{system_msg}\n\n{prompt}");
         }
 
         // Try OpenAI-compatible format first
@@ -272,19 +270,18 @@ impl LLMClient for LocalLLMClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| OrbitError::internal(format!("Local LLM API request failed: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Local LLM API request failed: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(OrbitError::internal(format!(
-                "Local LLM API error ({}): {}",
-                status, error_text
+                "Local LLM API error ({status}): {error_text}"
             )));
         }
 
         let json: serde_json::Value = response.json().await.map_err(|e| {
-            OrbitError::internal(format!("Failed to parse local LLM response: {}", e))
+            OrbitError::internal(format!("Failed to parse local LLM response: {e}"))
         })?;
 
         // Try OpenAI-compatible format
@@ -303,7 +300,7 @@ impl LLMClient for LocalLLMClient {
             tokens_used: json["usage"]["total_tokens"].as_u64().map(|v| v as u32),
             finish_reason: json["choices"][0]["finish_reason"]
                 .as_str()
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             model: self.model.clone(),
         })
     }

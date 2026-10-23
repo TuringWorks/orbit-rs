@@ -37,8 +37,7 @@ impl WasmUdfRegistry {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::PostgresError(format!(
-                    "Invalid WASM module: {}",
-                    e
+                    "Invalid WASM module: {e}"
                 ))
             })?;
 
@@ -116,8 +115,7 @@ impl WasmUdfRegistry {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::PostgresError(format!(
-                    "WASM execution error: {}",
-                    e
+                    "WASM execution error: {e}"
                 ))
             })?;
 
@@ -147,13 +145,13 @@ impl WasmUdfRegistry {
 
     /// Clear runtime cache
     pub async fn clear_cache(&self) {
-        self.runtime.clear_cache().await
+        self.runtime.clear_cache().await;
     }
 
     /// Build qualified function name
     fn qualified_name(schema: &Option<String>, name: &str) -> String {
         match schema {
-            Some(s) => format!("{}.{}", s, name),
+            Some(s) => format!("{s}.{name}"),
             None => name.to_string(),
         }
     }

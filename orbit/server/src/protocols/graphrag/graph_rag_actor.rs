@@ -472,7 +472,7 @@ impl GraphRAGActor {
         info!(
             query_text = %query.query_text,
             entities_involved = result.entities_involved.len(),
-            reasoning_paths = result.reasoning_paths.as_ref().map(|p| p.len()).unwrap_or(0),
+            reasoning_paths = result.reasoning_paths.as_ref().map_or(0, std::vec::Vec::len),
             total_time_ms = total_time_ms,
             "GraphRAG query completed"
         );
@@ -503,7 +503,7 @@ impl GraphRAGActor {
         let words: Vec<String> = query_text
             .split_whitespace()
             .filter(|word| word.len() > 3 && word.chars().next().unwrap().is_uppercase())
-            .map(|word| word.to_string())
+            .map(std::string::ToString::to_string)
             .take(5) // Limit to 5 potential entities
             .collect();
 
@@ -602,10 +602,10 @@ impl GraphRAGActor {
         {
             for entity in similar_entities {
                 let context_item = ContextItem {
-                    content: format!("Similar entity found: {}", entity),
+                    content: format!("Similar entity found: {entity}"),
                     source_type: ContextSourceType::Vector,
                     relevance_score: 0.7, // Default relevance for vector matches
-                    source_id: format!("vector_match_{}", entity),
+                    source_id: format!("vector_match_{entity}"),
                     metadata: HashMap::new(),
                 };
                 context_items.push(context_item);
@@ -691,7 +691,7 @@ impl GraphRAGActor {
         let llm_response = llm_client
             .generate(generation_request)
             .await
-            .map_err(|e| OrbitError::internal(format!("LLM generation failed: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("LLM generation failed: {e}")))?;
         let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
         let citations = context_items

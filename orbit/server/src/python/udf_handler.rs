@@ -49,8 +49,7 @@ fn validate_python_source(source: &str) -> PythonResult<()> {
     for (pattern, msg) in &forbidden_patterns {
         if source.contains(pattern) {
             return Err(PythonError::SecurityViolation(format!(
-                "Security violation: {}",
-                msg
+                "Security violation: {msg}"
             )));
         }
     }

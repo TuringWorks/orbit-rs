@@ -61,8 +61,7 @@ impl PrimaryKey {
                 "Decimal type not yet supported as primary key".to_string(),
             )),
             _ => Err(ProtocolError::PostgresError(format!(
-                "Type {:?} cannot be used as primary key",
-                value
+                "Type {value:?} cannot be used as primary key"
             ))),
         }
     }
@@ -670,11 +669,7 @@ impl HybridStorageManager {
         let mut column_names = Vec::new();
 
         // Scan hot tier if needed
-        if time_range
-            .as_ref()
-            .map(|r| r.overlaps_hot())
-            .unwrap_or(true)
-        {
+        if time_range.as_ref().is_none_or(TimeRange::overlaps_hot) {
             let hot = self.hot_store.read().await;
             let rows = hot.scan(filter.as_ref())?;
             all_rows.extend(rows.iter().map(|r| r.values.clone()));
@@ -769,7 +764,7 @@ impl HybridStorageManager {
                     .as_ref()
                     .and_then(|names| names.iter().position(|n| n == &column))
                     .ok_or_else(|| {
-                        ProtocolError::PostgresError(format!("Column {} not found", column))
+                        ProtocolError::PostgresError(format!("Column {column} not found"))
                     })?;
 
                 // Execute aggregation using vectorized executor

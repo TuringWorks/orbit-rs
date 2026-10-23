@@ -134,8 +134,7 @@ impl UnifiedStorageIntegration {
         // Initialize storage
         storage.initialize().await.map_err(|e| {
             UnifiedStorageError::InitializationFailed(format!(
-                "Failed to initialize unified storage: {}",
-                e
+                "Failed to initialize unified storage: {e}"
             ))
         })?;
 

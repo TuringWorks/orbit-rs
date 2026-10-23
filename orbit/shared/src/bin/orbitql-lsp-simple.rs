@@ -98,7 +98,7 @@ impl SimpleOrbitQLServer {
             items.push(CompletionItem {
                 label: function.clone(),
                 kind: Some(CompletionItemKind::FUNCTION),
-                insert_text: Some(format!("{}()", function)),
+                insert_text: Some(format!("{function}()")),
                 ..Default::default()
             });
         }
@@ -259,7 +259,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             reader.read_exact(&mut content).await?;
 
             let message_str = String::from_utf8(content)?;
-            eprintln!("Received message: {}", message_str);
+            eprintln!("Received message: {message_str}");
 
             if let Ok(message) = serde_json::from_str::<LSPMessage>(&message_str) {
                 if let Some(response) = handle_lsp_message(&server, message).await {
@@ -272,7 +272,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     stdout.write_all(response_with_header.as_bytes()).await?;
                     stdout.flush().await?;
 
-                    eprintln!("Sent response: {}", response_str);
+                    eprintln!("Sent response: {response_str}");
                 }
             }
         }

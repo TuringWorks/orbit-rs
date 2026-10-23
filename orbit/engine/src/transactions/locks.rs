@@ -310,7 +310,7 @@ impl DeadlockDetector {
         }
 
         // Detect cycle using DFS
-        for start_tx in all_transactions.iter() {
+        for start_tx in &all_transactions {
             if let Some(cycle) = self.detect_cycle_dfs(&graph, start_tx) {
                 // Get resources involved in the cycle
                 let cycle_set: HashSet<_> = cycle.iter().cloned().collect();

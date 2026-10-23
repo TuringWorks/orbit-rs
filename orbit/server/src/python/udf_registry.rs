@@ -108,8 +108,7 @@ impl PythonUdfRegistry {
             .await
             .map_err(|e| {
                 PythonError::RuntimeError(format!(
-                    "Failed to validate function {}: {}",
-                    qualified_name, e
+                    "Failed to validate function {qualified_name}: {e}"
                 ))
             })?;
 

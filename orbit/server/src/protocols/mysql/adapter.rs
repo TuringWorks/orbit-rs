@@ -240,7 +240,7 @@ impl MySqlAdapter {
                             Err(e) => {
                                 let err = MySqlPacketBuilder::error(
                                     1045,
-                                    &format!("Authentication error: {}", e),
+                                    &format!("Authentication error: {e}"),
                                 );
                                 let response_packet = MySqlPacket::new(sequence_id, err);
                                 socket
@@ -252,7 +252,7 @@ impl MySqlAdapter {
                         }
                     }
                     Err(e) => {
-                        eprintln!("[MySQL] Failed to parse handshake response: {}", e);
+                        eprintln!("[MySQL] Failed to parse handshake response: {e}");
                         let err = MySqlPacketBuilder::error(1043, "Invalid handshake response");
                         let response_packet = MySqlPacket::new(sequence_id, err);
                         socket
@@ -343,7 +343,7 @@ impl MySqlAdapter {
                 // Change database
                 let db_name = String::from_utf8(payload.to_vec())
                     .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
-                println!("[MySQL] Switching to database: {}", db_name);
+                println!("[MySQL] Switching to database: {db_name}");
                 Ok(vec![MySqlPacketBuilder::ok(0, 0)])
             }
             MySqlCommand::StmtPrepare => self.handle_prepare(payload).await,
@@ -363,7 +363,7 @@ impl MySqlAdapter {
                 // Unsupported command
                 Ok(vec![MySqlPacketBuilder::error(
                     super::protocol::error_codes::ER_UNKNOWN_COM_ERROR,
-                    &format!("Unknown command: {:?}", command),
+                    &format!("Unknown command: {command:?}"),
                 )])
             }
         }
@@ -668,9 +668,9 @@ impl MySqlAdapter {
                 .trim()
                 .trim_end_matches(';');
             if !table_name.is_empty() {
-                let _delete_query = format!("DELETE FROM {}", table_name);
+                let _delete_query = format!("DELETE FROM {table_name}");
                 // Execute through SQL engine - will be handled below
-                println!("[MySQL] Converting TRUNCATE to DELETE FROM {}", table_name);
+                println!("[MySQL] Converting TRUNCATE to DELETE FROM {table_name}");
             }
             return Some(Ok(vec![MySqlPacketBuilder::ok(0, 0)]));
         }
@@ -1151,7 +1151,7 @@ impl MySqlAdapter {
         };
 
         // Query table structure using SQL engine
-        let schema_query = format!("SELECT * FROM {} LIMIT 0", table_name);
+        let schema_query = format!("SELECT * FROM {table_name} LIMIT 0");
         match self.sql_engine.write().await.execute(&schema_query).await {
             Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
                 columns,
@@ -1190,7 +1190,7 @@ impl MySqlAdapter {
             }
             _ => Ok(vec![MySqlPacketBuilder::error(
                 super::protocol::error_codes::ER_NO_SUCH_TABLE,
-                &format!("Table '{}' doesn't exist", table_name),
+                &format!("Table '{table_name}' doesn't exist"),
             )]),
         }
     }
@@ -1207,7 +1207,7 @@ impl MySqlAdapter {
             .trim_end_matches(';');
 
         // Query table structure using SQL engine
-        let schema_query = format!("SELECT * FROM {} LIMIT 0", table_name);
+        let schema_query = format!("SELECT * FROM {table_name} LIMIT 0");
         match self.sql_engine.write().await.execute(&schema_query).await {
             Ok(crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {
                 columns,
@@ -1216,7 +1216,7 @@ impl MySqlAdapter {
                 // Build CREATE TABLE statement
                 let column_defs: Vec<String> = columns
                     .iter()
-                    .map(|col| format!("  `{}` varchar(255)", col))
+                    .map(|col| format!("  `{col}` varchar(255)"))
                     .collect();
 
                 let create_statement = format!(
@@ -1236,7 +1236,7 @@ impl MySqlAdapter {
             }
             _ => Ok(vec![MySqlPacketBuilder::error(
                 super::protocol::error_codes::ER_NO_SUCH_TABLE,
-                &format!("Table '{}' doesn't exist", table_name),
+                &format!("Table '{table_name}' doesn't exist"),
             )]),
         }
     }
@@ -1318,8 +1318,9 @@ impl MySqlAdapter {
             query_upper
                 .split(" FOR ")
                 .nth(1)
-                .map(|s| s.trim().trim_matches('\'').trim_matches('"'))
-                .unwrap_or("root@localhost")
+                .map_or("root@localhost", |s| {
+                    s.trim().trim_matches('\'').trim_matches('"')
+                })
         } else {
             "root@localhost"
         };
@@ -1327,8 +1328,7 @@ impl MySqlAdapter {
         let result = UnifiedExecutionResult::Select {
             columns: vec![format!("Grants for {}", user)],
             rows: vec![vec![Some(format!(
-                "GRANT ALL PRIVILEGES ON *.* TO '{}'",
-                user
+                "GRANT ALL PRIVILEGES ON *.* TO '{user}'"
             ))]],
             row_count: 1,
             transaction_id: None,
@@ -1362,7 +1362,7 @@ impl MySqlAdapter {
             columns: vec!["Database".to_string(), "Create Database".to_string()],
             rows: vec![vec![
                 Some(db_name.clone()),
-                Some(format!("CREATE DATABASE `{}` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci */", db_name)),
+                Some(format!("CREATE DATABASE `{db_name}` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci */")),
             ]],
             row_count: 1,
             transaction_id: None,
@@ -1685,7 +1685,7 @@ impl MySqlAdapter {
             return Err(ProtocolError::ParseError("Empty query".to_string()));
         }
 
-        println!("[MySQL] Query: {}", query);
+        println!("[MySQL] Query: {query}");
 
         // Check for MySQL-specific queries first
         if let Some(result) = self.handle_mysql_specific_query(&query).await {
@@ -1707,9 +1707,9 @@ impl MySqlAdapter {
                         columns.len(),
                         rows.len()
                     );
-                    println!("[MySQL] Columns: {:?}", columns);
+                    println!("[MySQL] Columns: {columns:?}");
                     if let Some(first_row) = rows.first() {
-                        println!("[MySQL] First row: {:?}", first_row);
+                        println!("[MySQL] First row: {first_row:?}");
                     }
                 }
                 self.build_result_set(result)
@@ -1736,7 +1736,7 @@ impl MySqlAdapter {
         let query = String::from_utf8(payload.to_vec())
             .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
 
-        println!("[MySQL] Prepare: {}", query);
+        println!("[MySQL] Prepare: {query}");
 
         // Count parameters
         let num_params = Self::count_parameters(&query);
@@ -1876,11 +1876,10 @@ impl MySqlAdapter {
                 if len == 0 {
                     Ok("'0000-00-00'".to_string())
                 } else if len == 4 {
-                    Ok(format!("'{:04}-{:02}-{:02}'", year, month, day))
+                    Ok(format!("'{year:04}-{month:02}-{day:02}'"))
                 } else {
                     Ok(format!(
-                        "'{:04}-{:02}-{:02} {:02}:{:02}:{:02}'",
-                        year, month, day, hour, minute, second
+                        "'{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}'"
                     ))
                 }
             }
@@ -1898,7 +1897,7 @@ impl MySqlAdapter {
                 if len == 0 {
                     Ok("'00:00:00'".to_string())
                 } else {
-                    Ok(format!("'{:02}:{:02}:{:02}'", hour, minute, second))
+                    Ok(format!("'{hour:02}:{minute:02}:{second:02}'"))
                 }
             }
             _ => {
@@ -1918,16 +1917,13 @@ impl MySqlAdapter {
         let flags = payload.get_u8(); // Flags
         let _iteration_count = payload.get_u32_le(); // Usually 1
 
-        println!(
-            "[MySQL] Execute statement: {} (flags: {})",
-            statement_id, flags
-        );
+        println!("[MySQL] Execute statement: {statement_id} (flags: {flags})");
 
         // Look up prepared statement
         let statements = self.prepared_statements.read().await;
         let stmt = statements.get(&statement_id).ok_or_else(|| {
             // Note: Error metrics will be updated in error response handler
-            ProtocolError::InvalidStatement(format!("Statement {} not found", statement_id))
+            ProtocolError::InvalidStatement(format!("Statement {statement_id} not found"))
         })?;
 
         let num_params = stmt.num_params;
@@ -2019,7 +2015,7 @@ impl MySqlAdapter {
             bound_query = bound_query.replacen("?", &value, 1);
         }
 
-        println!("[MySQL] Bound query: {}", bound_query);
+        println!("[MySQL] Bound query: {bound_query}");
 
         // Execute bound query
         match self.sql_engine.write().await.execute(&bound_query).await {
@@ -2043,7 +2039,7 @@ impl MySqlAdapter {
 
         let statement_id = payload.get_u32_le();
 
-        println!("[MySQL] Close statement: {}", statement_id);
+        println!("[MySQL] Close statement: {statement_id}");
 
         self.prepared_statements.write().await.remove(&statement_id);
 
@@ -2065,7 +2061,7 @@ impl MySqlAdapter {
 
         let statement_id = payload.get_u32_le();
 
-        println!("[MySQL] Reset statement: {}", statement_id);
+        println!("[MySQL] Reset statement: {statement_id}");
 
         // Reset clears long data and resets parameter state
         let mut statements = self.prepared_statements.write().await;
@@ -2109,10 +2105,7 @@ impl MySqlAdapter {
                 .extend(data);
         } else {
             // Statement not found, but per MySQL protocol, no response is sent
-            println!(
-                "[MySQL] Warning: Long data for unknown statement {}",
-                statement_id
-            );
+            println!("[MySQL] Warning: Long data for unknown statement {statement_id}");
         }
         drop(statements);
 
@@ -2134,7 +2127,7 @@ impl MySqlAdapter {
         let statement_id = payload.get_u32_le();
         let num_rows = payload.get_u32_le();
 
-        println!("[MySQL] Fetch: stmt={}, rows={}", statement_id, num_rows);
+        println!("[MySQL] Fetch: stmt={statement_id}, rows={num_rows}");
 
         // Note: Full cursor support would require:
         // 1. Storing the result set from COM_STMT_EXECUTE when CURSOR_TYPE_READ_ONLY is set
@@ -2149,7 +2142,7 @@ impl MySqlAdapter {
         if !statements.contains_key(&statement_id) {
             return Ok(vec![MySqlPacketBuilder::error(
                 super::protocol::error_codes::ER_UNKNOWN_ERROR,
-                &format!("Statement {} not found", statement_id),
+                &format!("Statement {statement_id} not found"),
             )]);
         }
         drop(statements);
@@ -2176,10 +2169,10 @@ impl MySqlAdapter {
             String::from_utf8(name_bytes).map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?
         };
 
-        println!("[MySQL] Field list for table: {}", table_name);
+        println!("[MySQL] Field list for table: {table_name}");
 
         // Query table schema to get columns
-        let query = format!("SELECT * FROM {} LIMIT 0", table_name);
+        let query = format!("SELECT * FROM {table_name} LIMIT 0");
         match self.sql_engine.write().await.execute(&query).await {
             Ok(result) => {
                 // Extract column information from result
@@ -2211,7 +2204,7 @@ impl MySqlAdapter {
                 } else {
                     Ok(vec![MySqlPacketBuilder::error(
                         super::protocol::error_codes::ER_NO_SUCH_TABLE,
-                        &format!("Table '{}' doesn't exist", table_name),
+                        &format!("Table '{table_name}' doesn't exist"),
                     )])
                 }
             }
@@ -2250,7 +2243,7 @@ impl MySqlAdapter {
         let db_name = String::from_utf8(payload.to_vec())
             .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
 
-        println!("[MySQL] Create database: {}", db_name);
+        println!("[MySQL] Create database: {db_name}");
 
         // In Orbit, we don't have separate databases/schemas in the same way MySQL does
         // For compatibility, we'll just return OK
@@ -2263,7 +2256,7 @@ impl MySqlAdapter {
         let db_name = String::from_utf8(payload.to_vec())
             .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
 
-        println!("[MySQL] Drop database: {}", db_name);
+        println!("[MySQL] Drop database: {db_name}");
 
         // In Orbit, we don't have separate databases/schemas in the same way MySQL does
         // For compatibility, we'll just return OK
@@ -2278,7 +2271,7 @@ impl MySqlAdapter {
         }
 
         let refresh_flags = payload.get_u8();
-        println!("[MySQL] Refresh with flags: 0x{:02x}", refresh_flags);
+        println!("[MySQL] Refresh with flags: 0x{refresh_flags:02x}");
 
         // Refresh commands:
         // 0x01 = REFRESH_GRANT (reload privileges)
@@ -2302,7 +2295,7 @@ impl MySqlAdapter {
         }
 
         let option = payload.get_u16_le();
-        println!("[MySQL] Set option: {}", option);
+        println!("[MySQL] Set option: {option}");
 
         // Options:
         // 0 = MYSQL_OPTION_MULTI_STATEMENTS_ON
@@ -2532,7 +2525,7 @@ impl MySqlAdapter {
             SqlValue::Date(d) => Some(d.to_string()),
             SqlValue::Time(t) => Some(t.to_string()),
             SqlValue::Timestamp(ts) => Some(ts.to_string()),
-            _ => Some(format!("{:?}", value)),
+            _ => Some(format!("{value:?}")),
         }
     }
 

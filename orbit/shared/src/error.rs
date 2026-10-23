@@ -37,7 +37,7 @@ pub enum OrbitError {
     #[error("Timeout: {operation}")]
     Timeout { operation: String },
 
-    #[error("Configuration error: {message}{}", .key.as_ref().map(|k| format!(" (key: {})", k)).unwrap_or_default())]
+    #[error("Configuration error: {message}{}", .key.as_ref().map(|k| format!(" (key: {k})")).unwrap_or_default())]
     ConfigurationError {
         message: String,
         key: Option<String>,
@@ -46,15 +46,15 @@ pub enum OrbitError {
     #[error("Cluster error: {0}")]
     ClusterError(String),
 
-    #[error("IO error: {message}{}", .source_info.as_ref().map(|s| format!(" (source: {})", s)).unwrap_or_default())]
+    #[error("IO error: {message}{}", .source_info.as_ref().map(|s| format!(" (source: {s})")).unwrap_or_default())]
     IoError {
         message: String,
         source_info: Option<String>,
     },
 
     #[error("Parse error: {message}{}{}",
-        .position.as_ref().map(|p| format!(" at position {}", p)).unwrap_or_default(),
-        .input.as_ref().map(|i| format!(" in input: {}", i)).unwrap_or_default()
+        .position.as_ref().map(|p| format!(" at position {p}")).unwrap_or_default(),
+        .input.as_ref().map(|i| format!(" in input: {i}")).unwrap_or_default()
     )]
     ParseError {
         message: String,
@@ -62,19 +62,19 @@ pub enum OrbitError {
         position: Option<usize>,
     },
 
-    #[error("Storage error: {message}{}", .operation.as_ref().map(|o| format!(" (operation: {})", o)).unwrap_or_default())]
+    #[error("Storage error: {message}{}", .operation.as_ref().map(|o| format!(" (operation: {o})")).unwrap_or_default())]
     StorageError {
         message: String,
         operation: Option<String>,
     },
 
-    #[error("Authentication error: {message}{}", .user.as_ref().map(|u| format!(" (user: {})", u)).unwrap_or_default())]
+    #[error("Authentication error: {message}{}", .user.as_ref().map(|u| format!(" (user: {u})")).unwrap_or_default())]
     AuthError {
         message: String,
         user: Option<String>,
     },
 
-    #[error("Internal error: {message}{}", .context.as_ref().map(|c| format!(" (context: {})", c)).unwrap_or_default())]
+    #[error("Internal error: {message}{}", .context.as_ref().map(|c| format!(" (context: {c})")).unwrap_or_default())]
     Internal {
         message: String,
         context: Option<String>,

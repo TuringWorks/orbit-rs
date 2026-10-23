@@ -507,8 +507,8 @@ impl SqlValue {
                     ranges[0]
                         .lower
                         .as_ref()
-                        .map(|v| v.sql_type())
-                        .or_else(|| ranges[0].upper.as_ref().map(|v| v.sql_type()))
+                        .map(SqlValue::sql_type)
+                        .or_else(|| ranges[0].upper.as_ref().map(SqlValue::sql_type))
                         .unwrap_or(SqlType::Text)
                 };
                 SqlType::MultiRange {
@@ -606,16 +606,19 @@ impl SqlValue {
             SqlValue::Json(v) | SqlValue::Jsonb(v) => v.to_string(),
             SqlValue::JsonPath(s) => s.clone(),
             SqlValue::Array(values) => {
-                let elements: Vec<String> = values.iter().map(|v| v.to_postgres_string()).collect();
+                let elements: Vec<String> =
+                    values.iter().map(SqlValue::to_postgres_string).collect();
                 format!("{{{}}}", elements.join(","))
             }
             SqlValue::Uuid(u) => u.to_string(),
             SqlValue::Vector(v) => {
-                let elements: Vec<String> = v.iter().map(|f| f.to_string()).collect();
+                let elements: Vec<String> =
+                    v.iter().map(std::string::ToString::to_string).collect();
                 format!("[{}]", elements.join(","))
             }
             SqlValue::HalfVec(v) => {
-                let elements: Vec<String> = v.iter().map(|f| f.to_string()).collect();
+                let elements: Vec<String> =
+                    v.iter().map(std::string::ToString::to_string).collect();
                 format!("[{}]", elements.join(","))
             }
             SqlValue::MultiRange(ranges) => {
@@ -625,18 +628,18 @@ impl SqlValue {
                         let lower = r
                             .lower
                             .as_ref()
-                            .map(|v| v.to_postgres_string())
+                            .map(SqlValue::to_postgres_string)
                             .unwrap_or_default();
                         let upper = r
                             .upper
                             .as_ref()
-                            .map(|v| v.to_postgres_string())
+                            .map(SqlValue::to_postgres_string)
                             .unwrap_or_default();
                         // Construct range string depending on bounds
                         // Note: Simplification here, assuming standard range format [lower,upper)
                         let start_bracket = if r.lower_inclusive { '[' } else { '(' };
                         let end_bracket = if r.upper_inclusive { ']' } else { ')' };
-                        format!("{}{},{}{}", start_bracket, lower, upper, end_bracket)
+                        format!("{start_bracket}{lower},{upper}{end_bracket}")
                     })
                     .collect();
                 format!("{{{}}}", elements.join(","))
@@ -663,11 +666,13 @@ impl SqlValue {
             SqlValue::Xid(x) => x.to_string(),
             SqlValue::AclItem(s) | SqlValue::PgNodeTree(s) => s.clone(),
             SqlValue::Int2Vector(v) => {
-                let elements: Vec<String> = v.iter().map(|i| i.to_string()).collect();
+                let elements: Vec<String> =
+                    v.iter().map(std::string::ToString::to_string).collect();
                 elements.join(" ")
             }
             SqlValue::OidVector(v) => {
-                let elements: Vec<String> = v.iter().map(|i| i.to_string()).collect();
+                let elements: Vec<String> =
+                    v.iter().map(std::string::ToString::to_string).collect();
                 elements.join(" ")
             }
 
@@ -708,7 +713,7 @@ impl SqlValue {
                     .collect();
                 return values
                     .map(SqlValue::Vector)
-                    .map_err(|e| format!("Invalid vector format: {}", e));
+                    .map_err(|e| format!("Invalid vector format: {e}"));
             }
             (SqlValue::Text(s), SqlType::HalfVec { .. })
             | (SqlValue::Varchar(s), SqlType::HalfVec { .. })
@@ -721,7 +726,7 @@ impl SqlValue {
                     .collect();
                 return values
                     .map(SqlValue::HalfVec)
-                    .map_err(|e| format!("Invalid halfvec format: {}", e));
+                    .map_err(|e| format!("Invalid halfvec format: {e}"));
             }
             _ => {}
         }
@@ -759,7 +764,7 @@ impl SqlValue {
         let parts: Vec<&str> = s.split_whitespace().collect();
 
         if parts.len() != 2 {
-            return Err(format!("Invalid interval format: {}", s));
+            return Err(format!("Invalid interval format: {s}"));
         }
 
         let value: i32 = parts[0]
@@ -778,7 +783,7 @@ impl SqlValue {
             "week" | "weeks" => (0, value * 7, 0),
             "month" | "months" => (value, 0, 0),
             "year" | "years" => (value * 12, 0, 0),
-            _ => return Err(format!("Unknown interval unit: {}", unit)),
+            _ => return Err(format!("Unknown interval unit: {unit}")),
         };
 
         Ok(SqlValue::Interval(PostgresInterval {
@@ -806,7 +811,7 @@ impl SqlValue {
             }
         }
 
-        Err(format!("Invalid timestamp format: {}", s))
+        Err(format!("Invalid timestamp format: {s}"))
     }
 
     /// Parse a date string
@@ -815,7 +820,7 @@ impl SqlValue {
 
         NaiveDate::parse_from_str(s, "%Y-%m-%d")
             .map(SqlValue::Date)
-            .map_err(|_| format!("Invalid date format: {}", s))
+            .map_err(|_| format!("Invalid date format: {s}"))
     }
 
     /// Parse a string value into a SQL value of the specified type

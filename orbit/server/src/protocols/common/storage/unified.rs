@@ -376,7 +376,7 @@ impl UnifiedTableStorage {
                 UniversalValue::Map(map)
             }
             // Handle any other new variants as string/debug representation
-            _ => UniversalValue::String(format!("{:?}", value)),
+            _ => UniversalValue::String(format!("{value:?}")),
         }
     }
 
@@ -559,7 +559,7 @@ impl UnifiedTableStorage {
             }
             _ => {
                 // For other types, convert to string representation
-                serde_json::Value::String(format!("{:?}", value))
+                serde_json::Value::String(format!("{value:?}"))
             }
         }
     }
@@ -708,7 +708,7 @@ impl TableStorage for UnifiedTableStorage {
         self.sql_adapter
             .insert(table_name, universal_row, &primary_key)
             .await
-            .map_err(|e| ProtocolError::Other(format!("Storage error: {}", e)))?;
+            .map_err(|e| ProtocolError::Other(format!("Storage error: {e}")))?;
         Ok(())
     }
 
@@ -733,7 +733,7 @@ impl TableStorage for UnifiedTableStorage {
             .sql_adapter
             .select(table_name, None, None, None, None, None)
             .await
-            .map_err(|e| ProtocolError::Other(format!("Storage error: {}", e)))?;
+            .map_err(|e| ProtocolError::Other(format!("Storage error: {e}")))?;
 
         Ok(rows
             .into_iter()
@@ -757,7 +757,7 @@ impl TableStorage for UnifiedTableStorage {
             .sql_adapter
             .update(table_name, universal_updates, None)
             .await
-            .map_err(|e| ProtocolError::Other(format!("Storage error: {}", e)))?;
+            .map_err(|e| ProtocolError::Other(format!("Storage error: {e}")))?;
 
         Ok(count as usize)
     }
@@ -779,7 +779,7 @@ impl TableStorage for UnifiedTableStorage {
             .sql_adapter
             .delete(table_name, None)
             .await
-            .map_err(|e| ProtocolError::Other(format!("Storage error: {}", e)))?;
+            .map_err(|e| ProtocolError::Other(format!("Storage error: {e}")))?;
 
         Ok(count as usize)
     }
@@ -1184,11 +1184,10 @@ mod persistent_storage_impl {
                 SqlValue::Integer(i) => JsonValue::Number((*i as i64).into()),
                 SqlValue::BigInt(i) => JsonValue::Number((*i).into()),
                 SqlValue::Real(f) => serde_json::Number::from_f64(*f as f64)
-                    .map(JsonValue::Number)
-                    .unwrap_or(JsonValue::Null),
-                SqlValue::DoublePrecision(f) => serde_json::Number::from_f64(*f)
-                    .map(JsonValue::Number)
-                    .unwrap_or(JsonValue::Null),
+                    .map_or(JsonValue::Null, JsonValue::Number),
+                SqlValue::DoublePrecision(f) => {
+                    serde_json::Number::from_f64(*f).map_or(JsonValue::Null, JsonValue::Number)
+                }
                 SqlValue::Text(s) => JsonValue::String(s.clone()),
                 SqlValue::Varchar(s) => JsonValue::String(s.clone()),
                 SqlValue::Char(s) => JsonValue::String(s.clone()),
@@ -1884,7 +1883,7 @@ mod aql_storage_impl {
             self.ensure_tables_exist().await?;
 
             let data = serde_json::to_value(&collection).map_err(|e| {
-                ProtocolError::SerializationError(format!("Failed to serialize collection: {}", e))
+                ProtocolError::SerializationError(format!("Failed to serialize collection: {e}"))
             })?;
 
             let mut row = HashMap::new();
@@ -1929,8 +1928,7 @@ mod aql_storage_impl {
                             let collection: AqlCollection =
                                 serde_json::from_value(data).map_err(|e| {
                                     ProtocolError::SerializationError(format!(
-                                        "Failed to deserialize collection: {}",
-                                        e
+                                        "Failed to deserialize collection: {e}"
                                     ))
                                 })?;
                             return Ok(Some(collection));
@@ -1960,11 +1958,9 @@ mod aql_storage_impl {
                 SqlValue::Integer(i) => serde_json::Value::Number((*i as i64).into()),
                 SqlValue::BigInt(i) => serde_json::Value::Number((*i).into()),
                 SqlValue::Real(f) => serde_json::Number::from_f64(*f as f64)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null),
+                    .map_or(serde_json::Value::Null, serde_json::Value::Number),
                 SqlValue::DoublePrecision(f) => serde_json::Number::from_f64(*f)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null),
+                    .map_or(serde_json::Value::Null, serde_json::Value::Number),
                 SqlValue::Char(s) | SqlValue::Varchar(s) | SqlValue::Text(s) => {
                     serde_json::Value::String(s.clone())
                 }
@@ -1984,7 +1980,7 @@ mod aql_storage_impl {
             let collection_name = doc.id.split('/').next().unwrap_or("default").to_string();
 
             let data = serde_json::to_value(&doc).map_err(|e| {
-                ProtocolError::SerializationError(format!("Failed to serialize document: {}", e))
+                ProtocolError::SerializationError(format!("Failed to serialize document: {e}"))
             })?;
 
             let mut row = HashMap::new();
@@ -2037,8 +2033,7 @@ mod aql_storage_impl {
                     if let Some(data) = data_value {
                         let doc: AqlDocument = serde_json::from_value(data).map_err(|e| {
                             ProtocolError::SerializationError(format!(
-                                "Failed to deserialize document: {}",
-                                e
+                                "Failed to deserialize document: {e}"
                             ))
                         })?;
                         return Ok(Some(doc));
@@ -2091,7 +2086,7 @@ mod aql_storage_impl {
             self.ensure_tables_exist().await?;
 
             // Construct the document ID
-            let doc_id = format!("{}/{}", collection, key);
+            let doc_id = format!("{collection}/{key}");
 
             // Delete the document using the underlying storage
             let result = self
@@ -2138,8 +2133,7 @@ mod aql_storage_impl {
 
             self.get_document(collection, key)
                 .await
-                .map(|doc| doc.is_some())
-                .unwrap_or(false)
+                .is_ok_and(|doc| doc.is_some())
         }
     }
 
@@ -2249,11 +2243,9 @@ mod cypher_storage_impl {
                 SqlValue::Integer(i) => serde_json::Value::Number((*i as i64).into()),
                 SqlValue::BigInt(i) => serde_json::Value::Number((*i).into()),
                 SqlValue::Real(f) => serde_json::Number::from_f64(*f as f64)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null),
+                    .map_or(serde_json::Value::Null, serde_json::Value::Number),
                 SqlValue::DoublePrecision(f) => serde_json::Number::from_f64(*f)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null),
+                    .map_or(serde_json::Value::Null, serde_json::Value::Number),
                 SqlValue::Char(s) | SqlValue::Varchar(s) | SqlValue::Text(s) => {
                     serde_json::Value::String(s.clone())
                 }
@@ -2377,11 +2369,11 @@ mod cypher_storage_impl {
             self.ensure_tables_exist().await?;
 
             let labels = serde_json::to_value(&node.labels).map_err(|e| {
-                ProtocolError::SerializationError(format!("Failed to serialize labels: {}", e))
+                ProtocolError::SerializationError(format!("Failed to serialize labels: {e}"))
             })?;
 
             let properties = serde_json::to_value(&node.properties).map_err(|e| {
-                ProtocolError::SerializationError(format!("Failed to serialize properties: {}", e))
+                ProtocolError::SerializationError(format!("Failed to serialize properties: {e}"))
             })?;
 
             let mut row = HashMap::new();
@@ -2499,7 +2491,7 @@ mod cypher_storage_impl {
             self.ensure_tables_exist().await?;
 
             let properties = serde_json::to_value(&rel.properties).map_err(|e| {
-                ProtocolError::SerializationError(format!("Failed to serialize properties: {}", e))
+                ProtocolError::SerializationError(format!("Failed to serialize properties: {e}"))
             })?;
 
             let mut row = HashMap::new();

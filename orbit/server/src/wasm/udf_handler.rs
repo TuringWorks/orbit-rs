@@ -94,7 +94,7 @@ impl WasmUdfHandler {
 
         // Decode hex string
         hex::decode(hex_str)
-            .map_err(|e| ProtocolError::PostgresError(format!("Invalid WASM hex encoding: {}", e)))
+            .map_err(|e| ProtocolError::PostgresError(format!("Invalid WASM hex encoding: {e}")))
     }
 
     /// Encode WASM binary as hex string

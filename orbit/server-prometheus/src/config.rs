@@ -261,22 +261,22 @@ impl PrometheusConfig {
     /// Load configuration from file
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> PrometheusResult<Self> {
         let content = std::fs::read_to_string(&path).map_err(|e| {
-            PrometheusError::configuration(format!("Failed to read config file: {}", e))
+            PrometheusError::configuration(format!("Failed to read config file: {e}"))
         })?;
 
         let config: Self = if path.as_ref().extension().and_then(|s| s.to_str()) == Some("toml") {
             toml::from_str(&content).map_err(|e| {
-                PrometheusError::configuration(format!("Failed to parse TOML config: {}", e))
+                PrometheusError::configuration(format!("Failed to parse TOML config: {e}"))
             })?
         } else if path.as_ref().extension().and_then(|s| s.to_str()) == Some("yaml")
             || path.as_ref().extension().and_then(|s| s.to_str()) == Some("yml")
         {
             serde_yaml_ng::from_str(&content).map_err(|e| {
-                PrometheusError::configuration(format!("Failed to parse YAML config: {}", e))
+                PrometheusError::configuration(format!("Failed to parse YAML config: {e}"))
             })?
         } else {
             serde_json::from_str(&content).map_err(|e| {
-                PrometheusError::configuration(format!("Failed to parse JSON config: {}", e))
+                PrometheusError::configuration(format!("Failed to parse JSON config: {e}"))
             })?
         };
 

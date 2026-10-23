@@ -201,7 +201,7 @@ impl EncryptedFieldValue {
     /// Serialize to a marked string
     pub fn to_marked_string(&self) -> OrbitResult<String> {
         let json = serde_json::to_string(self).map_err(|e| {
-            OrbitError::internal(format!("Failed to serialize encrypted value: {}", e))
+            OrbitError::internal(format!("Failed to serialize encrypted value: {e}"))
         })?;
         Ok(format!("{}{}", Self::marker(), json))
     }
@@ -213,7 +213,7 @@ impl EncryptedFieldValue {
         }
         let json = &value[Self::marker().len()..];
         serde_json::from_str(json)
-            .map_err(|e| OrbitError::internal(format!("Failed to parse encrypted value: {}", e)))
+            .map_err(|e| OrbitError::internal(format!("Failed to parse encrypted value: {e}")))
     }
 }
 
@@ -258,7 +258,7 @@ impl FieldEncryptionEngine {
     pub async fn set_default_key(&self, key_id: &str) -> OrbitResult<()> {
         let keys = self.keys.read().await;
         if !keys.contains_key(key_id) {
-            return Err(OrbitError::internal(format!("Key not found: {}", key_id)));
+            return Err(OrbitError::internal(format!("Key not found: {key_id}")));
         }
         drop(keys);
 
@@ -288,7 +288,7 @@ impl FieldEncryptionEngine {
     ) -> OrbitResult<EncryptedFieldValue> {
         // Serialize value to bytes
         let plaintext = serde_json::to_vec(value)
-            .map_err(|e| OrbitError::internal(format!("Failed to serialize value: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to serialize value: {e}")))?;
 
         // Get key
         let key_id = config.key_id.clone().unwrap_or_else(|| {
@@ -301,7 +301,7 @@ impl FieldEncryptionEngine {
         let keys = self.keys.read().await;
         let key = keys
             .get(&key_id)
-            .ok_or_else(|| OrbitError::internal(format!("Key not found: {}", key_id)))?;
+            .ok_or_else(|| OrbitError::internal(format!("Key not found: {key_id}")))?;
 
         // Encrypt based on type
         let ciphertext = match config.encryption_type {
@@ -326,7 +326,7 @@ impl FieldEncryptionEngine {
         // Decode ciphertext
         let ciphertext = STANDARD
             .decode(&encrypted.ciphertext)
-            .map_err(|e| OrbitError::internal(format!("Failed to decode ciphertext: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to decode ciphertext: {e}")))?;
 
         // Get key
         let keys = self.keys.read().await;
@@ -342,7 +342,7 @@ impl FieldEncryptionEngine {
 
         // Deserialize
         serde_json::from_slice(&plaintext)
-            .map_err(|e| OrbitError::internal(format!("Failed to deserialize value: {}", e)))
+            .map_err(|e| OrbitError::internal(format!("Failed to deserialize value: {e}")))
     }
 
     /// Encrypt a row according to its table's policy
@@ -443,12 +443,12 @@ impl FieldEncryptionEngine {
         let policies = self.policies.read().await;
         let policy = policies
             .get(table_name)
-            .ok_or_else(|| OrbitError::internal(format!("No policy for table: {}", table_name)))?;
+            .ok_or_else(|| OrbitError::internal(format!("No policy for table: {table_name}")))?;
 
         let config = policy
             .encrypted_fields
             .get(field_name)
-            .ok_or_else(|| OrbitError::internal(format!("Field not encrypted: {}", field_name)))?;
+            .ok_or_else(|| OrbitError::internal(format!("Field not encrypted: {field_name}")))?;
 
         if config.encryption_type != EncryptionType::Deterministic {
             return Err(OrbitError::internal(
@@ -465,7 +465,7 @@ impl FieldEncryptionEngine {
     /// Randomized encryption using AES-256-GCM with random nonce
     fn encrypt_randomized(&self, plaintext: &[u8], key: &[u8]) -> OrbitResult<Vec<u8>> {
         let cipher = Aes256Gcm::new_from_slice(key)
-            .map_err(|e| OrbitError::internal(format!("Invalid key: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid key: {e}")))?;
 
         let mut nonce_bytes = [0u8; NONCE_SIZE];
         rand::rng().fill_bytes(&mut nonce_bytes);
@@ -473,7 +473,7 @@ impl FieldEncryptionEngine {
 
         let ciphertext = cipher
             .encrypt(nonce, plaintext)
-            .map_err(|e| OrbitError::internal(format!("Encryption failed: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Encryption failed: {e}")))?;
 
         // Prepend nonce
         let mut result = Vec::with_capacity(NONCE_SIZE + ciphertext.len());
@@ -489,7 +489,7 @@ impl FieldEncryptionEngine {
         }
 
         let cipher = Aes256Gcm::new_from_slice(key)
-            .map_err(|e| OrbitError::internal(format!("Invalid key: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid key: {e}")))?;
 
         let nonce = Nonce::from_slice(&ciphertext[..NONCE_SIZE]);
         let encrypted = &ciphertext[NONCE_SIZE..];
@@ -502,7 +502,7 @@ impl FieldEncryptionEngine {
     /// Deterministic encryption using AES-256-GCM with derived nonce
     fn encrypt_deterministic(&self, plaintext: &[u8], key: &[u8]) -> OrbitResult<Vec<u8>> {
         let cipher = Aes256Gcm::new_from_slice(key)
-            .map_err(|e| OrbitError::internal(format!("Invalid key: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Invalid key: {e}")))?;
 
         // Derive nonce deterministically from plaintext and key
         let nonce_bytes = self.derive_deterministic_nonce(plaintext, key);
@@ -510,7 +510,7 @@ impl FieldEncryptionEngine {
 
         let ciphertext = cipher
             .encrypt(nonce, plaintext)
-            .map_err(|e| OrbitError::internal(format!("Encryption failed: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Encryption failed: {e}")))?;
 
         // Prepend nonce
         let mut result = Vec::with_capacity(NONCE_SIZE + ciphertext.len());

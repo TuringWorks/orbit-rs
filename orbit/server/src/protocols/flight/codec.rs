@@ -491,8 +491,7 @@ impl CommandEncoder {
                 }))
             }
             _ => Err(FlightSqlError::invalid_argument(format!(
-                "Unknown command type: 0x{:02x}",
-                command_type
+                "Unknown command type: 0x{command_type:02x}"
             ))),
         }
     }

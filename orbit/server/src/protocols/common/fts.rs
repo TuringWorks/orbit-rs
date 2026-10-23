@@ -65,12 +65,12 @@ pub enum FtsError {
 impl std::fmt::Display for FtsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FtsError::IndexNotFound(name) => write!(f, "Index not found: {}", name),
-            FtsError::InvalidQuery(msg) => write!(f, "Invalid query: {}", msg),
-            FtsError::TokenizationError(msg) => write!(f, "Tokenization error: {}", msg),
-            FtsError::IoError(msg) => write!(f, "IO error: {}", msg),
-            FtsError::PersistenceError(msg) => write!(f, "Persistence error: {}", msg),
-            FtsError::InternalError(msg) => write!(f, "Internal error: {}", msg),
+            FtsError::IndexNotFound(name) => write!(f, "Index not found: {name}"),
+            FtsError::InvalidQuery(msg) => write!(f, "Invalid query: {msg}"),
+            FtsError::TokenizationError(msg) => write!(f, "Tokenization error: {msg}"),
+            FtsError::IoError(msg) => write!(f, "IO error: {msg}"),
+            FtsError::PersistenceError(msg) => write!(f, "Persistence error: {msg}"),
+            FtsError::InternalError(msg) => write!(f, "Internal error: {msg}"),
         }
     }
 }
@@ -111,8 +111,7 @@ impl std::str::FromStr for FtsEngineType {
             "shared" | "simd" | "memory" | "in-memory" => Ok(FtsEngineType::Shared),
             "tantivy" | "disk" | "persistent" => Ok(FtsEngineType::Tantivy),
             _ => Err(format!(
-                "Unknown FTS engine type: {}. Use 'shared' or 'tantivy'",
-                s
+                "Unknown FTS engine type: {s}. Use 'shared' or 'tantivy'"
             )),
         }
     }
@@ -1297,7 +1296,7 @@ impl UnifiedFtsEngine for SharedFtsEngine {
 
         let indexes = self.indexes.read().await;
         for (name, index) in indexes.iter() {
-            let index_file = persistence_dir.join(format!("{}.fts.json", name));
+            let index_file = persistence_dir.join(format!("{name}.fts.json"));
             let data = serde_json::to_string(&SerializableIndex::from(index))
                 .map_err(|e| FtsError::PersistenceError(e.to_string()))?;
             std::fs::write(&index_file, data)?;
@@ -1479,13 +1478,13 @@ impl UnifiedFtsEngine for TantivyFtsEngine {
         let mut query_parts: Vec<String> = Vec::new();
 
         for term in &query.must_terms {
-            query_parts.push(format!("+{}", term));
+            query_parts.push(format!("+{term}"));
         }
         for term in &query.should_terms {
             query_parts.push(term.clone());
         }
         for term in &query.must_not_terms {
-            query_parts.push(format!("-{}", term));
+            query_parts.push(format!("-{term}"));
         }
 
         if query_parts.is_empty() {
@@ -1609,7 +1608,7 @@ impl UnifiedFtsEngine for TantivyFtsEngine {
         for (name, handle) in indexes.iter() {
             let mut writer = handle.writer.write().await;
             writer.commit().map_err(|e| {
-                FtsError::PersistenceError(format!("Failed to commit index {}: {}", name, e))
+                FtsError::PersistenceError(format!("Failed to commit index {name}: {e}"))
             })?;
         }
         Ok(())
@@ -1749,7 +1748,10 @@ impl FtsEngineFactory {
 pub fn parse_mysql_query(query: &str, mode: MysqlSearchMode) -> FtsQuery {
     match mode {
         MysqlSearchMode::Natural => {
-            let terms: Vec<String> = query.split_whitespace().map(|s| s.to_string()).collect();
+            let terms: Vec<String> = query
+                .split_whitespace()
+                .map(std::string::ToString::to_string)
+                .collect();
             FtsQuery {
                 query_type: FtsQueryType::Natural,
                 should_terms: terms,
@@ -1771,7 +1773,7 @@ pub fn parse_mysql_query(query: &str, mode: MysqlSearchMode) -> FtsQuery {
                     let phrase: Vec<String> = term
                         .trim_matches('"')
                         .split_whitespace()
-                        .map(|s| s.to_string())
+                        .map(std::string::ToString::to_string)
                         .collect();
                     fts_query.phrases.push(phrase);
                 } else {
@@ -1783,7 +1785,10 @@ pub fn parse_mysql_query(query: &str, mode: MysqlSearchMode) -> FtsQuery {
         }
         MysqlSearchMode::QueryExpansion => {
             // Query expansion treated as natural with expansion flag
-            let terms: Vec<String> = query.split_whitespace().map(|s| s.to_string()).collect();
+            let terms: Vec<String> = query
+                .split_whitespace()
+                .map(std::string::ToString::to_string)
+                .collect();
             FtsQuery {
                 query_type: FtsQueryType::Natural,
                 should_terms: terms,
@@ -1850,7 +1855,7 @@ pub fn parse_redis_query(query: &str) -> FtsQuery {
             let phrase: Vec<String> = part
                 .trim_matches('"')
                 .split_whitespace()
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .collect();
             fts_query.phrases.push(phrase);
         } else {
@@ -1906,7 +1911,10 @@ pub fn parse_cql_query(query: &str, query_type: CqlQueryType) -> FtsQuery {
             }
         }
         CqlQueryType::Fulltext => {
-            let terms: Vec<String> = query.split_whitespace().map(|s| s.to_string()).collect();
+            let terms: Vec<String> = query
+                .split_whitespace()
+                .map(std::string::ToString::to_string)
+                .collect();
             FtsQuery {
                 query_type: FtsQueryType::Natural,
                 should_terms: terms,
@@ -1941,7 +1949,7 @@ pub fn parse_mongodb_text_query(query: &str) -> FtsQuery {
             let phrase_content = &remaining[start + 1..start + 1 + end];
             let phrase: Vec<String> = phrase_content
                 .split_whitespace()
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .collect();
             if !phrase.is_empty() {
                 fts_query.phrases.push(phrase);
@@ -1981,7 +1989,7 @@ fn default_stop_words() -> HashSet<String> {
         "but", "they", "have", "had", "what", "when", "where", "who", "which", "why", "how",
     ]
     .iter()
-    .map(|s| s.to_string())
+    .map(std::string::ToString::to_string)
     .collect()
 }
 

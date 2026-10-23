@@ -182,7 +182,7 @@ impl OrbitMetrics {
     /// Add custom metric
     pub fn add_custom_metric(&self, name: String, value: MetricValue) -> PrometheusResult<()> {
         let mut custom_metrics = self.custom_metrics.write().map_err(|e| {
-            PrometheusError::collection(format!("Failed to acquire write lock: {}", e))
+            PrometheusError::collection(format!("Failed to acquire write lock: {e}"))
         })?;
 
         custom_metrics.insert(name, value);
@@ -194,7 +194,7 @@ impl OrbitMetrics {
     /// Get custom metric
     pub fn get_custom_metric(&self, name: &str) -> PrometheusResult<Option<MetricValue>> {
         let custom_metrics = self.custom_metrics.read().map_err(|e| {
-            PrometheusError::collection(format!("Failed to acquire read lock: {}", e))
+            PrometheusError::collection(format!("Failed to acquire read lock: {e}"))
         })?;
 
         Ok(custom_metrics.get(name).cloned())
@@ -203,7 +203,7 @@ impl OrbitMetrics {
     /// List all custom metrics
     pub fn list_custom_metrics(&self) -> PrometheusResult<Vec<String>> {
         let custom_metrics = self.custom_metrics.read().map_err(|e| {
-            PrometheusError::collection(format!("Failed to acquire read lock: {}", e))
+            PrometheusError::collection(format!("Failed to acquire read lock: {e}"))
         })?;
 
         Ok(custom_metrics.keys().cloned().collect())
@@ -212,7 +212,7 @@ impl OrbitMetrics {
     /// Remove custom metric
     pub fn remove_custom_metric(&self, name: &str) -> PrometheusResult<Option<MetricValue>> {
         let mut custom_metrics = self.custom_metrics.write().map_err(|e| {
-            PrometheusError::collection(format!("Failed to acquire write lock: {}", e))
+            PrometheusError::collection(format!("Failed to acquire write lock: {e}"))
         })?;
 
         let removed = custom_metrics.remove(name);
@@ -233,11 +233,11 @@ impl OrbitMetrics {
     /// Get metrics summary
     pub fn get_summary(&self) -> PrometheusResult<MetricsSummary> {
         let custom_metrics = self.custom_metrics.read().map_err(|e| {
-            PrometheusError::collection(format!("Failed to acquire read lock: {}", e))
+            PrometheusError::collection(format!("Failed to acquire read lock: {e}"))
         })?;
 
         let last_updated = self.last_updated.read().map_err(|e| {
-            PrometheusError::collection(format!("Failed to acquire read lock: {}", e))
+            PrometheusError::collection(format!("Failed to acquire read lock: {e}"))
         })?;
 
         Ok(MetricsSummary {
@@ -360,7 +360,7 @@ impl MetricsFormatter {
         });
 
         serde_json::to_string_pretty(&json_metrics)
-            .map_err(|e| PrometheusError::serialization(format!("Failed to serialize JSON: {}", e)))
+            .map_err(|e| PrometheusError::serialization(format!("Failed to serialize JSON: {e}")))
     }
 }
 
@@ -416,7 +416,7 @@ impl MetricsValidator {
 
             if value.is_empty() {
                 return Err(PrometheusError::metric_validation(
-                    format!("{}={}", key, value),
+                    format!("{key}={value}"),
                     "Label value cannot be empty",
                 ));
             }

@@ -69,7 +69,7 @@ impl CardinalityEstimator {
         table_stats: Option<&TableStatistics>,
         filter: Option<&Expression>,
     ) -> usize {
-        let base_rows = table_stats.map(|s| s.row_count).unwrap_or(1000);
+        let base_rows = table_stats.map_or(1000, |s| s.row_count);
 
         if let Some(expr) = filter {
             let selectivity = self.estimate_selectivity(expr, table_stats);
@@ -470,13 +470,11 @@ impl CardinalityEstimator {
                 // Get distinct counts from both sides
                 let left_distinct = left_stats
                     .and_then(|s| s.get_column_stats(&l_col))
-                    .map(|cs| cs.distinct_count)
-                    .unwrap_or(100);
+                    .map_or(100, |cs| cs.distinct_count);
 
                 let right_distinct = right_stats
                     .and_then(|s| s.get_column_stats(&r_col))
-                    .map(|cs| cs.distinct_count)
-                    .unwrap_or(100);
+                    .map_or(100, |cs| cs.distinct_count);
 
                 // Join selectivity = 1 / max(distinct_left, distinct_right)
                 let max_distinct = left_distinct.max(right_distinct).max(1);

@@ -662,7 +662,7 @@ impl UnifiedStorage {
     // ============================================================================
 
     fn data_key(namespace: &str, key: &str) -> String {
-        format!("data:{}:{}", namespace, key)
+        format!("data:{namespace}:{key}")
     }
 
     /// Get a record by namespace and key
@@ -867,7 +867,7 @@ impl UnifiedStorage {
         order_by: Option<Vec<(String, SortOrder)>>,
         projection: Vec<String>,
     ) -> UnifiedStorageResult<UniversalResult> {
-        let prefix = format!("data:{}:", namespace);
+        let prefix = format!("data:{namespace}:");
         let max_limit = limit.unwrap_or(self.config.max_scan_limit);
 
         // Fetch all records matching prefix
@@ -959,7 +959,7 @@ impl UnifiedStorage {
         pattern: Option<String>,
         limit: Option<usize>,
     ) -> UnifiedStorageResult<UniversalResult> {
-        let prefix = format!("data:{}:", namespace);
+        let prefix = format!("data:{namespace}:");
         let entries = self.backend.scan_prefix(&prefix, limit).await?;
 
         let keys: Vec<UniversalValue> = entries
@@ -995,7 +995,7 @@ impl UnifiedStorage {
         namespace: &str,
         filter: Option<FilterExpression>,
     ) -> UnifiedStorageResult<UniversalResult> {
-        let prefix = format!("data:{}:", namespace);
+        let prefix = format!("data:{namespace}:");
         let entries = self.backend.scan_prefix(&prefix, None).await?;
 
         let mut count = 0u64;
@@ -1068,18 +1068,17 @@ impl UnifiedStorage {
         };
 
         // Ensure value is a Map
-        let map = match &mut record.value {
-            UniversalValue::Map(m) => m,
-            _ => {
-                // Convert to Map
-                let mut new_map = BTreeMap::new();
-                new_map.insert("_value".to_string(), record.value.clone());
-                record.value = UniversalValue::Map(new_map);
-                if let UniversalValue::Map(m) = &mut record.value {
-                    m
-                } else {
-                    unreachable!()
-                }
+        let map = if let UniversalValue::Map(m) = &mut record.value {
+            m
+        } else {
+            // Convert to Map
+            let mut new_map = BTreeMap::new();
+            new_map.insert("_value".to_string(), record.value.clone());
+            record.value = UniversalValue::Map(new_map);
+            if let UniversalValue::Map(m) = &mut record.value {
+                m
+            } else {
+                unreachable!()
             }
         };
 
@@ -1148,7 +1147,10 @@ impl UnifiedStorage {
         };
 
         let new_value = if let UniversalValue::Map(ref mut m) = record.value {
-            let current = m.get(field).and_then(|v| v.as_int()).unwrap_or(0);
+            let current = m
+                .get(field)
+                .and_then(super::types::UniversalValue::as_int)
+                .unwrap_or(0);
             let new_value = current + delta;
             m.insert(field.to_string(), UniversalValue::Int(new_value));
             new_value
@@ -1822,7 +1824,9 @@ impl UnifiedStorage {
                 .get_field(field)
                 .and_then(|v| v.as_str())
                 .is_some_and(|s| s.contains(substring)),
-            FilterExpression::IsNull(field) => record.get_field(field).is_none_or(|v| v.is_null()),
+            FilterExpression::IsNull(field) => record
+                .get_field(field)
+                .is_none_or(super::types::UniversalValue::is_null),
             FilterExpression::IsNotNull(field) => {
                 record.get_field(field).is_some_and(|v| !v.is_null())
             }
@@ -1864,18 +1868,14 @@ impl UnifiedStorage {
     fn matches_like_pattern(&self, s: &str, pattern: &str) -> bool {
         // Simple LIKE implementation: % = any sequence, _ = single char
         let regex_pattern = pattern.replace('%', ".*").replace('_', ".");
-        regex::Regex::new(&format!("^{}$", regex_pattern))
-            .map(|re| re.is_match(s))
-            .unwrap_or(false)
+        regex::Regex::new(&format!("^{regex_pattern}$")).is_ok_and(|re| re.is_match(s))
     }
 
     /// Match glob pattern (like Redis KEYS)
     fn matches_pattern(&self, s: &str, pattern: &str) -> bool {
         // Simple glob: * = any sequence, ? = single char
         let regex_pattern = pattern.replace('*', ".*").replace('?', ".");
-        regex::Regex::new(&format!("^{}$", regex_pattern))
-            .map(|re| re.is_match(s))
-            .unwrap_or(false)
+        regex::Regex::new(&format!("^{regex_pattern}$")).is_ok_and(|re| re.is_match(s))
     }
 
     /// Get storage metrics

@@ -315,8 +315,7 @@ impl ScriptValidator {
         for pattern in &self.forbidden_patterns {
             if script.contains(pattern) {
                 return Err(LuaError::SecurityViolation(format!(
-                    "Script contains forbidden pattern: {}",
-                    pattern
+                    "Script contains forbidden pattern: {pattern}"
                 )));
             }
         }
@@ -383,8 +382,7 @@ pub fn setup_sandbox(lua: &Lua, config: &SecurityConfig) -> LuaResult<()> {
                     .call::<mlua::Value>(module)
             } else {
                 Err(mlua::Error::RuntimeError(format!(
-                    "Module '{}' is not allowed",
-                    module
+                    "Module '{module}' is not allowed"
                 )))
             }
         })?;
@@ -402,7 +400,7 @@ pub fn setup_sandbox(lua: &Lua, config: &SecurityConfig) -> LuaResult<()> {
 #[cfg(feature = "lua-mlua")]
 pub fn set_memory_limit(lua: &Lua, limit: usize) -> LuaResult<()> {
     lua.set_memory_limit(limit)
-        .map_err(|e| LuaError::InternalError(format!("Failed to set memory limit: {}", e)))?;
+        .map_err(|e| LuaError::InternalError(format!("Failed to set memory limit: {e}")))?;
     Ok(())
 }
 

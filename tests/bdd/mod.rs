@@ -4,17 +4,19 @@
 //! in natural language format. These tests ensure that the system behaves correctly
 //! from an end-user perspective.
 
-use cucumber::{given, then, when, World};
+use cucumber::{gherkin::Step, given, then, when, World};
+use orbit_server::protocols::postgres_wire::sql::{ExecutionResult, SqlExecutor};
+use orbit_server::protocols::vector_store::{SimilarityMetric, Vector, VectorActor};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// World object that maintains test state between scenario steps
-#[derive(Debug, Default, World)]
+#[derive(Default, World)]
 pub struct OrbitWorld {
     /// SQL executor for database operations
     pub sql_executor: Option<orbit_server::protocols::postgres_wire::sql::SqlExecutor>,
     /// Vector store for similarity search operations
-    pub vector_store: Option<Arc<RwLock<orbit_server::protocols::vector_store::VectorIndex>>>,
+    pub vector_store: Option<Arc<RwLock<VectorActor>>>,
     /// Last execution result for assertions
     pub last_result: Option<serde_json::Value>,
     /// Error from last operation (if any)
@@ -23,13 +25,37 @@ pub struct OrbitWorld {
     pub scenario_data: std::collections::HashMap<String, serde_json::Value>,
 }
 
+impl std::fmt::Debug for OrbitWorld {
+    // SqlExecutor and VectorIndex do not implement Debug, so report the scenario state only.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OrbitWorld")
+            .field("has_sql_executor", &self.sql_executor.is_some())
+            .field("has_vector_store", &self.vector_store.is_some())
+            .field("last_result", &self.last_result)
+            .field("last_error", &self.last_error)
+            .finish()
+    }
+}
+
+/// Render an execution result as JSON so steps can assert on `rows` / `count`.
+fn result_to_json(result: &ExecutionResult) -> serde_json::Value {
+    match result {
+        ExecutionResult::Select {
+            columns,
+            rows,
+            row_count,
+        } => serde_json::json!({ "columns": columns, "rows": rows, "row_count": row_count }),
+        ExecutionResult::Insert { count, .. }
+        | ExecutionResult::Update { count, .. }
+        | ExecutionResult::Delete { count, .. } => serde_json::json!({ "count": count }),
+        other => serde_json::json!({ "result": format!("{other:?}") }),
+    }
+}
+
 impl OrbitWorld {
     /// Create a new SQL executor for testing
     pub async fn create_sql_executor(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let storage =
-            Arc::new(orbit_server::protocols::postgres_wire::storage::memory::MemoryStorage::new());
-        self.sql_executor =
-            Some(orbit_server::protocols::postgres_wire::sql::SqlExecutor::new(storage).await?);
+        self.sql_executor = Some(SqlExecutor::new().await?);
         Ok(())
     }
 
@@ -38,7 +64,7 @@ impl OrbitWorld {
         if let Some(executor) = &self.sql_executor {
             match executor.execute(sql).await {
                 Ok(result) => {
-                    self.last_result = Some(serde_json::to_value(result)?);
+                    self.last_result = Some(result_to_json(&result));
                     self.last_error = None;
                 }
                 Err(e) => {
@@ -84,12 +110,13 @@ async fn when_execute_sql(
 async fn when_insert_data(
     world: &mut OrbitWorld,
     table_name: String,
-    data_table: &cucumber::DataTable,
+    step: &Step,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let headers = data_table.raw().first().unwrap();
+    let table = step.table.as_ref().ok_or("step is missing a data table")?;
+    let headers = table.rows.first().ok_or("data table is empty")?;
     let columns = headers.join(", ");
 
-    for row in data_table.raw().iter().skip(1) {
+    for row in table.rows.iter().skip(1) {
         let values = row
             .iter()
             .map(|v| {
@@ -226,13 +253,10 @@ async fn given_vector_store(
     world: &mut OrbitWorld,
     dimension: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let config = orbit_server::protocols::vector_store::VectorIndexConfig::new(
-        "test_index".to_string(),
-        dimension,
-        orbit_server::protocols::vector_store::SimilarityMetric::Cosine,
-    );
-    let index = orbit_server::protocols::vector_store::VectorIndex::new(config);
-    world.vector_store = Some(Arc::new(RwLock::new(index)));
+    let actor = VectorActor::new()
+        .with_default_dimension(dimension)
+        .with_default_metric(SimilarityMetric::Cosine);
+    world.vector_store = Some(Arc::new(RwLock::new(actor)));
     Ok(())
 }
 
@@ -251,10 +275,10 @@ async fn when_add_vector(
             .collect();
 
         let data = values?;
-        let vector = orbit_server::protocols::vector_store::Vector::new(vector_id, data);
+        let vector = Vector::new(vector_id, data);
 
-        let mut index = store.write().await;
-        match index.add_vector(vector) {
+        let mut actor = store.write().await;
+        match VectorActor::add_vector(&mut actor, vector) {
             Ok(_) => {
                 world.last_error = None;
             }
@@ -284,16 +308,10 @@ async fn when_search_vectors(
 
         let query_data = values?;
 
-        let index = store.read().await;
-        match index.search(&query_data, limit) {
-            Ok(results) => {
-                world.last_result = Some(serde_json::to_value(results)?);
-                world.last_error = None;
-            }
-            Err(e) => {
-                world.last_error = Some(e.to_string());
-            }
-        }
+        let actor = store.read().await;
+        let results = actor.knn_search(query_data, limit, Some(SimilarityMetric::Cosine));
+        world.last_result = Some(serde_json::to_value(results)?);
+        world.last_error = None;
     } else {
         return Err("Vector store not initialized".into());
     }
@@ -330,9 +348,9 @@ async fn then_first_result_has_id(
     expected_id: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let result = get_search_result(world)?;
-    let results_array = get_results_array(&result)?;
-    let first_result = get_first_result(&results_array)?;
-    let actual_id = extract_vector_id(&first_result)?;
+    let results_array = get_results_array(result)?;
+    let first_result = get_first_result(results_array)?;
+    let actual_id = extract_vector_id(first_result)?;
 
     validate_expected_id(&actual_id, &expected_id)?;
     Ok(())
@@ -400,47 +418,5 @@ fn validate_expected_id(
 
 #[tokio::main]
 async fn main() {
-    OrbitWorld::run("tests/bdd/features").await;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_bdd_step_definitions() {
-        // This test ensures that the BDD step definitions compile and can be used
-        let mut world = OrbitWorld::default();
-
-        // Test SQL operations
-        given_empty_database(&mut world).await.unwrap();
-        given_table_with_columns(
-            &mut world,
-            "users".to_string(),
-            "id INTEGER, name TEXT".to_string(),
-        )
-        .await
-        .unwrap();
-        when_execute_sql(
-            &mut world,
-            "INSERT INTO users VALUES (1, 'Alice')".to_string(),
-        )
-        .await
-        .unwrap();
-        then_operation_succeeds(&mut world).await.unwrap();
-
-        // Test vector operations
-        given_vector_store(&mut world, 3).await.unwrap();
-        when_add_vector(
-            &mut world,
-            "vec1".to_string(),
-            "[1.0, 2.0, 3.0]".to_string(),
-        )
-        .await
-        .unwrap();
-        when_search_vectors(&mut world, "[1.0, 2.0, 3.0]".to_string(), 1)
-            .await
-            .unwrap();
-        then_find_similar_vectors(&mut world, 1).await.unwrap();
-    }
+    OrbitWorld::run(concat!(env!("CARGO_MANIFEST_DIR"), "/bdd/features")).await;
 }

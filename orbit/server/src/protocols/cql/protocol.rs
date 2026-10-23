@@ -1145,7 +1145,7 @@ pub fn compress_data(data: &[u8], algorithm: CompressionAlgorithm) -> ProtocolRe
             let mut encoder = snap::raw::Encoder::new();
             encoder
                 .compress_vec(data)
-                .map_err(|e| ProtocolError::CqlError(format!("Snappy compression failed: {}", e)))
+                .map_err(|e| ProtocolError::CqlError(format!("Snappy compression failed: {e}")))
         }
         CompressionAlgorithm::Lz4 => {
             // LZ4 block compression
@@ -1162,12 +1162,12 @@ pub fn decompress_data(data: &[u8], algorithm: CompressionAlgorithm) -> Protocol
             let mut decoder = snap::raw::Decoder::new();
             decoder
                 .decompress_vec(data)
-                .map_err(|e| ProtocolError::CqlError(format!("Snappy decompression failed: {}", e)))
+                .map_err(|e| ProtocolError::CqlError(format!("Snappy decompression failed: {e}")))
         }
         CompressionAlgorithm::Lz4 => {
             // LZ4 block decompression
             lz4_flex::decompress_size_prepended(data)
-                .map_err(|e| ProtocolError::CqlError(format!("LZ4 decompression failed: {}", e)))
+                .map_err(|e| ProtocolError::CqlError(format!("LZ4 decompression failed: {e}")))
         }
     }
 }

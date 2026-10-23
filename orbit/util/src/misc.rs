@@ -32,6 +32,7 @@ impl RngUtils {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sync::MutexExt;
     use std::collections::HashSet;
 
     #[test]
@@ -257,7 +258,7 @@ mod tests {
                 let n = RngUtils::random_int(1, 100);
                 let u = RngUtils::random_u64();
 
-                results_clone.lock().unwrap().push((s, n, u));
+                results_clone.lock_recover().push((s, n, u));
             });
             handles.push(handle);
         }
@@ -266,7 +267,7 @@ mod tests {
             handle.join().unwrap();
         }
 
-        let results = results.lock().unwrap();
+        let results = results.lock_recover();
         assert_eq!(results.len(), 10);
 
         // Verify all results are valid

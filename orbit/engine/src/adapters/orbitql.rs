@@ -75,12 +75,12 @@ impl OrbitQLAdapter {
         let lexer = Lexer::new();
         let tokens = lexer
             .tokenize(query)
-            .map_err(|e| EngineError::query(format!("Lexer error: {}", e)))?;
+            .map_err(|e| EngineError::query(format!("Lexer error: {e}")))?;
 
         let mut parser = Parser::new();
         parser
             .parse(tokens)
-            .map_err(|e| EngineError::query(format!("Parse error: {}", e)))
+            .map_err(|e| EngineError::query(format!("Parse error: {e}")))
     }
 
     /// Execute a parsed statement
@@ -92,8 +92,7 @@ impl OrbitQLAdapter {
             Statement::Delete(delete) => self.execute_delete(delete).await,
             Statement::Create(create) => self.execute_create(create).await,
             _ => Err(EngineError::not_supported(format!(
-                "Statement type not yet supported: {:?}",
-                statement
+                "Statement type not yet supported: {statement:?}"
             ))),
         }
     }
@@ -365,8 +364,7 @@ impl OrbitQLAdapter {
                     Ok(FilterPredicate::Or(vec![left_filter, right_filter]))
                 }
                 _ => Err(EngineError::not_supported(format!(
-                    "Operator {:?} not supported in WHERE clause",
-                    operator
+                    "Operator {operator:?} not supported in WHERE clause"
                 ))),
             },
             Expression::Unary { operator, operand } => match operator {
@@ -375,13 +373,11 @@ impl OrbitQLAdapter {
                     Ok(FilterPredicate::Not(Box::new(inner)))
                 }
                 _ => Err(EngineError::not_supported(format!(
-                    "Unary operator {:?} not supported",
-                    operator
+                    "Unary operator {operator:?} not supported"
                 ))),
             },
             _ => Err(EngineError::query(format!(
-                "Cannot convert expression to filter: {:?}",
-                expr
+                "Cannot convert expression to filter: {expr:?}"
             ))),
         }
     }
@@ -396,8 +392,7 @@ impl OrbitQLAdapter {
                 Ok(format!("{}.{}", self.extract_field_name(object)?, field))
             }
             _ => Err(EngineError::query(format!(
-                "Expected identifier, got: {:?}",
-                expr
+                "Expected identifier, got: {expr:?}"
             ))),
         }
     }
@@ -408,8 +403,7 @@ impl OrbitQLAdapter {
             Expression::Literal(lit) => self.query_value_to_sql_value(lit),
             Expression::Identifier(s) => Ok(SqlValue::String(s.clone())),
             _ => Err(EngineError::query(format!(
-                "Cannot convert expression to value: {:?}",
-                expr
+                "Cannot convert expression to value: {expr:?}"
             ))),
         }
     }
@@ -439,8 +433,7 @@ impl OrbitQLAdapter {
                     + std::time::Duration::from_secs(dt.timestamp() as u64),
             )),
             _ => Err(EngineError::not_supported(format!(
-                "QueryValue type not supported: {:?}",
-                value
+                "QueryValue type not supported: {value:?}"
             ))),
         }
     }

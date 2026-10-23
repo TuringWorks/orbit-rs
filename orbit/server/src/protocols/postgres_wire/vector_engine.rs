@@ -201,8 +201,7 @@ impl VectorQueryEngine {
                     .to_string();
                 let dimension = dim_str.parse::<usize>().map_err(|_| {
                     ProtocolError::PostgresError(format!(
-                        "Invalid vector dimension '{}'. Expected a positive integer like VECTOR(1536)",
-                        dim_str
+                        "Invalid vector dimension '{dim_str}'. Expected a positive integer like VECTOR(1536)"
                     ))
                 })?;
                 (VectorColumnType::Vector(dimension), Some(dimension))
@@ -218,8 +217,7 @@ impl VectorQueryEngine {
                     .to_string();
                 let dimension = dim_str.parse::<usize>().map_err(|_| {
                     ProtocolError::PostgresError(format!(
-                        "Invalid halfvector dimension '{}'. Expected a positive integer",
-                        dim_str
+                        "Invalid halfvector dimension '{dim_str}'. Expected a positive integer"
                     ))
                 })?;
                 (VectorColumnType::HalfVector(dimension), Some(dimension))
@@ -316,28 +314,26 @@ impl VectorQueryEngine {
                     // Dimension not yet set (VECTOR without dimension, no inserts yet)
                     // Return an error suggesting they either specify dimension or insert data first
                     return Err(ProtocolError::PostgresError(format!(
-                        "Cannot create index on column '{}': vector dimension not specified. \
+                        "Cannot create index on column '{column_name}': vector dimension not specified. \
                         Either:\n\
                         1. Specify dimension in CREATE TABLE: embedding VECTOR(1536)\n\
                         2. Insert at least one row before creating the index\n\
                         Common dimensions: 384 (all-MiniLM-L6-v2), 768 (BERT), \
-                        1536 (text-embedding-ada-002), 3072 (text-embedding-3-large)",
-                        column_name
+                        1536 (text-embedding-ada-002), 3072 (text-embedding-3-large)"
                     )));
                 }
                 _ => unreachable!(),
             }
         } else {
             return Err(ProtocolError::PostgresError(format!(
-                "Table '{}' not found. Create the table first with:\n\
-                CREATE TABLE {} (id SERIAL, content TEXT, {} VECTOR(dimension))",
-                table_name, table_name, column_name
+                "Table '{table_name}' not found. Create the table first with:\n\
+                CREATE TABLE {table_name} (id SERIAL, content TEXT, {column_name} VECTOR(dimension))"
             )));
         };
         drop(tables);
 
         // Create the actual vector index
-        let index_name = format!("{}_{}", table_name, column_name);
+        let index_name = format!("{table_name}_{column_name}");
         let index = match index_method.as_str() {
             "hnsw" => {
                 // Parse WITH options if present (m, ef_construction)
@@ -510,7 +506,7 @@ impl VectorQueryEngine {
 
                 // Insert into any applicable index
                 if let Some(col_name) = vector_column_name {
-                    let index_name = format!("{}_{}", table_name, col_name);
+                    let index_name = format!("{table_name}_{col_name}");
                     let mut indexes = self.indexes.write().await;
                     if let Some(index) = indexes.get_mut(&index_name) {
                         index.insert(vector.clone()).map_err(|e| {
@@ -643,7 +639,7 @@ impl VectorQueryEngine {
         };
 
         // Try to use an index if available
-        let index_name = format!("{}_{}", table_name, vector_column);
+        let index_name = format!("{table_name}_{vector_column}");
         let indexes = self.indexes.read().await;
 
         let results = if let Some(index) = indexes.get(&index_name) {
@@ -699,7 +695,7 @@ impl VectorQueryEngine {
             rows.push(vec![
                 Some(id),
                 Some(content),
-                Some(format!("{:.6}", distance)),
+                Some(format!("{distance:.6}")),
             ]);
         }
 

@@ -80,19 +80,16 @@ impl MlNlpProcessor {
     ) -> Result<QueryIntent, NlpError> {
         // Try ML-based processing first
         if self.intent_model.is_some() && self.entity_model.is_some() {
-            match self.classify_intent_ml(query).await {
-                Ok(ml_prediction) => {
-                    if ml_prediction.confidence >= self.confidence_threshold {
-                        // Use ML prediction if confidence is high
-                        // Merge ML results with rule-based results
-                        return self
-                            .merge_ml_and_rule_based(ml_prediction, rule_based_intent)
-                            .await;
-                    }
+            if let Ok(ml_prediction) = self.classify_intent_ml(query).await {
+                if ml_prediction.confidence >= self.confidence_threshold {
+                    // Use ML prediction if confidence is high
+                    // Merge ML results with rule-based results
+                    return self
+                        .merge_ml_and_rule_based(ml_prediction, rule_based_intent)
+                        .await;
                 }
-                Err(_) => {
-                    // Fall back to rule-based if ML fails
-                }
+            } else {
+                // Fall back to rule-based if ML fails
             }
         }
 

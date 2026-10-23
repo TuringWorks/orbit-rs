@@ -134,7 +134,7 @@ impl SplitBrainDetector {
         let mut reachable_nodes = Vec::new();
         let mut unreachable_nodes = Vec::new();
 
-        for (node_id, health) in node_health.iter() {
+        for (node_id, health) in node_health {
             if health.is_reachable {
                 reachable_nodes.push(node_id.clone());
             } else {

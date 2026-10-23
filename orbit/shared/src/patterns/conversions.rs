@@ -20,13 +20,13 @@ pub enum QueryError {
 
 impl From<std::io::Error> for QueryError {
     fn from(err: std::io::Error) -> Self {
-        QueryError::ExecutionError(format!("IO error: {}", err))
+        QueryError::ExecutionError(format!("IO error: {err}"))
     }
 }
 
 impl From<std::num::ParseIntError> for QueryError {
     fn from(err: std::num::ParseIntError) -> Self {
-        QueryError::ParseError(format!("Parse error: {}", err))
+        QueryError::ParseError(format!("Parse error: {err}"))
     }
 }
 
@@ -248,10 +248,7 @@ impl TryFrom<f64> for Percentage {
 
     fn try_from(value: f64) -> Result<Self, Self::Error> {
         if !(0.0..=100.0).contains(&value) {
-            Err(format!(
-                "Percentage must be between 0 and 100, got {}",
-                value
-            ))
+            Err(format!("Percentage must be between 0 and 100, got {value}"))
         } else {
             Ok(Percentage(value))
         }
@@ -272,8 +269,8 @@ impl From<Percentage> for f64 {
 /// drifting between copies.
 fn validate_identifier(ident: &str) -> Result<String, String> {
     validate_sql_identifier(ident)
-        .map(|s| s.to_string())
-        .map_err(|e| e.to_string())
+        .map(std::string::ToString::to_string)
+        .map_err(|e| e.clone())
 }
 
 /// SQL statement keywords that must never appear in a demo filter fragment.
@@ -362,7 +359,7 @@ impl Query {
     pub fn new(table: impl Into<String>) -> Self {
         let table = table.into();
         validate_sql_identifier(&table)
-            .unwrap_or_else(|e| panic!("Query::new: invalid table identifier: {}", e));
+            .unwrap_or_else(|e| panic!("Query::new: invalid table identifier: {e}"));
         Self {
             table,
             columns: Vec::new(),
@@ -374,7 +371,7 @@ impl Query {
     pub fn select(mut self, columns: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.columns = columns
             .into_iter()
-            .map(|c| c.into())
+            .map(std::convert::Into::into)
             .filter(|c| validate_identifier(c).is_ok())
             .collect();
         self
@@ -411,14 +408,14 @@ impl Query {
                 .join(", ")
         };
 
-        let mut query = format!("SELECT {} FROM {}", columns, table);
+        let mut query = format!("SELECT {columns} FROM {table}");
 
         if let Some(filter) = self.filter {
-            query.push_str(&format!(" WHERE {}", filter));
+            query.push_str(&format!(" WHERE {filter}"));
         }
 
         if let Some(limit) = self.limit {
-            query.push_str(&format!(" LIMIT {}", limit));
+            query.push_str(&format!(" LIMIT {limit}"));
         }
 
         query
@@ -475,7 +472,7 @@ pub fn normalize_path(path: &str) -> Cow<'_, str> {
         Cow::Borrowed(path)
     } else {
         // Needs modification, return owned
-        Cow::Owned(format!("/{}", path))
+        Cow::Owned(format!("/{path}"))
     }
 }
 

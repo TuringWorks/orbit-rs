@@ -71,9 +71,8 @@ impl UdfHandler {
                         Some(FunctionLanguage::JavaScript) => UdfRuntime::JavaScript,
                         Some(lang) => {
                             return Err(ProtocolError::PostgresError(format!(
-                                "Unsupported language: {:?}. Supported languages: Lua, JavaScript",
-                                lang
-                            )))
+                            "Unsupported language: {lang:?}. Supported languages: Lua, JavaScript"
+                        )))
                         }
                         None => {
                             // Default to Lua if not specified
@@ -106,7 +105,7 @@ impl UdfHandler {
 
                     // Register the function
                     self.udf_registry.register(metadata).await.map_err(|e| {
-                        ProtocolError::PostgresError(format!("Failed to register function: {}", e))
+                        ProtocolError::PostgresError(format!("Failed to register function: {e}"))
                     })?;
 
                     Ok(SqlValue::Text(format!("CREATE FUNCTION {}", stmt.name)))
@@ -153,7 +152,7 @@ impl UdfHandler {
                 .unregister(&qualified_name)
                 .await
                 .map_err(|e| {
-                    ProtocolError::PostgresError(format!("Failed to drop function: {}", e))
+                    ProtocolError::PostgresError(format!("Failed to drop function: {e}"))
                 })?;
 
             Ok(SqlValue::Text(format!("DROP FUNCTION {}", stmt.name)))
@@ -172,7 +171,10 @@ impl UdfHandler {
     #[cfg(feature = "lua-mlua")]
     pub async fn list_functions(&self) -> Vec<String> {
         let functions = self.udf_registry.list_all().await;
-        functions.iter().map(|f| f.qualified_name()).collect()
+        functions
+            .iter()
+            .map(crate::lua::udf_registry::UdfMetadata::qualified_name)
+            .collect()
     }
 
     #[cfg(not(feature = "lua-mlua"))]
@@ -199,8 +201,7 @@ impl UdfHandler {
 
         if exists && !stmt.or_replace {
             return Err(ProtocolError::PostgresError(format!(
-                "Function '{}' already exists. Use CREATE OR REPLACE FUNCTION to replace it.",
-                func_name
+                "Function '{func_name}' already exists. Use CREATE OR REPLACE FUNCTION to replace it."
             )));
         }
 
@@ -224,8 +225,7 @@ impl UdfHandler {
             }
             Some(lang) => {
                 return Err(ProtocolError::PostgresError(format!(
-                    "Unsupported language: {:?}. Supported languages: Lua, JavaScript",
-                    lang
+                    "Unsupported language: {lang:?}. Supported languages: Lua, JavaScript"
                 )))
             }
             None => UdfRuntime::Lua, // Default to Lua
@@ -265,10 +265,10 @@ impl UdfHandler {
 
         // Register the function
         self.udf_registry.register(metadata).await.map_err(|e| {
-            ProtocolError::PostgresError(format!("Failed to register function: {}", e))
+            ProtocolError::PostgresError(format!("Failed to register function: {e}"))
         })?;
 
-        Ok(SqlValue::Text(format!("CREATE FUNCTION {}", func_name)))
+        Ok(SqlValue::Text(format!("CREATE FUNCTION {func_name}")))
     }
 
     #[cfg(not(feature = "lua-mlua"))]
@@ -302,19 +302,18 @@ impl UdfHandler {
                     continue;
                 } else {
                     return Err(ProtocolError::PostgresError(format!(
-                        "Function '{}' does not exist",
-                        func_name
+                        "Function '{func_name}' does not exist"
                     )));
                 }
             }
 
             // Unregister the function
-            let qualified_name = format!("public.{}", func_name);
+            let qualified_name = format!("public.{func_name}");
             self.udf_registry
                 .unregister(&qualified_name)
                 .await
                 .map_err(|e| {
-                    ProtocolError::PostgresError(format!("Failed to drop function: {}", e))
+                    ProtocolError::PostgresError(format!("Failed to drop function: {e}"))
                 })?;
 
             dropped_funcs.push(func_name);

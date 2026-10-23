@@ -80,8 +80,7 @@ pub async fn list_actors(
     let node_id = state
         .orbit_client
         .node_id()
-        .map(|n| n.key.clone())
-        .unwrap_or_else(|| "local".to_string());
+        .map_or_else(|| "local".to_string(), |n| n.key.clone());
 
     // Note: The current OrbitClient doesn't expose a method to enumerate
     // all active actors. This would require extending the ActorRegistry
@@ -157,8 +156,7 @@ pub async fn get_actor(
     let node_id = state
         .orbit_client
         .node_id()
-        .map(|n| n.key.clone())
-        .unwrap_or_else(|| "local".to_string());
+        .map_or_else(|| "local".to_string(), |n| n.key.clone());
 
     // Note: To properly retrieve state, the actor would need to implement
     // a state query method. For now, we return the actor reference info
@@ -222,8 +220,7 @@ pub async fn create_actor(
     // Get node ID from client
     let node_id = invocation_system
         .node_id()
-        .map(|n| n.key.clone())
-        .unwrap_or_else(|| "local".to_string());
+        .map_or_else(|| "local".to_string(), |n| n.key.clone());
 
     let actor_info = ActorInfo {
         actor_type: request.actor_type.clone(),
@@ -285,8 +282,7 @@ pub async fn update_actor(
     let node_id = state
         .orbit_client
         .node_id()
-        .map(|n| n.key.clone())
-        .unwrap_or_else(|| "local".to_string());
+        .map_or_else(|| "local".to_string(), |n| n.key.clone());
 
     // Determine update strategy
     let strategy = request.strategy.as_deref().unwrap_or("replace");
@@ -313,7 +309,7 @@ pub async fn update_actor(
         StatusCode::OK,
         Json(SuccessResponse::with_message(
             actor_info,
-            format!("Actor state updated using {} strategy", strategy).as_str(),
+            format!("Actor state updated using {strategy} strategy").as_str(),
         )),
     )
 }
@@ -360,7 +356,7 @@ pub async fn delete_actor(
             (
                 StatusCode::OK,
                 Json(SuccessResponse::with_message(
-                    format!("Actor {}/{} deactivated", actor_type, key),
+                    format!("Actor {actor_type}/{key} deactivated"),
                     "Actor deactivated successfully",
                 )),
             )
@@ -377,7 +373,7 @@ pub async fn delete_actor(
             (
                 StatusCode::OK,
                 Json(SuccessResponse::with_message(
-                    format!("Actor {}/{} deactivated (or not found)", actor_type, key),
+                    format!("Actor {actor_type}/{key} deactivated (or not found)"),
                     "Actor deactivation completed",
                 )),
             )
@@ -428,8 +424,7 @@ pub async fn invoke_actor(
     let node_id = state
         .orbit_client
         .node_id()
-        .map(|n| n.key.clone())
-        .unwrap_or_else(|| "local".to_string());
+        .map_or_else(|| "local".to_string(), |n| n.key.clone());
 
     // Note: Full invocation would require getting an ActorReference<T> where T
     // is the specific actor type. Since we don't know T at runtime from REST,
@@ -940,10 +935,7 @@ pub async fn get_database_stats(State(state): State<ApiState>) -> impl IntoRespo
         table_count: 10,                     // Mock value
         index_count: 15,                     // Mock value
         size_bytes: Some(1024 * 1024 * 100), // 100 MB mock
-        active_connections: client_stats
-            .as_ref()
-            .map(|s| s.server_connections)
-            .unwrap_or(1),
+        active_connections: client_stats.as_ref().map_or(1, |s| s.server_connections),
         uptime_seconds: 3600, // Mock 1 hour
         version: env!("CARGO_PKG_VERSION").to_string(),
     };
@@ -1046,7 +1038,7 @@ pub async fn describe_table(
         ],
         primary_key: Some(vec!["id".to_string()]),
         indexes: vec![IndexInfo {
-            name: format!("{}_pkey", table),
+            name: format!("{table}_pkey"),
             columns: vec!["id".to_string()],
             unique: true,
             index_type: "btree".to_string(),
@@ -1090,13 +1082,13 @@ pub async fn list_indexes(
     // Mock index list
     let indexes = vec![
         IndexInfo {
-            name: format!("{}_pkey", table),
+            name: format!("{table}_pkey"),
             columns: vec!["id".to_string()],
             unique: true,
             index_type: "btree".to_string(),
         },
         IndexInfo {
-            name: format!("{}_name_idx", table),
+            name: format!("{table}_name_idx"),
             columns: vec!["name".to_string()],
             unique: false,
             index_type: "btree".to_string(),
@@ -1130,8 +1122,7 @@ pub async fn list_cluster_nodes(State(state): State<ApiState>) -> impl IntoRespo
     let node_id = state
         .orbit_client
         .node_id()
-        .map(|n| n.key.clone())
-        .unwrap_or_else(|| "local".to_string());
+        .map_or_else(|| "local".to_string(), |n| n.key.clone());
 
     let nodes = vec![ClusterNodeInfo {
         node_id: node_id.clone(),
@@ -1172,7 +1163,7 @@ pub async fn get_cluster_status(State(state): State<ApiState>) -> impl IntoRespo
         total_nodes: 1,
         healthy_nodes: 1,
         unhealthy_nodes: 0,
-        total_actors: client_stats.as_ref().map(|_| 150).unwrap_or(0),
+        total_actors: client_stats.as_ref().map_or(0, |_| 150),
         replication_factor: 3,
         consistency_level: "quorum".to_string(),
     };

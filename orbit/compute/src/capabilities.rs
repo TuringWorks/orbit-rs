@@ -2525,7 +2525,7 @@ fn get_macos_cpu_brand_string() -> Result<String, ComputeError> {
         .map_err(|e| {
             ComputeError::capability_detection(
                 CapabilityDetectionError::CPUDetectionFailed {
-                    reason: format!("Failed to execute sysctl: {}", e),
+                    reason: format!("Failed to execute sysctl: {e}"),
                 },
                 "Apple Silicon detection",
             )

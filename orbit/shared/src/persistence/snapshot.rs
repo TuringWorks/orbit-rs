@@ -394,7 +394,7 @@ impl PersistenceBackend for MemoryPersistenceBackend {
 
         // Calculate total storage bytes
         let storage = self.storage.read().await;
-        let total_snapshots = storage.values().map(|v| v.len()).sum::<usize>();
+        let total_snapshots = storage.values().map(std::vec::Vec::len).sum::<usize>();
 
         let mut stats = metrics.clone();
         stats.total_storage_bytes = (total_snapshots * 1024) as u64; // Rough estimate
@@ -468,7 +468,7 @@ impl EncryptedPersistenceBackend {
     async fn encrypt_snapshot(&self, snapshot: &ActorSnapshot) -> OrbitResult<EncryptedSnapshot> {
         // Serialize state data to JSON bytes
         let state_bytes = serde_json::to_vec(&snapshot.state_data)
-            .map_err(|e| OrbitError::internal(format!("Failed to serialize state: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to serialize state: {e}")))?;
 
         // Encrypt with key ID tracking
         let (encrypted_data, key_id) = self
@@ -501,7 +501,7 @@ impl EncryptedPersistenceBackend {
         // Deserialize state data
         let state_data: serde_json::Value =
             serde_json::from_slice(&decrypted_bytes).map_err(|e| {
-                OrbitError::internal(format!("Failed to deserialize decrypted state: {}", e))
+                OrbitError::internal(format!("Failed to deserialize decrypted state: {e}"))
             })?;
 
         Ok(ActorSnapshot {
@@ -527,7 +527,7 @@ impl PersistenceBackend for EncryptedPersistenceBackend {
         // Store encrypted data as the state_data in a wrapper ActorSnapshot
         // This allows us to use the existing backend without changes
         let wrapper_state = serde_json::to_value(&encrypted).map_err(|e| {
-            OrbitError::internal(format!("Failed to serialize encrypted snapshot: {}", e))
+            OrbitError::internal(format!("Failed to serialize encrypted snapshot: {e}"))
         })?;
 
         let wrapper_snapshot = ActorSnapshot {
@@ -558,7 +558,7 @@ impl PersistenceBackend for EncryptedPersistenceBackend {
             // Deserialize the encrypted snapshot from the wrapper
             let encrypted: EncryptedSnapshot = serde_json::from_value(wrapper_snapshot.state_data)
                 .map_err(|e| {
-                    OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {}", e))
+                    OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {e}"))
                 })?;
 
             // Decrypt and return
@@ -579,7 +579,7 @@ impl PersistenceBackend for EncryptedPersistenceBackend {
         {
             let encrypted: EncryptedSnapshot = serde_json::from_value(wrapper_snapshot.state_data)
                 .map_err(|e| {
-                    OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {}", e))
+                    OrbitError::internal(format!("Failed to deserialize encrypted snapshot: {e}"))
                 })?;
 
             let decrypted = self.decrypt_snapshot(&encrypted).await?;

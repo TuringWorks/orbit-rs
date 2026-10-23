@@ -357,7 +357,7 @@ impl Polygon {
     /// Calculate the area of the polygon (exterior area minus interior holes).
     pub fn area(&self) -> f64 {
         let exterior_area = self.exterior_ring.area();
-        let interior_area: f64 = self.interior_rings.iter().map(|ring| ring.area()).sum();
+        let interior_area: f64 = self.interior_rings.iter().map(LinearRing::area).sum();
         exterior_area - interior_area
     }
 

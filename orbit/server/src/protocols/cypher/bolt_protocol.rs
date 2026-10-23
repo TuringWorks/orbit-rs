@@ -112,9 +112,7 @@ impl PackStreamDecoder {
             // FLOAT_64
             0xC1 => {
                 let value = self.read_f64(bytes)?;
-                Ok(serde_json::Number::from_f64(value)
-                    .map(Value::Number)
-                    .unwrap_or(Value::Null))
+                Ok(serde_json::Number::from_f64(value).map_or(Value::Null, Value::Number))
             }
 
             // Tiny string (0x80-0x8F)
@@ -212,8 +210,7 @@ impl PackStreamDecoder {
             }
 
             _ => Err(ProtocolError::CypherError(format!(
-                "Unknown PackStream marker: 0x{:02X}",
-                marker
+                "Unknown PackStream marker: 0x{marker:02X}"
             ))),
         }
     }
@@ -569,7 +566,7 @@ impl BoltProtocolHandler {
         let mut handshake_buf = [0u8; 20];
         stream.read_exact(&mut handshake_buf).await.map_err(|e| {
             error!("Failed to read handshake: {}", e);
-            ProtocolError::Other(format!("Handshake read error: {}", e))
+            ProtocolError::Other(format!("Handshake read error: {e}"))
         })?;
 
         // Bolt handshake format: 4 bytes magic (0x6060B017) + 4 version proposals (4 bytes each)
@@ -616,7 +613,7 @@ impl BoltProtocolHandler {
         response.put_u32(version.as_u32());
         stream.write_all(&response).await.map_err(|e| {
             error!("Failed to write handshake response: {}", e);
-            ProtocolError::Other(format!("Handshake write error: {}", e))
+            ProtocolError::Other(format!("Handshake write error: {e}"))
         })?;
 
         info!("Bolt handshake completed, version: {:?}", version);
@@ -704,7 +701,7 @@ impl BoltProtocolHandler {
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                 Err(ProtocolError::ConnectionClosed)
             }
-            Err(e) => Err(ProtocolError::Other(format!("Read error: {}", e))),
+            Err(e) => Err(ProtocolError::Other(format!("Read error: {e}"))),
         }
     }
 
@@ -856,12 +853,12 @@ impl BoltProtocolHandler {
         let scheme = hello
             .get("scheme")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
 
         let principal = hello
             .get("principal")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
 
         let user_agent = hello
             .get("user_agent")
@@ -932,12 +929,12 @@ impl BoltProtocolHandler {
         let scheme = logon
             .get("scheme")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
 
         let principal = logon
             .get("principal")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
 
         info!(
             "Client logon: scheme={:?}, principal={:?}",
@@ -1155,14 +1152,13 @@ impl BoltProtocolHandler {
                                 } else if let (Some(l_f64), Some(r_f64)) = (l.as_f64(), r.as_f64())
                                 {
                                     serde_json::Number::from_f64(l_f64 + r_f64)
-                                        .map(Value::Number)
-                                        .unwrap_or(Value::Null)
+                                        .map_or(Value::Null, Value::Number)
                                 } else {
                                     Value::Null
                                 }
                             }
                             (Value::String(l), Value::String(r)) => {
-                                Value::String(format!("{}{}", l, r))
+                                Value::String(format!("{l}{r}"))
                             }
                             _ => Value::Null,
                         }
@@ -1175,8 +1171,7 @@ impl BoltProtocolHandler {
                                 } else if let (Some(l_f64), Some(r_f64)) = (l.as_f64(), r.as_f64())
                                 {
                                     serde_json::Number::from_f64(l_f64 - r_f64)
-                                        .map(Value::Number)
-                                        .unwrap_or(Value::Null)
+                                        .map_or(Value::Null, Value::Number)
                                 } else {
                                     Value::Null
                                 }
@@ -1318,9 +1313,10 @@ impl BoltProtocolHandler {
             let mut chunk = BytesMut::with_capacity(chunk_size + 2);
             chunk.put_u16(chunk_size as u16);
             chunk.put_slice(&message_buf[offset..offset + chunk_size]);
-            stream.write_all(&chunk).await.map_err(|e| {
-                ProtocolError::Other(format!("Failed to write message chunk: {}", e))
-            })?;
+            stream
+                .write_all(&chunk)
+                .await
+                .map_err(|e| ProtocolError::Other(format!("Failed to write message chunk: {e}")))?;
             offset += chunk_size;
         }
 
@@ -1328,7 +1324,7 @@ impl BoltProtocolHandler {
         stream
             .write_all(&[0x00, 0x00])
             .await
-            .map_err(|e| ProtocolError::Other(format!("Failed to write end marker: {}", e)))?;
+            .map_err(|e| ProtocolError::Other(format!("Failed to write end marker: {e}")))?;
 
         Ok(())
     }
@@ -1462,7 +1458,7 @@ impl BoltProtocolHandler {
     /// Convert a GraphNode to a Value
     fn node_to_value(&self, node: &GraphNode) -> Value {
         let mut map = serde_json::Map::new();
-        map.insert("id".to_string(), Value::String(node.id.to_string()));
+        map.insert("id".to_string(), Value::String(node.id.clone()));
         map.insert(
             "labels".to_string(),
             Value::Array(
@@ -1487,13 +1483,10 @@ impl BoltProtocolHandler {
     /// Convert a GraphRelationship to a Value
     fn relationship_to_value(&self, rel: &GraphRelationship) -> Value {
         let mut map = serde_json::Map::new();
-        map.insert("id".to_string(), Value::String(rel.id.to_string()));
+        map.insert("id".to_string(), Value::String(rel.id.clone()));
         map.insert("type".to_string(), Value::String(rel.rel_type.clone()));
-        map.insert(
-            "start".to_string(),
-            Value::String(rel.start_node.to_string()),
-        );
-        map.insert("end".to_string(), Value::String(rel.end_node.to_string()));
+        map.insert("start".to_string(), Value::String(rel.start_node.clone()));
+        map.insert("end".to_string(), Value::String(rel.end_node.clone()));
         map.insert(
             "properties".to_string(),
             Value::Object(

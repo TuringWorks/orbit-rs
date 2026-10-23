@@ -341,8 +341,7 @@ impl SchemaRegistry {
         // Check if field is part of primary key
         if schema.primary_key.contains(&field_name.to_string()) {
             return Err(UnifiedStorageError::InvalidOperation(format!(
-                "Cannot remove field '{}' - it is part of the primary key",
-                field_name
+                "Cannot remove field '{field_name}' - it is part of the primary key"
             )));
         }
 
@@ -395,8 +394,7 @@ impl SchemaRegistry {
         for field_name in &index.fields {
             if !schema.fields.iter().any(|f| &f.name == field_name) {
                 return Err(UnifiedStorageError::InvalidOperation(format!(
-                    "Field '{}' does not exist in namespace '{}'",
-                    field_name, namespace
+                    "Field '{field_name}' does not exist in namespace '{namespace}'"
                 )));
             }
         }
@@ -509,8 +507,7 @@ impl SchemaRegistry {
         let projections = self.projections.read().await;
         projections
             .get(&(protocol, namespace.to_string()))
-            .map(|p| p.visible)
-            .unwrap_or(false)
+            .is_some_and(|p| p.visible)
     }
 
     /// Set visibility of a namespace for a protocol
@@ -560,7 +557,7 @@ impl SchemaRegistry {
             FieldType::Json => "JSONB".to_string(),
             FieldType::List(_) => "JSONB".to_string(), // Arrays stored as JSON
             FieldType::Map(_, _) => "JSONB".to_string(),
-            FieldType::Vector(dim) => format!("VECTOR({})", dim),
+            FieldType::Vector(dim) => format!("VECTOR({dim})"),
             FieldType::Uuid => "UUID".to_string(),
         }
     }
@@ -660,8 +657,7 @@ impl SchemaRegistry {
             UniversalValue::List(items) => {
                 let inner_type = items
                     .first()
-                    .map(Self::infer_field_type)
-                    .unwrap_or(FieldType::String);
+                    .map_or(FieldType::String, Self::infer_field_type);
                 FieldType::List(Box::new(inner_type))
             }
             UniversalValue::Map(..) => FieldType::Json,

@@ -138,9 +138,7 @@ where
 
 /// Helper function to parse boolean environment variable with default
 fn parse_env_bool(key: &str, default: bool) -> bool {
-    std::env::var(key)
-        .map(|s| s.parse().unwrap_or(default))
-        .unwrap_or(default)
+    std::env::var(key).map_or(default, |s| s.parse().unwrap_or(default))
 }
 
 /// Helper function to get environment variable with default string value
@@ -203,8 +201,7 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(0.01),
                 enable_compaction: std::env::var("ORBIT_LSM_ENABLE_COMPACTION")
-                    .map(|s| s.parse().unwrap_or(true))
-                    .unwrap_or(true),
+                    .map_or(true, |s| s.parse().unwrap_or(true)),
                 compaction_threshold: std::env::var("ORBIT_LSM_COMPACTION_THRESHOLD")
                     .ok()
                     .and_then(|s| s.parse().ok())
@@ -217,8 +214,7 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
                 data_dir: std::env::var("ORBIT_ROCKSDB_DATA_DIR")
                     .unwrap_or_else(|_| "./orbit_rocksdb_data".to_string()),
                 enable_wal: std::env::var("ORBIT_ROCKSDB_ENABLE_WAL")
-                    .map(|s| s.parse().unwrap_or(true))
-                    .unwrap_or(true),
+                    .map_or(true, |s| s.parse().unwrap_or(true)),
                 max_background_jobs: std::env::var("ORBIT_ROCKSDB_MAX_BACKGROUND_JOBS")
                     .ok()
                     .and_then(|s| s.parse().ok())
@@ -236,8 +232,7 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(64 * 1024 * 1024), // 64MB
                 enable_statistics: std::env::var("ORBIT_ROCKSDB_ENABLE_STATISTICS")
-                    .map(|s| s.parse().unwrap_or(true))
-                    .unwrap_or(true),
+                    .map_or(true, |s| s.parse().unwrap_or(true)),
                 block_cache_size: std::env::var("ORBIT_ROCKSDB_BLOCK_CACHE_SIZE")
                     .ok()
                     .and_then(|s| s.parse().ok())
@@ -246,8 +241,7 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
             Ok(PersistenceConfig::RocksDB(config))
         }
         _ => Err(OrbitError::configuration(format!(
-            "Unknown persistence backend: {}",
-            backend_type
+            "Unknown persistence backend: {backend_type}"
         ))),
     }
 }
@@ -255,11 +249,11 @@ pub fn load_config_from_env() -> OrbitResult<PersistenceConfig> {
 /// Load persistence configuration from a TOML file
 pub async fn load_config_from_file(path: &str) -> OrbitResult<PersistenceConfig> {
     let content = tokio::fs::read_to_string(path).await.map_err(|e| {
-        OrbitError::configuration(format!("Failed to read config file {}: {}", path, e))
+        OrbitError::configuration(format!("Failed to read config file {path}: {e}"))
     })?;
 
     let config: PersistenceConfig = toml::from_str(&content).map_err(|e| {
-        OrbitError::configuration(format!("Failed to parse config file {}: {}", path, e))
+        OrbitError::configuration(format!("Failed to parse config file {path}: {e}"))
     })?;
 
     Ok(config)
@@ -293,7 +287,7 @@ impl PersistenceConfigBuilder {
         let backend_type = self.backend_type.unwrap_or_else(|| "memory".to_string());
         let data_dir = self
             .data_dir
-            .unwrap_or_else(|| format!("./orbit_{}_data", backend_type));
+            .unwrap_or_else(|| format!("./orbit_{backend_type}_data"));
 
         match backend_type.as_str() {
             "memory" => Ok(PersistenceConfig::Memory(MemoryConfig::default())),
@@ -310,8 +304,7 @@ impl PersistenceConfigBuilder {
                 ..Default::default()
             })),
             _ => Err(OrbitError::configuration(format!(
-                "Unknown persistence backend: {}",
-                backend_type
+                "Unknown persistence backend: {backend_type}"
             ))),
         }
     }

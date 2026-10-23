@@ -856,16 +856,13 @@ impl SagaOrchestrator {
     ) -> OrbitResult<()> {
         debug!("Compensating step: {}", step_id);
 
-        match step.compensate(&execution.context).await {
-            Ok(StepResult::Success) => {
-                self.handle_step_compensation_success(execution, step_id)
-                    .await;
-                Ok(())
-            }
-            Ok(_) | Err(_) => {
-                error!("Failed to compensate step: {}", step_id);
-                Err(OrbitError::internal("Step compensation failed"))
-            }
+        if let Ok(StepResult::Success) = step.compensate(&execution.context).await {
+            self.handle_step_compensation_success(execution, step_id)
+                .await;
+            Ok(())
+        } else {
+            error!("Failed to compensate step: {}", step_id);
+            Err(OrbitError::internal("Step compensation failed"))
         }
     }
 

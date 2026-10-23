@@ -91,10 +91,10 @@ impl TriggerManager {
                 table_triggers.remove(pos);
                 Ok(())
             } else {
-                Err(EngineError::NotFound(format!("Trigger {}", name)))
+                Err(EngineError::NotFound(format!("Trigger {name}")))
             }
         } else {
-            Err(EngineError::NotFound(format!("Trigger {}", name)))
+            Err(EngineError::NotFound(format!("Trigger {name}")))
         }
     }
 }

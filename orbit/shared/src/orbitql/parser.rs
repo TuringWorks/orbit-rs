@@ -767,7 +767,7 @@ impl Parser {
             if self.matches(&[TokenType::Colon]) {
                 self.advance();
                 let record_id = self.expect_identifier_or_keyword()?.value.clone();
-                token_value = format!("{}:{}", token_value, record_id);
+                token_value = format!("{token_value}:{record_id}");
                 expr = Expression::Identifier(token_value.clone());
             }
 
@@ -2811,7 +2811,7 @@ impl Parser {
             while self.matches(&[TokenType::Dot]) {
                 self.advance();
                 let next_part = self.expect_identifier_or_keyword()?.value.clone();
-                field = format!("{}.{}", field, next_part);
+                field = format!("{field}.{next_part}");
             }
 
             self.expect(TokenType::Equal)?;

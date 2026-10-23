@@ -494,10 +494,7 @@ impl MvccSqlExecutor {
     fn is_version_visible(&self, version: &RowVersion, snapshot: &TransactionSnapshot) -> bool {
         // Version created by the same transaction is always visible (unless deleted by same transaction)
         if version.xmin == snapshot.xid {
-            return version
-                .xmax
-                .map(|xmax| xmax != snapshot.xid)
-                .unwrap_or(true);
+            return version.xmax != Some(snapshot.xid);
         }
 
         // Version must be committed to be visible to other transactions

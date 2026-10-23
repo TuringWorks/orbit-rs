@@ -49,17 +49,20 @@ pub trait CommandHandler: Send + Sync {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<String> {
-        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
-            crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR invalid argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(crate::protocols::resp::types::RespValue::as_string)
+            .ok_or_else(|| {
+                crate::protocols::error::ProtocolError::RespError(format!(
+                    "ERR invalid argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     /// Extract optional string argument at index
     fn get_optional_string_arg(&self, args: &[RespValue], index: usize) -> Option<String> {
-        args.get(index).and_then(|v| v.as_string())
+        args.get(index)
+            .and_then(crate::protocols::resp::types::RespValue::as_string)
     }
 
     /// Extract integer argument at index with error handling

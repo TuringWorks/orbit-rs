@@ -46,7 +46,7 @@ impl PrometheusServer {
         let app = self.create_router();
 
         let listener = TcpListener::bind(&bind_address).await.map_err(|e| {
-            PrometheusError::server_startup(format!("Failed to bind to {}: {}", bind_address, e))
+            PrometheusError::server_startup(format!("Failed to bind to {bind_address}: {e}"))
         })?;
 
         let shutdown_token = self.shutdown_token.clone();

@@ -58,8 +58,7 @@ impl SpatialFunctions {
             Self::parse_polygon_wkt(wkt, srid)
         } else {
             Err(SpatialError::OperationError(format!(
-                "Unsupported WKT geometry type: {}",
-                wkt_upper
+                "Unsupported WKT geometry type: {wkt_upper}"
             )))
         }
     }
@@ -411,7 +410,7 @@ impl SpatialFunctions {
                     .map(|p| format!("{} {}", p.x, p.y))
                     .collect::<Vec<_>>()
                     .join(", ");
-                Ok(format!("LINESTRING ({})", coords))
+                Ok(format!("LINESTRING ({coords})"))
             }
             SpatialGeometry::Polygon(poly) => {
                 let exterior_coords: String = poly
@@ -421,7 +420,7 @@ impl SpatialFunctions {
                     .map(|p| format!("{} {}", p.x, p.y))
                     .collect::<Vec<_>>()
                     .join(", ");
-                let mut wkt = format!("POLYGON (({})", exterior_coords);
+                let mut wkt = format!("POLYGON (({exterior_coords})");
 
                 // Add interior rings (holes) if any
                 for interior_ring in &poly.interior_rings {
@@ -431,7 +430,7 @@ impl SpatialFunctions {
                         .map(|p| format!("{} {}", p.x, p.y))
                         .collect::<Vec<_>>()
                         .join(", ");
-                    wkt.push_str(&format!(", ({})", interior_coords));
+                    wkt.push_str(&format!(", ({interior_coords})"));
                 }
                 wkt.push(')');
                 Ok(wkt)
@@ -443,7 +442,7 @@ impl SpatialFunctions {
                     .map(|p| format!("({} {})", p.x, p.y))
                     .collect::<Vec<_>>()
                     .join(", ");
-                Ok(format!("MULTIPOINT ({})", coords))
+                Ok(format!("MULTIPOINT ({coords})"))
             }
             SpatialGeometry::MultiLineString(mls) => {
                 let lines: String = mls
@@ -456,11 +455,11 @@ impl SpatialFunctions {
                             .map(|p| format!("{} {}", p.x, p.y))
                             .collect::<Vec<_>>()
                             .join(", ");
-                        format!("({})", coords)
+                        format!("({coords})")
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                Ok(format!("MULTILINESTRING ({})", lines))
+                Ok(format!("MULTILINESTRING ({lines})"))
             }
             SpatialGeometry::MultiPolygon(mpoly) => {
                 let polys: String = mpoly
@@ -474,11 +473,11 @@ impl SpatialFunctions {
                             .map(|p| format!("{} {}", p.x, p.y))
                             .collect::<Vec<_>>()
                             .join(", ");
-                        format!("(({}))", exterior)
+                        format!("(({exterior}))")
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                Ok(format!("MULTIPOLYGON ({})", polys))
+                Ok(format!("MULTIPOLYGON ({polys})"))
             }
             SpatialGeometry::GeometryCollection(_) => Err(SpatialError::OperationError(
                 "WKT output not implemented for GeometryCollection".to_string(),
@@ -576,7 +575,7 @@ impl SpatialFunctions {
 
         for c in geohash.chars() {
             let idx = BASE32_CHARS.find(c.to_ascii_lowercase()).ok_or_else(|| {
-                SpatialError::OperationError(format!("Invalid geohash character: {}", c))
+                SpatialError::OperationError(format!("Invalid geohash character: {c}"))
             })? as u8;
 
             for bit in (0..5).rev() {

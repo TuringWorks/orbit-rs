@@ -19,9 +19,9 @@ pub enum SerializationError {
 impl std::fmt::Display for SerializationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SerializationError::Json(msg) => write!(f, "JSON serialization error: {}", msg),
-            SerializationError::Binary(msg) => write!(f, "Binary serialization error: {}", msg),
-            SerializationError::Schema(msg) => write!(f, "Schema validation error: {}", msg),
+            SerializationError::Json(msg) => write!(f, "JSON serialization error: {msg}"),
+            SerializationError::Binary(msg) => write!(f, "Binary serialization error: {msg}"),
+            SerializationError::Schema(msg) => write!(f, "Schema validation error: {msg}"),
         }
     }
 }

@@ -64,7 +64,7 @@ impl S3BackendConfig {
     /// Create an AWS S3 configuration
     pub fn aws_s3(access_key: &str, secret_key: &str, region: &str, bucket: &str) -> Self {
         Self {
-            endpoint: format!("https://s3.{}.amazonaws.com", region),
+            endpoint: format!("https://s3.{region}.amazonaws.com"),
             access_key_id: access_key.to_string(),
             secret_access_key: secret_key.to_string(),
             region: region.to_string(),
@@ -150,7 +150,7 @@ impl S3Backend {
 
         let op = Operator::new(builder)
             .map_err(|e| {
-                UnifiedStorageError::Backend(format!("Failed to create S3 operator: {}", e))
+                UnifiedStorageError::Backend(format!("Failed to create S3 operator: {e}"))
             })?
             .finish();
 
@@ -249,10 +249,7 @@ impl UnifiedStorageBackend for S3Backend {
             Err(e) => {
                 self.error_count.fetch_add(1, Ordering::Relaxed);
                 error!("[S3Backend] GET {} failed: {}", key, e);
-                Err(UnifiedStorageError::Backend(format!(
-                    "S3 get failed: {}",
-                    e
-                )))
+                Err(UnifiedStorageError::Backend(format!("S3 get failed: {e}")))
             }
         }
     }
@@ -265,7 +262,7 @@ impl UnifiedStorageBackend for S3Backend {
         op.write(&full_key, value.to_vec()).await.map_err(|e| {
             self.error_count.fetch_add(1, Ordering::Relaxed);
             error!("[S3Backend] PUT {} failed: {}", key, e);
-            UnifiedStorageError::Backend(format!("S3 put failed: {}", e))
+            UnifiedStorageError::Backend(format!("S3 put failed: {e}"))
         })?;
 
         debug!("[S3Backend] PUT {}: {} bytes", key, value.len());
@@ -281,7 +278,7 @@ impl UnifiedStorageBackend for S3Backend {
         let key_exists = op
             .exists(&full_key)
             .await
-            .map_err(|e| UnifiedStorageError::Backend(format!("S3 exists check failed: {}", e)))?;
+            .map_err(|e| UnifiedStorageError::Backend(format!("S3 exists check failed: {e}")))?;
 
         if !key_exists {
             debug!("[S3Backend] DELETE {}: not found", key);
@@ -291,7 +288,7 @@ impl UnifiedStorageBackend for S3Backend {
         op.delete(&full_key).await.map_err(|e| {
             self.error_count.fetch_add(1, Ordering::Relaxed);
             error!("[S3Backend] DELETE {} failed: {}", key, e);
-            UnifiedStorageError::Backend(format!("S3 delete failed: {}", e))
+            UnifiedStorageError::Backend(format!("S3 delete failed: {e}"))
         })?;
 
         debug!("[S3Backend] DELETE {}: success", key);
@@ -306,7 +303,7 @@ impl UnifiedStorageBackend for S3Backend {
         let key_exists = op
             .exists(&full_key)
             .await
-            .map_err(|e| UnifiedStorageError::Backend(format!("S3 exists check failed: {}", e)))?;
+            .map_err(|e| UnifiedStorageError::Backend(format!("S3 exists check failed: {e}")))?;
 
         debug!("[S3Backend] EXISTS {}: {}", key, key_exists);
         Ok(key_exists)
@@ -328,7 +325,7 @@ impl UnifiedStorageBackend for S3Backend {
         let entries = op
             .list(&full_prefix)
             .await
-            .map_err(|e| UnifiedStorageError::Backend(format!("S3 list failed: {}", e)))?;
+            .map_err(|e| UnifiedStorageError::Backend(format!("S3 list failed: {e}")))?;
 
         for entry in entries {
             if results.len() >= max_results {

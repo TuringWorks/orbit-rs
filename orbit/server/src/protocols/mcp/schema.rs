@@ -3,6 +3,7 @@
 //! This module provides schema discovery, caching, and analysis capabilities
 //! for intelligent SQL generation.
 
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -42,7 +43,7 @@ impl SchemaAnalyzer {
     pub async fn get_table_schema(&self, table_name: &str) -> Option<TableSchema> {
         // Check cache first
         {
-            let cache = self.schema_cache.read().unwrap();
+            let cache = self.schema_cache.read_recover();
             if let Some(schema) = cache.tables.get(table_name) {
                 // Check if cache is still valid (not expired)
                 if cache.is_valid() {
@@ -58,7 +59,7 @@ impl SchemaAnalyzer {
 
     /// Update schema cache with discovered schema
     pub fn update_schema(&self, schema: TableSchema) {
-        let mut cache = self.schema_cache.write().unwrap();
+        let mut cache = self.schema_cache.write_recover();
         let old_schema = cache.tables.insert(schema.name.clone(), schema.clone());
         cache.last_updated = SystemTime::now();
 
@@ -72,13 +73,13 @@ impl SchemaAnalyzer {
 
     /// Get cache statistics
     pub fn get_cache_stats(&self) -> (usize, SystemTime) {
-        let cache = self.schema_cache.read().unwrap();
+        let cache = self.schema_cache.read_recover();
         (cache.tables.len(), cache.last_updated)
     }
 
     /// Get all cached table schemas
     pub fn list_tables(&self) -> Vec<String> {
-        let cache = self.schema_cache.read().unwrap();
+        let cache = self.schema_cache.read_recover();
         cache.tables.keys().cloned().collect()
     }
 
@@ -88,10 +89,10 @@ impl SchemaAnalyzer {
         table_name: &str,
         column_name: &str,
     ) -> Option<ColumnStatistics> {
-        let cache = self.schema_cache.read().unwrap();
+        let cache = self.schema_cache.read_recover();
         cache
             .statistics
-            .get(&format!("{}.{}", table_name, column_name))
+            .get(&format!("{table_name}.{column_name}"))
             .cloned()
     }
 
@@ -129,7 +130,7 @@ impl SchemaAnalyzer {
                 .await
                 .map_err(|e| SchemaError::DiscoveryError(e.to_string()))?;
 
-            let mut cache = self.schema_cache.write().unwrap();
+            let mut cache = self.schema_cache.write_recover();
             for pg_schema in schemas {
                 let mcp_schema = self.convert_pg_schema_to_mcp(pg_schema);
                 cache.tables.insert(mcp_schema.name.clone(), mcp_schema);
@@ -137,7 +138,7 @@ impl SchemaAnalyzer {
             cache.last_updated = SystemTime::now();
             Ok(())
         } else {
-            let mut cache = self.schema_cache.write().unwrap();
+            let mut cache = self.schema_cache.write_recover();
             cache.last_updated = SystemTime::now();
             Ok(())
         }
@@ -164,7 +165,7 @@ impl SchemaAnalyzer {
                         "TEXT".to_string()
                     }
                     crate::protocols::postgres_wire::sql::types::SqlType::Varchar(Some(n)) => {
-                        format!("VARCHAR({})", n)
+                        format!("VARCHAR({n})")
                     }
                     crate::protocols::postgres_wire::sql::types::SqlType::Varchar(None) => {
                         "VARCHAR".to_string()
@@ -198,7 +199,7 @@ impl SchemaAnalyzer {
                     name: col.name.clone(),
                     data_type: data_type_str,
                     nullable: !has_not_null,
-                    default_value: col.default.as_ref().map(|v| format!("{:?}", v)),
+                    default_value: col.default.as_ref().map(|v| format!("{v:?}")),
                     is_primary_key,
                     is_indexed: false, // TODO: Check indexes
                 }
@@ -459,18 +460,18 @@ pub enum SchemaError {
 impl std::fmt::Display for SchemaError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SchemaError::TableNotFound(name) => write!(f, "Table not found: {}", name),
-            SchemaError::ColumnNotFound(name) => write!(f, "Column not found: {}", name),
+            SchemaError::TableNotFound(name) => write!(f, "Table not found: {name}"),
+            SchemaError::ColumnNotFound(name) => write!(f, "Column not found: {name}"),
             SchemaError::DiscoveryNotImplemented => {
                 write!(f, "Schema discovery not yet implemented")
             }
             SchemaError::DiscoveryError(msg) => {
-                write!(f, "Schema discovery error: {}", msg)
+                write!(f, "Schema discovery error: {msg}")
             }
             SchemaError::StatisticsNotImplemented => {
                 write!(f, "Statistics collection not yet implemented")
             }
-            SchemaError::CacheError(msg) => write!(f, "Cache error: {}", msg),
+            SchemaError::CacheError(msg) => write!(f, "Cache error: {msg}"),
         }
     }
 }

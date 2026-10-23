@@ -38,7 +38,7 @@ impl ProcedureCatalog {
         procedures
             .get(name)
             .cloned()
-            .ok_or_else(|| EngineError::NotFound(format!("Procedure {}", name)))
+            .ok_or_else(|| EngineError::NotFound(format!("Procedure {name}")))
     }
 
     /// Drop a stored procedure
@@ -48,7 +48,7 @@ impl ProcedureCatalog {
             .write()
             .map_err(|_| EngineError::LockError)?;
         if !procedures.contains_key(name) {
-            return Err(EngineError::NotFound(format!("Procedure {}", name)));
+            return Err(EngineError::NotFound(format!("Procedure {name}")));
         }
         procedures.remove(name);
         Ok(())

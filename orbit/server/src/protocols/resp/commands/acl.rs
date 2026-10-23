@@ -111,7 +111,7 @@ impl AclUser {
         }
 
         for pwd in &self.passwords {
-            parts.push(format!("#{}", pwd));
+            parts.push(format!("#{pwd}"));
         }
 
         for cat in &self.categories {
@@ -119,19 +119,19 @@ impl AclUser {
         }
 
         for cmd in &self.commands {
-            parts.push(format!("+{}", cmd));
+            parts.push(format!("+{cmd}"));
         }
 
         for cmd in &self.denied_commands {
-            parts.push(format!("-{}", cmd));
+            parts.push(format!("-{cmd}"));
         }
 
         for key in &self.keys {
-            parts.push(format!("~{}", key));
+            parts.push(format!("~{key}"));
         }
 
         for channel in &self.channels {
-            parts.push(format!("&{}", channel));
+            parts.push(format!("&{channel}"));
         }
 
         parts.join(" ")
@@ -251,12 +251,14 @@ impl AclCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<String> {
-        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(super::super::types::RespValue::as_string)
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     /// ACL CAT [category] - List available ACL categories or commands in a category
@@ -331,8 +333,7 @@ impl AclCommands {
             "keyspace" => vec!["DEL", "EXISTS", "EXPIRE", "TTL", "KEYS", "RENAME", "TYPE"],
             _ => {
                 return Err(ProtocolError::RespError(format!(
-                    "ERR Unknown category '{}'",
-                    category
+                    "ERR Unknown category '{category}'"
                 )));
             }
         };
@@ -398,82 +399,79 @@ impl AclCommands {
 
         let username = self.get_string_arg(args, 0, "ACL GETUSER")?;
 
-        match self.acl_manager.get_user(&username).await {
-            Some(user) => {
-                let mut result = Vec::new();
+        if let Some(user) = self.acl_manager.get_user(&username).await {
+            let mut result = Vec::new();
 
-                // flags
-                result.push(RespValue::BulkString(Bytes::from("flags")));
-                let mut flags = Vec::new();
-                if user.enabled {
-                    flags.push(RespValue::BulkString(Bytes::from("on")));
-                } else {
-                    flags.push(RespValue::BulkString(Bytes::from("off")));
-                }
-                if user.nopass {
-                    flags.push(RespValue::BulkString(Bytes::from("nopass")));
-                }
-                result.push(RespValue::Array(flags));
-
-                // passwords
-                result.push(RespValue::BulkString(Bytes::from("passwords")));
-                let passwords: Vec<RespValue> = user
-                    .passwords
-                    .iter()
-                    .map(|p| RespValue::BulkString(Bytes::from(p.as_bytes().to_vec())))
-                    .collect();
-                result.push(RespValue::Array(passwords));
-
-                // commands
-                result.push(RespValue::BulkString(Bytes::from("commands")));
-                let mut cmd_str = String::new();
-                for cat in &user.categories {
-                    if !cmd_str.is_empty() {
-                        cmd_str.push(' ');
-                    }
-                    cmd_str.push_str(cat);
-                }
-                for cmd in &user.commands {
-                    if !cmd_str.is_empty() {
-                        cmd_str.push(' ');
-                    }
-                    cmd_str.push('+');
-                    cmd_str.push_str(cmd);
-                }
-                for cmd in &user.denied_commands {
-                    if !cmd_str.is_empty() {
-                        cmd_str.push(' ');
-                    }
-                    cmd_str.push('-');
-                    cmd_str.push_str(cmd);
-                }
-                result.push(RespValue::BulkString(Bytes::from(cmd_str.into_bytes())));
-
-                // keys
-                result.push(RespValue::BulkString(Bytes::from("keys")));
-                let keys: Vec<RespValue> = user
-                    .keys
-                    .iter()
-                    .map(|k| RespValue::BulkString(Bytes::from(k.as_bytes().to_vec())))
-                    .collect();
-                result.push(RespValue::Array(keys));
-
-                // channels
-                result.push(RespValue::BulkString(Bytes::from("channels")));
-                let channels: Vec<RespValue> = user
-                    .channels
-                    .iter()
-                    .map(|c| RespValue::BulkString(Bytes::from(c.as_bytes().to_vec())))
-                    .collect();
-                result.push(RespValue::Array(channels));
-
-                debug!("ACL GETUSER {} -> found", username);
-                Ok(RespValue::Array(result))
+            // flags
+            result.push(RespValue::BulkString(Bytes::from("flags")));
+            let mut flags = Vec::new();
+            if user.enabled {
+                flags.push(RespValue::BulkString(Bytes::from("on")));
+            } else {
+                flags.push(RespValue::BulkString(Bytes::from("off")));
             }
-            None => {
-                debug!("ACL GETUSER {} -> not found", username);
-                Ok(RespValue::NullArray)
+            if user.nopass {
+                flags.push(RespValue::BulkString(Bytes::from("nopass")));
             }
+            result.push(RespValue::Array(flags));
+
+            // passwords
+            result.push(RespValue::BulkString(Bytes::from("passwords")));
+            let passwords: Vec<RespValue> = user
+                .passwords
+                .iter()
+                .map(|p| RespValue::BulkString(Bytes::from(p.as_bytes().to_vec())))
+                .collect();
+            result.push(RespValue::Array(passwords));
+
+            // commands
+            result.push(RespValue::BulkString(Bytes::from("commands")));
+            let mut cmd_str = String::new();
+            for cat in &user.categories {
+                if !cmd_str.is_empty() {
+                    cmd_str.push(' ');
+                }
+                cmd_str.push_str(cat);
+            }
+            for cmd in &user.commands {
+                if !cmd_str.is_empty() {
+                    cmd_str.push(' ');
+                }
+                cmd_str.push('+');
+                cmd_str.push_str(cmd);
+            }
+            for cmd in &user.denied_commands {
+                if !cmd_str.is_empty() {
+                    cmd_str.push(' ');
+                }
+                cmd_str.push('-');
+                cmd_str.push_str(cmd);
+            }
+            result.push(RespValue::BulkString(Bytes::from(cmd_str.into_bytes())));
+
+            // keys
+            result.push(RespValue::BulkString(Bytes::from("keys")));
+            let keys: Vec<RespValue> = user
+                .keys
+                .iter()
+                .map(|k| RespValue::BulkString(Bytes::from(k.as_bytes().to_vec())))
+                .collect();
+            result.push(RespValue::Array(keys));
+
+            // channels
+            result.push(RespValue::BulkString(Bytes::from("channels")));
+            let channels: Vec<RespValue> = user
+                .channels
+                .iter()
+                .map(|c| RespValue::BulkString(Bytes::from(c.as_bytes().to_vec())))
+                .collect();
+            result.push(RespValue::Array(channels));
+
+            debug!("ACL GETUSER {} -> found", username);
+            Ok(RespValue::Array(result))
+        } else {
+            debug!("ACL GETUSER {} -> not found", username);
+            Ok(RespValue::NullArray)
         }
     }
 
@@ -688,16 +686,12 @@ impl AclCommands {
                 }
 
                 Ok(RespValue::BulkString(Bytes::from(
-                    format!(
-                        "This user has no permissions to run the '{}' command",
-                        command
-                    )
-                    .into_bytes(),
+                    format!("This user has no permissions to run the '{command}' command")
+                        .into_bytes(),
                 )))
             }
             None => Err(ProtocolError::RespError(format!(
-                "ERR User '{}' not found",
-                username
+                "ERR User '{username}' not found"
             ))),
         }
     }
@@ -771,8 +765,7 @@ impl CommandHandler for AclCommands {
             "USERS" => self.cmd_acl_users().await,
             "WHOAMI" => self.cmd_acl_whoami().await,
             _ => Err(ProtocolError::RespError(format!(
-                "ERR Unknown ACL subcommand '{}'",
-                subcommand
+                "ERR Unknown ACL subcommand '{subcommand}'"
             ))),
         }
     }

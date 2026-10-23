@@ -126,21 +126,21 @@ impl MemoryAddressableDirectoryProvider {
 
         let serialized = match backup_config.compression {
             CompressionType::None => serde_json::to_vec(&backup_data)
-                .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?,
+                .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?,
             CompressionType::Gzip => {
                 use flate2::write::GzEncoder;
                 use flate2::Compression;
                 use std::io::Write;
 
                 let json = serde_json::to_vec(&backup_data)
-                    .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?;
                 let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
                 encoder
                     .write_all(&json)
-                    .map_err(|e| OrbitError::internal(format!("Compression error: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("Compression error: {e}")))?;
                 encoder
                     .finish()
-                    .map_err(|e| OrbitError::internal(format!("Compression error: {}", e)))?
+                    .map_err(|e| OrbitError::internal(format!("Compression error: {e}")))?
             }
             _ => {
                 return Err(OrbitError::internal(
@@ -151,7 +151,7 @@ impl MemoryAddressableDirectoryProvider {
 
         fs::write(&backup_config.path, serialized)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to write backup: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to write backup: {e}")))?;
 
         Ok(())
     }
@@ -163,11 +163,11 @@ impl MemoryAddressableDirectoryProvider {
 
         let data = fs::read(&backup_config.path)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to read backup: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to read backup: {e}")))?;
 
         let backup_data: MemoryBackupData = match backup_config.compression {
             CompressionType::None => serde_json::from_slice(&data)
-                .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?,
+                .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?,
             CompressionType::Gzip => {
                 use flate2::read::GzDecoder;
                 use std::io::Read;
@@ -176,9 +176,9 @@ impl MemoryAddressableDirectoryProvider {
                 let mut decompressed = Vec::new();
                 decoder
                     .read_to_end(&mut decompressed)
-                    .map_err(|e| OrbitError::internal(format!("Decompression error: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("Decompression error: {e}")))?;
                 serde_json::from_slice(&decompressed)
-                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?
+                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?
             }
             _ => {
                 return Err(OrbitError::internal(

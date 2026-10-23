@@ -144,7 +144,7 @@ impl RocksDbTableStorage {
 
         let db = DB::open_cf_descriptors(&opts, path, cf_descriptors).map_err(|e| {
             error!("Failed to open PostgreSQL RocksDB: {}", e);
-            ProtocolError::PostgresError(format!("Failed to open persistent storage: {}", e))
+            ProtocolError::PostgresError(format!("Failed to open persistent storage: {e}"))
         })?;
 
         let storage = Self {
@@ -160,7 +160,7 @@ impl RocksDbTableStorage {
     fn get_cf(&self, cf_name: &str) -> ProtocolResult<&rocksdb::ColumnFamily> {
         self.db.cf_handle(cf_name).ok_or_else(|| {
             error!("Column family not found: {}", cf_name);
-            ProtocolError::PostgresError(format!("Column family not found: {}", cf_name))
+            ProtocolError::PostgresError(format!("Column family not found: {cf_name}"))
         })
     }
 
@@ -171,12 +171,12 @@ impl RocksDbTableStorage {
 
     /// Create table key for schema storage
     fn table_schema_key(&self, table_name: &str) -> String {
-        format!("schema:{}", table_name)
+        format!("schema:{table_name}")
     }
 
     /// Create row key for data storage
     fn table_row_key(&self, table_name: &str, row_id: &str) -> String {
-        format!("data:{}:{}", table_name, row_id)
+        format!("data:{table_name}:{row_id}")
     }
 
     /// Evaluate query condition against a row
@@ -241,15 +241,14 @@ impl RocksDbTableStorage {
         // Iterate through all schema keys
         let iter = self.db.iterator_cf(tables_cf, rocksdb::IteratorMode::Start);
         for item in iter {
-            let (key, value) = item.map_err(|e| {
-                ProtocolError::PostgresError(format!("Failed to read schema: {}", e))
-            })?;
+            let (key, value) = item
+                .map_err(|e| ProtocolError::PostgresError(format!("Failed to read schema: {e}")))?;
 
             let key_str = String::from_utf8_lossy(&key);
             if key_str.starts_with("schema:") {
                 let table_name = key_str.strip_prefix("schema:").unwrap();
                 let schema: TableSchema = serde_json::from_slice(&value).map_err(|e| {
-                    ProtocolError::PostgresError(format!("Failed to deserialize schema: {}", e))
+                    ProtocolError::PostgresError(format!("Failed to deserialize schema: {e}"))
                 })?;
                 cache.insert(table_name.to_string(), schema);
             }
@@ -277,13 +276,13 @@ impl PersistentTableStorage for RocksDbTableStorage {
 
         // Serialize and store schema
         let schema_json = serde_json::to_vec(&schema).map_err(|e| {
-            ProtocolError::PostgresError(format!("Failed to serialize schema: {}", e))
+            ProtocolError::PostgresError(format!("Failed to serialize schema: {e}"))
         })?;
 
         self.db
             .put_cf(tables_cf, key.as_bytes(), &schema_json)
             .map_err(|e| {
-                ProtocolError::PostgresError(format!("Failed to store table schema: {}", e))
+                ProtocolError::PostgresError(format!("Failed to store table schema: {e}"))
             })?;
 
         let table_name = schema.name.clone();
@@ -300,8 +299,7 @@ impl PersistentTableStorage for RocksDbTableStorage {
         // Check if table exists
         if !self.table_exists(table_name).await? {
             return Err(ProtocolError::PostgresError(format!(
-                "Table '{}' does not exist",
-                table_name
+                "Table '{table_name}' does not exist"
             )));
         }
 
@@ -313,17 +311,17 @@ impl PersistentTableStorage for RocksDbTableStorage {
         self.db
             .delete_cf(tables_cf, schema_key.as_bytes())
             .map_err(|e| {
-                ProtocolError::PostgresError(format!("Failed to delete table schema: {}", e))
+                ProtocolError::PostgresError(format!("Failed to delete table schema: {e}"))
             })?;
 
         // Delete all data for this table
-        let data_prefix = format!("data:{}:", table_name);
+        let data_prefix = format!("data:{table_name}:");
         let iter = self.db.iterator_cf(data_cf, rocksdb::IteratorMode::Start);
         let mut keys_to_delete = Vec::new();
 
         for item in iter {
             let (key, _) = item
-                .map_err(|e| ProtocolError::PostgresError(format!("Failed to read data: {}", e)))?;
+                .map_err(|e| ProtocolError::PostgresError(format!("Failed to read data: {e}")))?;
 
             let key_str = String::from_utf8_lossy(&key);
             if key_str.starts_with(&data_prefix) {
@@ -334,7 +332,7 @@ impl PersistentTableStorage for RocksDbTableStorage {
         // Delete all collected keys
         for key in keys_to_delete {
             self.db.delete_cf(data_cf, &key).map_err(|e| {
-                ProtocolError::PostgresError(format!("Failed to delete table data: {}", e))
+                ProtocolError::PostgresError(format!("Failed to delete table data: {e}"))
             })?;
         }
 
@@ -363,8 +361,7 @@ impl PersistentTableStorage for RocksDbTableStorage {
             Ok(Some(_)) => Ok(true),
             Ok(None) => Ok(false),
             Err(e) => Err(ProtocolError::PostgresError(format!(
-                "Failed to check table existence: {}",
-                e
+                "Failed to check table existence: {e}"
             ))),
         }
     }
@@ -385,7 +382,7 @@ impl PersistentTableStorage for RocksDbTableStorage {
         match self.db.get_cf(tables_cf, key.as_bytes()) {
             Ok(Some(data)) => {
                 let schema: TableSchema = serde_json::from_slice(&data).map_err(|e| {
-                    ProtocolError::PostgresError(format!("Failed to deserialize schema: {}", e))
+                    ProtocolError::PostgresError(format!("Failed to deserialize schema: {e}"))
                 })?;
 
                 // Update cache
@@ -396,8 +393,7 @@ impl PersistentTableStorage for RocksDbTableStorage {
             }
             Ok(None) => Ok(None),
             Err(e) => Err(ProtocolError::PostgresError(format!(
-                "Failed to get table schema: {}",
-                e
+                "Failed to get table schema: {e}"
             ))),
         }
     }
@@ -411,8 +407,7 @@ impl PersistentTableStorage for RocksDbTableStorage {
         // Verify table exists
         if !self.table_exists(table_name).await? {
             return Err(ProtocolError::PostgresError(format!(
-                "Table '{}' does not exist",
-                table_name
+                "Table '{table_name}' does not exist"
             )));
         }
 
@@ -422,12 +417,12 @@ impl PersistentTableStorage for RocksDbTableStorage {
 
         // Serialize row
         let row_json = serde_json::to_vec(&row)
-            .map_err(|e| ProtocolError::PostgresError(format!("Failed to serialize row: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Failed to serialize row: {e}")))?;
 
         // Store row
         self.db
             .put_cf(data_cf, key.as_bytes(), &row_json)
-            .map_err(|e| ProtocolError::PostgresError(format!("Failed to store row: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Failed to store row: {e}")))?;
 
         debug!("Inserted row {} into table {}", row_id, table_name);
         Ok(row_id)
@@ -465,14 +460,12 @@ impl PersistentTableStorage for RocksDbTableStorage {
             let key = self.table_row_key(table_name, &row_id);
 
             let row_json = serde_json::to_vec(&updated_row).map_err(|e| {
-                ProtocolError::PostgresError(format!("Failed to serialize updated row: {}", e))
+                ProtocolError::PostgresError(format!("Failed to serialize updated row: {e}"))
             })?;
 
             self.db
                 .put_cf(data_cf, key.as_bytes(), &row_json)
-                .map_err(|e| {
-                    ProtocolError::PostgresError(format!("Failed to update row: {}", e))
-                })?;
+                .map_err(|e| ProtocolError::PostgresError(format!("Failed to update row: {e}")))?;
 
             updated_count += 1;
         }
@@ -487,7 +480,7 @@ impl PersistentTableStorage for RocksDbTableStorage {
         conditions: Vec<QueryCondition>,
     ) -> ProtocolResult<i64> {
         let data_cf = self.get_cf(CF_DATA)?;
-        let data_prefix = format!("data:{}:", table_name);
+        let data_prefix = format!("data:{table_name}:");
         let iter = self.db.iterator_cf(data_cf, rocksdb::IteratorMode::Start);
 
         let mut keys_to_delete = Vec::new();
@@ -495,13 +488,13 @@ impl PersistentTableStorage for RocksDbTableStorage {
 
         for item in iter {
             let (key, value) = item
-                .map_err(|e| ProtocolError::PostgresError(format!("Failed to read data: {}", e)))?;
+                .map_err(|e| ProtocolError::PostgresError(format!("Failed to read data: {e}")))?;
 
             let key_str = String::from_utf8_lossy(&key);
             if key_str.starts_with(&data_prefix) {
                 // Deserialize row and check conditions
                 let row: TableRow = serde_json::from_slice(&value).map_err(|e| {
-                    ProtocolError::PostgresError(format!("Failed to deserialize row: {}", e))
+                    ProtocolError::PostgresError(format!("Failed to deserialize row: {e}"))
                 })?;
 
                 // Check if row matches all conditions
@@ -519,9 +512,9 @@ impl PersistentTableStorage for RocksDbTableStorage {
 
         // Delete all matching keys
         for key in keys_to_delete {
-            self.db.delete_cf(data_cf, &key).map_err(|e| {
-                ProtocolError::PostgresError(format!("Failed to delete row: {}", e))
-            })?;
+            self.db
+                .delete_cf(data_cf, &key)
+                .map_err(|e| ProtocolError::PostgresError(format!("Failed to delete row: {e}")))?;
         }
 
         debug!("Deleted {} rows from table {}", deleted_count, table_name);
@@ -536,7 +529,7 @@ impl PersistentTableStorage for RocksDbTableStorage {
         limit: Option<i64>,
     ) -> ProtocolResult<Vec<TableRow>> {
         let data_cf = self.get_cf(CF_DATA)?;
-        let data_prefix = format!("data:{}:", table_name);
+        let data_prefix = format!("data:{table_name}:");
         let iter = self.db.iterator_cf(data_cf, rocksdb::IteratorMode::Start);
 
         let mut matching_rows = Vec::new();
@@ -550,13 +543,13 @@ impl PersistentTableStorage for RocksDbTableStorage {
             }
 
             let (key, value) = item
-                .map_err(|e| ProtocolError::PostgresError(format!("Failed to read data: {}", e)))?;
+                .map_err(|e| ProtocolError::PostgresError(format!("Failed to read data: {e}")))?;
 
             let key_str = String::from_utf8_lossy(&key);
             if key_str.starts_with(&data_prefix) {
                 // Deserialize row
                 let mut row: TableRow = serde_json::from_slice(&value).map_err(|e| {
-                    ProtocolError::PostgresError(format!("Failed to deserialize row: {}", e))
+                    ProtocolError::PostgresError(format!("Failed to deserialize row: {e}"))
                 })?;
 
                 // Check conditions

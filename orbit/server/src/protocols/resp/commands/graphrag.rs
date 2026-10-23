@@ -41,7 +41,7 @@ impl GraphRAGCommands {
         kg_name: &str,
     ) -> ProtocolResult<Arc<GraphRAGActor>> {
         // Try to get existing actor from local registry
-        let _actor_key = format!("graphrag:{}", kg_name);
+        let _actor_key = format!("graphrag:{kg_name}");
 
         // For now, create a new actor (in production, this would use the actor system)
         // TODO: Integrate with actual Orbit actor system
@@ -115,7 +115,7 @@ impl GraphRAGCommands {
         let result = actor_mut
             .process_document(orbit_client, request)
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
 
         use bytes::Bytes;
         Ok(RespValue::Array(vec![
@@ -201,7 +201,7 @@ impl GraphRAGCommands {
         let result = actor_mut
             .query_rag(orbit_client, query)
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR {e}")))?;
 
         use bytes::Bytes;
         Ok(RespValue::Array(vec![
@@ -250,8 +250,7 @@ impl CommandHandler for GraphRAGCommands {
             "GRAPHRAG.QUERY" => self.handle_query(args).await,
             "GRAPHRAG.STATS" => self.handle_stats(args).await,
             _ => Err(ProtocolError::RespError(format!(
-                "ERR unknown GraphRAG command: {}",
-                command
+                "ERR unknown GraphRAG command: {command}"
             ))),
         }
     }

@@ -183,7 +183,7 @@ impl RestApiServer {
             .config
             .bind_address
             .parse()
-            .map_err(|e| ProtocolError::RestError(format!("Invalid bind address: {}", e)))?;
+            .map_err(|e| ProtocolError::RestError(format!("Invalid bind address: {e}")))?;
 
         let router = self.build_router();
 
@@ -201,11 +201,11 @@ impl RestApiServer {
 
         let listener = TcpListener::bind(addr)
             .await
-            .map_err(|e| ProtocolError::RestError(format!("Failed to bind: {}", e)))?;
+            .map_err(|e| ProtocolError::RestError(format!("Failed to bind: {e}")))?;
 
         axum::serve(listener, router)
             .await
-            .map_err(|e| ProtocolError::RestError(format!("Server error: {}", e)))?;
+            .map_err(|e| ProtocolError::RestError(format!("Server error: {e}")))?;
 
         Ok(())
     }

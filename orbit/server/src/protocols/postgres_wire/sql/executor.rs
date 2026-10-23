@@ -452,8 +452,7 @@ impl SequenceAccessor for ExecutorSequenceAccessor {
 
         if !seq.is_called {
             return Err(ProtocolError::PostgresError(format!(
-                "currval of sequence \"{}\" is not yet defined in this session",
-                sequence_name
+                "currval of sequence \"{sequence_name}\" is not yet defined in this session"
             )));
         }
 
@@ -980,17 +979,13 @@ impl SqlExecutor {
                     .map(|p| FunctionParameterDef {
                         name: p.name.clone(),
                         data_type: format!("{:?}", p.data_type),
-                        mode: p
-                            .mode
-                            .as_ref()
-                            .map(|m| match m {
-                                ParameterMode::In => ParameterModeType::In,
-                                ParameterMode::Out => ParameterModeType::Out,
-                                ParameterMode::InOut => ParameterModeType::InOut,
-                                ParameterMode::Variadic => ParameterModeType::Variadic,
-                            })
-                            .unwrap_or(ParameterModeType::In),
-                        default_value: p.default.as_ref().map(|e| format!("{:?}", e)),
+                        mode: p.mode.as_ref().map_or(ParameterModeType::In, |m| match m {
+                            ParameterMode::In => ParameterModeType::In,
+                            ParameterMode::Out => ParameterModeType::Out,
+                            ParameterMode::InOut => ParameterModeType::InOut,
+                            ParameterMode::Variadic => ParameterModeType::Variadic,
+                        }),
+                        default_value: p.default.as_ref().map(|e| format!("{e:?}")),
                     })
                     .collect()
             })
@@ -1000,32 +995,30 @@ impl SqlExecutor {
         let language = stmt
             .language
             .as_ref()
-            .map(|l| match l {
+            .map_or(FunctionLanguageType::Sql, |l| match l {
                 FunctionLanguage::Sql => FunctionLanguageType::Sql,
                 FunctionLanguage::PlPgSql => FunctionLanguageType::PlPgSql,
                 FunctionLanguage::PlJavaScript => FunctionLanguageType::PlJavaScript,
                 FunctionLanguage::Lua => FunctionLanguageType::Internal,
                 FunctionLanguage::Other(_) => FunctionLanguageType::Internal,
-            })
-            .unwrap_or(FunctionLanguageType::Sql);
+            });
 
         // Convert volatility
         let volatility = stmt
             .volatility
             .as_ref()
-            .map(|v| match v {
+            .map_or(FunctionVolatilityType::Volatile, |v| match v {
                 FunctionVolatility::Immutable => FunctionVolatilityType::Immutable,
                 FunctionVolatility::Stable => FunctionVolatilityType::Stable,
                 FunctionVolatility::Volatile => FunctionVolatilityType::Volatile,
-            })
-            .unwrap_or(FunctionVolatilityType::Volatile);
+            });
 
         // Create stored function
         let stored_function = StoredFunction {
             name: function_name.clone(),
             schema,
             parameters,
-            return_type: stmt.return_type.map(|t| format!("{:?}", t)),
+            return_type: stmt.return_type.map(|t| format!("{t:?}")),
             language,
             body: stmt.body.clone(),
             volatility,
@@ -1049,7 +1042,7 @@ impl SqlExecutor {
         let table_schema = stmt.table.schema.clone();
 
         // Generate unique key for trigger (trigger_name + table_name)
-        let trigger_key = format!("{}_{}", trigger_name, table_name);
+        let trigger_key = format!("{trigger_name}_{table_name}");
 
         // Check if trigger already exists (unless OR REPLACE)
         let mut triggers = self.triggers.write().await;
@@ -1096,7 +1089,7 @@ impl SqlExecutor {
         let function_args: Vec<String> = stmt
             .function_args
             .iter()
-            .map(|e| format!("{:?}", e))
+            .map(|e| format!("{e:?}"))
             .collect();
 
         // Create stored trigger
@@ -1107,7 +1100,7 @@ impl SqlExecutor {
             timing,
             events,
             for_each,
-            when_clause: stmt.when_clause.map(|e| format!("{:?}", e)),
+            when_clause: stmt.when_clause.map(|e| format!("{e:?}")),
             function_name,
             function_schema,
             function_args,
@@ -1128,7 +1121,7 @@ impl SqlExecutor {
     ) -> ProtocolResult<ExecutionResult> {
         let trigger_name = stmt.name.clone();
         let table_name = stmt.table.name.clone();
-        let trigger_key = format!("{}_{}", trigger_name, table_name);
+        let trigger_key = format!("{trigger_name}_{table_name}");
 
         let mut triggers = self.triggers.write().await;
 
@@ -1177,7 +1170,7 @@ impl SqlExecutor {
         functions.get(name).cloned().or_else(|| {
             functions
                 .iter()
-                .find(|(k, _)| k.starts_with(&format!("{}(", name)))
+                .find(|(k, _)| k.starts_with(&format!("{name}(")))
                 .map(|(_, v)| v.clone())
         })
     }
@@ -1582,7 +1575,7 @@ impl SqlExecutor {
                         data_type: column_def.data_type,
                         nullable: !column_def.constraints.iter().any(|c| matches!(c, crate::protocols::postgres_wire::sql::ast::ColumnConstraint::NotNull)),
                         default: None, // Simplified: ignoring default for now
-                        constraints: column_def.constraints.iter().map(|c| format!("{:?}", c)).collect(),
+                        constraints: column_def.constraints.iter().map(|c| format!("{c:?}")).collect(),
                         generated: None,
                     };
 
@@ -1607,8 +1600,7 @@ impl SqlExecutor {
                         }
                     } else if !if_exists {
                         return Err(ProtocolError::PostgresError(format!(
-                            "Column \"{}\" of relation \"{}\" does not exist",
-                            name, table_name
+                            "Column \"{name}\" of relation \"{table_name}\" does not exist"
                         )));
                     }
                 }
@@ -1629,7 +1621,11 @@ impl SqlExecutor {
         &self,
         stmt: DropTableStatement,
     ) -> ProtocolResult<ExecutionResult> {
-        let table_names: Vec<String> = stmt.names.iter().map(|n| n.full_name()).collect();
+        let table_names: Vec<String> = stmt
+            .names
+            .iter()
+            .map(super::ast::TableName::full_name)
+            .collect();
 
         let mut tables = self.tables.write().await;
         let mut table_data = self.table_data.write().await;
@@ -1664,7 +1660,7 @@ impl SqlExecutor {
         // - Requires retention policy for dropped table metadata
 
         Err(ProtocolError::PostgresError(format!(
-            "UNDROP TABLE '{}' not yet implemented. This feature requires:\n\
+            "UNDROP TABLE '{table_name}' not yet implemented. This feature requires:\n\
              1. Dropped table metadata retention (current: tables removed immediately)\n\
              2. Iceberg snapshot-based restoration for cold tier tables\n\
              3. Configurable retention period for undrop capability\n\n\
@@ -1673,8 +1669,7 @@ impl SqlExecutor {
              - Use Iceberg table.metadata().snapshots() for historical state\n\
              - Restore table to last snapshot before DROP operation\n\
              - Support time-based UNDROP (e.g., UNDROP TABLE foo AT TIMESTAMP '...')\n\n\
-             Status: Parser and AST complete, executor pending full Iceberg integration.",
-            table_name
+             Status: Parser and AST complete, executor pending full Iceberg integration."
         )))
     }
 
@@ -1690,7 +1685,11 @@ impl SqlExecutor {
     }
 
     async fn execute_drop_view(&self, stmt: DropViewStatement) -> ProtocolResult<ExecutionResult> {
-        let view_names: Vec<String> = stmt.names.iter().map(|n| n.full_name()).collect();
+        let view_names: Vec<String> = stmt
+            .names
+            .iter()
+            .map(super::ast::TableName::full_name)
+            .collect();
 
         let mut views = self.views.write().await;
 
@@ -2243,7 +2242,7 @@ impl SqlExecutor {
     /// Parse a SQL expression from text
     fn parse_generated_expression(&self, expr_text: &str) -> ProtocolResult<Expression> {
         // Wrap in SELECT to make it parseable, then extract the expression
-        let sql = format!("SELECT {}", expr_text);
+        let sql = format!("SELECT {expr_text}");
         let mut parser = SqlParser::new();
 
         // Parse as a select statement
@@ -2259,8 +2258,7 @@ impl SqlExecutor {
                 }
             }
             _ => Err(ProtocolError::PostgresError(format!(
-                "Failed to parse generated column expression: {}",
-                expr_text
+                "Failed to parse generated column expression: {expr_text}"
             ))),
         }
     }
@@ -2282,7 +2280,7 @@ impl SqlExecutor {
                     }
                 }
                 SelectItem::Wildcard => "*".to_string(),
-                SelectItem::QualifiedWildcard { qualifier } => format!("{}.*", qualifier),
+                SelectItem::QualifiedWildcard { qualifier } => format!("{qualifier}.*"),
             })
             .collect()
     }
@@ -2487,12 +2485,12 @@ impl SqlExecutor {
                 format!("{{{}}}", elements.join(","))
             }
             SqlValue::Vector(vec) | SqlValue::HalfVec(vec) => {
-                let elements: Vec<String> = vec.iter().map(|f| f.to_string()).collect();
+                let elements: Vec<String> =
+                    vec.iter().map(std::string::ToString::to_string).collect();
                 format!("[{}]", elements.join(","))
             }
             SqlValue::SparseVec(pairs) => {
-                let elements: Vec<String> =
-                    pairs.iter().map(|(i, v)| format!("{}:{}", i, v)).collect();
+                let elements: Vec<String> = pairs.iter().map(|(i, v)| format!("{i}:{v}")).collect();
                 format!("{{{}}}", elements.join(","))
             }
             SqlValue::Inet(addr) => addr.to_string(),
@@ -2506,8 +2504,8 @@ impl SqlExecutor {
                 bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]
             ),
             SqlValue::Xml(s) => s.clone(),
-            SqlValue::Point(x, y) => format!("({},{})", x, y),
-            SqlValue::Line(a, b, c) => format!("{{{},{},{}}}", a, b, c),
+            SqlValue::Point(x, y) => format!("({x},{y})"),
+            SqlValue::Line(a, b, c) => format!("{{{a},{b},{c}}}"),
             SqlValue::Lseg(start, end) => {
                 format!("[({},{}),({},{})]", start.0, start.1, end.0, end.1)
             }
@@ -2516,10 +2514,7 @@ impl SqlExecutor {
                 format!("<({},{}),{}>", center.0, center.1, radius)
             }
             SqlValue::Path { points, open } => {
-                let pts: Vec<String> = points
-                    .iter()
-                    .map(|(x, y)| format!("({},{})", x, y))
-                    .collect();
+                let pts: Vec<String> = points.iter().map(|(x, y)| format!("({x},{y})")).collect();
                 if *open {
                     format!("[{}]", pts.join(","))
                 } else {
@@ -2527,10 +2522,7 @@ impl SqlExecutor {
                 }
             }
             SqlValue::Polygon(points) => {
-                let pts: Vec<String> = points
-                    .iter()
-                    .map(|(x, y)| format!("({},{})", x, y))
-                    .collect();
+                let pts: Vec<String> = points.iter().map(|(x, y)| format!("({x},{y})")).collect();
                 format!("({})", pts.join(","))
             }
             SqlValue::Tsvector(elements) => elements
@@ -2541,7 +2533,7 @@ impl SqlExecutor {
                         e.lexeme,
                         e.positions
                             .iter()
-                            .map(|p| p.to_string())
+                            .map(std::string::ToString::to_string)
                             .collect::<Vec<_>>()
                             .join(",")
                     )
@@ -2562,7 +2554,7 @@ impl SqlExecutor {
                     .unwrap_or_default();
                 let lb = if range.lower_inclusive { "[" } else { "(" };
                 let ub = if range.upper_inclusive { "]" } else { ")" };
-                format!("{}{},{}{}", lb, lower, upper, ub)
+                format!("{lb}{lower},{upper}{ub}")
             }
             SqlValue::Composite(fields) => {
                 let values: Vec<String> = fields
@@ -2591,7 +2583,7 @@ impl SqlExecutor {
             SqlValue::PgSnapshot(s) => s.clone(),
 
             SqlValue::Custom { type_name, data } => format!("{}:{}", type_name, hex::encode(data)),
-            _ => format!("{:?}", value),
+            _ => format!("{value:?}"),
         }
     }
 
@@ -2669,8 +2661,7 @@ impl SqlExecutor {
                             .any(|c| c.name.eq_ignore_ascii_case(col_name) && c.generated.is_some())
                         {
                             return Err(ProtocolError::PostgresError(format!(
-                                "cannot insert a value into column \"{}\" because it is a generated column",
-                                col_name
+                                "cannot insert a value into column \"{col_name}\" because it is a generated column"
                             )));
                         }
 
@@ -2888,8 +2879,7 @@ impl SqlExecutor {
                         }) {
                             drop(table_data);
                             return Err(ProtocolError::PostgresError(format!(
-                                "cannot update column \"{}\" because it is a generated column",
-                                col_name
+                                "cannot update column \"{col_name}\" because it is a generated column"
                             )));
                         }
 
@@ -3076,7 +3066,7 @@ impl SqlExecutor {
                 // Add source columns with alias prefix if present
                 if let Some(alias) = &stmt.alias {
                     for (key, value) in target_row {
-                        combined_row.insert(format!("{}.{}", alias, key), value.clone());
+                        combined_row.insert(format!("{alias}.{key}"), value.clone());
                     }
                 }
                 // Add source row columns
@@ -3139,8 +3129,7 @@ impl SqlExecutor {
                                     c.name.eq_ignore_ascii_case(&col_name) && c.generated.is_some()
                                 }) {
                                     return Err(ProtocolError::PostgresError(format!(
-                                        "cannot update generated column \"{}\"",
-                                        col_name
+                                        "cannot update generated column \"{col_name}\""
                                     )));
                                 }
 
@@ -3237,8 +3226,7 @@ impl SqlExecutor {
                                                 && c.generated.is_some()
                                         }) {
                                             return Err(ProtocolError::PostgresError(format!(
-                                                "cannot insert into generated column \"{}\"",
-                                                col_name
+                                                "cannot insert into generated column \"{col_name}\""
                                             )));
                                         }
 
@@ -3318,7 +3306,7 @@ impl SqlExecutor {
             CopyTarget::Table(name) => {
                 // Format table name for logging
                 match (&name.schema, &name.name) {
-                    (Some(schema), name) => format!("{}.{}", schema, name),
+                    (Some(schema), name) => format!("{schema}.{name}"),
                     (None, name) => name.clone(),
                 }
             }
@@ -3340,8 +3328,8 @@ impl SqlExecutor {
                 // COPY FROM - import data
                 let source_desc = match &stmt.source {
                     CopySource::Stdio => "STDIN".to_string(),
-                    CopySource::File(path) => format!("file '{}'", path),
-                    CopySource::Program(cmd) => format!("PROGRAM '{}'", cmd),
+                    CopySource::File(path) => format!("file '{path}'"),
+                    CopySource::Program(cmd) => format!("PROGRAM '{cmd}'"),
                 };
                 tracing::info!("COPY {} FROM {}", table_name, source_desc);
 
@@ -3355,8 +3343,8 @@ impl SqlExecutor {
                 // COPY TO - export data
                 let dest_desc = match &stmt.source {
                     CopySource::Stdio => "STDOUT".to_string(),
-                    CopySource::File(path) => format!("file '{}'", path),
-                    CopySource::Program(cmd) => format!("PROGRAM '{}'", cmd),
+                    CopySource::File(path) => format!("file '{path}'"),
+                    CopySource::Program(cmd) => format!("PROGRAM '{cmd}'"),
                 };
                 tracing::info!("COPY {} TO {}", table_name, dest_desc);
 
@@ -3883,7 +3871,7 @@ impl SqlExecutor {
             match from_clause {
                 FromClause::Table { name, alias, .. } => {
                     let table_name = name.full_name();
-                    let alias_name = alias.as_ref().map(|a| &a.name).unwrap_or(&table_name);
+                    let alias_name = alias.as_ref().map_or(&table_name, |a| &a.name);
 
                     if alias_name == qualifier {
                         let tables = self.tables.read().await;
@@ -4015,10 +4003,10 @@ impl SqlExecutor {
                 if should_include {
                     let mut result_row = Vec::new();
                     for col_name in columns {
-                        let value = row
-                            .get(col_name)
-                            .map(|v| v.to_postgres_string())
-                            .unwrap_or_else(|| "".to_string());
+                        let value = row.get(col_name).map_or_else(
+                            || "".to_string(),
+                            super::types::SqlValue::to_postgres_string,
+                        );
                         result_row.push(Some(value));
                     }
                     rows.push(result_row);
@@ -4159,7 +4147,7 @@ impl SqlExecutor {
                     let path = col_def
                         .path
                         .clone()
-                        .unwrap_or_else(|| format!("$.{}", col_name));
+                        .unwrap_or_else(|| format!("$.{col_name}"));
 
                     // Simple path extraction: $.key
                     let key = path.trim_start_matches("$.");
@@ -4609,7 +4597,7 @@ impl SqlExecutor {
         for col_name in columns {
             let value = joined_row
                 .get(col_name)
-                .map(|v| v.to_postgres_string())
+                .map(super::types::SqlValue::to_postgres_string)
                 .unwrap_or_default();
             result.push(Some(value));
         }
@@ -4695,11 +4683,10 @@ impl SqlExecutor {
                 );
                 row_data.insert(
                     "column_default".to_string(),
-                    column
-                        .default
-                        .as_ref()
-                        .map(|d| d.to_postgres_string())
-                        .unwrap_or_else(|| "".to_string()),
+                    column.default.as_ref().map_or_else(
+                        || "".to_string(),
+                        super::types::SqlValue::to_postgres_string,
+                    ),
                 );
                 row_data.insert(
                     "is_nullable".to_string(),
@@ -5610,7 +5597,7 @@ impl SqlExecutor {
         let mut rows = Vec::new();
         for (table_name, table_schema) in tables.iter() {
             let relid = table_schema.oid;
-            let row_count = table_data.get(table_name).map(|d| d.len()).unwrap_or(0);
+            let row_count = table_data.get(table_name).map_or(0, std::vec::Vec::len);
 
             let mut row_data = HashMap::new();
             row_data.insert("relid".to_string(), relid.to_string());
@@ -5896,7 +5883,7 @@ impl SqlExecutor {
         } else {
             // Simple string representation of the first value
             match &stmt.value[0] {
-                Expression::Literal(val) => format!("{:?}", val),
+                Expression::Literal(val) => format!("{val:?}"),
                 _ => "COMPLEX_VALUE".to_string(),
             }
         };
@@ -6148,12 +6135,16 @@ impl SqlExecutor {
 
         Ok(ExecutionResult::Show {
             variable: "CREATE TYPE".to_string(),
-            value: format!("{} ({})", type_name, type_kind),
+            value: format!("{type_name} ({type_kind})"),
         })
     }
 
     async fn execute_drop_type(&self, stmt: DropTypeStatement) -> ProtocolResult<ExecutionResult> {
-        let type_names: Vec<String> = stmt.names.iter().map(|n| n.full_name()).collect();
+        let type_names: Vec<String> = stmt
+            .names
+            .iter()
+            .map(super::ast::TableName::full_name)
+            .collect();
 
         Ok(ExecutionResult::Show {
             variable: "DROP TYPE".to_string(),
@@ -6191,7 +6182,11 @@ impl SqlExecutor {
         &self,
         stmt: DropDomainStatement,
     ) -> ProtocolResult<ExecutionResult> {
-        let domain_names: Vec<String> = stmt.names.iter().map(|n| n.full_name()).collect();
+        let domain_names: Vec<String> = stmt
+            .names
+            .iter()
+            .map(super::ast::TableName::full_name)
+            .collect();
 
         Ok(ExecutionResult::Show {
             variable: "DROP DOMAIN".to_string(),
@@ -6220,7 +6215,7 @@ impl SqlExecutor {
         let object_type = if stmt.is_user { "USER" } else { "ROLE" };
 
         Ok(ExecutionResult::Show {
-            variable: format!("CREATE {}", object_type),
+            variable: format!("CREATE {object_type}"),
             value: stmt.name.clone(),
         })
     }
@@ -6229,7 +6224,7 @@ impl SqlExecutor {
         let object_type = if stmt.is_user { "USER" } else { "ROLE" };
 
         Ok(ExecutionResult::Show {
-            variable: format!("DROP {}", object_type),
+            variable: format!("DROP {object_type}"),
             value: stmt.names.join(", "),
         })
     }
@@ -6241,7 +6236,7 @@ impl SqlExecutor {
         let object_type = if stmt.is_user { "USER" } else { "ROLE" };
 
         Ok(ExecutionResult::Show {
-            variable: format!("ALTER {}", object_type),
+            variable: format!("ALTER {object_type}"),
             value: stmt.name.clone(),
         })
     }
@@ -6319,8 +6314,8 @@ fn format_expression(expr: &Expression) -> String {
             SqlValue::Real(f) => f.to_string(),
             SqlValue::DoublePrecision(f) => f.to_string(),
             SqlValue::Decimal(d) => d.to_string(),
-            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => format!("'{}'", s),
-            _ => format!("{:?}", value),
+            SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => format!("'{s}'"),
+            _ => format!("{value:?}"),
         },
         Expression::Column(col_ref) => {
             if let Some(table) = &col_ref.table {
@@ -6420,7 +6415,7 @@ fn format_expression(expr: &Expression) -> String {
             let args: Vec<String> = func.args.iter().map(format_expression).collect();
             let func_name = match &func.name {
                 FunctionName::Simple(name) => name.clone(),
-                FunctionName::Qualified { schema, name } => format!("{}.{}", schema, name),
+                FunctionName::Qualified { schema, name } => format!("{schema}.{name}"),
             };
             format!("{}({})", func_name, args.join(", "))
         }
@@ -6445,6 +6440,6 @@ fn format_expression(expr: &Expression) -> String {
             s.push_str(" END");
             s
         }
-        _ => format!("{:?}", expr),
+        _ => format!("{expr:?}"),
     }
 }

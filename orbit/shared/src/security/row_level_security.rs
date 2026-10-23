@@ -420,7 +420,7 @@ impl RlsEngine {
                     if let Some(arr) = value.as_array() {
                         return Ok(arr
                             .iter()
-                            .any(|v| v.as_str().map(|s| s == subject.id).unwrap_or(false)));
+                            .any(|v| v.as_str().is_some_and(|s| s == subject.id)));
                     }
                 }
                 Ok(false)

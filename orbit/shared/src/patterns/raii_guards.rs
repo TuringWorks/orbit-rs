@@ -230,8 +230,7 @@ impl<'a, T> TimedLockGuard<'a, T> {
             .await
             .map_err(|_| {
                 OrbitError::timeout(format!(
-                    "Failed to acquire lock '{}' within {:?}",
-                    lock_name, timeout
+                    "Failed to acquire lock '{lock_name}' within {timeout:?}"
                 ))
             })?;
 

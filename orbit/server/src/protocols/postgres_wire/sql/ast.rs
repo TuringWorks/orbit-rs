@@ -1758,8 +1758,8 @@ impl std::fmt::Display for TableName {
 impl std::fmt::Display for FunctionName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FunctionName::Simple(name) => write!(f, "{}", name),
-            FunctionName::Qualified { schema, name } => write!(f, "{}.{}", schema, name),
+            FunctionName::Simple(name) => write!(f, "{name}"),
+            FunctionName::Qualified { schema, name } => write!(f, "{schema}.{name}"),
         }
     }
 }

@@ -72,7 +72,7 @@ async fn proxy_connection(
         Ok(s) => s,
         Err(e) => {
             if verbose {
-                eprintln!("[{}] Failed to connect to {}: {}", name, backend_addr, e);
+                eprintln!("[{name}] Failed to connect to {backend_addr}: {e}");
             }
             return;
         }

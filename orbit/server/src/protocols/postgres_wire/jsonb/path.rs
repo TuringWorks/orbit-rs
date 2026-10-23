@@ -247,13 +247,12 @@ impl JsonbPath {
         }
 
         // Try to parse as array index
-        match content.parse::<usize>() {
-            Ok(index) => Ok(PathComponent::Index(index)),
-            Err(_) => {
-                // Treat as quoted key
-                let key = content.trim_matches('"');
-                Ok(PathComponent::Key(key.to_string()))
-            }
+        if let Ok(index) = content.parse::<usize>() {
+            Ok(PathComponent::Index(index))
+        } else {
+            // Treat as quoted key
+            let key = content.trim_matches('"');
+            Ok(PathComponent::Key(key.to_string()))
         }
     }
 

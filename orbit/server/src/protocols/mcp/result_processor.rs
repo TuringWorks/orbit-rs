@@ -56,7 +56,7 @@ impl ResultProcessor {
             continuation_token: if full_result_available {
                 None
             } else {
-                Some(format!("offset_{}", max_preview_rows))
+                Some(format!("offset_{max_preview_rows}"))
             },
         }
     }
@@ -356,7 +356,7 @@ impl DataSummarizer {
 
     /// Summarize text data
     fn summarize_text(&self, values: &[String]) -> TextSummary {
-        let lengths: Vec<usize> = values.iter().map(|v| v.len()).collect();
+        let lengths: Vec<usize> = values.iter().map(std::string::String::len).collect();
         let total_length: usize = lengths.iter().sum();
         let avg_length = if lengths.is_empty() {
             0.0
@@ -404,7 +404,7 @@ impl VisualizationHintGenerator {
                 results
                     .rows
                     .iter()
-                    .any(|row| row.get(*col).and_then(|v| v.as_f64()).is_some())
+                    .any(|row| row.get(*col).and_then(serde_json::Value::as_f64).is_some())
             })
             .cloned()
             .collect();

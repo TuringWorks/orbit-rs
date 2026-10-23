@@ -276,7 +276,7 @@ impl HnswIndex {
             let current_dist = -distance;
 
             // Get furthest result distance
-            let furthest_dist = results.peek().map(|n| n.distance).unwrap_or(f32::INFINITY);
+            let furthest_dist = results.peek().map_or(f32::INFINITY, |n| n.distance);
 
             if current_dist > furthest_dist && results.len() >= ef {
                 break;
@@ -292,8 +292,7 @@ impl HnswIndex {
 
                         if let Some(neighbor_vec) = self.vectors.get(neighbor_id) {
                             let dist = self.distance(query, &neighbor_vec.data);
-                            let furthest =
-                                results.peek().map(|n| n.distance).unwrap_or(f32::INFINITY);
+                            let furthest = results.peek().map_or(f32::INFINITY, |n| n.distance);
 
                             if dist < furthest || results.len() < ef {
                                 candidates.push(DistanceNode {
@@ -624,8 +623,7 @@ impl IvfFlatIndex {
             .enumerate()
             .map(|(i, c)| (i, self.distance(vector, c)))
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal))
-            .map(|(i, _)| i)
-            .unwrap_or(0)
+            .map_or(0, |(i, _)| i)
     }
 
     /// Find k nearest centroids for a vector

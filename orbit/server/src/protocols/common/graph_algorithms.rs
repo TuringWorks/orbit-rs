@@ -1042,7 +1042,7 @@ pub struct GraphStats {
 /// Calculate graph statistics
 pub fn graph_stats(graph: &Graph) -> GraphStats {
     let node_count = graph.nodes.len();
-    let edge_count: usize = graph.adjacency.values().map(|v| v.len()).sum();
+    let edge_count: usize = graph.adjacency.values().map(std::vec::Vec::len).sum();
 
     let density = if node_count > 1 {
         edge_count as f64 / (node_count * (node_count - 1)) as f64
@@ -1056,11 +1056,16 @@ pub fn graph_stats(graph: &Graph) -> GraphStats {
         0.0
     };
 
-    let max_out_degree = graph.adjacency.values().map(|v| v.len()).max().unwrap_or(0);
+    let max_out_degree = graph
+        .adjacency
+        .values()
+        .map(std::vec::Vec::len)
+        .max()
+        .unwrap_or(0);
     let max_in_degree = graph
         .reverse_adjacency
         .values()
-        .map(|v| v.len())
+        .map(std::vec::Vec::len)
         .max()
         .unwrap_or(0);
 

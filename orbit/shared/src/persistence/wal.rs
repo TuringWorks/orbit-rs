@@ -292,7 +292,7 @@ impl WriteAheadLog {
     pub async fn new(config: WalConfig) -> OrbitResult<Self> {
         // Ensure log directory exists
         std::fs::create_dir_all(&config.log_directory)
-            .map_err(|e| OrbitError::storage(format!("Failed to create WAL directory: {}", e)))?;
+            .map_err(|e| OrbitError::storage(format!("Failed to create WAL directory: {e}")))?;
 
         let current_lsn = Arc::new(RwLock::new(0));
         let metrics = Arc::new(RwLock::new(WalMetrics::default()));
@@ -347,7 +347,7 @@ impl WriteAheadLog {
         if let Some(mut writer) = self.current_writer.lock().await.take() {
             writer
                 .flush()
-                .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {}", e)))?;
+                .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {e}")))?;
         }
 
         info!("WAL service stopped");
@@ -360,7 +360,7 @@ impl WriteAheadLog {
 
         // Serialize entry
         let serialized = bincode::serialize(&entry)
-            .map_err(|e| OrbitError::parse(format!("Failed to serialize WAL entry: {}", e)))?;
+            .map_err(|e| OrbitError::parse(format!("Failed to serialize WAL entry: {e}")))?;
 
         // Acquire writer lock
         let mut writer_guard = self.current_writer.lock().await;
@@ -372,12 +372,12 @@ impl WriteAheadLog {
         let length = serialized.len() as u32;
         writer
             .write_all(&length.to_le_bytes())
-            .map_err(|e| OrbitError::storage(format!("Failed to write WAL entry length: {}", e)))?;
+            .map_err(|e| OrbitError::storage(format!("Failed to write WAL entry length: {e}")))?;
 
         // Write entry data
         writer
             .write_all(&serialized)
-            .map_err(|e| OrbitError::storage(format!("Failed to write WAL entry: {}", e)))?;
+            .map_err(|e| OrbitError::storage(format!("Failed to write WAL entry: {e}")))?;
 
         // Update file size
         let entry_size = 4 + serialized.len() as u64;
@@ -389,13 +389,13 @@ impl WriteAheadLog {
             DurabilityLevel::Strict => {
                 writer
                     .flush()
-                    .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {}", e)))?;
+                    .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {e}")))?;
 
                 // Force fsync
                 writer
                     .get_ref()
                     .sync_all()
-                    .map_err(|e| OrbitError::storage(format!("Failed to fsync WAL: {}", e)))?;
+                    .map_err(|e| OrbitError::storage(format!("Failed to fsync WAL: {e}")))?;
 
                 let mut metrics = self.metrics.write().await;
                 metrics.fsync_count += 1;
@@ -404,7 +404,7 @@ impl WriteAheadLog {
                 // Flush to OS buffer
                 writer
                     .flush()
-                    .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {}", e)))?;
+                    .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {e}")))?;
             }
             DurabilityLevel::Performance => {
                 // No immediate flush - rely on OS buffering
@@ -452,7 +452,7 @@ impl WriteAheadLog {
     ) -> OrbitResult<u64> {
         let lsn = self.next_lsn().await;
         let state_data_json = serde_json::to_string(&state_data)
-            .map_err(|e| OrbitError::parse(format!("Failed to serialize state: {}", e)))?;
+            .map_err(|e| OrbitError::parse(format!("Failed to serialize state: {e}")))?;
         let entry = WalEntry::new(lsn, actor_ref, WalEntryType::Insert { state_data_json });
         self.write_entry(entry).await
     }
@@ -466,9 +466,9 @@ impl WriteAheadLog {
     ) -> OrbitResult<u64> {
         let lsn = self.next_lsn().await;
         let old_state_json = serde_json::to_string(&old_state)
-            .map_err(|e| OrbitError::parse(format!("Failed to serialize old state: {}", e)))?;
+            .map_err(|e| OrbitError::parse(format!("Failed to serialize old state: {e}")))?;
         let new_state_json = serde_json::to_string(&new_state)
-            .map_err(|e| OrbitError::parse(format!("Failed to serialize new state: {}", e)))?;
+            .map_err(|e| OrbitError::parse(format!("Failed to serialize new state: {e}")))?;
         let entry = WalEntry::new(
             lsn,
             actor_ref,
@@ -488,7 +488,7 @@ impl WriteAheadLog {
     ) -> OrbitResult<u64> {
         let lsn = self.next_lsn().await;
         let state_data_json = serde_json::to_string(&state_data)
-            .map_err(|e| OrbitError::parse(format!("Failed to serialize state: {}", e)))?;
+            .map_err(|e| OrbitError::parse(format!("Failed to serialize state: {e}")))?;
         let entry = WalEntry::new(lsn, actor_ref, WalEntryType::Delete { state_data_json });
         self.write_entry(entry).await
     }
@@ -550,12 +550,11 @@ impl WriteAheadLog {
 
     /// Perform checkpoint operation
     async fn perform_checkpoint(&self) -> OrbitResult<()> {
-        let _snapshot_backend = match &self.snapshot_backend {
-            Some(backend) => backend.clone(),
-            None => {
-                debug!("No snapshot backend configured, skipping checkpoint");
-                return Ok(());
-            }
+        let _snapshot_backend = if let Some(backend) = &self.snapshot_backend {
+            backend.clone()
+        } else {
+            debug!("No snapshot backend configured, skipping checkpoint");
+            return Ok(());
         };
 
         // This is a simplified checkpoint - in a real system, you'd:
@@ -585,13 +584,13 @@ impl WriteAheadLog {
         if let Some(mut writer) = self.current_writer.lock().await.take() {
             writer
                 .flush()
-                .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {}", e)))?;
+                .map_err(|e| OrbitError::storage(format!("Failed to flush WAL: {e}")))?;
         }
 
         // Generate new file path
         let lsn = *self.current_lsn.read().await;
         let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        let filename = format!("wal_{:016x}_{}.log", lsn, timestamp);
+        let filename = format!("wal_{lsn:016x}_{timestamp}.log");
         let file_path = self.config.log_directory.join(filename);
 
         // Open new file
@@ -599,7 +598,7 @@ impl WriteAheadLog {
             .create(true)
             .append(true)
             .open(&file_path)
-            .map_err(|e| OrbitError::storage(format!("Failed to open WAL file: {}", e)))?;
+            .map_err(|e| OrbitError::storage(format!("Failed to open WAL file: {e}")))?;
 
         let writer = BufWriter::with_capacity(self.config.buffer_size, file);
 
@@ -619,7 +618,7 @@ impl WriteAheadLog {
     /// Read all entries from a WAL file
     async fn read_wal_file(&self, path: &Path) -> OrbitResult<Vec<WalEntry>> {
         let file = File::open(path)
-            .map_err(|e| OrbitError::storage(format!("Failed to open WAL file: {}", e)))?;
+            .map_err(|e| OrbitError::storage(format!("Failed to open WAL file: {e}")))?;
 
         let mut reader = BufReader::new(file);
         let mut entries = Vec::new();
@@ -635,8 +634,7 @@ impl WriteAheadLog {
                 }
                 Err(e) => {
                     return Err(OrbitError::storage(format!(
-                        "Failed to read WAL entry length: {}",
-                        e
+                        "Failed to read WAL entry length: {e}"
                     )));
                 }
             }
@@ -647,12 +645,11 @@ impl WriteAheadLog {
             let mut entry_bytes = vec![0u8; length];
             reader
                 .read_exact(&mut entry_bytes)
-                .map_err(|e| OrbitError::storage(format!("Failed to read WAL entry: {}", e)))?;
+                .map_err(|e| OrbitError::storage(format!("Failed to read WAL entry: {e}")))?;
 
             // Deserialize entry
-            let entry: WalEntry = bincode::deserialize(&entry_bytes).map_err(|e| {
-                OrbitError::parse(format!("Failed to deserialize WAL entry: {}", e))
-            })?;
+            let entry: WalEntry = bincode::deserialize(&entry_bytes)
+                .map_err(|e| OrbitError::parse(format!("Failed to deserialize WAL entry: {e}")))?;
 
             entries.push(entry);
         }
@@ -665,12 +662,11 @@ impl WriteAheadLog {
         let mut files = Vec::new();
 
         let entries = std::fs::read_dir(&self.config.log_directory)
-            .map_err(|e| OrbitError::storage(format!("Failed to read WAL directory: {}", e)))?;
+            .map_err(|e| OrbitError::storage(format!("Failed to read WAL directory: {e}")))?;
 
         for entry in entries {
-            let entry = entry.map_err(|e| {
-                OrbitError::storage(format!("Failed to read directory entry: {}", e))
-            })?;
+            let entry = entry
+                .map_err(|e| OrbitError::storage(format!("Failed to read directory entry: {e}")))?;
 
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("log") {
@@ -691,14 +687,13 @@ impl WriteAheadLog {
         }
 
         let entries = std::fs::read_dir(log_dir)
-            .map_err(|e| OrbitError::storage(format!("Failed to read WAL directory: {}", e)))?;
+            .map_err(|e| OrbitError::storage(format!("Failed to read WAL directory: {e}")))?;
 
         let mut max_lsn = 0u64;
 
         for entry in entries {
-            let entry = entry.map_err(|e| {
-                OrbitError::storage(format!("Failed to read directory entry: {}", e))
-            })?;
+            let entry = entry
+                .map_err(|e| OrbitError::storage(format!("Failed to read directory entry: {e}")))?;
 
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) != Some("log") {
@@ -730,9 +725,8 @@ impl WriteAheadLog {
             let to_remove = files.len() - self.config.retain_wal_files;
 
             for file_path in files.drain(..to_remove) {
-                std::fs::remove_file(&file_path).map_err(|e| {
-                    OrbitError::storage(format!("Failed to remove WAL file: {}", e))
-                })?;
+                std::fs::remove_file(&file_path)
+                    .map_err(|e| OrbitError::storage(format!("Failed to remove WAL file: {e}")))?;
 
                 info!("Removed old WAL file: {:?}", file_path);
             }

@@ -66,8 +66,7 @@ fn parse_proxy_spec(spec: &str, backend_host: &str) -> Result<(u16, Vec<SocketAd
     let parts: Vec<&str> = spec.split(':').collect();
     if parts.len() != 2 {
         return Err(format!(
-            "Invalid spec '{}': expected listen_port:backend_ports",
-            spec
+            "Invalid spec '{spec}': expected listen_port:backend_ports"
         ));
     }
 
@@ -78,11 +77,8 @@ fn parse_proxy_spec(spec: &str, backend_host: &str) -> Result<(u16, Vec<SocketAd
     let backends: Result<Vec<SocketAddr>, String> = parts[1]
         .split(',')
         .map(|p| {
-            let port: u16 = p
-                .trim()
-                .parse()
-                .map_err(|_| format!("Invalid port: {}", p))?;
-            Ok(format!("{}:{}", backend_host, port).parse().unwrap())
+            let port: u16 = p.trim().parse().map_err(|_| format!("Invalid port: {p}"))?;
+            Ok(format!("{backend_host}:{port}").parse().unwrap())
         })
         .collect();
 
@@ -96,7 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Auto-configure for N nodes
     if let Some(nodes) = args.nodes {
-        println!("Configuring load balancer for {}-node cluster", nodes);
+        println!("Configuring load balancer for {nodes}-node cluster");
 
         let protocols = [
             ("Redis", 6379u16, 16379u16),

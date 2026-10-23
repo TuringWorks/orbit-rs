@@ -394,7 +394,7 @@ impl CqlAdapter {
             CqlValue::Float(f) => f.to_string(),
             CqlValue::Double(f) => f.to_string(),
             CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
-            CqlValue::Uuid(s) => format!("'{}'", s),
+            CqlValue::Uuid(s) => format!("'{s}'"),
             CqlValue::Null => "NULL".to_string(),
             CqlValue::Set(items) => {
                 // Store as JSON string
@@ -750,7 +750,7 @@ impl CqlAdapter {
         let query_bytes = body.copy_to_bytes(query_len as usize);
         let query = String::from_utf8(query_bytes.to_vec())
             .map_err(|e| ProtocolError::InvalidUtf8(e.to_string()))?;
-        println!("DEBUG: Received query: {}", query);
+        println!("DEBUG: Received query: {query}");
 
         // Read query parameters
         let params = QueryParameters::decode(body)?;
@@ -1031,7 +1031,7 @@ impl CqlAdapter {
                 Err(e) => {
                     // For LOGGED batches, we should roll back on error
                     // For now, just collect errors
-                    errors.push(format!("Statement error: {}", e));
+                    errors.push(format!("Statement error: {e}"));
 
                     // For strict atomicity, break on first error in LOGGED batch
                     if matches!(batch_type, BatchType::Logged) {
@@ -1094,10 +1094,10 @@ impl CqlAdapter {
                 limit,
                 ..
             } => {
-                println!("DEBUG: execute_statement SELECT table={}", table);
+                println!("DEBUG: execute_statement SELECT table={table}");
                 // Handle system tables (required for driver initialization)
                 let table_lower = table.to_lowercase();
-                println!("DEBUG: table_lower={}", table_lower);
+                println!("DEBUG: table_lower={table_lower}");
                 if table_lower == "system.local" || table_lower == "local" {
                     return Ok(build_system_local_response(stream));
                 }
@@ -1159,13 +1159,13 @@ impl CqlAdapter {
                 } else {
                     let parser = self.parser.read().await;
                     if let Some(ks) = parser.current_keyspace() {
-                        format!("{}.{}", ks, table)
+                        format!("{ks}.{table}")
                     } else {
                         table.clone()
                     }
                 };
 
-                let mut sql = format!("SELECT {} FROM {}", sql_columns, qualified_table);
+                let mut sql = format!("SELECT {sql_columns} FROM {qualified_table}");
 
                 // Add WHERE clause
                 if let Some(conditions) = where_clause {
@@ -1211,7 +1211,7 @@ impl CqlAdapter {
                                                 CqlValue::Boolean(b) => b.to_string(),
                                                 CqlValue::Float(f) => f.to_string(),
                                                 CqlValue::Double(f) => f.to_string(),
-                                                _ => format!("'{:?}'", v),
+                                                _ => format!("'{v:?}'"),
                                             })
                                             .collect();
                                         format!("({})", formatted_values.join(", "))
@@ -1226,7 +1226,7 @@ impl CqlAdapter {
                 }
 
                 if let Some(lim) = limit {
-                    sql.push_str(&format!(" LIMIT {}", lim));
+                    sql.push_str(&format!(" LIMIT {lim}"));
                 }
 
                 // Execute using query engine's direct SQL execution (bypasses persistent storage check)
@@ -1264,7 +1264,7 @@ impl CqlAdapter {
                                                 {
                                                     SqlValue::DoublePrecision(float_val)
                                                 } else {
-                                                    SqlValue::Text(val_str.to_string())
+                                                    SqlValue::Text((*val_str).clone())
                                                 };
                                                 map.insert(col.clone(), sql_val);
                                             } else {
@@ -1301,7 +1301,7 @@ impl CqlAdapter {
                 } else {
                     let parser = self.parser.read().await;
                     if let Some(ks) = parser.current_keyspace() {
-                        format!("{}.{}", ks, table)
+                        format!("{ks}.{table}")
                     } else {
                         table.clone()
                     }
@@ -1313,7 +1313,7 @@ impl CqlAdapter {
                     // In a full implementation, we'd need to know the table schema to identify PK columns
                     let pk_col = &columns[0];
                     let pk_val = Self::cql_value_to_sql_string(&values[0]);
-                    let where_clause = format!("{} = {}", pk_col, pk_val);
+                    let where_clause = format!("{pk_col} = {pk_val}");
 
                     // Check if row already exists
                     if let Ok(Some(existing_row)) =
@@ -1344,7 +1344,7 @@ impl CqlAdapter {
                     format!(" VALUES ({})", val_parts.join(", "))
                 };
 
-                let sql = format!("INSERT INTO {}{}{}", qualified_table, col_str, val_str);
+                let sql = format!("INSERT INTO {qualified_table}{col_str}{val_str}");
 
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => {
@@ -1372,7 +1372,7 @@ impl CqlAdapter {
                 } else {
                     let parser = self.parser.read().await;
                     if let Some(ks) = parser.current_keyspace() {
-                        format!("{}.{}", ks, table)
+                        format!("{ks}.{table}")
                     } else {
                         table.clone()
                     }
@@ -1440,7 +1440,7 @@ impl CqlAdapter {
                 let mut set_parts: Vec<String> = Vec::new();
 
                 // Add simple value assignments
-                for (col, val) in assignments.iter() {
+                for (col, val) in assignments {
                     let val_str = match val {
                         CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
                         CqlValue::Int(i) => i.to_string(),
@@ -1450,58 +1450,58 @@ impl CqlAdapter {
                         CqlValue::Double(f) => f.to_string(),
                         CqlValue::Timestamp(ts) => (ts / 1000).to_string(),
                         CqlValue::Null => "NULL".to_string(),
-                        _ => format!("'{:?}'", val),
+                        _ => format!("'{val:?}'"),
                     };
-                    set_parts.push(format!("{} = {}", col, val_str));
+                    set_parts.push(format!("{col} = {val_str}"));
                 }
 
                 // Add counter and collection assignments
-                for (col, assignment) in counter_assignments.iter() {
+                for (col, assignment) in counter_assignments {
                     use crate::protocols::cql::parser::CqlAssignment;
                     let assignment_str = match assignment {
                         CqlAssignment::CounterIncrement(inc) => {
                             // For counter increment: column = column + value
-                            format!("{} = {} + {}", col, col, inc)
+                            format!("{col} = {col} + {inc}")
                         }
                         CqlAssignment::CounterDecrement(dec) => {
                             // For counter decrement: column = column - value
-                            format!("{} = {} - {}", col, col, dec)
+                            format!("{col} = {col} - {dec}")
                         }
                         CqlAssignment::ListAppend(values) => {
                             // For list append, serialize the values as JSON and use concatenation
                             let json_vals = serde_json::to_string(values).unwrap_or_default();
-                            format!("{} = {} || '{}'", col, col, json_vals)
+                            format!("{col} = {col} || '{json_vals}'")
                         }
                         CqlAssignment::ListPrepend(values) => {
                             let json_vals = serde_json::to_string(values).unwrap_or_default();
-                            format!("{} = '{}' || {}", col, json_vals, col)
+                            format!("{col} = '{json_vals}' || {col}")
                         }
                         CqlAssignment::SetAdd(values) => {
                             // Set union operation
                             let json_vals = serde_json::to_string(values).unwrap_or_default();
-                            format!("{} = {} || '{}'", col, col, json_vals)
+                            format!("{col} = {col} || '{json_vals}'")
                         }
                         CqlAssignment::SetRemove(values) => {
                             // Set difference (not directly supported in SQL, use JSON functions)
                             let json_vals = serde_json::to_string(values).unwrap_or_default();
-                            format!("{} = {} - '{}'", col, col, json_vals)
+                            format!("{col} = {col} - '{json_vals}'")
                         }
                         CqlAssignment::MapPut(entries) => {
                             let json_map = serde_json::to_string(entries).unwrap_or_default();
-                            format!("{} = {} || '{}'", col, col, json_map)
+                            format!("{col} = {col} || '{json_map}'")
                         }
                         CqlAssignment::MapRemove(key) => {
                             let key_str = serde_json::to_string(key).unwrap_or_default();
-                            format!("{} = {} - '{}'", col, col, key_str)
+                            format!("{col} = {col} - '{key_str}'")
                         }
                         CqlAssignment::Value(val) => {
                             let val_str = match val {
                                 CqlValue::Text(s) => format!("'{}'", s.replace('\'', "''")),
                                 CqlValue::Int(i) => i.to_string(),
                                 CqlValue::Bigint(i) => i.to_string(),
-                                _ => format!("'{:?}'", val),
+                                _ => format!("'{val:?}'"),
                             };
-                            format!("{} = {}", col, val_str)
+                            format!("{col} = {val_str}")
                         }
                     };
                     set_parts.push(assignment_str);
@@ -1538,7 +1538,7 @@ impl CqlAdapter {
                 } else {
                     let parser = self.parser.read().await;
                     if let Some(ks) = parser.current_keyspace() {
-                        format!("{}.{}", ks, table)
+                        format!("{ks}.{table}")
                     } else {
                         table.clone()
                     }
@@ -1611,7 +1611,7 @@ impl CqlAdapter {
                 }
 
                 // Convert CQL DELETE to SQL and execute
-                let mut sql = format!("DELETE FROM {}", qualified_table);
+                let mut sql = format!("DELETE FROM {qualified_table}");
 
                 if !where_str.is_empty() {
                     sql.push_str(" WHERE ");
@@ -1653,11 +1653,11 @@ impl CqlAdapter {
                 if_not_exists,
                 ..
             } => {
-                println!("[CQL] CREATE KEYSPACE {}", name);
+                println!("[CQL] CREATE KEYSPACE {name}");
                 let sql = if *if_not_exists {
-                    format!("CREATE SCHEMA IF NOT EXISTS {}", name)
+                    format!("CREATE SCHEMA IF NOT EXISTS {name}")
                 } else {
-                    format!("CREATE SCHEMA {}", name)
+                    format!("CREATE SCHEMA {name}")
                 };
 
                 match self.query_engine.execute_sql_direct(&sql).await {
@@ -1680,7 +1680,7 @@ impl CqlAdapter {
                 primary_key,
                 ..
             } => {
-                println!("[CQL] CREATE TABLE {}", name);
+                println!("[CQL] CREATE TABLE {name}");
 
                 // Qualify table name with keyspace if not already qualified
                 let qualified_table = if name.contains('.') {
@@ -1688,7 +1688,7 @@ impl CqlAdapter {
                 } else {
                     let parser = self.parser.read().await;
                     if let Some(ks) = parser.current_keyspace() {
-                        format!("{}.{}", ks, name)
+                        format!("{ks}.{name}")
                     } else {
                         name.clone()
                     }
@@ -1764,11 +1764,11 @@ impl CqlAdapter {
                 }
             }
             CqlStatement::DropKeyspace { name, if_exists } => {
-                println!("[CQL] DROP KEYSPACE {}", name);
+                println!("[CQL] DROP KEYSPACE {name}");
                 let sql = if *if_exists {
-                    format!("DROP SCHEMA IF EXISTS {} CASCADE", name)
+                    format!("DROP SCHEMA IF EXISTS {name} CASCADE")
                 } else {
-                    format!("DROP SCHEMA {} CASCADE", name)
+                    format!("DROP SCHEMA {name} CASCADE")
                 };
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => {
@@ -1784,23 +1784,23 @@ impl CqlAdapter {
                 }
             }
             CqlStatement::DropTable { name, if_exists } => {
-                println!("[CQL] DROP TABLE {}", name);
+                println!("[CQL] DROP TABLE {name}");
                 // Qualify table name with keyspace if not already qualified
                 let qualified_table = if name.contains('.') {
                     name.clone()
                 } else {
                     let parser = self.parser.read().await;
                     if let Some(ks) = parser.current_keyspace() {
-                        format!("{}.{}", ks, name)
+                        format!("{ks}.{name}")
                     } else {
                         name.clone()
                     }
                 };
 
                 let sql = if *if_exists {
-                    format!("DROP TABLE IF EXISTS {}", qualified_table)
+                    format!("DROP TABLE IF EXISTS {qualified_table}")
                 } else {
-                    format!("DROP TABLE {}", qualified_table)
+                    format!("DROP TABLE {qualified_table}")
                 };
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => {
@@ -1838,26 +1838,23 @@ impl CqlAdapter {
                 if_not_exists,
                 ..
             } => {
-                println!("[CQL] CREATE INDEX {} ON {} ({})", name, table, column);
+                println!("[CQL] CREATE INDEX {name} ON {table} ({column})");
                 // Qualify table name with keyspace if not already qualified
                 let qualified_table = if table.contains('.') {
                     table.clone()
                 } else {
                     let parser = self.parser.read().await;
                     if let Some(ks) = parser.current_keyspace() {
-                        format!("{}.{}", ks, table)
+                        format!("{ks}.{table}")
                     } else {
                         table.clone()
                     }
                 };
 
                 let sql = if *if_not_exists {
-                    format!(
-                        "CREATE INDEX IF NOT EXISTS {} ON {} ({})",
-                        name, qualified_table, column
-                    )
+                    format!("CREATE INDEX IF NOT EXISTS {name} ON {qualified_table} ({column})")
                 } else {
-                    format!("CREATE INDEX {} ON {} ({})", name, qualified_table, column)
+                    format!("CREATE INDEX {name} ON {qualified_table} ({column})")
                 };
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => Ok(self.build_schema_change_result(stream)),
@@ -1865,97 +1862,94 @@ impl CqlAdapter {
                 }
             }
             CqlStatement::CreateType { name, .. } => {
-                println!("[CQL] CREATE TYPE {}", name);
+                println!("[CQL] CREATE TYPE {name}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::CreateMaterializedView {
                 name, source_table, ..
             } => {
-                println!(
-                    "[CQL] CREATE MATERIALIZED VIEW {} FROM {}",
-                    name, source_table
-                );
+                println!("[CQL] CREATE MATERIALIZED VIEW {name} FROM {source_table}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::Use { keyspace } => {
                 let mut parser = self.parser.write().await;
                 parser.set_keyspace(keyspace.clone());
-                println!("[CQL] USE {}", keyspace);
+                println!("[CQL] USE {keyspace}");
                 Ok(self.build_set_keyspace_result(stream, keyspace))
             }
             CqlStatement::Truncate { table } => {
-                println!("[CQL] TRUNCATE {}", table);
+                println!("[CQL] TRUNCATE {table}");
                 // Execute DELETE FROM table to actually truncate
-                let sql = format!("DELETE FROM {}", table);
+                let sql = format!("DELETE FROM {table}");
                 match self.query_engine.execute_sql_direct(&sql).await {
                     Ok(_) => {
-                        println!("[CQL] Truncated table: {}", table);
+                        println!("[CQL] Truncated table: {table}");
                     }
                     Err(e) => {
-                        println!("[CQL] Error truncating table {}: {}", table, e);
+                        println!("[CQL] Error truncating table {table}: {e}");
                     }
                 }
                 Ok(build_void_result(stream))
             }
             CqlStatement::Batch { .. } => Ok(build_void_result(stream)),
             CqlStatement::AlterTable { name, alteration } => {
-                println!("[CQL] ALTER TABLE {} {:?}", name, alteration);
+                println!("[CQL] ALTER TABLE {name} {alteration:?}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::AlterKeyspace { name, .. } => {
-                println!("[CQL] ALTER KEYSPACE {}", name);
+                println!("[CQL] ALTER KEYSPACE {name}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::AlterType { name, alteration } => {
-                println!("[CQL] ALTER TYPE {} {:?}", name, alteration);
+                println!("[CQL] ALTER TYPE {name} {alteration:?}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::DropIndex { name, .. } => {
-                println!("[CQL] DROP INDEX {}", name);
+                println!("[CQL] DROP INDEX {name}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::DropType { name, .. } => {
-                println!("[CQL] DROP TYPE {}", name);
+                println!("[CQL] DROP TYPE {name}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::DropMaterializedView { name, .. } => {
-                println!("[CQL] DROP MATERIALIZED VIEW {}", name);
+                println!("[CQL] DROP MATERIALIZED VIEW {name}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::CreateFunction { name, .. } => {
-                println!("[CQL] CREATE FUNCTION {}", name);
+                println!("[CQL] CREATE FUNCTION {name}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::DropFunction { name, .. } => {
-                println!("[CQL] DROP FUNCTION {}", name);
+                println!("[CQL] DROP FUNCTION {name}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::CreateAggregate { name, .. } => {
-                println!("[CQL] CREATE AGGREGATE {}", name);
+                println!("[CQL] CREATE AGGREGATE {name}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::DropAggregate { name, .. } => {
-                println!("[CQL] DROP AGGREGATE {}", name);
+                println!("[CQL] DROP AGGREGATE {name}");
                 Ok(self.build_schema_change_result(stream))
             }
             CqlStatement::CreateRole { name, .. } => {
-                println!("[CQL] CREATE ROLE {}", name);
+                println!("[CQL] CREATE ROLE {name}");
                 Ok(build_void_result(stream))
             }
             CqlStatement::AlterRole { name, .. } => {
-                println!("[CQL] ALTER ROLE {}", name);
+                println!("[CQL] ALTER ROLE {name}");
                 Ok(build_void_result(stream))
             }
             CqlStatement::DropRole { name, .. } => {
-                println!("[CQL] DROP ROLE {}", name);
+                println!("[CQL] DROP ROLE {name}");
                 Ok(build_void_result(stream))
             }
             CqlStatement::Grant { role, .. } => {
-                println!("[CQL] GRANT TO {}", role);
+                println!("[CQL] GRANT TO {role}");
                 Ok(build_void_result(stream))
             }
             CqlStatement::Revoke { role, .. } => {
-                println!("[CQL] REVOKE FROM {}", role);
+                println!("[CQL] REVOKE FROM {role}");
                 Ok(build_void_result(stream))
             }
             CqlStatement::ListRoles { .. } => {
@@ -1985,7 +1979,7 @@ impl CqlAdapter {
                 ))
             }
             CqlStatement::Describe { target } => {
-                println!("[CQL] DESCRIBE {:?}", target);
+                println!("[CQL] DESCRIBE {target:?}");
                 // Return schema information based on target
                 Ok(build_void_result(stream))
             }
@@ -2044,23 +2038,23 @@ impl CqlAdapter {
                 ))
             }
             CqlStatement::CreateUser { name, .. } => {
-                println!("[CQL] CREATE USER {}", name);
+                println!("[CQL] CREATE USER {name}");
                 Ok(build_void_result(stream))
             }
             CqlStatement::AlterUser { name, .. } => {
-                println!("[CQL] ALTER USER {}", name);
+                println!("[CQL] ALTER USER {name}");
                 Ok(build_void_result(stream))
             }
             CqlStatement::DropUser { name, .. } => {
-                println!("[CQL] DROP USER {}", name);
+                println!("[CQL] DROP USER {name}");
                 Ok(build_void_result(stream))
             }
             CqlStatement::GrantRole { role, to_role } => {
-                println!("[CQL] GRANT {} TO {}", role, to_role);
+                println!("[CQL] GRANT {role} TO {to_role}");
                 Ok(build_void_result(stream))
             }
             CqlStatement::RevokeRole { role, from_role } => {
-                println!("[CQL] REVOKE {} FROM {}", role, from_role);
+                println!("[CQL] REVOKE {role} FROM {from_role}");
                 Ok(build_void_result(stream))
             }
         }
@@ -2200,7 +2194,7 @@ impl CqlAdapter {
             SqlValue::Real(f) => f.to_string().as_bytes().to_vec(),
             SqlValue::Uuid(u) => u.as_bytes().to_vec(),
             SqlValue::Null => vec![],
-            _ => format!("{}", value).as_bytes().to_vec(),
+            _ => format!("{value}").as_bytes().to_vec(),
         }
     }
 
@@ -2313,7 +2307,7 @@ impl CqlAdapter {
         table: &str,
         where_clause: &str,
     ) -> ProtocolResult<Option<HashMap<String, SqlValue>>> {
-        let select_sql = format!("SELECT * FROM {} WHERE {} LIMIT 1", table, where_clause);
+        let select_sql = format!("SELECT * FROM {table} WHERE {where_clause} LIMIT 1");
 
         match self.query_engine.execute_sql_direct(&select_sql).await {
             Ok(crate::protocols::postgres_wire::QueryResult::Select { columns, rows }) => {
@@ -2323,7 +2317,7 @@ impl CqlAdapter {
                     // Convert Vec<Option<String>> to HashMap<String, SqlValue>
                     let mut row_map = HashMap::new();
                     for (i, col_name) in columns.iter().enumerate() {
-                        let value = if let Some(ref val) = rows[0].get(i).and_then(|v| v.as_ref()) {
+                        let value = if let Some(val) = rows[0].get(i).and_then(|v| v.as_ref()) {
                             // Try to parse as various types
                             if val.eq_ignore_ascii_case("true") || val.eq_ignore_ascii_case("false")
                             {
@@ -2335,7 +2329,7 @@ impl CqlAdapter {
                             } else if let Ok(f) = val.parse::<f64>() {
                                 SqlValue::DoublePrecision(f)
                             } else {
-                                SqlValue::Text(val.to_string())
+                                SqlValue::Text(val.clone())
                             }
                         } else {
                             SqlValue::Null
@@ -2422,7 +2416,7 @@ impl CqlAdapter {
             CqlValue::Float(f) => SqlValue::Real(*f),
             CqlValue::Double(f) => SqlValue::DoublePrecision(*f),
             CqlValue::Null => SqlValue::Null,
-            _ => SqlValue::Text(format!("{:?}", value)),
+            _ => SqlValue::Text(format!("{value:?}")),
         }
     }
 
@@ -2452,11 +2446,9 @@ impl CqlAdapter {
             (SqlValue::BigInt(i1), SqlValue::BigInt(i2)) => i1.cmp(i2) as i32,
             (SqlValue::Integer(i), SqlValue::BigInt(b)) => (*i as i64).cmp(b) as i32,
             (SqlValue::BigInt(b), SqlValue::Integer(i)) => b.cmp(&(*i as i64)) as i32,
-            (SqlValue::Real(f1), SqlValue::Real(f2)) => {
-                f1.partial_cmp(f2).map(|o| o as i32).unwrap_or(0)
-            }
+            (SqlValue::Real(f1), SqlValue::Real(f2)) => f1.partial_cmp(f2).map_or(0, |o| o as i32),
             (SqlValue::DoublePrecision(f1), SqlValue::DoublePrecision(f2)) => {
-                f1.partial_cmp(f2).map(|o| o as i32).unwrap_or(0)
+                f1.partial_cmp(f2).map_or(0, |o| o as i32)
             }
             (SqlValue::Text(s1), SqlValue::Text(s2)) => s1.cmp(s2) as i32,
             _ => 0,

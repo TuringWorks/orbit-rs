@@ -542,8 +542,7 @@ impl TenantManager {
             Ok(())
         } else {
             Err(OrbitError::internal(format!(
-                "Tenant not found: {}",
-                tenant_id
+                "Tenant not found: {tenant_id}"
             )))
         }
     }
@@ -557,8 +556,7 @@ impl TenantManager {
             Ok(())
         } else {
             Err(OrbitError::internal(format!(
-                "Tenant not found: {}",
-                tenant_id
+                "Tenant not found: {tenant_id}"
             )))
         }
     }
@@ -569,8 +567,7 @@ impl TenantManager {
         let tenants = self.tenants.read().await;
         if !tenants.contains_key(tenant_id) {
             return Err(OrbitError::internal(format!(
-                "Tenant not found: {}",
-                tenant_id
+                "Tenant not found: {tenant_id}"
             )));
         }
         drop(tenants);
@@ -597,8 +594,7 @@ impl TenantManager {
         let memberships = self.user_memberships.read().await;
         memberships
             .get(user_id)
-            .map(|tenants| tenants.contains(tenant_id))
-            .unwrap_or(false)
+            .is_some_and(|tenants| tenants.contains(tenant_id))
     }
 
     /// Get all tenants for a user

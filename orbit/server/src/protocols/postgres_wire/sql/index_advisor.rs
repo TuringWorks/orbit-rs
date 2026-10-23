@@ -103,7 +103,7 @@ impl IndexRecommendation {
         }
 
         if let Some(condition) = &self.partial_condition {
-            sql.push_str(&format!(" WHERE {}", condition));
+            sql.push_str(&format!(" WHERE {condition}"));
         }
 
         sql.push(';');
@@ -557,7 +557,7 @@ impl IndexAdvisor {
                             .estimate_storage(table_stats, std::slice::from_ref(column)),
                         write_overhead: 1.1, // 10% write overhead for single column
                         benefiting_queries: pattern.count,
-                        reason: format!("Frequently filtered by {} with {:?}", column, operator),
+                        reason: format!("Frequently filtered by {column} with {operator:?}"),
                         priority: self.calculate_priority(improvement, pattern.count),
                         partial_condition: None,
                         is_covering: false,
@@ -759,7 +759,7 @@ impl IndexAdvisor {
         _columns: &[String],
         table_stats: Option<&TableStatistics>,
     ) -> f64 {
-        let row_count = table_stats.map(|s| s.row_count).unwrap_or(10_000) as f64;
+        let row_count = table_stats.map_or(10_000, |s| s.row_count) as f64;
 
         // Simple model: improvement = log2(row_count) for indexed access vs full scan
         let scan_cost = row_count;
@@ -778,7 +778,7 @@ impl IndexAdvisor {
     }
 
     fn estimate_sort_improvement(&self, table_stats: Option<&TableStatistics>) -> f64 {
-        let row_count = table_stats.map(|s| s.row_count).unwrap_or(10_000) as f64;
+        let row_count = table_stats.map_or(10_000, |s| s.row_count) as f64;
 
         // Sort cost without index: O(n log n)
         let sort_cost = row_count * row_count.log2();
@@ -790,7 +790,7 @@ impl IndexAdvisor {
     }
 
     fn estimate_storage(&self, table_stats: Option<&TableStatistics>, columns: &[String]) -> usize {
-        let row_count = table_stats.map(|s| s.row_count).unwrap_or(10_000);
+        let row_count = table_stats.map_or(10_000, |s| s.row_count);
 
         // Rough estimate: 20 bytes per column per row for B-tree
         let bytes_per_row = 20 * columns.len();

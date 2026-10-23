@@ -144,8 +144,7 @@ impl GraphRAGStorage {
             Err(e) => {
                 error!("Failed to open GraphRAG RocksDB at {:?}: {}", db_path, e);
                 return Err(ProtocolError::Other(format!(
-                    "Failed to initialize GraphRAG RocksDB: {}",
-                    e
+                    "Failed to initialize GraphRAG RocksDB: {e}"
                 )));
             }
         }
@@ -172,8 +171,7 @@ impl GraphRAGStorage {
                             .properties
                             .get("kg_name")
                             .and_then(|v| v.as_str())
-                            .map(|n| n == self.kg_name)
-                            .unwrap_or(false)
+                            .is_some_and(|n| n == self.kg_name)
                         {
                             nodes.insert(node.id.clone(), node);
                             node_count += 1;
@@ -252,10 +250,10 @@ impl GraphRAGStorage {
 
             let key = format!("node:{}:{}", self.kg_name, node_with_kg.id);
             let value = serde_json::to_vec(&node_with_kg)
-                .map_err(|e| ProtocolError::Other(format!("Failed to serialize node: {}", e)))?;
+                .map_err(|e| ProtocolError::Other(format!("Failed to serialize node: {e}")))?;
 
             db.put_cf(nodes_cf, key.as_bytes(), &value).map_err(|e| {
-                ProtocolError::Other(format!("Failed to persist node to RocksDB: {}", e))
+                ProtocolError::Other(format!("Failed to persist node to RocksDB: {e}"))
             })?;
 
             // Update entity index for text-based lookup
@@ -268,7 +266,7 @@ impl GraphRAGStorage {
                 index_key.as_bytes(),
                 node_with_kg.id.as_bytes(),
             )
-            .map_err(|e| ProtocolError::Other(format!("Failed to update entity index: {}", e)))?;
+            .map_err(|e| ProtocolError::Other(format!("Failed to update entity index: {e}")))?;
         }
 
         Ok(())
@@ -319,11 +317,11 @@ impl GraphRAGStorage {
 
             let key = format!("rel:{}:{}", self.kg_name, rel.id);
             let value = serde_json::to_vec(&rel).map_err(|e| {
-                ProtocolError::Other(format!("Failed to serialize relationship: {}", e))
+                ProtocolError::Other(format!("Failed to serialize relationship: {e}"))
             })?;
 
             db.put_cf(rels_cf, key.as_bytes(), &value).map_err(|e| {
-                ProtocolError::Other(format!("Failed to persist relationship to RocksDB: {}", e))
+                ProtocolError::Other(format!("Failed to persist relationship to RocksDB: {e}"))
             })?;
 
             // Update relationship index
@@ -335,14 +333,14 @@ impl GraphRAGStorage {
             let from_key = format!("from:{}:{}:{}", self.kg_name, rel.from_entity_id, rel.id);
             db.put_cf(rel_index_cf, from_key.as_bytes(), rel.id.as_bytes())
                 .map_err(|e| {
-                    ProtocolError::Other(format!("Failed to update relationship index: {}", e))
+                    ProtocolError::Other(format!("Failed to update relationship index: {e}"))
                 })?;
 
             // Index by to_entity
             let to_key = format!("to:{}:{}:{}", self.kg_name, rel.to_entity_id, rel.id);
             db.put_cf(rel_index_cf, to_key.as_bytes(), rel.id.as_bytes())
                 .map_err(|e| {
-                    ProtocolError::Other(format!("Failed to update relationship index: {}", e))
+                    ProtocolError::Other(format!("Failed to update relationship index: {e}"))
                 })?;
         }
 
@@ -410,13 +408,12 @@ impl GraphRAGStorage {
             })?;
 
             let key = format!("kg:{}", self.kg_name);
-            let value = serde_json::to_vec(&metadata).map_err(|e| {
-                ProtocolError::Other(format!("Failed to serialize metadata: {}", e))
-            })?;
+            let value = serde_json::to_vec(&metadata)
+                .map_err(|e| ProtocolError::Other(format!("Failed to serialize metadata: {e}")))?;
 
             db.put_cf(metadata_cf, key.as_bytes(), &value)
                 .map_err(|e| {
-                    ProtocolError::Other(format!("Failed to persist metadata to RocksDB: {}", e))
+                    ProtocolError::Other(format!("Failed to persist metadata to RocksDB: {e}"))
                 })?;
         }
 

@@ -224,7 +224,7 @@ pub async fn handle_resource_read(
         } else {
             McpResponse::error(
                 request.id.clone(),
-                McpError::InvalidRequest(format!("Unsupported resource URI: {}", uri)),
+                McpError::InvalidRequest(format!("Unsupported resource URI: {uri}")),
             )
         }
     } else {
@@ -331,7 +331,7 @@ pub async fn handle_prompt_get(
             _ => {
                 McpResponse::error(
                     request.id.clone(),
-                    McpError::InvalidRequest(format!("Unknown prompt: {}. Available prompts: system_analysis, query_help, schema_exploration", name)),
+                    McpError::InvalidRequest(format!("Unknown prompt: {name}. Available prompts: system_analysis, query_help, schema_exploration")),
                 )
             }
         }

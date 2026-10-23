@@ -62,7 +62,7 @@ fn generate_node_id() -> String {
         .as_nanos();
     // Create 40-char hex ID by combining timestamp with padding
     // Redis uses 160-bit (40 hex chars) node IDs
-    let part1 = format!("{:032x}", now);
+    let part1 = format!("{now:032x}");
     let hash = crc16_xmodem(part1.as_bytes());
     format!("{}{:08x}", &part1[..32], hash as u32 | ((now as u32) << 16))
 }
@@ -207,9 +207,9 @@ impl ClusterCommands {
                 .iter()
                 .map(|(start, end)| {
                     if start == end {
-                        format!("{}", start)
+                        format!("{start}")
                     } else {
-                        format!("{}-{}", start, end)
+                        format!("{start}-{end}")
                     }
                 })
                 .collect::<Vec<_>>()

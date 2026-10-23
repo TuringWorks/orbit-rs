@@ -95,18 +95,18 @@ impl BoltGraphRAGProcedures {
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect()
             });
 
         let build_graph = config
             .get("build_graph")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(true);
 
         let generate_embeddings = config
             .get("generate_embeddings")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(true);
 
         // Get GraphRAG actor reference
@@ -262,19 +262,19 @@ impl BoltGraphRAGProcedures {
         // Parse config options
         let max_hops = config
             .get("max_hops")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as u32);
         let context_size = config
             .get("context_size")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as usize);
         let llm_provider = config
             .get("llm_provider")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
         let include_explanation = config
             .get("include_explanation")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         // Get GraphRAG actor reference
@@ -349,15 +349,15 @@ impl BoltGraphRAGProcedures {
         // Parse config options
         let max_hops = config
             .get("max_hops")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as u32);
         let include_explanation = config
             .get("include_explanation")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
         let max_results = config
             .get("max_results")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as usize);
 
         // Get GraphRAG actor reference
@@ -454,15 +454,13 @@ impl BoltGraphRAGProcedures {
 
         let limit = config
             .get("limit")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(10);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |n| n as usize);
 
         let similarity_threshold = config
             .get("similarity_threshold")
-            .and_then(|v| v.as_f64())
-            .map(|f| f as f32)
-            .unwrap_or(0.7);
+            .and_then(serde_json::Value::as_f64)
+            .map_or(0.7, |f| f as f32);
 
         // Get storage and find similar entities
         let storage = self.get_storage(&kg_name).await?;
@@ -475,8 +473,7 @@ impl BoltGraphRAGProcedures {
 
         if target_node.is_none() {
             return Err(ProtocolError::CypherError(format!(
-                "Entity '{}' not found in knowledge graph",
-                entity_text
+                "Entity '{entity_text}' not found in knowledge graph"
             )));
         }
 
@@ -516,7 +513,7 @@ impl BoltGraphRAGProcedures {
                             Some(node.id.clone()),
                             Some(node.text.clone()),
                             Some(format!("{:?}", node.entity_type)),
-                            Some(format!("{:.4}", similarity)),
+                            Some(format!("{similarity:.4}")),
                             Some(format!("{:.4}", node.confidence)),
                         ]);
                     }
@@ -564,7 +561,7 @@ impl BoltGraphRAGProcedures {
                     Some(node.id.clone()),
                     Some(node.text.clone()),
                     Some(format!("{:?}", node.entity_type)),
-                    Some(format!("{:.4}", similarity)),
+                    Some(format!("{similarity:.4}")),
                     Some(format!("{:.4}", node.confidence)),
                 ]);
             }
@@ -595,9 +592,8 @@ impl BoltGraphRAGProcedures {
 
         let max_results = config
             .get("max_results")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(20);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(20, |n| n as usize);
 
         // Use RAG query to find relevant entities and context
         let rag_query = GraphRAGQuery {
@@ -621,7 +617,7 @@ impl BoltGraphRAGProcedures {
             llm_provider: config
                 .get("llm_provider")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+                .map(std::string::ToString::to_string),
             search_strategy: None,
             include_explanation: false,
             max_results: Some(max_results),
@@ -759,13 +755,13 @@ impl BoltGraphRAGProcedures {
 
         let limit = config
             .get("limit")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .map(|n| n as usize);
 
         let entity_type_filter = config
             .get("entity_type")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
 
         // Get storage and list entities
         let storage = self.get_storage(&kg_name).await?;
@@ -828,9 +824,8 @@ impl BoltGraphRAGProcedures {
 
         let time_window_days = config
             .get("time_window_days")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as i64)
-            .unwrap_or(30);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(30, |n| n as i64);
 
         // Get storage and analyze trends
         let storage = self.get_storage(&kg_name).await?;
@@ -903,9 +898,8 @@ impl BoltGraphRAGProcedures {
 
         let min_community_size = config
             .get("min_community_size")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize)
-            .unwrap_or(3);
+            .and_then(serde_json::Value::as_u64)
+            .map_or(3, |n| n as usize);
 
         // Get storage
         let storage = self.get_storage(&kg_name).await?;

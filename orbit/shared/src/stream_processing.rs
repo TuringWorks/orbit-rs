@@ -264,11 +264,11 @@ impl StreamProcessor {
         match self.aggregation {
             AggregationFunction::Count => Ok(serde_json::json!(events.len())),
             AggregationFunction::Sum => {
-                let sum: f64 = events.iter().filter_map(|e| e.as_number()).sum();
+                let sum: f64 = events.iter().filter_map(StreamEvent::as_number).sum();
                 Ok(serde_json::json!(sum))
             }
             AggregationFunction::Avg => {
-                let values: Vec<f64> = events.iter().filter_map(|e| e.as_number()).collect();
+                let values: Vec<f64> = events.iter().filter_map(StreamEvent::as_number).collect();
                 if values.is_empty() {
                     return Ok(serde_json::Value::Null);
                 }
@@ -278,14 +278,14 @@ impl StreamProcessor {
             AggregationFunction::Min => {
                 let min = events
                     .iter()
-                    .filter_map(|e| e.as_number())
+                    .filter_map(StreamEvent::as_number)
                     .min_by(|a, b| a.partial_cmp(b).unwrap());
                 Ok(serde_json::json!(min))
             }
             AggregationFunction::Max => {
                 let max = events
                     .iter()
-                    .filter_map(|e| e.as_number())
+                    .filter_map(StreamEvent::as_number)
                     .max_by(|a, b| a.partial_cmp(b).unwrap());
                 Ok(serde_json::json!(max))
             }

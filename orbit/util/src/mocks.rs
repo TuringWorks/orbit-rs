@@ -4,6 +4,7 @@
 //! Orbit components for use in testing. The mocks can be configured to simulate various
 //! scenarios including success, failure, and edge cases.
 
+use crate::sync::MutexExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -147,7 +148,7 @@ impl MockOrbitClient {
             if !actor.is_active {
                 actor.is_active = true;
                 if self.config.verbose_logging {
-                    eprintln!("🔄 Mock: Activated actor {} ({})", actor_id, actor_type);
+                    eprintln!("🔄 Mock: Activated actor {actor_id} ({actor_type})");
                 }
             }
             actor.clone()
@@ -156,7 +157,7 @@ impl MockOrbitClient {
             actor.is_active = true;
 
             if self.config.verbose_logging {
-                eprintln!("✨ Mock: Created new actor {} ({})", actor_id, actor_type);
+                eprintln!("✨ Mock: Created new actor {actor_id} ({actor_type})");
             }
 
             registry.insert(actor_id.to_string(), actor.clone());
@@ -178,12 +179,12 @@ impl MockOrbitClient {
             actor.last_access = std::time::SystemTime::now();
 
             if self.config.verbose_logging {
-                eprintln!("📝 Mock: Updated actor {} state", actor_id);
+                eprintln!("📝 Mock: Updated actor {actor_id} state");
             }
 
             Ok(())
         } else {
-            Err(format!("Actor {} not found", actor_id))
+            Err(format!("Actor {actor_id} not found"))
         }
     }
 
@@ -203,18 +204,14 @@ impl MockOrbitClient {
 
         if self.should_fail() {
             return Err(format!(
-                "Mock failure: Actor invocation failed for {}.{}",
-                actor_type, method
+                "Mock failure: Actor invocation failed for {actor_type}.{method}"
             ));
         }
 
         let actor = self.get_or_create_actor(actor_id, actor_type).await;
 
         if self.config.verbose_logging {
-            eprintln!(
-                "📞 Mock: Invoking {}.{}() on actor {}",
-                actor_type, method, actor_id
-            );
+            eprintln!("📞 Mock: Invoking {actor_type}.{method}() on actor {actor_id}");
         }
 
         // Simulate different method behaviors
@@ -248,7 +245,7 @@ impl MockOrbitClient {
                 let current_value: i64 = actor
                     .state
                     .get("value")
-                    .and_then(|v| v.as_i64())
+                    .and_then(serde_json::Value::as_i64)
                     .unwrap_or(0);
                 let increment_amount: i64 =
                     serde_json::from_value(serde_json::to_value(args).unwrap_or_default())
@@ -276,7 +273,7 @@ impl MockOrbitClient {
                 let value: i64 = actor
                     .state
                     .get("value")
-                    .and_then(|v| v.as_i64())
+                    .and_then(serde_json::Value::as_i64)
                     .unwrap_or(0);
                 serde_json::from_value(serde_json::json!(value)).unwrap_or_default()
             }
@@ -320,12 +317,12 @@ impl MockOrbitClient {
             actor.is_active = false;
 
             if self.config.verbose_logging {
-                eprintln!("😴 Mock: Deactivated actor {}", actor_id);
+                eprintln!("😴 Mock: Deactivated actor {actor_id}");
             }
 
             Ok(())
         } else {
-            Err(format!("Actor {} not found", actor_id))
+            Err(format!("Actor {actor_id} not found"))
         }
     }
 
@@ -340,7 +337,7 @@ impl MockOrbitClient {
             node_id: self.node_id.clone(),
             active_actors,
             total_actors,
-            connection_count: *self.connection_count.lock().unwrap(),
+            connection_count: *self.connection_count.lock_recover(),
         }
     }
 
@@ -398,12 +395,12 @@ impl MockOrbitServer {
 
     /// Register an actor type
     pub async fn register_actor_type(&self, actor_type: &str) -> Result<(), String> {
-        let mut types = self.registered_types.lock().unwrap();
+        let mut types = self.registered_types.lock_recover();
         if !types.contains(&actor_type.to_string()) {
             types.push(actor_type.to_string());
 
             if self.config.verbose_logging {
-                eprintln!("📋 Mock: Registered actor type {}", actor_type);
+                eprintln!("📋 Mock: Registered actor type {actor_type}");
             }
         }
         Ok(())
@@ -415,7 +412,7 @@ impl MockOrbitServer {
             return Err("Mock failure: Server startup failed".to_string());
         }
 
-        *self.is_running.lock().unwrap() = true;
+        *self.is_running.lock_recover() = true;
 
         if self.config.verbose_logging {
             eprintln!("🚀 Mock: OrbitServer started on port {}", self.port);
@@ -426,7 +423,7 @@ impl MockOrbitServer {
 
     /// Stop the mock server
     pub async fn stop(&self) -> Result<(), String> {
-        *self.is_running.lock().unwrap() = false;
+        *self.is_running.lock_recover() = false;
 
         if self.config.verbose_logging {
             eprintln!("🛑 Mock: OrbitServer stopped");
@@ -437,13 +434,13 @@ impl MockOrbitServer {
 
     /// Check if server is running
     pub fn is_running(&self) -> bool {
-        *self.is_running.lock().unwrap()
+        *self.is_running.lock_recover()
     }
 
     /// Get server statistics
     pub async fn get_stats(&self) -> MockServerStats {
         let registry = self.actor_registry.read().await;
-        let types = self.registered_types.lock().unwrap();
+        let types = self.registered_types.lock_recover();
 
         MockServerStats {
             port: self.port,

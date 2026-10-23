@@ -449,9 +449,7 @@ impl GPUColumnarAnalytics {
                     .par_iter()
                     .enumerate()
                     .filter(|(idx, _)| {
-                        null_bitmap
-                            .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                            .unwrap_or(true)
+                        null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
                     })
                     .map(|(_, &v)| v as i64)
                     .sum();
@@ -466,9 +464,7 @@ impl GPUColumnarAnalytics {
                     .par_iter()
                     .enumerate()
                     .filter(|(idx, _)| {
-                        null_bitmap
-                            .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                            .unwrap_or(true)
+                        null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
                     })
                     .map(|(_, &v)| v)
                     .min();
@@ -483,9 +479,7 @@ impl GPUColumnarAnalytics {
                     .par_iter()
                     .enumerate()
                     .filter(|(idx, _)| {
-                        null_bitmap
-                            .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                            .unwrap_or(true)
+                        null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
                     })
                     .map(|(_, &v)| v)
                     .max();
@@ -521,9 +515,7 @@ impl GPUColumnarAnalytics {
                     .par_iter()
                     .enumerate()
                     .filter(|(idx, _)| {
-                        null_bitmap
-                            .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                            .unwrap_or(true)
+                        null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
                     })
                     .map(|(_, &v)| (v as i64, 1))
                     .reduce(|| (0, 0), |(s1, c1), (s2, c2)| (s1 + s2, c1 + c2));
@@ -551,10 +543,7 @@ impl GPUColumnarAnalytics {
             AggregateFunction::Sum => {
                 let mut sum: i64 = 0;
                 for (idx, &value) in values.iter().enumerate() {
-                    if null_bitmap
-                        .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                        .unwrap_or(true)
-                    {
+                    if null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0) {
                         sum += value as i64;
                     }
                 }
@@ -567,11 +556,8 @@ impl GPUColumnarAnalytics {
             AggregateFunction::Min => {
                 let mut min: Option<i32> = None;
                 for (idx, &value) in values.iter().enumerate() {
-                    if null_bitmap
-                        .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                        .unwrap_or(true)
-                    {
-                        min = Some(min.map(|m| m.min(value)).unwrap_or(value));
+                    if null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0) {
+                        min = Some(min.map_or(value, |m| m.min(value)));
                     }
                 }
                 AggregationResult {
@@ -583,11 +569,8 @@ impl GPUColumnarAnalytics {
             AggregateFunction::Max => {
                 let mut max: Option<i32> = None;
                 for (idx, &value) in values.iter().enumerate() {
-                    if null_bitmap
-                        .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                        .unwrap_or(true)
-                    {
-                        max = Some(max.map(|m| m.max(value)).unwrap_or(value));
+                    if null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0) {
+                        max = Some(max.map_or(value, |m| m.max(value)));
                     }
                 }
                 AggregationResult {
@@ -621,10 +604,7 @@ impl GPUColumnarAnalytics {
                 let mut sum: i64 = 0;
                 let mut count = 0;
                 for (idx, &value) in values.iter().enumerate() {
-                    if null_bitmap
-                        .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                        .unwrap_or(true)
-                    {
+                    if null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0) {
                         sum += value as i64;
                         count += 1;
                     }
@@ -687,9 +667,7 @@ impl GPUColumnarAnalytics {
                     .par_iter()
                     .enumerate()
                     .filter(|(idx, _)| {
-                        null_bitmap
-                            .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                            .unwrap_or(true)
+                        null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
                     })
                     .map(|(_, &v)| v)
                     .sum();
@@ -704,9 +682,7 @@ impl GPUColumnarAnalytics {
                     .par_iter()
                     .enumerate()
                     .filter(|(idx, _)| {
-                        null_bitmap
-                            .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                            .unwrap_or(true)
+                        null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
                     })
                     .map(|(_, &v)| v)
                     .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -721,9 +697,7 @@ impl GPUColumnarAnalytics {
                     .par_iter()
                     .enumerate()
                     .filter(|(idx, _)| {
-                        null_bitmap
-                            .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                            .unwrap_or(true)
+                        null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
                     })
                     .map(|(_, &v)| v)
                     .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -759,9 +733,7 @@ impl GPUColumnarAnalytics {
                     .par_iter()
                     .enumerate()
                     .filter(|(idx, _)| {
-                        null_bitmap
-                            .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                            .unwrap_or(true)
+                        null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
                     })
                     .map(|(_, &v)| (v, 1))
                     .reduce(|| (0.0, 0), |(s1, c1), (s2, c2)| (s1 + s2, c1 + c2));
@@ -789,10 +761,7 @@ impl GPUColumnarAnalytics {
             AggregateFunction::Sum => {
                 let mut sum = 0.0;
                 for (idx, &value) in values.iter().enumerate() {
-                    if null_bitmap
-                        .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                        .unwrap_or(true)
-                    {
+                    if null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0) {
                         sum += value;
                     }
                 }
@@ -805,11 +774,8 @@ impl GPUColumnarAnalytics {
             AggregateFunction::Min => {
                 let mut min: Option<f64> = None;
                 for (idx, &value) in values.iter().enumerate() {
-                    if null_bitmap
-                        .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                        .unwrap_or(true)
-                    {
-                        min = Some(min.map(|m| m.min(value)).unwrap_or(value));
+                    if null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0) {
+                        min = Some(min.map_or(value, |m| m.min(value)));
                     }
                 }
                 AggregationResult {
@@ -821,11 +787,8 @@ impl GPUColumnarAnalytics {
             AggregateFunction::Max => {
                 let mut max: Option<f64> = None;
                 for (idx, &value) in values.iter().enumerate() {
-                    if null_bitmap
-                        .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                        .unwrap_or(true)
-                    {
-                        max = Some(max.map(|m| m.max(value)).unwrap_or(value));
+                    if null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0) {
+                        max = Some(max.map_or(value, |m| m.max(value)));
                     }
                 }
                 AggregationResult {
@@ -859,10 +822,7 @@ impl GPUColumnarAnalytics {
                 let mut sum = 0.0;
                 let mut count = 0;
                 for (idx, &value) in values.iter().enumerate() {
-                    if null_bitmap
-                        .map(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0)
-                        .unwrap_or(true)
-                    {
+                    if null_bitmap.is_none_or(|bm| (bm[idx / 8] >> (idx % 8)) & 1 == 0) {
                         sum += value;
                         count += 1;
                     }

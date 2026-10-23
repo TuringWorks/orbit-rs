@@ -178,19 +178,19 @@ impl fmt::Display for UnifiedExecutionResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             UnifiedExecutionResult::Select { row_count, .. } => {
-                write!(f, "SELECT {}", row_count)
+                write!(f, "SELECT {row_count}")
             }
             UnifiedExecutionResult::Insert { count, .. } => {
-                write!(f, "INSERT 0 {}", count)
+                write!(f, "INSERT 0 {count}")
             }
             UnifiedExecutionResult::Update { count, .. } => {
-                write!(f, "UPDATE {}", count)
+                write!(f, "UPDATE {count}")
             }
             UnifiedExecutionResult::Delete { count, .. } => {
-                write!(f, "DELETE {}", count)
+                write!(f, "DELETE {count}")
             }
             UnifiedExecutionResult::Merge { count, .. } => {
-                write!(f, "MERGE {}", count)
+                write!(f, "MERGE {count}")
             }
             UnifiedExecutionResult::CreateTable { .. } => {
                 write!(f, "CREATE TABLE")
@@ -229,7 +229,7 @@ impl fmt::Display for UnifiedExecutionResult {
                 write!(f, "SET")
             }
             UnifiedExecutionResult::Other { message, .. } => {
-                write!(f, "{}", message)
+                write!(f, "{message}")
             }
         }
     }
@@ -389,7 +389,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     let json_val = evaluator
                         .evaluate(&json_table.context_item, &context)
                         .map_err(|e| {
-                            ProtocolError::PostgresError(format!("Evaluation error: {}", e))
+                            ProtocolError::PostgresError(format!("Evaluation error: {e}"))
                         })?;
 
                     let json_str = match json_val {
@@ -514,7 +514,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                         match item {
                             SelectItem::Expression { expr, alias } => {
                                 let value = evaluator.evaluate(expr, &context).map_err(|e| {
-                                    ProtocolError::PostgresError(format!("Evaluation error: {}", e))
+                                    ProtocolError::PostgresError(format!("Evaluation error: {e}"))
                                 })?;
 
                                 let col_name = alias.clone().unwrap_or_else(|| "expr".to_string());
@@ -600,7 +600,7 @@ impl SqlExecutionStrategy for MvccExecutionStrategy {
                     for col in &columns {
                         let value = row
                             .get(col)
-                            .map(|v| v.to_postgres_string())
+                            .map(super::types::SqlValue::to_postgres_string)
                             .or(Some("".to_string()));
                         string_row.push(value);
                     }

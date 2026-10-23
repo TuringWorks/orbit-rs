@@ -1,3 +1,4 @@
+use orbit_util::RwLockExt;
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use dashmap::DashMap;
@@ -157,7 +158,7 @@ impl DefaultExtentIndex {
                 extent: old_metadata.extent,
                 connections,
                 access_count: AtomicU64::new(old_metadata.access_count.load(Ordering::Relaxed)),
-                last_access: std::sync::RwLock::new(*old_metadata.last_access.read().unwrap()),
+                last_access: std::sync::RwLock::new(*old_metadata.last_access.read_recover()),
                 hotness_score: std::sync::atomic::AtomicU32::new(old_metadata.hotness_score.load(Ordering::Relaxed)),
             });
             *metadata.value_mut() = new_metadata;

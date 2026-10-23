@@ -392,8 +392,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                     props.insert(
                                         "message".to_string(),
                                         serde_json::Value::String(format!(
-                                            "Index {} created",
-                                            index_name
+                                            "Index {index_name} created"
                                         )),
                                     );
                                     result_nodes.push(GraphNode::new(
@@ -474,8 +473,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                     props.insert(
                                         "message".to_string(),
                                         serde_json::Value::String(format!(
-                                            "Constraint {} created",
-                                            constraint_name
+                                            "Constraint {constraint_name} created"
                                         )),
                                     );
                                     result_nodes.push(GraphNode::new(
@@ -509,10 +507,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                     let mut props = HashMap::new();
                                     props.insert(
                                         "message".to_string(),
-                                        serde_json::Value::String(format!(
-                                            "Index {} dropped",
-                                            name
-                                        )),
+                                        serde_json::Value::String(format!("Index {name} dropped")),
                                     );
                                     result_nodes.push(GraphNode::new(
                                         vec!["_DDLResult".to_string()],
@@ -549,8 +544,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                                     props.insert(
                                         "message".to_string(),
                                         serde_json::Value::String(format!(
-                                            "Constraint {} dropped",
-                                            name
+                                            "Constraint {name} dropped"
                                         )),
                                     );
                                     result_nodes.push(GraphNode::new(
@@ -818,8 +812,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                     // Check if any node matches this variable binding
                     context
                         .get_nodes(&item.expression)
-                        .map(|bound| bound.iter().any(|b| b.id == n.id))
-                        .unwrap_or(false)
+                        .is_some_and(|bound| bound.iter().any(|b| b.id == n.id))
                 })
                 .cloned()
                 .collect();
@@ -1024,7 +1017,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let row_count = context
             .bound_nodes
             .values()
-            .map(|v| v.len())
+            .map(std::vec::Vec::len)
             .max()
             .unwrap_or(result_nodes.len());
 
@@ -1212,7 +1205,11 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 .as_ref()
                 .ok_or_else(|| ProtocolError::CypherError("Storage not available".to_string()))?;
             let relationships = storage
-                .get_relationships(&current_node_id, direction, rel_types.map(|t| t.to_vec()))
+                .get_relationships(
+                    &current_node_id,
+                    direction,
+                    rel_types.map(<[std::string::String]>::to_vec),
+                )
                 .await
                 .map_err(|e| ProtocolError::ActorError(e.to_string()))?;
 
@@ -2129,7 +2126,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
                 .unwrap_or_else(|| match &item.expression {
                     Expression::Variable(v) => v.clone(),
                     Expression::PropertyAccess { variable, property } => {
-                        format!("{}_{}", variable, property)
+                        format!("{variable}_{property}")
                     }
                     _ => "result".to_string(),
                 });
@@ -2272,7 +2269,7 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let row_count = context
             .bound_nodes
             .values()
-            .map(|v| v.len())
+            .map(std::vec::Vec::len)
             .max()
             .unwrap_or(result_nodes.len());
 
@@ -2392,13 +2389,16 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
         let result = match function {
             AggregationFunction::Count => serde_json::Value::Number(values.len().into()),
             AggregationFunction::Sum => {
-                let sum: f64 = values.iter().filter_map(|v| v.as_f64()).sum();
+                let sum: f64 = values.iter().filter_map(serde_json::Value::as_f64).sum();
                 serde_json::Value::Number(
                     serde_json::Number::from_f64(sum).unwrap_or(serde_json::Number::from(0)),
                 )
             }
             AggregationFunction::Avg => {
-                let nums: Vec<f64> = values.iter().filter_map(|v| v.as_f64()).collect();
+                let nums: Vec<f64> = values
+                    .iter()
+                    .filter_map(serde_json::Value::as_f64)
+                    .collect();
                 if nums.is_empty() {
                     serde_json::Value::Null
                 } else {
@@ -2410,24 +2410,22 @@ impl<S: GraphStorage + Send + Sync + 'static> GraphEngine<S> {
             }
             AggregationFunction::Min => values
                 .iter()
-                .filter_map(|v| v.as_f64())
+                .filter_map(serde_json::Value::as_f64)
                 .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                .map(|n| {
+                .map_or(serde_json::Value::Null, |n| {
                     serde_json::Value::Number(
                         serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0)),
                     )
-                })
-                .unwrap_or(serde_json::Value::Null),
+                }),
             AggregationFunction::Max => values
                 .iter()
-                .filter_map(|v| v.as_f64())
+                .filter_map(serde_json::Value::as_f64)
                 .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-                .map(|n| {
+                .map_or(serde_json::Value::Null, |n| {
                     serde_json::Value::Number(
                         serde_json::Number::from_f64(n).unwrap_or(serde_json::Number::from(0)),
                     )
-                })
-                .unwrap_or(serde_json::Value::Null),
+                }),
             AggregationFunction::Collect => serde_json::Value::Array(values),
         };
 

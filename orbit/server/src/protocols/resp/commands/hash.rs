@@ -39,23 +39,21 @@ impl HashCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
         let value: Option<String> = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR serialization error: {}",
-                e
+                "ERR serialization error: {e}"
             ))
         })?;
 
         debug!("HGET {} {} -> {:?}", key, field, value);
 
-        Ok(value
-            .map(|v| RespValue::BulkString(Bytes::from(v.into_bytes())))
-            .unwrap_or(RespValue::null()))
+        Ok(value.map_or(RespValue::null(), |v| {
+            RespValue::BulkString(Bytes::from(v.into_bytes()))
+        }))
     }
 
     async fn cmd_hset(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
@@ -91,15 +89,13 @@ impl HashCommands {
                 .await
                 .map_err(|e| {
                     crate::protocols::error::ProtocolError::RespError(format!(
-                        "ERR actor invocation failed: {}",
-                        e
+                        "ERR actor invocation failed: {e}"
                     ))
                 })?;
 
             let was_new: bool = serde_json::from_value(result).map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR serialization error: {}",
-                    e
+                    "ERR serialization error: {e}"
                 ))
             })?;
 
@@ -124,15 +120,13 @@ impl HashCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
         let pairs: Vec<(String, String)> = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR serialization error: {}",
-                e
+                "ERR serialization error: {e}"
             ))
         })?;
 
@@ -173,16 +167,13 @@ impl HashCommands {
                     let value: Option<String> =
                         serde_json::from_value(value_json).map_err(|e| {
                             crate::protocols::error::ProtocolError::RespError(format!(
-                                "ERR serialization error: {}",
-                                e
+                                "ERR serialization error: {e}"
                             ))
                         })?;
 
-                    result.push(
-                        value
-                            .map(|v| RespValue::BulkString(Bytes::from(v.into_bytes())))
-                            .unwrap_or(RespValue::null()),
-                    );
+                    result.push(value.map_or(RespValue::null(), |v| {
+                        RespValue::BulkString(Bytes::from(v.into_bytes()))
+                    }));
                 }
                 Err(_) => result.push(RespValue::null()),
             }
@@ -223,8 +214,7 @@ impl HashCommands {
                 .await
                 .map_err(|e| {
                     crate::protocols::error::ProtocolError::RespError(format!(
-                        "ERR actor invocation failed: {}",
-                        e
+                        "ERR actor invocation failed: {e}"
                     ))
                 })?;
 
@@ -254,15 +244,13 @@ impl HashCommands {
                 .await
                 .map_err(|e| {
                     crate::protocols::error::ProtocolError::RespError(format!(
-                        "ERR actor invocation failed: {}",
-                        e
+                        "ERR actor invocation failed: {e}"
                     ))
                 })?;
 
             let was_deleted: bool = serde_json::from_value(result).map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR serialization error: {}",
-                    e
+                    "ERR serialization error: {e}"
                 ))
             })?;
 
@@ -288,15 +276,13 @@ impl HashCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
         let exists: bool = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR serialization error: {}",
-                e
+                "ERR serialization error: {e}"
             ))
         })?;
 
@@ -316,15 +302,13 @@ impl HashCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
         let keys: Vec<String> = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR serialization error: {}",
-                e
+                "ERR serialization error: {e}"
             ))
         })?;
 
@@ -349,15 +333,13 @@ impl HashCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
         let values: Vec<String> = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR serialization error: {}",
-                e
+                "ERR serialization error: {e}"
             ))
         })?;
 
@@ -382,15 +364,13 @@ impl HashCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
         let len: i64 = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR serialization error: {}",
-                e
+                "ERR serialization error: {e}"
             ))
         })?;
 
@@ -419,15 +399,13 @@ impl HashCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
         let new_value: i64 = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR serialization error: {}",
-                e
+                "ERR serialization error: {e}"
             ))
         })?;
 

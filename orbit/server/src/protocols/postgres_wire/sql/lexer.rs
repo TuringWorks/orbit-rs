@@ -1019,7 +1019,7 @@ impl Lexer {
             ("FALSE", Token::BooleanLiteral(false)),
         ];
 
-        for (keyword, token) in keywords.iter() {
+        for (keyword, token) in &keywords {
             self.keywords.insert(keyword.to_string(), token.clone());
         }
     }

@@ -38,7 +38,7 @@ pub fn argon2_generate(args: &[Value]) -> ProtocolResult<Value> {
 
     let hash = argon2
         .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| ProtocolError::PostgresError(format!("Argon2 hash failed: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Argon2 hash failed: {e}")))?;
 
     Ok(json!(hash.to_string()))
 }
@@ -62,7 +62,7 @@ pub fn argon2_compare(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("Hash must be a string".to_string()))?;
 
     let parsed_hash = PasswordHash::new(hash_str)
-        .map_err(|e| ProtocolError::PostgresError(format!("Invalid Argon2 hash format: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Invalid Argon2 hash format: {e}")))?;
 
     let argon2 = Argon2::default();
     let is_valid = argon2
@@ -88,7 +88,7 @@ pub fn bcrypt_generate(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("Password must be a string".to_string()))?;
 
     let hash_str = hash(password, DEFAULT_COST)
-        .map_err(|e| ProtocolError::PostgresError(format!("Bcrypt hash failed: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Bcrypt hash failed: {e}")))?;
 
     Ok(json!(hash_str))
 }
@@ -112,7 +112,7 @@ pub fn bcrypt_compare(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("Hash must be a string".to_string()))?;
 
     let is_valid = verify(password, hash_str)
-        .map_err(|e| ProtocolError::PostgresError(format!("Bcrypt verify failed: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Bcrypt verify failed: {e}")))?;
 
     Ok(json!(is_valid))
 }
@@ -135,7 +135,7 @@ pub fn pbkdf2_generate(args: &[Value]) -> ProtocolResult<Value> {
     let salt = Pbkdf2Salt::generate(&mut OsRng);
     let hash = Pbkdf2
         .hash_password(password.as_bytes(), &salt)
-        .map_err(|e| ProtocolError::PostgresError(format!("PBKDF2 hash failed: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("PBKDF2 hash failed: {e}")))?;
 
     Ok(json!(hash.to_string()))
 }
@@ -159,7 +159,7 @@ pub fn pbkdf2_compare(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("Hash must be a string".to_string()))?;
 
     let parsed_hash = PasswordHash::new(hash_str)
-        .map_err(|e| ProtocolError::PostgresError(format!("Invalid PBKDF2 hash format: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Invalid PBKDF2 hash format: {e}")))?;
 
     let is_valid = Pbkdf2
         .verify_password(password.as_bytes(), &parsed_hash)

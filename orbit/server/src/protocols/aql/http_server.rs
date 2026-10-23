@@ -93,7 +93,7 @@ impl AqlHttpServer {
                 "Failed to bind AQL HTTP server to {}: {}",
                 self.bind_addr, e
             );
-            ProtocolError::Other(format!("Failed to bind AQL HTTP server: {}", e))
+            ProtocolError::Other(format!("Failed to bind AQL HTTP server: {e}"))
         })?;
 
         info!("AQL/ArangoDB HTTP server listening on {}", self.bind_addr);
@@ -270,7 +270,7 @@ async fn handle_cursor_request(
                     }
                     Err(e) => {
                         error!("AQL query execution error: {}", e);
-                        error_response(StatusCode::BAD_REQUEST, &format!("Query error: {}", e))
+                        error_response(StatusCode::BAD_REQUEST, &format!("Query error: {e}"))
                     }
                 },
                 Err(e) => {

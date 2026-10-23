@@ -377,7 +377,7 @@ impl JsonOperations {
             let key = match &chunk[0] {
                 SqlValue::Text(s) => s.clone(),
                 SqlValue::Varchar(s) => s.clone(),
-                other => format!("{:?}", other),
+                other => format!("{other:?}"),
             };
             map.insert(key, sql_value_to_json(chunk[1].clone())?);
         }
@@ -511,7 +511,7 @@ impl JsonOperations {
     /// Pretty print JSONB with indentation (jsonb_pretty)
     pub fn jsonb_pretty(json: &JsonValue) -> ProtocolResult<SqlValue> {
         let pretty = serde_json::to_string_pretty(json)
-            .map_err(|e| ProtocolError::PostgresError(format!("Pretty print failed: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Pretty print failed: {e}")))?;
         Ok(SqlValue::Text(pretty))
     }
 }
@@ -532,8 +532,7 @@ fn contains_json(left: &JsonValue, right: &JsonValue) -> bool {
             right_map.iter().all(|(key, right_val)| {
                 left_map
                     .get(key)
-                    .map(|left_val| contains_json(left_val, right_val))
-                    .unwrap_or(false)
+                    .is_some_and(|left_val| contains_json(left_val, right_val))
             })
         }
         (JsonValue::Array(left_arr), JsonValue::Array(right_arr)) => {
@@ -742,8 +741,7 @@ pub fn sql_value_to_json(value: SqlValue) -> ProtocolResult<JsonValue> {
             Ok(JsonValue::Object(json_map))
         }
         _ => Err(ProtocolError::PostgresError(format!(
-            "Cannot convert {:?} to JSON",
-            value
+            "Cannot convert {value:?} to JSON"
         ))),
     }
 }
@@ -820,16 +818,14 @@ impl JsonSchema {
                 if let Some(min) = self.minimum {
                     if num < min {
                         return Err(ProtocolError::PostgresError(format!(
-                            "Number {} is less than minimum {}",
-                            num, min
+                            "Number {num} is less than minimum {min}"
                         )));
                     }
                 }
                 if let Some(max) = self.maximum {
                     if num > max {
                         return Err(ProtocolError::PostgresError(format!(
-                            "Number {} exceeds maximum {}",
-                            num, max
+                            "Number {num} exceeds maximum {max}"
                         )));
                     }
                 }
@@ -851,8 +847,7 @@ impl JsonSchema {
                     for req_key in required {
                         if !map.contains_key(req_key) {
                             return Err(ProtocolError::PostgresError(format!(
-                                "Required property '{}' is missing",
-                                req_key
+                                "Required property '{req_key}' is missing"
                             )));
                         }
                     }

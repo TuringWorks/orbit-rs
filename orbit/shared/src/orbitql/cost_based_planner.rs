@@ -140,31 +140,28 @@ impl CostBasedQueryPlanner {
     ) -> Result<Vec<PlanAlternative>, PlanningError> {
         let mut alternatives = Vec::new();
 
-        match stmt {
-            Statement::Select(select) => {
-                // Generate different scan alternatives
-                alternatives.extend(self.generate_scan_alternatives(&select).await?);
+        if let Statement::Select(select) = stmt {
+            // Generate different scan alternatives
+            alternatives.extend(self.generate_scan_alternatives(&select).await?);
 
-                // Generate different join alternatives if applicable
-                if !select.join_clauses.is_empty() && self.config.enable_join_enumeration {
-                    alternatives.extend(self.generate_join_alternatives(&select).await?);
-                }
-
-                // Generate different aggregation alternatives
-                if !select.group_by.is_empty() {
-                    alternatives.extend(self.generate_aggregation_alternatives(&select).await?);
-                }
-
-                // Generate different sorting alternatives
-                if !select.order_by.is_empty() {
-                    alternatives.extend(self.generate_sort_alternatives(&select).await?);
-                }
+            // Generate different join alternatives if applicable
+            if !select.join_clauses.is_empty() && self.config.enable_join_enumeration {
+                alternatives.extend(self.generate_join_alternatives(&select).await?);
             }
-            _ => {
-                // For non-SELECT statements, generate a single basic plan
-                let basic_plan = self.generate_basic_plan(stmt).await?;
-                alternatives.push(basic_plan);
+
+            // Generate different aggregation alternatives
+            if !select.group_by.is_empty() {
+                alternatives.extend(self.generate_aggregation_alternatives(&select).await?);
             }
+
+            // Generate different sorting alternatives
+            if !select.order_by.is_empty() {
+                alternatives.extend(self.generate_sort_alternatives(&select).await?);
+            }
+        } else {
+            // For non-SELECT statements, generate a single basic plan
+            let basic_plan = self.generate_basic_plan(stmt).await?;
+            alternatives.push(basic_plan);
         }
 
         // Limit number of alternatives

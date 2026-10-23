@@ -247,9 +247,11 @@ impl Histogram {
             return 0.33; // Default estimate
         }
 
-        let range_min = min.and_then(|v| v.to_f64()).unwrap_or(self.boundaries[0]);
+        let range_min = min
+            .and_then(SqlValueExt::to_f64)
+            .unwrap_or(self.boundaries[0]);
         let range_max = max
-            .and_then(|v| v.to_f64())
+            .and_then(SqlValueExt::to_f64)
             .unwrap_or(*self.boundaries.last().unwrap());
 
         let mut matching_count = 0usize;
@@ -453,20 +455,16 @@ impl StatisticsManager {
             let selectivity = match predicate {
                 Predicate::Eq { column, .. } => stats
                     .get_column_stats(column)
-                    .map(|cs| cs.selectivity_eq(stats.row_count))
-                    .unwrap_or(0.1),
+                    .map_or(0.1, |cs| cs.selectivity_eq(stats.row_count)),
                 Predicate::Range { column, min, max } => stats
                     .get_column_stats(column)
-                    .map(|cs| cs.selectivity_range(min.as_ref(), max.as_ref()))
-                    .unwrap_or(0.33),
+                    .map_or(0.33, |cs| cs.selectivity_range(min.as_ref(), max.as_ref())),
                 Predicate::IsNull { column } => stats
                     .get_column_stats(column)
-                    .map(|cs| cs.selectivity_null(stats.row_count))
-                    .unwrap_or(0.01),
+                    .map_or(0.01, |cs| cs.selectivity_null(stats.row_count)),
                 Predicate::IsNotNull { column } => stats
                     .get_column_stats(column)
-                    .map(|cs| 1.0 - cs.selectivity_null(stats.row_count))
-                    .unwrap_or(0.99),
+                    .map_or(0.99, |cs| 1.0 - cs.selectivity_null(stats.row_count)),
             };
             combined_selectivity *= selectivity;
         }

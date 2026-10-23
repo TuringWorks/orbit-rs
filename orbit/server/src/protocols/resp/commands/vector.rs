@@ -147,7 +147,7 @@ impl TextIndex {
                         value
                             .to_lowercase()
                             .split_whitespace()
-                            .map(|s| s.to_string())
+                            .map(std::string::ToString::to_string)
                             .collect()
                     } else {
                         self.tokenize(value)
@@ -364,8 +364,7 @@ impl VectorCommands {
                     let metric_str = self.get_string_arg(args, i, "VECTOR.CREATE")?;
                     distance_metric = DistanceMetric::from_str(&metric_str).ok_or_else(|| {
                         crate::protocols::error::ProtocolError::RespError(format!(
-                            "ERR unknown distance metric '{}'",
-                            metric_str
+                            "ERR unknown distance metric '{metric_str}'"
                         ))
                     })?;
                 }
@@ -390,8 +389,7 @@ impl VectorCommands {
 
         if indices_guard.contains_key(&index_name) {
             return Err(crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR index '{}' already exists",
-                index_name
+                "ERR index '{index_name}' already exists"
             )));
         }
 
@@ -424,8 +422,7 @@ impl VectorCommands {
             .map(|s| {
                 s.trim().parse::<f32>().map_err(|_| {
                     crate::protocols::error::ProtocolError::RespError(format!(
-                        "ERR invalid vector component '{}'",
-                        s
+                        "ERR invalid vector component '{s}'"
                     ))
                 })
             })
@@ -446,8 +443,7 @@ impl VectorCommands {
 
         let index = indices_guard.get_mut(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR index '{}' does not exist",
-                index_name
+                "ERR index '{index_name}' does not exist"
             ))
         })?;
 
@@ -491,8 +487,7 @@ impl VectorCommands {
 
         let index = indices_guard.get(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR index '{}' does not exist",
-                index_name
+                "ERR index '{index_name}' does not exist"
             ))
         })?;
 
@@ -500,7 +495,7 @@ impl VectorCommands {
             let vector_str = sv
                 .vector
                 .iter()
-                .map(|v| v.to_string())
+                .map(std::string::ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(",");
 
@@ -534,8 +529,7 @@ impl VectorCommands {
 
         let index = indices_guard.get_mut(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR index '{}' does not exist",
-                index_name
+                "ERR index '{index_name}' does not exist"
             ))
         })?;
 
@@ -563,8 +557,7 @@ impl VectorCommands {
             .map(|s| {
                 s.trim().parse::<f32>().map_err(|_| {
                     crate::protocols::error::ProtocolError::RespError(format!(
-                        "ERR invalid query vector component '{}'",
-                        s
+                        "ERR invalid query vector component '{s}'"
                     ))
                 })
             })
@@ -611,8 +604,7 @@ impl VectorCommands {
 
         let index = indices_guard.get(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR index '{}' does not exist",
-                index_name
+                "ERR index '{index_name}' does not exist"
             ))
         })?;
 
@@ -680,8 +672,7 @@ impl VectorCommands {
 
         let index = indices_guard.get(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR index '{}' does not exist",
-                index_name
+                "ERR index '{index_name}' does not exist"
             ))
         })?;
 
@@ -716,8 +707,7 @@ impl VectorCommands {
 
         let index = indices_guard.get(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR index '{}' does not exist",
-                index_name
+                "ERR index '{index_name}' does not exist"
             ))
         })?;
 
@@ -735,8 +725,7 @@ impl VectorCommands {
 
         let index = indices_guard.get(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR index '{}' does not exist",
-                index_name
+                "ERR index '{index_name}' does not exist"
             ))
         })?;
 
@@ -760,8 +749,7 @@ impl VectorCommands {
 
         let index = indices_guard.get(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR index '{}' does not exist",
-                index_name
+                "ERR index '{index_name}' does not exist"
             ))
         })?;
 
@@ -954,8 +942,7 @@ impl VectorCommands {
 
         if indices_guard.contains_key(&index_name) {
             return Err(crate::protocols::error::ProtocolError::RespError(format!(
-                "Index already exists: {}",
-                index_name
+                "Index already exists: {index_name}"
             )));
         }
 
@@ -1023,8 +1010,7 @@ impl VectorCommands {
 
         let index = indices_guard.get_mut(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "Unknown index: {}",
-                index_name
+                "Unknown index: {index_name}"
             ))
         })?;
 
@@ -1103,8 +1089,7 @@ impl VectorCommands {
 
         let index = indices_guard.get(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "Unknown index: {}",
-                index_name
+                "Unknown index: {index_name}"
             ))
         })?;
 
@@ -1183,8 +1168,7 @@ impl VectorCommands {
 
         let index = indices_guard.get_mut(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "Unknown index: {}",
-                index_name
+                "Unknown index: {index_name}"
             ))
         })?;
 
@@ -1217,21 +1201,15 @@ impl VectorCommands {
 
         let index = indices_guard.get(&index_name).ok_or_else(|| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "Unknown index: {}",
-                index_name
+                "Unknown index: {index_name}"
             ))
         })?;
 
-        let num_docs = index
-            .text_index
-            .as_ref()
-            .map(|t| t.doc_count())
-            .unwrap_or(0);
+        let num_docs = index.text_index.as_ref().map_or(0, TextIndex::doc_count);
         let num_terms = index
             .text_index
             .as_ref()
-            .map(|t| t.inverted_index.len())
-            .unwrap_or(0);
+            .map_or(0, |t| t.inverted_index.len());
 
         // Build schema info
         let schema_info: Vec<RespValue> = index
@@ -1250,12 +1228,12 @@ impl VectorCommands {
                                 )
                             }
                             FtsFieldType::Tag { separator } => {
-                                format!("TAG SEPARATOR {}", separator)
+                                format!("TAG SEPARATOR {separator}")
                             }
                             FtsFieldType::Numeric => "NUMERIC".to_string(),
                             FtsFieldType::Geo => "GEO".to_string(),
                             FtsFieldType::Vector { dim, metric } => {
-                                format!("VECTOR DIM {} DISTANCE_METRIC {:?}", dim, metric)
+                                format!("VECTOR DIM {dim} DISTANCE_METRIC {metric:?}")
                             }
                         };
                         RespValue::Array(vec![

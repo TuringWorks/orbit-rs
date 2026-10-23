@@ -269,14 +269,13 @@ impl ColumnCompression {
         let mut encoded_values = Vec::with_capacity(values.len());
 
         for value in values {
-            let index = match dict_map.get(value) {
-                Some(&idx) => idx,
-                None => {
-                    let idx = dictionary.len() as u32;
-                    dictionary.push(value.clone());
-                    dict_map.insert(value.clone(), idx);
-                    idx
-                }
+            let index = if let Some(&idx) = dict_map.get(value) {
+                idx
+            } else {
+                let idx = dictionary.len() as u32;
+                dictionary.push(value.clone());
+                dict_map.insert(value.clone(), idx);
+                idx
             };
             encoded_values.push(index);
         }
@@ -335,7 +334,10 @@ impl ColumnCompression {
                 dictionary,
                 encoded_values,
             } => {
-                dictionary.iter().map(|s| s.len()).sum::<usize>()
+                dictionary
+                    .iter()
+                    .map(std::string::String::len)
+                    .sum::<usize>()
                     + encoded_values.len() * std::mem::size_of::<u32>()
             }
             CompressionCodec::LZ4 { compressed_data } => compressed_data.len(),

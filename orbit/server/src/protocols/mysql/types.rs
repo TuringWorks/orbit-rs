@@ -189,7 +189,7 @@ impl MySqlValue {
             SqlValue::Date(d) => Ok(MySqlValue::Date(*d)),
             SqlValue::Time(t) => Ok(MySqlValue::Time(*t)),
             SqlValue::Timestamp(dt) => Ok(MySqlValue::DateTime(*dt)),
-            _ => Ok(MySqlValue::String(format!("{:?}", value))),
+            _ => Ok(MySqlValue::String(format!("{value:?}"))),
         }
     }
 }

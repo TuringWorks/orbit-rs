@@ -100,7 +100,7 @@ impl S3Config {
         bucket: String,
     ) -> Self {
         Self {
-            endpoint: format!("https://s3.{}.amazonaws.com", region),
+            endpoint: format!("https://s3.{region}.amazonaws.com"),
             access_key_id,
             secret_access_key,
             region,

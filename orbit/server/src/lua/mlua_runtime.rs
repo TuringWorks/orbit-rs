@@ -73,7 +73,7 @@ impl MluaRuntime {
         let result =
             tokio::task::spawn_blocking(move || eval_lua_blocking(&config, &script, &keys, &args))
                 .await
-                .map_err(|e| LuaError::InternalError(format!("Task join error: {}", e)))??;
+                .map_err(|e| LuaError::InternalError(format!("Task join error: {e}")))??;
 
         Ok(result)
     }
@@ -129,7 +129,7 @@ impl MluaRuntime {
 
         // Remove all functions from this library
         // (In a full implementation, we'd track library membership)
-        registry.retain(|_, func| !func.name.starts_with(&format!("{}.", name)));
+        registry.retain(|_, func| !func.name.starts_with(&format!("{name}.")));
 
         Ok(())
     }
@@ -173,7 +173,7 @@ impl MluaRuntime {
         let cache = self.script_cache.read().await;
         let script_bytes = cache
             .get(sha)
-            .ok_or_else(|| LuaError::RuntimeError(format!("NOSCRIPT: {}", sha)))?;
+            .ok_or_else(|| LuaError::RuntimeError(format!("NOSCRIPT: {sha}")))?;
 
         let script = String::from_utf8(script_bytes.clone())
             .map_err(|e| LuaError::InternalError(e.to_string()))?;
@@ -282,7 +282,7 @@ impl MluaRuntime {
             }
             LuaValue::Table(map) => {
                 let table = lua.create_table()?;
-                for (k, v) in map.iter() {
+                for (k, v) in map {
                     table.set(k.as_str(), self.lua_value_to_mlua(lua, v)?)?;
                 }
                 MluaValue::Table(table)
@@ -591,7 +591,7 @@ fn lua_value_to_mlua(lua: &Lua, value: &LuaValue) -> LuaResult<MluaValue> {
         }
         LuaValue::Table(map) => {
             let table = lua.create_table()?;
-            for (k, v) in map.iter() {
+            for (k, v) in map {
                 table.set(k.as_str(), lua_value_to_mlua(lua, v)?)?;
             }
             MluaValue::Table(table)

@@ -309,8 +309,10 @@ impl AuthorizationProvider for ScopeBasedAuthorizationProvider {
             return Ok(false);
         }
 
-        let required_scopes: Vec<String> =
-            required_permissions.iter().map(|p| p.to_scope()).collect();
+        let required_scopes: Vec<String> = required_permissions
+            .iter()
+            .map(TransactionPermission::to_scope)
+            .collect();
 
         Ok(token.has_all_scopes(&required_scopes))
     }

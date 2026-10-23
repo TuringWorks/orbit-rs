@@ -284,8 +284,7 @@ impl VectorizedExecutor {
     ) -> EngineResult<ColumnBatch> {
         if column_index >= batch.columns.len() {
             return Err(EngineError::storage(format!(
-                "Column index {} out of bounds",
-                column_index
+                "Column index {column_index} out of bounds"
             )));
         }
 
@@ -368,8 +367,7 @@ impl VectorizedExecutor {
     ) -> EngineResult<SqlValue> {
         if column_index >= batch.columns.len() {
             return Err(EngineError::storage(format!(
-                "Column index {} out of bounds",
-                column_index
+                "Column index {column_index} out of bounds"
             )));
         }
 
@@ -379,15 +377,15 @@ impl VectorizedExecutor {
         match (column, function) {
             (Column::Int32(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_i32.sum(values, null_bitmap);
-                Ok(result.map(SqlValue::Int32).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Int32))
             }
             (Column::Int32(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_i32.min(values, null_bitmap);
-                Ok(result.map(SqlValue::Int32).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Int32))
             }
             (Column::Int32(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_i32.max(values, null_bitmap);
-                Ok(result.map(SqlValue::Int32).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Int32))
             }
             (Column::Int32(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_i32.count(null_bitmap);
@@ -395,15 +393,15 @@ impl VectorizedExecutor {
             }
             (Column::Int64(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_i64.sum(values, null_bitmap);
-                Ok(result.map(SqlValue::Int64).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Int64))
             }
             (Column::Int64(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_i64.min(values, null_bitmap);
-                Ok(result.map(SqlValue::Int64).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Int64))
             }
             (Column::Int64(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_i64.max(values, null_bitmap);
-                Ok(result.map(SqlValue::Int64).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Int64))
             }
             (Column::Int64(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_i64.count(null_bitmap);
@@ -411,15 +409,15 @@ impl VectorizedExecutor {
             }
             (Column::Float64(values), AggregateFunction::Sum) => {
                 let result = self.simd_aggregate_f64.sum(values, null_bitmap);
-                Ok(result.map(SqlValue::Float64).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Float64))
             }
             (Column::Float64(values), AggregateFunction::Min) => {
                 let result = self.simd_aggregate_f64.min(values, null_bitmap);
-                Ok(result.map(SqlValue::Float64).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Float64))
             }
             (Column::Float64(values), AggregateFunction::Max) => {
                 let result = self.simd_aggregate_f64.max(values, null_bitmap);
-                Ok(result.map(SqlValue::Float64).unwrap_or(SqlValue::Null))
+                Ok(result.map_or(SqlValue::Null, SqlValue::Float64))
             }
             (Column::Float64(_), AggregateFunction::Count) => {
                 let count = self.simd_aggregate_f64.count(null_bitmap);
@@ -432,8 +430,7 @@ impl VectorizedExecutor {
                 ))
             }
             _ => Err(EngineError::storage(format!(
-                "Unsupported column type for {:?}",
-                function
+                "Unsupported column type for {function:?}"
             ))),
         }
     }
@@ -475,11 +472,11 @@ impl VectorizedExecutor {
                 ComparisonOp::NotEqual => self.simd_filter_i32.filter_ne(values, target, result),
                 ComparisonOp::LessThan => self.simd_filter_i32.filter_lt(values, target, result),
                 ComparisonOp::LessThanOrEqual => {
-                    self.simd_filter_i32.filter_le(values, target, result)
+                    self.simd_filter_i32.filter_le(values, target, result);
                 }
                 ComparisonOp::GreaterThan => self.simd_filter_i32.filter_gt(values, target, result),
                 ComparisonOp::GreaterThanOrEqual => {
-                    self.simd_filter_i32.filter_ge(values, target, result)
+                    self.simd_filter_i32.filter_ge(values, target, result);
                 }
             }
         } else {
@@ -503,7 +500,7 @@ impl VectorizedExecutor {
             ComparisonOp::LessThanOrEqual => self.simd_filter_i64.filter_le(values, target, result),
             ComparisonOp::GreaterThan => self.simd_filter_i64.filter_gt(values, target, result),
             ComparisonOp::GreaterThanOrEqual => {
-                self.simd_filter_i64.filter_ge(values, target, result)
+                self.simd_filter_i64.filter_ge(values, target, result);
             }
         }
         Ok(())
@@ -524,7 +521,7 @@ impl VectorizedExecutor {
             ComparisonOp::LessThanOrEqual => self.simd_filter_f64.filter_le(values, target, result),
             ComparisonOp::GreaterThan => self.simd_filter_f64.filter_gt(values, target, result),
             ComparisonOp::GreaterThanOrEqual => {
-                self.simd_filter_f64.filter_ge(values, target, result)
+                self.simd_filter_f64.filter_ge(values, target, result);
             }
         }
         Ok(())
@@ -889,7 +886,7 @@ impl VectorizedExecutor {
 
         // Initialize Metal device (cached in production)
         let device = MetalDevice::new().map_err(|e| {
-            EngineError::Internal(format!("Failed to initialize Metal device: {}", e))
+            EngineError::Internal(format!("Failed to initialize Metal device: {e}"))
         })?;
 
         let mut result = data.clone();
@@ -1010,8 +1007,7 @@ impl VectorizedExecutor {
             GpuBackendType::Vulkan => self.execute_gpu_vulkan_with_query(plan, query, data).await,
 
             _ => Err(EngineError::Internal(format!(
-                "GPU backend {:?} not supported or not compiled in",
-                backend
+                "GPU backend {backend:?} not supported or not compiled in"
             ))),
         }
     }
@@ -1228,9 +1224,7 @@ impl VectorizedExecutor {
             names
                 .iter()
                 .position(|name| name == column_name)
-                .ok_or_else(|| {
-                    EngineError::storage(format!("Column '{}' not found", column_name))
-                })?
+                .ok_or_else(|| EngineError::storage(format!("Column '{column_name}' not found")))?
         } else {
             return Err(EngineError::storage(
                 "Cannot filter by name: batch has no column names".to_string(),
@@ -1241,13 +1235,13 @@ impl VectorizedExecutor {
         let mask = match (&batch.columns[column_index], value) {
             (Column::Int32(data), SqlValue::Int32(val)) => device
                 .execute_filter_i32(data, *val, op)
-                .map_err(|e| EngineError::Internal(format!("GPU filter i32 failed: {}", e)))?,
+                .map_err(|e| EngineError::Internal(format!("GPU filter i32 failed: {e}")))?,
             (Column::Int64(data), SqlValue::Int64(val)) => device
                 .execute_filter_i64(data, *val, op)
-                .map_err(|e| EngineError::Internal(format!("GPU filter i64 failed: {}", e)))?,
+                .map_err(|e| EngineError::Internal(format!("GPU filter i64 failed: {e}")))?,
             (Column::Float64(data), SqlValue::Float64(val)) => device
                 .execute_filter_f64(data, *val, op)
-                .map_err(|e| EngineError::Internal(format!("GPU filter f64 failed: {}", e)))?,
+                .map_err(|e| EngineError::Internal(format!("GPU filter f64 failed: {e}")))?,
             _ => {
                 return Err(EngineError::storage(
                     "Unsupported column type or value mismatch for GPU filtering".to_string(),
@@ -1812,9 +1806,7 @@ impl VectorizedExecutor {
             names
                 .iter()
                 .position(|name| name == column_name)
-                .ok_or_else(|| {
-                    EngineError::storage(format!("Column '{}' not found", column_name))
-                })?
+                .ok_or_else(|| EngineError::storage(format!("Column '{column_name}' not found")))?
         } else {
             return Err(EngineError::storage(
                 "Cannot filter by name: batch has no column names".to_string(),
@@ -1839,7 +1831,7 @@ impl VectorizedExecutor {
                     .iter()
                     .position(|name| name == col_name)
                     .ok_or_else(|| {
-                        EngineError::storage(format!("Column '{}' not found", col_name))
+                        EngineError::storage(format!("Column '{col_name}' not found"))
                     })?;
                 indices.push(idx);
             }

@@ -108,7 +108,7 @@ impl GraphStorage for PersistentGraphStorage {
         self.cypher_storage
             .store_node(cypher_node)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to store node: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to store node: {e}")))?;
 
         // Update ID mapping
         {
@@ -148,7 +148,7 @@ impl GraphStorage for PersistentGraphStorage {
             self.cypher_storage
                 .store_node(cypher_node)
                 .await
-                .map_err(|e| OrbitError::internal(format!("Failed to update node: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Failed to update node: {e}")))?;
 
             Ok(())
         } else {
@@ -190,7 +190,7 @@ impl GraphStorage for PersistentGraphStorage {
         self.cypher_storage
             .store_relationship(cypher_rel)
             .await
-            .map_err(|e| OrbitError::internal(format!("Failed to store relationship: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to store relationship: {e}")))?;
 
         // Update ID mapping
         {
@@ -266,9 +266,7 @@ impl GraphStorage for PersistentGraphStorage {
             self.cypher_storage
                 .store_relationship(cypher_rel)
                 .await
-                .map_err(|e| {
-                    OrbitError::internal(format!("Failed to update relationship: {}", e))
-                })?;
+                .map_err(|e| OrbitError::internal(format!("Failed to update relationship: {e}")))?;
 
             Ok(())
         } else {
@@ -314,9 +312,7 @@ impl GraphStorage for PersistentGraphStorage {
             self.cypher_storage
                 .store_node(cypher_node)
                 .await
-                .map_err(|e| {
-                    OrbitError::internal(format!("Failed to update node labels: {}", e))
-                })?;
+                .map_err(|e| OrbitError::internal(format!("Failed to update node labels: {e}")))?;
 
             Ok(())
         } else {
@@ -335,9 +331,7 @@ impl GraphStorage for PersistentGraphStorage {
             self.cypher_storage
                 .store_node(cypher_node)
                 .await
-                .map_err(|e| {
-                    OrbitError::internal(format!("Failed to update node labels: {}", e))
-                })?;
+                .map_err(|e| OrbitError::internal(format!("Failed to update node labels: {e}")))?;
 
             Ok(())
         } else {

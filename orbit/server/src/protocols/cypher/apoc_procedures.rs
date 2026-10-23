@@ -244,13 +244,13 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             }
             "apoc.coll.sum" => {
                 let list = self.get_array_arg(args, 0)?;
-                let sum: f64 = list.iter().filter_map(|v| v.as_f64()).sum();
+                let sum: f64 = list.iter().filter_map(serde_json::Value::as_f64).sum();
                 let rows = vec![vec![Some(sum.to_string())]];
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.coll.avg" => {
                 let list = self.get_array_arg(args, 0)?;
-                let values: Vec<f64> = list.iter().filter_map(|v| v.as_f64()).collect();
+                let values: Vec<f64> = list.iter().filter_map(serde_json::Value::as_f64).collect();
                 let avg = if values.is_empty() {
                     0.0
                 } else {
@@ -263,7 +263,7 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                 let list = self.get_array_arg(args, 0)?;
                 let min = list
                     .iter()
-                    .filter_map(|v| v.as_f64())
+                    .filter_map(serde_json::Value::as_f64)
                     .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 let rows = vec![vec![min.map(|v| v.to_string())]];
                 Ok(Self::make_result(columns, rows))
@@ -272,7 +272,7 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                 let list = self.get_array_arg(args, 0)?;
                 let max = list
                     .iter()
-                    .filter_map(|v| v.as_f64())
+                    .filter_map(serde_json::Value::as_f64)
                     .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 let rows = vec![vec![max.map(|v| v.to_string())]];
                 Ok(Self::make_result(columns, rows))
@@ -647,7 +647,7 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
             "apoc.util.md5" => {
                 let text = self.get_string_arg(args, 0)?;
                 let digest = md5::compute(text.as_bytes());
-                let hex = format!("{:x}", digest);
+                let hex = format!("{digest:x}");
                 let rows = vec![vec![Some(hex)]];
                 Ok(Self::make_result(columns, rows))
             }
@@ -658,12 +658,15 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                 let mut hasher = Sha256::new();
                 hasher.update(text.as_bytes());
                 let result = hasher.finalize();
-                let hex = format!("{:x}", result);
+                let hex = format!("{result:x}");
                 let rows = vec![vec![Some(hex)]];
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.util.sleep" => {
-                let millis = args.first().and_then(|v| v.as_u64()).unwrap_or(0);
+                let millis = args
+                    .first()
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
                 tokio::time::sleep(tokio::time::Duration::from_millis(millis)).await;
                 let rows = vec![vec![Some(millis.to_string())]];
                 Ok(Self::make_result(columns, rows))
@@ -693,7 +696,10 @@ impl<S: GraphStorage + Send + Sync + 'static> ApocProcedures<S> {
                 Ok(Self::make_result(columns, rows))
             }
             "apoc.date.format" => {
-                let timestamp = args.first().and_then(|v| v.as_i64()).unwrap_or(0);
+                let timestamp = args
+                    .first()
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0);
                 let format = args
                     .get(1)
                     .and_then(|v| v.as_str())

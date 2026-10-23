@@ -134,7 +134,7 @@ impl S3AddressableDirectoryProvider {
 
     fn get_node_leases_prefix(&self, node_id: &NodeId) -> String {
         let prefix = self.config.prefix.as_deref().unwrap_or("orbit");
-        format!("{}/node-leases/{}/", prefix, node_id)
+        format!("{prefix}/node-leases/{node_id}/")
     }
 
     fn encode_key(&self, key: &Key) -> String {
@@ -158,7 +158,7 @@ impl S3AddressableDirectoryProvider {
             .body(data.to_vec())
             .send()
             .await
-            .map_err(|e| OrbitError::network(format!("S3 PUT request failed: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("S3 PUT request failed: {e}")))?;
 
         if !response.status().is_success() {
             return Err(OrbitError::network(format!(
@@ -178,13 +178,13 @@ impl S3AddressableDirectoryProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| OrbitError::network(format!("S3 GET request failed: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("S3 GET request failed: {e}")))?;
 
         if response.status().is_success() {
             let data = response
                 .bytes()
                 .await
-                .map_err(|e| OrbitError::network(format!("Failed to read S3 response: {}", e)))?;
+                .map_err(|e| OrbitError::network(format!("Failed to read S3 response: {e}")))?;
             Ok(Some(data.to_vec()))
         } else if response.status() == reqwest::StatusCode::NOT_FOUND {
             Ok(None)
@@ -204,7 +204,7 @@ impl S3AddressableDirectoryProvider {
             .delete(&url)
             .send()
             .await
-            .map_err(|e| OrbitError::network(format!("S3 DELETE request failed: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("S3 DELETE request failed: {e}")))?;
 
         if response.status().is_success() || response.status() == reqwest::StatusCode::NOT_FOUND {
             Ok(true)
@@ -225,7 +225,7 @@ impl S3AddressableDirectoryProvider {
             .query(&[("list-type", "2"), ("prefix", prefix)])
             .send()
             .await
-            .map_err(|e| OrbitError::network(format!("S3 LIST request failed: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("S3 LIST request failed: {e}")))?;
 
         if !response.status().is_success() {
             return Err(OrbitError::network(format!(
@@ -238,7 +238,7 @@ impl S3AddressableDirectoryProvider {
         let text = response
             .text()
             .await
-            .map_err(|e| OrbitError::network(format!("Failed to read S3 list response: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("Failed to read S3 list response: {e}")))?;
 
         // In a real implementation, you would parse the XML properly
         // This is a simplified version for demonstration
@@ -312,7 +312,7 @@ impl PersistenceProvider for S3AddressableDirectoryProvider {
             Err(e) => {
                 let mut health = self.health_status.write().await;
                 *health = ProviderHealth::Unhealthy {
-                    reason: format!("Failed to connect to S3: {}", e),
+                    reason: format!("Failed to connect to S3: {e}"),
                 };
                 Err(e)
             }
@@ -367,7 +367,7 @@ impl AddressableDirectoryProvider for S3AddressableDirectoryProvider {
             };
 
             let data = serde_json::to_vec(&stored_lease)
-                .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?;
 
             self.put_object(&key, &data).await?;
 
@@ -396,7 +396,7 @@ impl AddressableDirectoryProvider for S3AddressableDirectoryProvider {
 
             if let Some(data) = self.get_object(&key).await? {
                 let stored_lease: StoredLease = serde_json::from_slice(&data)
-                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
                 Ok(Some(stored_lease.lease))
             } else {
                 Ok(None)
@@ -437,9 +437,8 @@ impl AddressableDirectoryProvider for S3AddressableDirectoryProvider {
             let mut leases = Vec::new();
             for key in keys {
                 if let Some(data) = self.get_object(&key).await? {
-                    let stored_lease: StoredLease = serde_json::from_slice(&data).map_err(|e| {
-                        OrbitError::internal(format!("Deserialization error: {}", e))
-                    })?;
+                    let stored_lease: StoredLease = serde_json::from_slice(&data)
+                        .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
                     leases.push(stored_lease.lease);
                 }
             }
@@ -465,9 +464,8 @@ impl AddressableDirectoryProvider for S3AddressableDirectoryProvider {
             let mut leases = Vec::new();
             for key in keys {
                 if let Some(data) = self.get_object(&key).await? {
-                    let stored_lease: StoredLease = serde_json::from_slice(&data).map_err(|e| {
-                        OrbitError::internal(format!("Deserialization error: {}", e))
-                    })?;
+                    let stored_lease: StoredLease = serde_json::from_slice(&data)
+                        .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
                     leases.push(stored_lease.lease);
                 }
             }
@@ -561,12 +559,12 @@ impl S3ClusterNodeProvider {
 
     fn get_node_key(&self, node_id: &NodeId) -> String {
         let prefix = self.config.prefix.as_deref().unwrap_or("orbit");
-        format!("{}/nodes/{}", prefix, node_id)
+        format!("{prefix}/nodes/{node_id}")
     }
 
     fn get_nodes_prefix(&self) -> String {
         let prefix = self.config.prefix.as_deref().unwrap_or("orbit");
-        format!("{}/nodes/", prefix)
+        format!("{prefix}/nodes/")
     }
 
     async fn update_metrics(&self, operation: &str, duration: Duration, success: bool) {
@@ -605,7 +603,7 @@ impl S3ClusterNodeProvider {
             .body(data)
             .send()
             .await
-            .map_err(|e| OrbitError::network(format!("S3 PUT request failed: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("S3 PUT request failed: {e}")))?;
 
         if !response.status().is_success() {
             return Err(OrbitError::network(format!(
@@ -625,13 +623,13 @@ impl S3ClusterNodeProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| OrbitError::network(format!("S3 GET request failed: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("S3 GET request failed: {e}")))?;
 
         if response.status().is_success() {
             let data = response
                 .bytes()
                 .await
-                .map_err(|e| OrbitError::network(format!("Failed to read S3 response: {}", e)))?;
+                .map_err(|e| OrbitError::network(format!("Failed to read S3 response: {e}")))?;
             Ok(Some(data.to_vec()))
         } else if response.status() == reqwest::StatusCode::NOT_FOUND {
             Ok(None)
@@ -651,7 +649,7 @@ impl S3ClusterNodeProvider {
             .delete(&url)
             .send()
             .await
-            .map_err(|e| OrbitError::network(format!("S3 DELETE request failed: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("S3 DELETE request failed: {e}")))?;
 
         if response.status().is_success() || response.status() == reqwest::StatusCode::NOT_FOUND {
             Ok(())
@@ -672,7 +670,7 @@ impl S3ClusterNodeProvider {
             .query(&[("list-type", "2"), ("prefix", prefix)])
             .send()
             .await
-            .map_err(|e| OrbitError::network(format!("S3 LIST request failed: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("S3 LIST request failed: {e}")))?;
 
         if !response.status().is_success() {
             return Err(OrbitError::network(format!(
@@ -685,7 +683,7 @@ impl S3ClusterNodeProvider {
         let text = response
             .text()
             .await
-            .map_err(|e| OrbitError::network(format!("Failed to read S3 list response: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("Failed to read S3 list response: {e}")))?;
 
         // In a real implementation, you would parse the XML properly
         // This is a simplified version for demonstration
@@ -757,7 +755,7 @@ impl ClusterNodeProvider for S3ClusterNodeProvider {
             };
 
             let data = serde_json::to_vec(&stored_node)
-                .map_err(|e| OrbitError::internal(format!("Failed to serialize node: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Failed to serialize node: {e}")))?;
 
             self.put_object(&key, data).await?;
 
@@ -781,7 +779,7 @@ impl ClusterNodeProvider for S3ClusterNodeProvider {
 
             if let Some(data) = self.get_object(&key).await? {
                 let stored_node: StoredNode = serde_json::from_slice(&data).map_err(|e| {
-                    OrbitError::internal(format!("Failed to deserialize node: {}", e))
+                    OrbitError::internal(format!("Failed to deserialize node: {e}"))
                 })?;
 
                 tracing::debug!("Retrieved node: {}", node_id);
@@ -908,8 +906,7 @@ impl ClusterNodeProvider for S3ClusterNodeProvider {
             Ok(())
         } else {
             Err(OrbitError::internal(format!(
-                "Node {} not found for lease renewal",
-                node_id
+                "Node {node_id} not found for lease renewal"
             )))
         }
     }
@@ -1008,7 +1005,7 @@ impl DigitalOceanSpacesAddressableDirectoryProvider {
 
     fn get_node_leases_prefix(&self, node_id: &NodeId) -> String {
         let prefix = self.config.prefix.as_deref().unwrap_or("orbit");
-        format!("{}/node-leases/{}/", prefix, node_id)
+        format!("{prefix}/node-leases/{node_id}/")
     }
 
     fn encode_key(&self, key: &Key) -> String {
@@ -1041,7 +1038,7 @@ impl DigitalOceanSpacesAddressableDirectoryProvider {
         }
 
         let response = request.body(data.to_vec()).send().await.map_err(|e| {
-            OrbitError::network(format!("Digital Ocean Spaces PUT request failed: {}", e))
+            OrbitError::network(format!("Digital Ocean Spaces PUT request failed: {e}"))
         })?;
 
         if !response.status().is_success() {
@@ -1065,15 +1062,12 @@ impl DigitalOceanSpacesAddressableDirectoryProvider {
         let url = format!("{}/{}/{}", base_url, self.config.space_name, key);
 
         let response = self.client.get(&url).send().await.map_err(|e| {
-            OrbitError::network(format!("Digital Ocean Spaces GET request failed: {}", e))
+            OrbitError::network(format!("Digital Ocean Spaces GET request failed: {e}"))
         })?;
 
         if response.status().is_success() {
             let data = response.bytes().await.map_err(|e| {
-                OrbitError::network(format!(
-                    "Failed to read Digital Ocean Spaces response: {}",
-                    e
-                ))
+                OrbitError::network(format!("Failed to read Digital Ocean Spaces response: {e}"))
             })?;
             Ok(Some(data.to_vec()))
         } else if response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -1091,7 +1085,7 @@ impl DigitalOceanSpacesAddressableDirectoryProvider {
         let url = format!("{}/{}/{}", base_url, self.config.space_name, key);
 
         let response = self.client.delete(&url).send().await.map_err(|e| {
-            OrbitError::network(format!("Digital Ocean Spaces DELETE request failed: {}", e))
+            OrbitError::network(format!("Digital Ocean Spaces DELETE request failed: {e}"))
         })?;
 
         if response.status().is_success() || response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -1115,7 +1109,7 @@ impl DigitalOceanSpacesAddressableDirectoryProvider {
             .send()
             .await
             .map_err(|e| {
-                OrbitError::network(format!("Digital Ocean Spaces LIST request failed: {}", e))
+                OrbitError::network(format!("Digital Ocean Spaces LIST request failed: {e}"))
             })?;
 
         if !response.status().is_success() {
@@ -1128,8 +1122,7 @@ impl DigitalOceanSpacesAddressableDirectoryProvider {
         // Parse XML response (simplified implementation)
         let text = response.text().await.map_err(|e| {
             OrbitError::network(format!(
-                "Failed to read Digital Ocean Spaces list response: {}",
-                e
+                "Failed to read Digital Ocean Spaces list response: {e}"
             ))
         })?;
 
@@ -1210,7 +1203,7 @@ impl PersistenceProvider for DigitalOceanSpacesAddressableDirectoryProvider {
                 reason: format!("HTTP status: {}", response.status()),
             },
             Err(e) => ProviderHealth::Unhealthy {
-                reason: format!("Connection failed: {}", e),
+                reason: format!("Connection failed: {e}"),
             },
         }
     }
@@ -1251,7 +1244,7 @@ impl AddressableDirectoryProvider for DigitalOceanSpacesAddressableDirectoryProv
             };
 
             let data = serde_json::to_vec(&stored_lease)
-                .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?;
 
             self.put_object(&key, &data).await
         }
@@ -1271,7 +1264,7 @@ impl AddressableDirectoryProvider for DigitalOceanSpacesAddressableDirectoryProv
             let key = self.get_lease_key(reference);
             if let Some(data) = self.get_object(&key).await? {
                 let stored_lease: StoredLease = serde_json::from_slice(&data)
-                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
                 Ok(Some(stored_lease.lease))
             } else {
                 Ok(None)
@@ -1299,7 +1292,7 @@ impl AddressableDirectoryProvider for DigitalOceanSpacesAddressableDirectoryProv
             };
 
             let data = serde_json::to_vec(&stored_lease)
-                .map_err(|e| OrbitError::internal(format!("Serialization error: {}", e)))?;
+                .map_err(|e| OrbitError::internal(format!("Serialization error: {e}")))?;
 
             self.put_object(&key, &data).await
         }
@@ -1333,9 +1326,8 @@ impl AddressableDirectoryProvider for DigitalOceanSpacesAddressableDirectoryProv
             let mut leases = Vec::new();
             for key in keys {
                 if let Some(data) = self.get_object(&key).await? {
-                    let stored_lease: StoredLease = serde_json::from_slice(&data).map_err(|e| {
-                        OrbitError::internal(format!("Deserialization error: {}", e))
-                    })?;
+                    let stored_lease: StoredLease = serde_json::from_slice(&data)
+                        .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
                     leases.push(stored_lease.lease);
                 }
             }
@@ -1361,9 +1353,8 @@ impl AddressableDirectoryProvider for DigitalOceanSpacesAddressableDirectoryProv
             let mut leases = Vec::new();
             for key in keys {
                 if let Some(data) = self.get_object(&key).await? {
-                    let stored_lease: StoredLease = serde_json::from_slice(&data).map_err(|e| {
-                        OrbitError::internal(format!("Deserialization error: {}", e))
-                    })?;
+                    let stored_lease: StoredLease = serde_json::from_slice(&data)
+                        .map_err(|e| OrbitError::internal(format!("Deserialization error: {e}")))?;
                     leases.push(stored_lease.lease);
                 }
             }

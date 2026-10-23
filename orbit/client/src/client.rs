@@ -335,13 +335,13 @@ impl OrbitClient {
 
     async fn connect_to_server(&self, url: &str) -> OrbitResult<Channel> {
         let endpoint = Endpoint::from_shared(url.to_string())
-            .map_err(|e| OrbitError::network(format!("Invalid endpoint: {}", e)))?
+            .map_err(|e| OrbitError::network(format!("Invalid endpoint: {e}")))?
             .timeout(self.config.connection_timeout);
 
         endpoint
             .connect()
             .await
-            .map_err(|e| OrbitError::network(format!("Connection failed: {}", e)))
+            .map_err(|e| OrbitError::network(format!("Connection failed: {e}")))
     }
 
     async fn get_node_id_from_server(&self, channel: &Channel) -> OrbitResult<NodeId> {
@@ -351,7 +351,7 @@ impl OrbitClient {
         let response = client
             .get_connection_info(request)
             .await
-            .map_err(|e| OrbitError::network(format!("Failed to get connection info: {}", e)))?;
+            .map_err(|e| OrbitError::network(format!("Failed to get connection info: {e}")))?;
 
         let node_id_proto = response
             .into_inner()

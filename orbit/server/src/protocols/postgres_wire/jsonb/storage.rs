@@ -317,9 +317,7 @@ impl JsonbStorage for MemoryJsonbStorage {
     }
 
     fn size_of(&self, value: &JsonbValue) -> usize {
-        JsonbBinary::from_jsonb(value)
-            .map(|b| b.size())
-            .unwrap_or(0)
+        JsonbBinary::from_jsonb(value).map_or(0, |b| b.size())
     }
 
     fn optimize(&mut self) -> JsonbResult<()> {

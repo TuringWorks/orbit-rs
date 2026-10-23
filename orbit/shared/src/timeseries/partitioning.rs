@@ -118,12 +118,14 @@ impl SeriesPartitionAssignment {
             .partition_series_count
             .iter()
             .find(|(_, &count)| count < max_series_per_partition)
-            .map(|(id, _)| id.clone())
-            .unwrap_or_else(|| {
-                // Create a new partition
-                let partition_num = self.next_partition.fetch_add(1, Ordering::SeqCst);
-                format!("series_partition_{}", partition_num)
-            });
+            .map_or_else(
+                || {
+                    // Create a new partition
+                    let partition_num = self.next_partition.fetch_add(1, Ordering::SeqCst);
+                    format!("series_partition_{partition_num}")
+                },
+                |(id, _)| id.clone(),
+            );
 
         // Assign series to partition
         self.series_to_partition
@@ -161,12 +163,14 @@ impl SizePartitionAssignment {
             .partition_sizes
             .iter()
             .find(|(_, &size)| size + estimated_size <= max_size)
-            .map(|(id, _)| id.clone())
-            .unwrap_or_else(|| {
-                // Create a new partition
-                let partition_num = self.next_partition.fetch_add(1, Ordering::SeqCst);
-                format!("size_partition_{}", partition_num)
-            });
+            .map_or_else(
+                || {
+                    // Create a new partition
+                    let partition_num = self.next_partition.fetch_add(1, Ordering::SeqCst);
+                    format!("size_partition_{partition_num}")
+                },
+                |(id, _)| id.clone(),
+            );
 
         // Update size estimate
         *self
@@ -266,7 +270,7 @@ impl PartitionManager {
 
         sorted_labels
             .into_iter()
-            .map(|(k, v)| format!("{}={}", k, v))
+            .map(|(k, v)| format!("{k}={v}"))
             .collect::<Vec<_>>()
             .join(",")
     }
@@ -346,7 +350,7 @@ impl PartitionManager {
             let partition = self
                 .partitions
                 .get(id)
-                .ok_or_else(|| anyhow!("Partition not found: {}", id))?;
+                .ok_or_else(|| anyhow!("Partition not found: {id}"))?;
             partitions_to_merge.push(partition.clone());
         }
 
@@ -388,7 +392,7 @@ impl PartitionManager {
         let partition = self
             .partitions
             .get(partition_id)
-            .ok_or_else(|| anyhow!("Partition not found: {}", partition_id))?
+            .ok_or_else(|| anyhow!("Partition not found: {partition_id}"))?
             .clone();
 
         if split_points.is_empty() {
@@ -420,7 +424,7 @@ impl PartitionManager {
             let ratio = duration as f64 / total_duration as f64;
 
             let new_partition = PartitionInfo {
-                partition_id: format!("split_{}_{}", prev_start, split_point),
+                partition_id: format!("split_{prev_start}_{split_point}"),
                 start_time: prev_start,
                 end_time: *split_point,
                 series_count: (partition.series_count as f64 * ratio).ceil() as u64,

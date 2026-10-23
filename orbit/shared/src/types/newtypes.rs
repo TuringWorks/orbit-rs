@@ -229,8 +229,7 @@ impl Percentage {
     pub fn new(value: f64) -> Result<Self, String> {
         if !(0.0..=100.0).contains(&value) {
             Err(format!(
-                "Percentage must be between 0.0 and 100.0, got {}",
-                value
+                "Percentage must be between 0.0 and 100.0, got {value}"
             ))
         } else {
             Ok(Self(value))
@@ -272,8 +271,7 @@ impl NormalizedPercentage {
     pub fn new(value: f64) -> Result<Self, String> {
         if !(0.0..=1.0).contains(&value) {
             Err(format!(
-                "Normalized percentage must be between 0.0 and 1.0, got {}",
-                value
+                "Normalized percentage must be between 0.0 and 1.0, got {value}"
             ))
         } else {
             Ok(Self(value))

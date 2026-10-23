@@ -68,7 +68,7 @@ impl RocksDbRedisDataProvider {
 
         // Open database with column families
         let db = DB::open_cf_descriptors(&opts, path, cf_descriptors)
-            .map_err(|e| OrbitError::internal(format!("Failed to open RocksDB: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to open RocksDB: {e}")))?;
 
         Ok(Self {
             db: Arc::new(db),
@@ -162,7 +162,7 @@ impl RocksDbRedisDataProvider {
             }
 
             let (key, _value) =
-                item.map_err(|e| OrbitError::internal(format!("RocksDB iteration error: {}", e)))?;
+                item.map_err(|e| OrbitError::internal(format!("RocksDB iteration error: {e}")))?;
 
             // Key format: "timestamp:actual_key"
             let key_str = String::from_utf8_lossy(&key);
@@ -191,9 +191,8 @@ impl RocksDbRedisDataProvider {
                 batch.delete_cf(exp_cf, exp_key);
             }
 
-            db.write(batch).map_err(|e| {
-                OrbitError::internal(format!("Failed to delete expired keys: {}", e))
-            })?;
+            db.write(batch)
+                .map_err(|e| OrbitError::internal(format!("Failed to delete expired keys: {e}")))?;
 
             tracing::debug!("Cleaned up {} expired keys", expired_keys.len());
         }
@@ -203,7 +202,7 @@ impl RocksDbRedisDataProvider {
 
     /// Format expiration key for indexing
     fn format_expiration_key(timestamp: u64, key: &str) -> String {
-        format!("{}:{}", timestamp, key)
+        format!("{timestamp}:{key}")
     }
 
     /// Parse expiration key to get timestamp and original key
@@ -258,7 +257,7 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
         match data_result {
             Ok(Some(data)) => {
                 let value: RedisValue = serde_json::from_slice(&data).map_err(|e| {
-                    OrbitError::internal(format!("Failed to deserialize value: {}", e))
+                    OrbitError::internal(format!("Failed to deserialize value: {e}"))
                 })?;
 
                 if value.is_expired() {
@@ -270,14 +269,14 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
                 }
             }
             Ok(None) => Ok(None),
-            Err(e) => Err(OrbitError::internal(format!("RocksDB get error: {}", e))),
+            Err(e) => Err(OrbitError::internal(format!("RocksDB get error: {e}"))),
         }
     }
 
     async fn set(&self, key: &str, value: RedisValue) -> OrbitResult<()> {
         // Serialize the value
         let serialized = serde_json::to_vec(&value)
-            .map_err(|e| OrbitError::internal(format!("Failed to serialize value: {}", e)))?;
+            .map_err(|e| OrbitError::internal(format!("Failed to serialize value: {e}")))?;
 
         // Prepare write batch without holding CF handles across await
         let write_result = {
@@ -302,7 +301,7 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
             metrics.set_operations += 1;
         }
 
-        write_result.map_err(|e| OrbitError::internal(format!("RocksDB write error: {}", e)))
+        write_result.map_err(|e| OrbitError::internal(format!("RocksDB write error: {e}")))
     }
 
     async fn delete(&self, key: &str) -> OrbitResult<bool> {
@@ -314,7 +313,7 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
             match self.db.get_cf(data_cf, key) {
                 Ok(Some(data)) => {
                     let value: RedisValue = serde_json::from_slice(&data).map_err(|e| {
-                        OrbitError::internal(format!("Failed to deserialize value: {}", e))
+                        OrbitError::internal(format!("Failed to deserialize value: {e}"))
                     })?;
 
                     let mut batch = rocksdb::WriteBatch::default();
@@ -329,12 +328,12 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
                     let result = self
                         .db
                         .write(batch)
-                        .map_err(|e| OrbitError::internal(format!("RocksDB delete error: {}", e)));
+                        .map_err(|e| OrbitError::internal(format!("RocksDB delete error: {e}")));
 
                     (true, result)
                 }
                 Ok(None) => (false, Ok(())),
-                Err(e) => return Err(OrbitError::internal(format!("RocksDB get error: {}", e))),
+                Err(e) => return Err(OrbitError::internal(format!("RocksDB get error: {e}"))),
             }
         };
 
@@ -357,7 +356,7 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
         match data_result {
             Ok(Some(data)) => {
                 let value: RedisValue = serde_json::from_slice(&data).map_err(|e| {
-                    OrbitError::internal(format!("Failed to deserialize value: {}", e))
+                    OrbitError::internal(format!("Failed to deserialize value: {e}"))
                 })?;
 
                 if value.is_expired() {
@@ -369,7 +368,7 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
                 }
             }
             Ok(None) => Ok(false),
-            Err(e) => Err(OrbitError::internal(format!("RocksDB exists error: {}", e))),
+            Err(e) => Err(OrbitError::internal(format!("RocksDB exists error: {e}"))),
         }
     }
 
@@ -399,7 +398,7 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
             let iter = self.db.iterator_cf(data_cf, rocksdb::IteratorMode::Start);
             for item in iter {
                 let (key, _) = item
-                    .map_err(|e| OrbitError::internal(format!("RocksDB iteration error: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("RocksDB iteration error: {e}")))?;
                 keys.push(String::from_utf8_lossy(&key).to_string());
             }
 
@@ -430,7 +429,7 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
             let iter = self.db.iterator_cf(data_cf, rocksdb::IteratorMode::Start);
             for item in iter {
                 let (_, value_data) = item
-                    .map_err(|e| OrbitError::internal(format!("RocksDB iteration error: {}", e)))?;
+                    .map_err(|e| OrbitError::internal(format!("RocksDB iteration error: {e}")))?;
 
                 if let Ok(value) = serde_json::from_slice::<RedisValue>(&value_data) {
                     if !value.is_expired() {
@@ -474,7 +473,7 @@ impl RedisDataProvider for RocksDbRedisDataProvider {
             None => String::new(),
         };
 
-        let new_value = format!("{}{}", current, append_value);
+        let new_value = format!("{current}{append_value}");
         let length = new_value.len();
         let redis_value = RedisValue::new(new_value);
         self.set(key, redis_value).await?;

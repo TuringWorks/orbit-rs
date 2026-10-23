@@ -166,7 +166,7 @@ impl QueryBuilder {
         // Validate table identifier before interpolation
         validate_identifier(&table_name)?;
 
-        sql.push_str(&format!(" FROM {}", table_name));
+        sql.push_str(&format!(" FROM {table_name}"));
 
         // Build WHERE clause
         if !intent.conditions.is_empty() {
@@ -199,7 +199,7 @@ impl QueryBuilder {
 
         // Build LIMIT clause
         if let Some(limit_val) = limit {
-            sql.push_str(&format!(" LIMIT {}", limit_val));
+            sql.push_str(&format!(" LIMIT {limit_val}"));
         }
 
         Ok(GeneratedQuery {
@@ -245,7 +245,7 @@ impl QueryBuilder {
                 crate::protocols::mcp::nlp::EntityType::Value
             ) {
                 let param_idx = parameters.len() + 1;
-                values.push(format!("${}", param_idx));
+                values.push(format!("${param_idx}"));
                 parameters.push(serde_json::Value::String(entity.value.clone()));
             }
         }
@@ -291,7 +291,7 @@ impl QueryBuilder {
         // Validate table identifier before interpolation
         validate_identifier(&table_name)?;
 
-        let mut sql = format!("UPDATE {} SET ", table_name);
+        let mut sql = format!("UPDATE {table_name} SET ");
         let mut parameters = Vec::new();
 
         // Build SET clause from conditions (simplified)
@@ -354,7 +354,7 @@ impl QueryBuilder {
         // Validate table identifier before interpolation
         validate_identifier(&table_name)?;
 
-        let mut sql = format!("DELETE FROM {}", table_name);
+        let mut sql = format!("DELETE FROM {table_name}");
         let mut parameters = Vec::new();
 
         if conditional && !intent.conditions.is_empty() {
@@ -406,21 +406,9 @@ impl QueryBuilder {
         // Generate a comprehensive analytical query
         let sql = format!(
             "SELECT COUNT(*) as count, AVG({}) as avg, MIN({}) as min, MAX({}) as max FROM {}",
-            intent
-                .projections
-                .first()
-                .map(|p| p.name.as_str())
-                .unwrap_or("*"),
-            intent
-                .projections
-                .first()
-                .map(|p| p.name.as_str())
-                .unwrap_or("*"),
-            intent
-                .projections
-                .first()
-                .map(|p| p.name.as_str())
-                .unwrap_or("*"),
+            intent.projections.first().map_or("*", |p| p.name.as_str()),
+            intent.projections.first().map_or("*", |p| p.name.as_str()),
+            intent.projections.first().map_or("*", |p| p.name.as_str()),
             table_name
         );
 
@@ -632,10 +620,10 @@ impl std::fmt::Display for SqlGenerationError {
             SqlGenerationError::MissingTable => write!(f, "Missing table name in query"),
             SqlGenerationError::MissingColumns => write!(f, "Missing columns in query"),
             SqlGenerationError::InvalidStructure(msg) => {
-                write!(f, "Invalid query structure: {}", msg)
+                write!(f, "Invalid query structure: {msg}")
             }
             SqlGenerationError::SchemaMismatch(msg) => {
-                write!(f, "Schema mismatch: {}", msg)
+                write!(f, "Schema mismatch: {msg}")
             }
         }
     }

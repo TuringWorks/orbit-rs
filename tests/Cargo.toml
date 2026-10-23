@@ -71,3 +71,22 @@ mock-services = []
 name = "tiered_storage_minio_tests"
 path = "integration/tiered_storage_minio_tests.rs"
 required-features = ["minio-tests"]
+
+# In-process PostgreSQL SQL-executor suites (TDD)
+[[test]]
+name = "postgres_ddl_tests"
+path = "orbit-protocols/postgres_ddl_tests.rs"
+
+[[test]]
+name = "postgres_dml_tests"
+path = "orbit-protocols/postgres_dml_tests.rs"
+
+[[test]]
+name = "postgres_dql_tests"
+path = "orbit-protocols/postgres_dql_tests.rs"
+
+# Cucumber BDD runner (own main)
+[[test]]
+name = "bdd"
+path = "bdd/mod.rs"
+harness = false

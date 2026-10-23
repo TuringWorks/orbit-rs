@@ -5,6 +5,7 @@
 //! (S3, Azure, GCS), and storage-aware query optimization.
 
 use futures::stream::{Stream, StreamExt};
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -930,7 +931,7 @@ impl StorageEngine {
 
     /// Get storage statistics
     pub async fn get_stats(&self) -> StorageStats {
-        self.stats.read().unwrap().clone()
+        self.stats.read_recover().clone()
     }
 
     // Helper methods
@@ -952,9 +953,9 @@ impl StorageEngine {
     ) -> Result<StorageMetadata, StorageError> {
         // Check cache first
         {
-            let cache = self.metadata_cache.read().unwrap();
+            let cache = self.metadata_cache.read_recover();
             if let Some(metadata) = cache.get(table_path) {
-                self.stats.write().unwrap().cache_hits += 1;
+                self.stats.write_recover().cache_hits += 1;
                 return Ok(metadata.clone());
             }
         }
@@ -965,27 +966,27 @@ impl StorageEngine {
 
         // Update cache
         {
-            let mut cache = self.metadata_cache.write().unwrap();
+            let mut cache = self.metadata_cache.write_recover();
             cache.insert(table_path.to_string(), metadata.clone());
         }
 
-        self.stats.write().unwrap().cache_misses += 1;
+        self.stats.write_recover().cache_misses += 1;
         Ok(metadata)
     }
 
     async fn invalidate_metadata_cache(&self, table_path: &str) {
-        let mut cache = self.metadata_cache.write().unwrap();
+        let mut cache = self.metadata_cache.write_recover();
         cache.remove(table_path);
     }
 
     async fn update_read_stats(&self) {
-        let mut stats = self.stats.write().unwrap();
+        let mut stats = self.stats.write_recover();
         stats.read_operations += 1;
         // Would update other metrics in real implementation
     }
 
     async fn update_write_stats(&self) {
-        let mut stats = self.stats.write().unwrap();
+        let mut stats = self.stats.write_recover();
         stats.write_operations += 1;
         // Would update other metrics in real implementation
     }

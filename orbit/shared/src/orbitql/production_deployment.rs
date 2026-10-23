@@ -3,6 +3,7 @@
 //! This module provides production deployment validation, configuration management,
 //! monitoring dashboards, stress testing, and end-to-end integration testing capabilities.
 
+use orbit_util::RwLockExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
@@ -2026,7 +2027,7 @@ impl EnvironmentManager {
         &self,
         environment: Environment,
     ) -> Result<(), DeploymentError> {
-        let mut environments = self.environments.write().unwrap();
+        let mut environments = self.environments.write_recover();
         environments.insert(environment.name.clone(), environment);
         Ok(())
     }
@@ -2197,7 +2198,7 @@ impl Default for HealthChecker {
 
 impl HealthChecker {
     pub async fn add_health_check(&self, check: HealthCheck) -> Result<(), DeploymentError> {
-        let mut checks = self.checks.write().unwrap();
+        let mut checks = self.checks.write_recover();
         checks.insert(check.name.clone(), check);
         Ok(())
     }

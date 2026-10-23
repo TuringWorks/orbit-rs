@@ -47,12 +47,14 @@ impl StringCommands {
         index: usize,
         command_name: &str,
     ) -> ProtocolResult<String> {
-        args.get(index).and_then(|v| v.as_string()).ok_or_else(|| {
-            ProtocolError::RespError(format!(
-                "ERR invalid argument for '{}' command",
-                command_name.to_lowercase()
-            ))
-        })
+        args.get(index)
+            .and_then(super::super::types::RespValue::as_string)
+            .ok_or_else(|| {
+                ProtocolError::RespError(format!(
+                    "ERR invalid argument for '{}' command",
+                    command_name.to_lowercase()
+                ))
+            })
     }
 
     async fn cmd_get(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
@@ -67,15 +69,13 @@ impl StringCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
         let mut value: Option<String> = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR serialization error: {}",
-                e
+                "ERR serialization error: {e}"
             ))
         })?;
 
@@ -107,9 +107,9 @@ impl StringCommands {
 
         debug!("GET {} -> {:?}", key, value);
 
-        Ok(value
-            .map(|v| RespValue::BulkString(Bytes::from(v.into_bytes())))
-            .unwrap_or(RespValue::null()))
+        Ok(value.map_or(RespValue::null(), |v| {
+            RespValue::BulkString(Bytes::from(v.into_bytes()))
+        }))
     }
 
     async fn cmd_set(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
@@ -185,11 +185,11 @@ impl StringCommands {
                 .execute_keyvalue(&key, "exists", &[])
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
 
             let exists: bool = serde_json::from_value(exists_result)
-                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
             if exists {
                 debug!("SET {} {} (NX) -> (nil)", key, value);
@@ -205,11 +205,11 @@ impl StringCommands {
                 .execute_keyvalue(&key, "exists", &[])
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
 
             let exists: bool = serde_json::from_value(exists_result)
-                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+                .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
             if !exists {
                 debug!("SET {} {} (XX) -> (nil)", key, value);
@@ -229,8 +229,7 @@ impl StringCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
@@ -270,7 +269,7 @@ impl StringCommands {
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
 
             // Persistence
@@ -313,22 +312,19 @@ impl StringCommands {
             let key = self.get_string_arg(std::slice::from_ref(arg), 0, "DEL")?;
 
             // Use delete_value method which returns whether the key existed
-            match self
+            if let Ok(result) = self
                 .base
                 .local_registry
                 .execute_keyvalue(&key, "delete_value", &[])
                 .await
             {
-                Ok(result) => {
-                    let existed: bool = serde_json::from_value(result).unwrap_or(false);
-                    if existed {
-                        deleted_count += 1;
-                        debug!("DEL {} -> deleted locally", key);
-                    }
+                let existed: bool = serde_json::from_value(result).unwrap_or(false);
+                if existed {
+                    deleted_count += 1;
+                    debug!("DEL {} -> deleted locally", key);
                 }
-                Err(_) => {
-                    // Key doesn't exist locally or error
-                }
+            } else {
+                // Key doesn't exist locally or error
             }
 
             // Also delete from OrbitClient (persistence)
@@ -382,22 +378,19 @@ impl StringCommands {
             let key = self.get_string_arg(std::slice::from_ref(arg), 0, "EXISTS")?;
 
             let mut found = false;
-            match self
+            if let Ok(result) = self
                 .base
                 .local_registry
                 .execute_keyvalue(&key, "get_value", &[])
                 .await
             {
-                Ok(result) => {
-                    let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
-                    if value.is_some() {
-                        exists_count += 1;
-                        found = true;
-                    }
+                let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
+                if value.is_some() {
+                    exists_count += 1;
+                    found = true;
                 }
-                Err(_) => {
-                    // Key doesn't exist locally
-                }
+            } else {
+                // Key doesn't exist locally
             }
 
             if !found {
@@ -440,19 +433,17 @@ impl StringCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
         let value: Option<String> = serde_json::from_value(result).map_err(|e| {
             crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR serialization error: {}",
-                e
+                "ERR serialization error: {e}"
             ))
         })?;
 
-        let length = value.map(|v| v.len() as i64).unwrap_or(0);
+        let length = value.map_or(0, |v| v.len() as i64);
         debug!("STRLEN {} -> {}", key, length);
 
         Ok(RespValue::Integer(length))
@@ -516,8 +507,7 @@ impl StringCommands {
                 .await
                 .map_err(|e| {
                     crate::protocols::error::ProtocolError::RespError(format!(
-                        "ERR actor invocation failed: {}",
-                        e
+                        "ERR actor invocation failed: {e}"
                     ))
                 })?;
 
@@ -596,8 +586,7 @@ impl StringCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
@@ -629,7 +618,7 @@ impl StringCommands {
             Err(_) => String::new(), // Key doesn't exist, start with empty string
         };
 
-        let new_value = format!("{}{}", current_value, append_value);
+        let new_value = format!("{current_value}{append_value}");
         let new_length = new_value.len() as i64;
 
         // Set the new value
@@ -640,8 +629,7 @@ impl StringCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
@@ -668,9 +656,9 @@ impl StringCommands {
         {
             Ok(result) => {
                 let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
-                value
-                    .map(|v| RespValue::BulkString(Bytes::from(v.into_bytes())))
-                    .unwrap_or(RespValue::null())
+                value.map_or(RespValue::null(), |v| {
+                    RespValue::BulkString(Bytes::from(v.into_bytes()))
+                })
             }
             Err(_) => RespValue::null(), // Key doesn't exist
         };
@@ -687,8 +675,7 @@ impl StringCommands {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
-                    "ERR actor invocation failed: {}",
-                    e
+                    "ERR actor invocation failed: {e}"
                 ))
             })?;
 
@@ -750,8 +737,7 @@ impl CommandHandler for StringCommands {
             "EXPIRE" => self.cmd_expire(args).await,
             "TTL" => self.cmd_ttl(args).await,
             _ => Err(ProtocolError::RespError(format!(
-                "ERR unknown string command '{}'",
-                command_name
+                "ERR unknown string command '{command_name}'"
             ))),
         }
     }
@@ -782,7 +768,7 @@ impl StringCommands {
                 &[serde_json::Value::String(value.clone())],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         // Set the expiration
         let _result = self
@@ -796,7 +782,7 @@ impl StringCommands {
                 ))],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!("SETEX {} {} {}", key, ttl_seconds, value);
         Ok(RespValue::ok())
@@ -814,10 +800,10 @@ impl StringCommands {
             .local_registry
             .execute_keyvalue(&key, "exists", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let exists: bool = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         if exists {
             Ok(RespValue::Integer(0)) // Key exists, return 0
@@ -833,7 +819,7 @@ impl StringCommands {
                 )
                 .await
                 .map_err(|e| {
-                    ProtocolError::RespError(format!("ERR actor invocation failed: {}", e))
+                    ProtocolError::RespError(format!("ERR actor invocation failed: {e}"))
                 })?;
 
             debug!("SETNX {} {}", key, value);
@@ -857,10 +843,10 @@ impl StringCommands {
             .local_registry
             .execute_keyvalue(&key, "exists", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let exists: bool = serde_json::from_value(exists_result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         if !exists {
             return Ok(RespValue::Integer(0));
@@ -884,7 +870,7 @@ impl StringCommands {
                 ))],
             )
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         debug!("EXPIRE {} {} -> OK", key, seconds);
         Ok(RespValue::Integer(1))
@@ -901,10 +887,10 @@ impl StringCommands {
             .local_registry
             .execute_keyvalue(&key, "exists", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let exists: bool = serde_json::from_value(exists_result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         if !exists {
             // Try OrbitClient
@@ -915,14 +901,11 @@ impl StringCommands {
                 .actor_reference::<crate::protocols::resp::actors::KeyValueActor>(orbit_key)
                 .await
             {
-                match actor_ref.invoke::<i64>("get_ttl", vec![]).await {
-                    Ok(ttl) => {
-                        debug!("TTL {} -> {} (from OrbitClient)", key, ttl);
-                        return Ok(RespValue::Integer(ttl));
-                    }
-                    Err(_) => {
-                        // Key likely doesn't exist remotely either
-                    }
+                if let Ok(ttl) = actor_ref.invoke::<i64>("get_ttl", vec![]).await {
+                    debug!("TTL {} -> {} (from OrbitClient)", key, ttl);
+                    return Ok(RespValue::Integer(ttl));
+                } else {
+                    // Key likely doesn't exist remotely either
                 }
             }
 
@@ -937,10 +920,10 @@ impl StringCommands {
             .local_registry
             .execute_keyvalue(&key, "get_ttl", &[])
             .await
-            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR actor invocation failed: {e}")))?;
 
         let ttl: i64 = serde_json::from_value(result)
-            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {}", e)))?;
+            .map_err(|e| ProtocolError::RespError(format!("ERR serialization error: {e}")))?;
 
         // get_ttl returns -1 if no expiration, remaining seconds if not expired, or -2 if expired
         debug!("TTL {} -> {}", key, ttl);

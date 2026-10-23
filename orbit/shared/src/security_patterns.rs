@@ -92,8 +92,7 @@ impl RateLimiter {
                 reset_time: window
                     .requests
                     .first()
-                    .map(|&first| first + self.window_duration)
-                    .unwrap_or(now),
+                    .map_or(now, |&first| first + self.window_duration),
             })
         } else {
             let now = Instant::now();
@@ -306,23 +305,24 @@ impl SecurityAuditLogger {
         let status = if success { "SUCCESS" } else { "FAILURE" };
         let extra = details.unwrap_or("");
 
-        match log_level {
-            tracing::Level::WARN => warn!(
+        if log_level == tracing::Level::WARN {
+            warn!(
                 operation = operation,
                 user = user,
                 client_ip = ip,
                 status = status,
                 details = extra,
                 "Security event logged"
-            ),
-            _ => info!(
+            );
+        } else {
+            info!(
                 operation = operation,
                 user = user,
                 client_ip = ip,
                 status = status,
                 details = extra,
                 "Security event logged"
-            ),
+            );
         }
 
         // Log failed authentication attempts at error level

@@ -179,7 +179,7 @@ impl Container {
         let bean_names = self
             .type_registry
             .get(&type_id)
-            .ok_or_else(|| SpringError::bean_not_found(format!("type: {}", type_name)))?;
+            .ok_or_else(|| SpringError::bean_not_found(format!("type: {type_name}")))?;
 
         self.resolve_bean_from_candidates(bean_names.as_slice(), type_name)
             .await
@@ -192,7 +192,7 @@ impl Container {
         type_name: &str,
     ) -> SpringResult<BeanInstance> {
         if bean_names.is_empty() {
-            return Err(SpringError::bean_not_found(format!("type: {}", type_name)));
+            return Err(SpringError::bean_not_found(format!("type: {type_name}")));
         }
 
         if bean_names.len() == 1 {
@@ -208,7 +208,7 @@ impl Container {
         bean_names: &[String],
         type_name: &str,
     ) -> SpringResult<BeanInstance> {
-        for name in bean_names.iter() {
+        for name in bean_names {
             if let Some(definition) = self.definitions.get(name) {
                 if definition.primary {
                     return self.get_bean(name).await;
@@ -217,8 +217,7 @@ impl Container {
         }
 
         Err(SpringError::dependency_injection(format!(
-            "Multiple beans of type {} found, no primary bean specified",
-            type_name
+            "Multiple beans of type {type_name} found, no primary bean specified"
         )))
     }
 
@@ -231,11 +230,11 @@ impl Container {
     pub fn get_bean_names(&self) -> Vec<String> {
         let mut names = Vec::new();
 
-        for entry in self.beans.iter() {
+        for entry in &self.beans {
             names.push(entry.key().clone());
         }
 
-        for entry in self.factories.iter() {
+        for entry in &self.factories {
             names.push(entry.key().clone());
         }
 
@@ -289,7 +288,7 @@ impl Container {
         info!("Stopping dependency injection container");
 
         // Destroy all singleton beans
-        for entry in self.beans.iter() {
+        for entry in &self.beans {
             let bean_name = entry.key();
             let bean_instance = entry.value();
 
@@ -323,7 +322,7 @@ impl Container {
         // Build dependency graph
         let mut graph: HashMap<String, Vec<String>> = HashMap::new();
 
-        for entry in self.definitions.iter() {
+        for entry in &self.definitions {
             let bean_name = entry.key().clone();
             let definition = entry.value();
             graph.insert(bean_name, definition.dependencies.clone());
@@ -387,7 +386,7 @@ impl Container {
     async fn initialize_singletons(&self) -> SpringResult<()> {
         debug!("Initializing singleton beans");
 
-        for entry in self.beans.iter() {
+        for entry in &self.beans {
             let bean_name = entry.key();
             let bean_instance = entry.value();
 
@@ -398,7 +397,7 @@ impl Container {
                 Err(e) => {
                     return Err(SpringError::lifecycle(
                         "initialization",
-                        format!("Failed to initialize bean {}: {}", bean_name, e),
+                        format!("Failed to initialize bean {bean_name}: {e}"),
                     ));
                 }
             }

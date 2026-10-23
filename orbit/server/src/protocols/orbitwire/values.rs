@@ -696,7 +696,7 @@ impl std::fmt::Display for ValueDecodeError {
         match self {
             ValueDecodeError::InsufficientData => write!(f, "Insufficient data"),
             ValueDecodeError::InvalidUtf8 => write!(f, "Invalid UTF-8"),
-            ValueDecodeError::UnsupportedType(t) => write!(f, "Unsupported type: 0x{:02x}", t),
+            ValueDecodeError::UnsupportedType(t) => write!(f, "Unsupported type: 0x{t:02x}"),
         }
     }
 }

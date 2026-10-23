@@ -179,8 +179,7 @@ impl OptimizedQueryEngine {
             let python_config = PythonConfig::default();
             let registry = Arc::new(PythonUdfRegistry::new(python_config).await.map_err(|e| {
                 crate::protocols::error::ProtocolError::PostgresError(format!(
-                    "Failed to create Python UDF registry: {}",
-                    e
+                    "Failed to create Python UDF registry: {e}"
                 ))
             })?);
             let handler = Arc::new(PythonUdfHandler::new(registry));
@@ -260,11 +259,10 @@ impl OptimizedQueryEngine {
             Statement::CreateFunction(create_fn) => {
                 // Determine which handler to use based on language
                 let is_python = create_fn.language.as_ref()
-                    .map(|lang| {
+                    .is_some_and(|lang| {
                         use crate::protocols::postgres_wire::sql::ast::FunctionLanguage;
                         matches!(lang, FunctionLanguage::Other(s) if s.eq_ignore_ascii_case("python") || s.eq_ignore_ascii_case("plpython") || s.eq_ignore_ascii_case("plpython3u"))
-                    })
-                    .unwrap_or(false);
+                    });
 
                 #[cfg(feature = "python-udf")]
                 if is_python {
@@ -318,15 +316,14 @@ impl OptimizedQueryEngine {
                                 .await
                                 .map_err(|e| {
                                     crate::protocols::error::ProtocolError::PostgresError(format!(
-                                        "Failed to drop Python function: {}",
-                                        e
+                                        "Failed to drop Python function: {e}"
                                     ))
                                 })?;
                             let execution_time_ms = start.elapsed().as_millis() as u64;
 
                             return Ok(OptimizedExecutionResult {
                                 result: ExecutionResult::Show {
-                                    variable: format!("DROP FUNCTION {}", name),
+                                    variable: format!("DROP FUNCTION {name}"),
                                     value: "OK".to_string(),
                                 },
                                 execution_time_ms,
@@ -507,7 +504,7 @@ impl OptimizedQueryEngine {
                 Ok(QueryPlan::Vectorized {
                     input: Box::new(QueryPlan::SeqScan {
                         table: table_name,
-                        filter: select.where_clause.as_ref().map(|e| format!("{:?}", e)),
+                        filter: select.where_clause.as_ref().map(|e| format!("{e:?}")),
                         estimated_rows,
                     }),
                     use_simd,
@@ -523,18 +520,12 @@ impl OptimizedQueryEngine {
             }),
             Statement::Update(update_stmt) => Ok(QueryPlan::SeqScan {
                 table: update_stmt.table.full_name(),
-                filter: update_stmt
-                    .where_clause
-                    .as_ref()
-                    .map(|e| format!("{:?}", e)),
+                filter: update_stmt.where_clause.as_ref().map(|e| format!("{e:?}")),
                 estimated_rows: 1,
             }),
             Statement::Delete(delete_stmt) => Ok(QueryPlan::SeqScan {
                 table: delete_stmt.table.full_name(),
-                filter: delete_stmt
-                    .where_clause
-                    .as_ref()
-                    .map(|e| format!("{:?}", e)),
+                filter: delete_stmt.where_clause.as_ref().map(|e| format!("{e:?}")),
                 estimated_rows: 1,
             }),
             _ => Ok(QueryPlan::SeqScan {
@@ -719,8 +710,7 @@ impl OptimizedQueryEngine {
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::PostgresError(format!(
-                    "Failed to create Python function: {}",
-                    e
+                    "Failed to create Python function: {e}"
                 ))
             })
     }
@@ -828,10 +818,10 @@ impl OptimizedQueryEngine {
         let backend = self.cost_router.route(operation, estimated_rows, None);
 
         let mut explanation = String::new();
-        explanation.push_str(&format!("Query Plan:\n{:#?}\n\n", plan));
-        explanation.push_str(&format!("Estimated Rows: {}\n", estimated_rows));
-        explanation.push_str(&format!("Operation Type: {:?}\n", operation));
-        explanation.push_str(&format!("Execution Backend: {:?}\n", backend));
+        explanation.push_str(&format!("Query Plan:\n{plan:#?}\n\n"));
+        explanation.push_str(&format!("Estimated Rows: {estimated_rows}\n"));
+        explanation.push_str(&format!("Operation Type: {operation:?}\n"));
+        explanation.push_str(&format!("Execution Backend: {backend:?}\n"));
         explanation.push_str(&self.cost_router.explain_routing(operation, estimated_rows));
 
         Ok(explanation)

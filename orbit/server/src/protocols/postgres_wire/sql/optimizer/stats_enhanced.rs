@@ -69,8 +69,7 @@ impl CorrelationMatrix {
     /// Check if columns are significantly correlated (|correlation| > threshold)
     pub fn are_correlated(&self, col1: &str, col2: &str, threshold: f64) -> bool {
         self.get_correlation(col1, col2)
-            .map(|corr| corr.abs() > threshold)
-            .unwrap_or(false)
+            .is_some_and(|corr| corr.abs() > threshold)
     }
 }
 
@@ -390,7 +389,7 @@ impl EnhancedStatisticsCollector {
     /// Record a query pattern for workload analysis
     pub async fn record_query_pattern(&self, table: &str, column: &str) {
         let mut patterns = self.query_patterns.write().await;
-        let key = format!("{}.{}", table, column);
+        let key = format!("{table}.{column}");
         *patterns.frequent_columns.entry(key).or_insert(0) += 1;
     }
 
@@ -465,7 +464,7 @@ impl EnhancedStatisticsCollector {
         let histograms = self.multidim_histograms.read().await;
         for (table, table_histograms) in histograms.iter() {
             export.insert(
-                format!("multidim_histogram:{}", table),
+                format!("multidim_histogram:{table}"),
                 serde_json::json!({
                     "count": table_histograms.len(),
                     "columns": table_histograms.iter().map(|h| &h.columns).collect::<Vec<_>>(),
@@ -477,7 +476,7 @@ impl EnhancedStatisticsCollector {
         let correlations = self.correlations.read().await;
         for (table, matrix) in correlations.iter() {
             export.insert(
-                format!("correlation:{}", table),
+                format!("correlation:{table}"),
                 serde_json::json!({
                     "correlation_count": matrix.correlations.len(),
                 }),

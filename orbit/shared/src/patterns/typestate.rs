@@ -95,7 +95,7 @@ impl DatabaseConnection<Connected> {
             .as_ref()
             .ok_or_else(|| OrbitError::internal("Connection handle not available"))?;
 
-        Ok(format!("Executed '{}' on {}", query, handle))
+        Ok(format!("Executed '{query}' on {handle}"))
     }
 
     /// Get connection handle

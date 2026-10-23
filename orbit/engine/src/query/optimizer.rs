@@ -44,8 +44,7 @@ impl QueryOptimizer {
             .await
             .map_err(|e| {
                 crate::error::EngineError::Internal(format!(
-                    "Failed to detect compute capabilities: {}",
-                    e
+                    "Failed to detect compute capabilities: {e}"
                 ))
             })?;
 

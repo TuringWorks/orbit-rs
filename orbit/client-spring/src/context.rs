@@ -204,7 +204,7 @@ impl ApplicationContext {
             }
             Err(e) => {
                 let mut state = self.state.write().await;
-                *state = ContextState::Failed(format!("Failed to stop: {}", e));
+                *state = ContextState::Failed(format!("Failed to stop: {e}"));
                 warn!("❌ Failed to stop application context: {}", e);
                 return Err(e);
             }

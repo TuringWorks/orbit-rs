@@ -291,7 +291,7 @@ impl DatabaseApi {
             }
             LuaValue::Table(map) => {
                 let table = lua.create_table()?;
-                for (k, v) in map.iter() {
+                for (k, v) in map {
                     table.set(k.clone(), Self::lua_value_to_mlua(lua, v)?)?;
                 }
                 Ok(MluaValue::Table(table))

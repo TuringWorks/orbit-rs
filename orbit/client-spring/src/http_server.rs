@@ -65,9 +65,9 @@ impl SpringHttpServer {
 
         let app = self.create_router(state);
 
-        let listener = TcpListener::bind(&bind_address).await.map_err(|e| {
-            SpringError::context(format!("Failed to bind to {}: {}", bind_address, e))
-        })?;
+        let listener = TcpListener::bind(&bind_address)
+            .await
+            .map_err(|e| SpringError::context(format!("Failed to bind to {bind_address}: {e}")))?;
 
         let shutdown_token = self.shutdown_token.clone();
 
@@ -100,24 +100,24 @@ impl SpringHttpServer {
 
         Router::new()
             // Service management endpoints
-            .route(&format!("{}/services", base_path), get(list_services))
-            .route(&format!("{}/services/:name", base_path), get(get_service))
+            .route(&format!("{base_path}/services"), get(list_services))
+            .route(&format!("{base_path}/services/:name"), get(get_service))
             .route(
-                &format!("{}/services/:name", base_path),
+                &format!("{base_path}/services/:name"),
                 post(register_service),
             )
             .route(
-                &format!("{}/services/:name", base_path),
+                &format!("{base_path}/services/:name"),
                 delete(unregister_service),
             )
             // Configuration endpoints
-            .route(&format!("{}/config", base_path), get(get_config))
-            .route(&format!("{}/config/:key", base_path), get(get_config_value))
-            .route(&format!("{}/config/:key", base_path), put(set_config_value))
+            .route(&format!("{base_path}/config"), get(get_config))
+            .route(&format!("{base_path}/config/:key"), get(get_config_value))
+            .route(&format!("{base_path}/config/:key"), put(set_config_value))
             // Health and status endpoints
-            .route(&format!("{}/health", base_path), get(health_check))
-            .route(&format!("{}/status", base_path), get(status_check))
-            .route(&format!("{}/metrics", base_path), get(get_metrics))
+            .route(&format!("{base_path}/health"), get(health_check))
+            .route(&format!("{base_path}/status"), get(status_check))
+            .route(&format!("{base_path}/metrics"), get(get_metrics))
             // Context management endpoints (temporarily disabled due to lifetime issues)
             // .route(&format!("{}/context/start", base_path), post(start_context))
             // .route(&format!("{}/context/stop", base_path), post(stop_context))
@@ -260,8 +260,7 @@ async fn get_config_value(
     match value {
         Some(v) => Ok(Json(ConfigValueResponse { key, value: v })),
         None => Err(SpringError::configuration(format!(
-            "Configuration key not found: {}",
-            key
+            "Configuration key not found: {key}"
         ))),
     }
 }

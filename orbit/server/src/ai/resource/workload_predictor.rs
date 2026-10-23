@@ -247,7 +247,7 @@ impl WorkloadPredictor {
         let mut hourly_sums = [0.0; 24];
         let mut hourly_counts = [0; 24];
 
-        for measurement in history.iter() {
+        for measurement in history {
             let duration = measurement
                 .timestamp
                 .duration_since(std::time::UNIX_EPOCH)

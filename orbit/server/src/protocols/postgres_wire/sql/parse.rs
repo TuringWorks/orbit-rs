@@ -82,7 +82,7 @@ pub fn url_domain(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("URL must be a string".to_string()))?;
 
     let url = Url::parse(url_str)
-        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {e}")))?;
 
     if let Some(domain) = url.domain() {
         Ok(json!(domain))
@@ -107,7 +107,7 @@ pub fn url_fragment(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("URL must be a string".to_string()))?;
 
     let url = Url::parse(url_str)
-        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {e}")))?;
 
     if let Some(fragment) = url.fragment() {
         Ok(json!(fragment))
@@ -132,7 +132,7 @@ pub fn url_host(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("URL must be a string".to_string()))?;
 
     let url = Url::parse(url_str)
-        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {e}")))?;
 
     if let Some(host) = url.host_str() {
         Ok(json!(host))
@@ -157,7 +157,7 @@ pub fn url_path(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("URL must be a string".to_string()))?;
 
     let url = Url::parse(url_str)
-        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {e}")))?;
 
     Ok(json!(url.path()))
 }
@@ -178,7 +178,7 @@ pub fn url_port(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("URL must be a string".to_string()))?;
 
     let url = Url::parse(url_str)
-        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {e}")))?;
 
     if let Some(port) = url.port() {
         Ok(json!(port))
@@ -203,7 +203,7 @@ pub fn url_query(args: &[Value]) -> ProtocolResult<Value> {
         .ok_or_else(|| ProtocolError::PostgresError("URL must be a string".to_string()))?;
 
     let url = Url::parse(url_str)
-        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {}", e)))?;
+        .map_err(|e| ProtocolError::PostgresError(format!("Invalid URL: {e}")))?;
 
     if let Some(query) = url.query() {
         Ok(json!(query))

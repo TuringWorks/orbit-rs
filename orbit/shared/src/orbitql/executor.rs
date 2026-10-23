@@ -583,7 +583,10 @@ impl QueryExecutor {
         let mut key_parts = Vec::new();
         for expr in group_by {
             if let Expression::Identifier(name) = expr {
-                let value = row.get(name).map(|v| v.to_string()).unwrap_or_default();
+                let value = row
+                    .get(name)
+                    .map(std::string::ToString::to_string)
+                    .unwrap_or_default();
                 key_parts.push(value);
             }
         }
@@ -624,7 +627,10 @@ impl QueryExecutor {
                 // Create a key representing the tuple of values at index i
                 let mut key_parts = Vec::new();
                 for col in &arg_values {
-                    let val_str = col[i].as_ref().map(|v| v.to_string()).unwrap_or_default();
+                    let val_str = col[i]
+                        .as_ref()
+                        .map(std::string::ToString::to_string)
+                        .unwrap_or_default();
                     key_parts.push(val_str);
                 }
                 let key = key_parts.join("|");
@@ -741,7 +747,8 @@ impl QueryExecutor {
                 }
             }
             AggregateFunction::ArrayAgg => {
-                let arr: Vec<serde_json::Value> = values.iter().filter_map(|v| v.clone()).collect();
+                let arr: Vec<serde_json::Value> =
+                    values.iter().filter_map(std::clone::Clone::clone).collect();
                 Ok(json!(arr))
             }
             AggregateFunction::StringAgg => {
@@ -1154,7 +1161,7 @@ impl QueryExecutor {
         // Add left row fields with model prefix for disambiguation
         let left_prefix = self.get_model_prefix(left_model);
         for (key, value) in left_row {
-            merged.insert(format!("{}_{}", left_prefix, key), value.clone());
+            merged.insert(format!("{left_prefix}_{key}"), value.clone());
             // Also add without prefix for convenience
             if !merged.contains_key(key) {
                 merged.insert(key.clone(), value.clone());
@@ -1164,9 +1171,9 @@ impl QueryExecutor {
         // Add right row fields with model prefix
         let right_prefix = self.get_model_prefix(right_model);
         for (key, value) in right_row {
-            merged.insert(format!("{}_{}", right_prefix, key), value.clone());
+            merged.insert(format!("{right_prefix}_{key}"), value.clone());
             // Add without prefix if not already present
-            let prefixed_key = format!("right_{}", key);
+            let prefixed_key = format!("right_{key}");
             merged.insert(prefixed_key, value.clone());
         }
 
@@ -1201,11 +1208,11 @@ impl QueryExecutor {
                 merged.insert(key.clone(), value.clone());
             }
             // Add null placeholders for right side
-            merged.insert(format!("{}_id", null_prefix), json!(null));
+            merged.insert(format!("{null_prefix}_id"), json!(null));
         } else {
             // Row is from right side
             for (key, value) in row {
-                merged.insert(format!("right_{}", key), value.clone());
+                merged.insert(format!("right_{key}"), value.clone());
             }
         }
 

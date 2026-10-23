@@ -74,15 +74,12 @@ impl KeyValueActor {
     }
 
     pub fn append_value(&mut self, value: &str) -> usize {
-        match &mut self.value {
-            Some(existing) => {
-                existing.push_str(value);
-                existing.len()
-            }
-            None => {
-                self.value = Some(value.to_string());
-                value.len()
-            }
+        if let Some(existing) = &mut self.value {
+            existing.push_str(value);
+            existing.len()
+        } else {
+            self.value = Some(value.to_string());
+            value.len()
         }
     }
 
@@ -149,7 +146,7 @@ impl KeyValueActor {
         if self.is_expired() {
             0
         } else {
-            self.value.as_ref().map(|s| s.len()).unwrap_or(0)
+            self.value.as_ref().map_or(0, std::string::String::len)
         }
     }
 
@@ -344,8 +341,7 @@ impl HashActor {
         let current_value = self
             .fields
             .get(&field)
-            .map(|v| v.parse::<i64>())
-            .unwrap_or(Ok(0))
+            .map_or(Ok(0), |v| v.parse::<i64>())
             .map_err(|_| "ERR hash value is not an integer".to_string())?;
 
         let new_value = current_value + increment;
@@ -985,7 +981,7 @@ impl StreamActor {
                 }
 
                 self.last_id = (timestamp, sequence);
-                Ok(format!("{}-{}", timestamp, sequence))
+                Ok(format!("{timestamp}-{sequence}"))
             } else {
                 Err("ERR Invalid stream ID format".to_string())
             }
@@ -1190,8 +1186,7 @@ impl StreamActor {
         let last_delivered = if start_id == "$" {
             self.entries
                 .last()
-                .map(|e| e.id.clone())
-                .unwrap_or_else(|| "0-0".to_string())
+                .map_or_else(|| "0-0".to_string(), |e| e.id.clone())
         } else if start_id == "0" {
             "0-0".to_string()
         } else {
@@ -1307,7 +1302,7 @@ impl StreamActor {
             .ok_or_else(|| "NOGROUP No such consumer group".to_string())?;
 
         let mut acked = 0;
-        for (consumer_name, pending_list) in group.pending.iter_mut() {
+        for (consumer_name, pending_list) in &mut group.pending {
             let before_len = pending_list.len();
             pending_list.retain(|id| !ids.contains(id));
             let removed = before_len - pending_list.len();

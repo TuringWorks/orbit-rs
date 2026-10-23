@@ -146,7 +146,7 @@ impl GPUVectorSimilarity {
             if candidate.len() != dimension {
                 return Err(ComputeError::execution(
                     crate::errors::ExecutionError::InvalidKernelParameters {
-                        parameter: format!("candidate_vector_{}", idx),
+                        parameter: format!("candidate_vector_{idx}"),
                         value: format!("dimension={}, expected={}", candidate.len(), dimension),
                     },
                 ));

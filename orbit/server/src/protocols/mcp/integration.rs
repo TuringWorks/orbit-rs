@@ -273,7 +273,7 @@ impl OrbitMcpIntegration {
                     ColumnType::Integer => "INTEGER".to_string(),
                     ColumnType::BigInt => "BIGINT".to_string(),
                     ColumnType::Text => "TEXT".to_string(),
-                    ColumnType::Varchar(n) => format!("VARCHAR({})", n),
+                    ColumnType::Varchar(n) => format!("VARCHAR({n})"),
                     ColumnType::Boolean => "BOOLEAN".to_string(),
                     ColumnType::Json => "JSON".to_string(),
                     ColumnType::Double => "DOUBLE PRECISION".to_string(),

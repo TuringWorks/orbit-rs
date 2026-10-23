@@ -186,7 +186,7 @@ impl SpatialStreamProcessor {
                         entity_id: update.vehicle_id,
                         location: update.location.clone(),
                         timestamp: update.timestamp,
-                        message: format!("Significant movement: {:.1} meters", distance),
+                        message: format!("Significant movement: {distance:.1} meters"),
                         geofence_id: None,
                     });
                 }
@@ -266,7 +266,7 @@ impl SpatialStreamProcessor {
             average_speed: avg_speed,
             max_speed,
             total_distance,
-            processing_timestamp: updates.last().map(|u| u.timestamp).unwrap_or(0),
+            processing_timestamp: updates.last().map_or(0, |u| u.timestamp),
         })
     }
 }

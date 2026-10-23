@@ -3,6 +3,7 @@
 //! Demonstrates Cell, RefCell, and other interior mutability patterns for
 //! scenarios where mutation is needed through shared references.
 
+use orbit_util::{MutexExt, RwLockExt};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -277,42 +278,41 @@ impl SharedConfig {
 
     /// Get configuration value (read lock)
     pub fn max_connections(&self) -> usize {
-        self.inner.read().unwrap().max_connections
+        self.inner.read_recover().max_connections
     }
 
     pub fn timeout_ms(&self) -> u64 {
-        self.inner.read().unwrap().timeout_ms
+        self.inner.read_recover().timeout_ms
     }
 
     pub fn retry_attempts(&self) -> u32 {
-        self.inner.read().unwrap().retry_attempts
+        self.inner.read_recover().retry_attempts
     }
 
     /// Update configuration (write lock)
     pub fn set_max_connections(&self, value: usize) {
-        self.inner.write().unwrap().max_connections = value;
+        self.inner.write_recover().max_connections = value;
     }
 
     pub fn set_timeout_ms(&self, value: u64) {
-        self.inner.write().unwrap().timeout_ms = value;
+        self.inner.write_recover().timeout_ms = value;
     }
 
     pub fn set_retry_attempts(&self, value: u32) {
-        self.inner.write().unwrap().retry_attempts = value;
+        self.inner.write_recover().retry_attempts = value;
     }
 
     /// Check if feature is enabled
     pub fn is_feature_enabled(&self, feature: &str) -> bool {
         self.inner
-            .read()
-            .unwrap()
+            .read_recover()
             .enabled_features
             .contains(&feature.to_string())
     }
 
     /// Enable feature
     pub fn enable_feature(&self, feature: String) {
-        let mut config = self.inner.write().unwrap();
+        let mut config = self.inner.write_recover();
         if !config.enabled_features.contains(&feature) {
             config.enabled_features.push(feature);
         }
@@ -320,7 +320,7 @@ impl SharedConfig {
 
     /// Disable feature
     pub fn disable_feature(&self, feature: &str) {
-        let mut config = self.inner.write().unwrap();
+        let mut config = self.inner.write_recover();
         config.enabled_features.retain(|f| f != feature);
     }
 
@@ -356,18 +356,18 @@ impl Observable {
     }
 
     pub fn subscribe(&self, observer: Arc<dyn Observer>) {
-        self.observers.write().unwrap().push(observer);
+        self.observers.write_recover().push(observer);
     }
 
     pub fn notify(&self, event: &str) {
-        let observers = self.observers.read().unwrap();
+        let observers = self.observers.read_recover();
         for observer in observers.iter() {
             observer.on_event(event);
         }
     }
 
     pub fn observer_count(&self) -> usize {
-        self.observers.read().unwrap().len()
+        self.observers.read_recover().len()
     }
 }
 
@@ -390,17 +390,17 @@ impl EventLogger {
     }
 
     pub fn events(&self) -> Vec<String> {
-        self.events.lock().unwrap().clone()
+        self.events.lock_recover().clone()
     }
 
     pub fn clear(&self) {
-        self.events.lock().unwrap().clear();
+        self.events.lock_recover().clear();
     }
 }
 
 impl Observer for EventLogger {
     fn on_event(&self, event: &str) {
-        self.events.lock().unwrap().push(event.to_string());
+        self.events.lock_recover().push(event.to_string());
     }
 }
 

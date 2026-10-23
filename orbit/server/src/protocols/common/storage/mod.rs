@@ -335,7 +335,7 @@ impl StorageSerializable for HashMap<String, SqlValue> {
         use serde_json::Value as JsonValue;
 
         let mut map = serde_json::Map::new();
-        for (k, v) in self.iter() {
+        for (k, v) in self {
             match v {
                 SqlValue::Jsonb(jv) => {
                     // Encode as base64 of CBOR bytes and mark as __jsonb_b64

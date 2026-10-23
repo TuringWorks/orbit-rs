@@ -236,8 +236,7 @@ impl SequenceAccessor for SimpleSequenceAccessor {
 
         if !seq.is_called {
             return Err(ProtocolError::PostgresError(format!(
-                "currval of sequence \"{}\" is not yet defined in this session",
-                sequence_name
+                "currval of sequence \"{sequence_name}\" is not yet defined in this session"
             )));
         }
 
@@ -1052,8 +1051,7 @@ impl ExpressionEvaluator {
                         SqlValue::Integer(n) => serde_json::Value::Number((*n).into()),
                         SqlValue::BigInt(n) => serde_json::Value::Number((*n).into()),
                         SqlValue::DoublePrecision(f) => serde_json::Number::from_f64(*f)
-                            .map(serde_json::Value::Number)
-                            .unwrap_or(serde_json::Value::Null),
+                            .map_or(serde_json::Value::Null, serde_json::Value::Number),
                         SqlValue::Boolean(b) => serde_json::Value::Bool(*b),
                         SqlValue::Null => serde_json::Value::Null,
                         SqlValue::Json(j) | SqlValue::Jsonb(j) => j.clone(),
@@ -1129,7 +1127,7 @@ impl ExpressionEvaluator {
 
                         return match result {
                             Ok(udf_result) => Ok(udf_sql_to_sql_value(udf_result)),
-                            Err(e) => Err(ProtocolError::Other(format!("UDF error: {}", e))),
+                            Err(e) => Err(ProtocolError::Other(format!("UDF error: {e}"))),
                         };
                     }
                 }
@@ -1838,7 +1836,7 @@ impl ExpressionEvaluator {
 
         // Build regex with case-insensitive flag if needed
         let regex_pattern = if case_insensitive {
-            format!("(?i){}", pattern_str)
+            format!("(?i){pattern_str}")
         } else {
             pattern_str
         };
@@ -1849,8 +1847,7 @@ impl ExpressionEvaluator {
                 Ok(SqlValue::Boolean(if negated { !matches } else { matches }))
             }
             Err(e) => Err(ProtocolError::PostgresError(format!(
-                "Invalid regex pattern: {}",
-                e
+                "Invalid regex pattern: {e}"
             ))),
         }
     }
@@ -3505,8 +3502,7 @@ impl ExpressionEvaluator {
                     .iter()
                     .filter(|elem| {
                         self.compare_values(elem, &args[1])
-                            .map(|ord| ord != std::cmp::Ordering::Equal)
-                            .unwrap_or(true)
+                            .map_or(true, |ord| ord != std::cmp::Ordering::Equal)
                     })
                     .cloned()
                     .collect();
@@ -3533,8 +3529,7 @@ impl ExpressionEvaluator {
                     .map(|elem| {
                         if self
                             .compare_values(elem, &args[1])
-                            .map(|ord| ord == std::cmp::Ordering::Equal)
-                            .unwrap_or(false)
+                            .is_ok_and(|ord| ord == std::cmp::Ordering::Equal)
                         {
                             args[2].clone()
                         } else {
@@ -3848,7 +3843,7 @@ impl ExpressionEvaluator {
             None
         };
 
-        let global = flags.map(|f| f.contains('g')).unwrap_or(false);
+        let global = flags.is_some_and(|f| f.contains('g'));
         // Case insensitivity 'i' should be handled in regex compilation, but we are using compile on the fly.
         // We can prepend (?i) if flag present.
 
@@ -3865,7 +3860,7 @@ impl ExpressionEvaluator {
         };
 
         let re = Regex::new(&final_pattern)
-            .map_err(|e| ProtocolError::PostgresError(format!("Invalid regex: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Invalid regex: {e}")))?;
 
         let result = if global {
             re.replace_all(text, replacement.as_str())
@@ -3969,7 +3964,7 @@ impl ExpressionEvaluator {
         };
 
         let re = Regex::new(&final_pattern)
-            .map_err(|e| ProtocolError::PostgresError(format!("Invalid regex: {}", e)))?;
+            .map_err(|e| ProtocolError::PostgresError(format!("Invalid regex: {e}")))?;
 
         f(&re, text)
     }
@@ -4225,16 +4220,14 @@ impl ExpressionEvaluator {
                     }
                     _ => {
                         return Err(ProtocolError::PostgresError(format!(
-                            "Invalid interval string: {}",
-                            s
+                            "Invalid interval string: {s}"
                         )))
                     }
                 }
             }
             _ => {
                 return Err(ProtocolError::PostgresError(format!(
-                    "time_bucket first argument must be an interval or interval string, got {:?}",
-                    interval
+                    "time_bucket first argument must be an interval or interval string, got {interval:?}"
                 )))
             }
         };
@@ -4702,7 +4695,7 @@ impl ExpressionEvaluator {
                         padding.push(fill_chars[i % fill_chars.len()]);
                         i += 1;
                     }
-                    Ok(SqlValue::Text(format!("{}{}", padding, s)))
+                    Ok(SqlValue::Text(format!("{padding}{s}")))
                 }
             }
             _ => Ok(SqlValue::Null),
@@ -4743,7 +4736,7 @@ impl ExpressionEvaluator {
                         padding.push(fill_chars[i % fill_chars.len()]);
                         i += 1;
                     }
-                    Ok(SqlValue::Text(format!("{}{}", s, padding)))
+                    Ok(SqlValue::Text(format!("{s}{padding}")))
                 }
             }
             _ => Ok(SqlValue::Null),
@@ -5001,7 +4994,7 @@ impl ExpressionEvaluator {
         match Self::get_string_arg(&args[0])? {
             Some(s) => {
                 let digest = md5::compute(s.as_bytes());
-                Ok(SqlValue::Text(format!("{:x}", digest)))
+                Ok(SqlValue::Text(format!("{digest:x}")))
             }
             None => Ok(SqlValue::Null),
         }
@@ -5032,8 +5025,7 @@ impl ExpressionEvaluator {
                         Ok(SqlValue::Text(data.escape_default().to_string()))
                     }
                     _ => Err(ProtocolError::PostgresError(format!(
-                        "Unknown encoding format: {}",
-                        format
+                        "Unknown encoding format: {format}"
                     ))),
                 }
             }
@@ -5063,8 +5055,7 @@ impl ExpressionEvaluator {
                             )),
                         },
                         Err(e) => Err(ProtocolError::PostgresError(format!(
-                            "Invalid base64 data: {}",
-                            e
+                            "Invalid base64 data: {e}"
                         ))),
                     }
                 }
@@ -5074,13 +5065,11 @@ impl ExpressionEvaluator {
                         Err(_) => Ok(SqlValue::Bytea(hex::decode(&data).unwrap())),
                     },
                     Err(e) => Err(ProtocolError::PostgresError(format!(
-                        "Invalid hex data: {}",
-                        e
+                        "Invalid hex data: {e}"
                     ))),
                 },
                 _ => Err(ProtocolError::PostgresError(format!(
-                    "Unknown decoding format: {}",
-                    format
+                    "Unknown decoding format: {format}"
                 ))),
             },
             _ => Ok(SqlValue::Null),
@@ -5202,14 +5191,13 @@ impl ExpressionEvaluator {
             ));
         }
 
-        match &args[0] {
-            SqlValue::Null => Ok(SqlValue::Text("NULL".to_string())),
-            _ => {
-                let s = args[0].to_postgres_string();
-                // Escape single quotes by doubling them
-                let escaped = s.replace('\'', "''");
-                Ok(SqlValue::Text(format!("'{}'", escaped)))
-            }
+        if args[0] == SqlValue::Null {
+            Ok(SqlValue::Text("NULL".to_string()))
+        } else {
+            let s = args[0].to_postgres_string();
+            // Escape single quotes by doubling them
+            let escaped = s.replace('\'', "''");
+            Ok(SqlValue::Text(format!("'{escaped}'")))
         }
     }
 
@@ -5224,14 +5212,14 @@ impl ExpressionEvaluator {
             Some(s) => {
                 // Check if quoting is needed
                 let needs_quoting = s.is_empty()
-                    || s.chars().next().map(|c| c.is_numeric()).unwrap_or(false)
+                    || s.chars().next().is_some_and(char::is_numeric)
                     || s.chars().any(|c| !c.is_alphanumeric() && c != '_')
                     || s.to_lowercase() != s;
 
                 if needs_quoting {
                     // Escape double quotes by doubling them
                     let escaped = s.replace('"', "\"\"");
-                    Ok(SqlValue::Text(format!("\"{}\"", escaped)))
+                    Ok(SqlValue::Text(format!("\"{escaped}\"")))
                 } else {
                     Ok(SqlValue::Text(s))
                 }
@@ -5270,7 +5258,7 @@ impl ExpressionEvaluator {
                             'I' if arg_idx < args.len() => {
                                 let s = args[arg_idx].to_postgres_string();
                                 let escaped = s.replace('"', "\"\"");
-                                let val = format!("\"{}\"", escaped);
+                                let val = format!("\"{escaped}\"");
                                 result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
                                 i += val.len();
                                 arg_idx += 1;
@@ -5278,7 +5266,7 @@ impl ExpressionEvaluator {
                             'L' if arg_idx < args.len() => {
                                 let s = args[arg_idx].to_postgres_string();
                                 let escaped = s.replace('\'', "''");
-                                let val = format!("'{}'", escaped);
+                                let val = format!("'{escaped}'");
                                 result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
                                 i += val.len();
                                 arg_idx += 1;
@@ -5343,8 +5331,7 @@ impl ExpressionEvaluator {
                     Ok(SqlValue::Integer(date.year()))
                 } else {
                     Err(ProtocolError::PostgresError(format!(
-                        "YEAR requires date argument, got: {}",
-                        s
+                        "YEAR requires date argument, got: {s}"
                     )))
                 }
             }
@@ -5374,8 +5361,7 @@ impl ExpressionEvaluator {
                     Ok(SqlValue::Integer(date.month() as i32))
                 } else {
                     Err(ProtocolError::PostgresError(format!(
-                        "MONTH requires date argument, got: {}",
-                        s
+                        "MONTH requires date argument, got: {s}"
                     )))
                 }
             }
@@ -5405,8 +5391,7 @@ impl ExpressionEvaluator {
                     Ok(SqlValue::Integer(date.day() as i32))
                 } else {
                     Err(ProtocolError::PostgresError(format!(
-                        "DAY requires date argument, got: {}",
-                        s
+                        "DAY requires date argument, got: {s}"
                     )))
                 }
             }
@@ -5472,8 +5457,7 @@ impl ExpressionEvaluator {
                     ))
                 }
                 _ => Err(ProtocolError::PostgresError(format!(
-                    "Cannot extract '{}' from DATE",
-                    field
+                    "Cannot extract '{field}' from DATE"
                 ))),
             },
             SqlValue::Time(time) => match field {
@@ -5489,8 +5473,7 @@ impl ExpressionEvaluator {
                     time.second() as f64 * 1_000_000.0 + time.nanosecond() as f64 / 1_000.0,
                 )),
                 _ => Err(ProtocolError::PostgresError(format!(
-                    "Cannot extract '{}' from TIME",
-                    field
+                    "Cannot extract '{field}' from TIME"
                 ))),
             },
             SqlValue::TimeWithTimezone(ts) => {
@@ -5506,8 +5489,7 @@ impl ExpressionEvaluator {
                         Ok(SqlValue::Integer(0))
                     }
                     _ => Err(ProtocolError::PostgresError(format!(
-                        "Cannot extract '{}' from TIME WITH TIMEZONE",
-                        field
+                        "Cannot extract '{field}' from TIME WITH TIMEZONE"
                     ))),
                 }
             }
@@ -5537,8 +5519,7 @@ impl ExpressionEvaluator {
                     "QUARTER" => Ok(SqlValue::Integer(((date.month() - 1) / 3 + 1) as i32)),
                     "EPOCH" => Ok(SqlValue::DoublePrecision(ts.and_utc().timestamp() as f64)),
                     _ => Err(ProtocolError::PostgresError(format!(
-                        "Cannot extract '{}' from TIMESTAMP",
-                        field
+                        "Cannot extract '{field}' from TIMESTAMP"
                     ))),
                 }
             }
@@ -5571,8 +5552,7 @@ impl ExpressionEvaluator {
                     "TIMEZONE_HOUR" => Ok(SqlValue::Integer(0)),
                     "TIMEZONE_MINUTE" => Ok(SqlValue::Integer(0)),
                     _ => Err(ProtocolError::PostgresError(format!(
-                        "Cannot extract '{}' from TIMESTAMP WITH TIMEZONE",
-                        field
+                        "Cannot extract '{field}' from TIMESTAMP WITH TIMEZONE"
                     ))),
                 }
             }
@@ -5597,8 +5577,7 @@ impl ExpressionEvaluator {
                     Ok(SqlValue::DoublePrecision(total_seconds))
                 }
                 _ => Err(ProtocolError::PostgresError(format!(
-                    "Cannot extract '{}' from INTERVAL",
-                    field
+                    "Cannot extract '{field}' from INTERVAL"
                 ))),
             },
             SqlValue::Text(s) => {
@@ -5613,13 +5592,11 @@ impl ExpressionEvaluator {
                     return self.extract_field_from_value(field, &SqlValue::Date(date));
                 }
                 Err(ProtocolError::PostgresError(format!(
-                    "Cannot parse '{}' as date/time for EXTRACT",
-                    s
+                    "Cannot parse '{s}' as date/time for EXTRACT"
                 )))
             }
             _ => Err(ProtocolError::PostgresError(format!(
-                "EXTRACT requires date/time value, got: {:?}",
-                value
+                "EXTRACT requires date/time value, got: {value:?}"
             ))),
         }
     }
@@ -5686,8 +5663,7 @@ impl ExpressionEvaluator {
                     "DAY" => *date,
                     _ => {
                         return Err(ProtocolError::PostgresError(format!(
-                            "Invalid DATE_TRUNC precision '{}' for DATE",
-                            precision
+                            "Invalid DATE_TRUNC precision '{precision}' for DATE"
                         )))
                     }
                 };
@@ -5779,8 +5755,7 @@ impl ExpressionEvaluator {
                     }
                     _ => {
                         return Err(ProtocolError::PostgresError(format!(
-                            "Invalid DATE_TRUNC precision '{}' for TIMESTAMP",
-                            precision
+                            "Invalid DATE_TRUNC precision '{precision}' for TIMESTAMP"
                         )))
                     }
                 };
@@ -5812,13 +5787,11 @@ impl ExpressionEvaluator {
                     return self.truncate_to_precision(precision, &SqlValue::Date(date));
                 }
                 Err(ProtocolError::PostgresError(format!(
-                    "Cannot parse '{}' as date/time for DATE_TRUNC",
-                    s
+                    "Cannot parse '{s}' as date/time for DATE_TRUNC"
                 )))
             }
             _ => Err(ProtocolError::PostgresError(format!(
-                "DATE_TRUNC requires date/time value, got: {:?}",
-                value
+                "DATE_TRUNC requires date/time value, got: {value:?}"
             ))),
         }
     }
@@ -6303,7 +6276,7 @@ impl ExpressionEvaluator {
         };
 
         // Build full regex pattern with anchors
-        let full_pattern = format!("^{}$", pattern_to_match);
+        let full_pattern = format!("^{pattern_to_match}$");
 
         // Use simple pattern matching for common cases to avoid regex overhead
         if !pattern_to_match.contains(".*") && !pattern_to_match.contains('.') {
@@ -7199,11 +7172,9 @@ impl ExpressionEvaluator {
             &empty_context,
             true,
         );
-        let end = frame
-            .end_bound
-            .as_ref()
-            .map(|b| self.frame_bound_to_pos(b, pos, partition_size, &empty_context, false))
-            .unwrap_or(pos); // Default to CURRENT ROW
+        let end = frame.end_bound.as_ref().map_or(pos, |b| {
+            self.frame_bound_to_pos(b, pos, partition_size, &empty_context, false)
+        }); // Default to CURRENT ROW
 
         Ok((start, end))
     }
@@ -7231,11 +7202,9 @@ impl ExpressionEvaluator {
                     &empty_context,
                     true,
                 );
-                let end = frame
-                    .end_bound
-                    .as_ref()
-                    .map(|b| self.frame_bound_to_pos(b, pos, partition_size, &empty_context, false))
-                    .unwrap_or(pos);
+                let end = frame.end_bound.as_ref().map_or(pos, |b| {
+                    self.frame_bound_to_pos(b, pos, partition_size, &empty_context, false)
+                });
                 Ok((start, end))
             }
             WindowFrameMode::Range => {
@@ -7830,11 +7799,10 @@ impl ExpressionEvaluator {
         match value {
             SqlValue::Json(j) | SqlValue::Jsonb(j) => Ok(j.clone()),
             SqlValue::Text(s) | SqlValue::Varchar(s) => serde_json::from_str(s)
-                .map_err(|e| ProtocolError::PostgresError(format!("Invalid JSON: {}", e))),
+                .map_err(|e| ProtocolError::PostgresError(format!("Invalid JSON: {e}"))),
             SqlValue::Null => Ok(serde_json::Value::Null),
             _ => Err(ProtocolError::PostgresError(format!(
-                "Expected JSON value, got {:?}",
-                value
+                "Expected JSON value, got {value:?}"
             ))),
         }
     }
@@ -7873,8 +7841,7 @@ impl ExpressionEvaluator {
             SqlValue::Integer(i) => Ok(i.to_string()),
             SqlValue::BigInt(i) => Ok(i.to_string()),
             _ => Err(ProtocolError::PostgresError(format!(
-                "Expected string value, got {:?}",
-                value
+                "Expected string value, got {value:?}"
             ))),
         }
     }
@@ -8107,7 +8074,10 @@ impl ExpressionEvaluator {
         let tsvector_str = tokens
             .iter()
             .map(|(lexeme, positions)| {
-                let pos_str: Vec<String> = positions.iter().map(|p| p.to_string()).collect();
+                let pos_str: Vec<String> = positions
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect();
                 format!("'{}':{}", lexeme, pos_str.join(","))
             })
             .collect::<Vec<_>>()
@@ -8163,7 +8133,7 @@ impl ExpressionEvaluator {
         } else {
             words
                 .iter()
-                .map(|w| format!("'{}'", w))
+                .map(|w| format!("'{w}'"))
                 .collect::<Vec<_>>()
                 .join(" & ")
         };
@@ -8198,7 +8168,7 @@ impl ExpressionEvaluator {
         } else {
             words
                 .iter()
-                .map(|w| format!("'{}'", w))
+                .map(|w| format!("'{w}'"))
                 .collect::<Vec<_>>()
                 .join(" <-> ")
         };
@@ -8247,13 +8217,13 @@ impl ExpressionEvaluator {
                             if !phrase_words.is_empty() {
                                 let phrase = phrase_words
                                     .iter()
-                                    .map(|w| format!("'{}'", w))
+                                    .map(|w| format!("'{w}'"))
                                     .collect::<Vec<_>>()
                                     .join(" <-> ");
                                 let part = if negate_next {
-                                    format!("!({})", phrase)
+                                    format!("!({phrase})")
                                 } else {
-                                    format!("({})", phrase)
+                                    format!("({phrase})")
                                 };
                                 result_parts.push(part);
                                 negate_next = false;
@@ -8281,9 +8251,9 @@ impl ExpressionEvaluator {
                             let stemmed = self.stem_word(&current_word, &config);
                             if !stemmed.is_empty() {
                                 let part = if negate_next {
-                                    format!("!'{}'", stemmed)
+                                    format!("!'{stemmed}'")
                                 } else {
-                                    format!("'{}'", stemmed)
+                                    format!("'{stemmed}'")
                                 };
                                 result_parts.push(part);
                                 negate_next = false;
@@ -8303,9 +8273,9 @@ impl ExpressionEvaluator {
             let stemmed = self.stem_word(&current_word, &config);
             if !stemmed.is_empty() {
                 let part = if negate_next {
-                    format!("!'{}'", stemmed)
+                    format!("!'{stemmed}'")
                 } else {
-                    format!("'{}'", stemmed)
+                    format!("'{stemmed}'")
                 };
                 result_parts.push(part);
             }
@@ -8514,7 +8484,7 @@ impl ExpressionEvaluator {
 
         // For now, return a simple array with the lowercased, stemmed token
         let stemmed = self.stem_word(&token, "english");
-        let result = format!("{{{}}}", stemmed);
+        let result = format!("{{{stemmed}}}");
 
         Ok(SqlValue::Text(result))
     }
@@ -8747,9 +8717,9 @@ impl ExpressionEvaluator {
 
         // Create phrase query with distance operator
         let phrase = if distance == 1 {
-            format!("{} <-> {}", query1, query2)
+            format!("{query1} <-> {query2}")
         } else {
-            format!("{} <{}> {}", query1, distance, query2)
+            format!("{query1} <{distance}> {query2}")
         };
 
         Ok(SqlValue::Text(phrase))
@@ -8813,7 +8783,7 @@ impl ExpressionEvaluator {
                     if !current_word.is_empty() {
                         let stemmed = self.stem_word(&current_word, config);
                         if !stemmed.is_empty() {
-                            result.push_str(&format!("'{}'", stemmed));
+                            result.push_str(&format!("'{stemmed}'"));
                         }
                         current_word.clear();
                     }
@@ -8826,7 +8796,7 @@ impl ExpressionEvaluator {
                     if !current_word.is_empty() {
                         let stemmed = self.stem_word(&current_word, config);
                         if !stemmed.is_empty() {
-                            result.push_str(&format!("'{}'", stemmed));
+                            result.push_str(&format!("'{stemmed}'"));
                         }
                         current_word.clear();
                     }
@@ -8848,7 +8818,7 @@ impl ExpressionEvaluator {
         if !current_word.is_empty() {
             let stemmed = self.stem_word(&current_word, config);
             if !stemmed.is_empty() {
-                result.push_str(&format!("'{}'", stemmed));
+                result.push_str(&format!("'{stemmed}'"));
             }
         }
 
@@ -8869,12 +8839,12 @@ impl ExpressionEvaluator {
                         .split(',')
                         .map(|p| {
                             let num: String = p.chars().take_while(|c| c.is_numeric()).collect();
-                            format!("{}{}", num, weight)
+                            format!("{num}{weight}")
                         })
                         .collect();
                     format!("{}:{}", lexeme, new_positions.join(","))
                 } else {
-                    format!("{}:{}", part, weight)
+                    format!("{part}:{weight}")
                 }
             })
             .collect::<Vec<_>>()
@@ -8961,7 +8931,7 @@ impl ExpressionEvaluator {
                     .filter(|c| c.is_alphanumeric())
                     .collect::<String>();
                 if terms.contains(&clean) {
-                    format!("{}{}{}", start_tag, word, end_tag)
+                    format!("{start_tag}{word}{end_tag}")
                 } else {
                     word.to_string()
                 }
@@ -9035,7 +9005,7 @@ impl ExpressionEvaluator {
         match value {
             SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) => Ok(s.clone()),
             SqlValue::Null => Ok(String::new()),
-            other => Ok(format!("{:?}", other)),
+            other => Ok(format!("{other:?}")),
         }
     }
 
@@ -9121,7 +9091,7 @@ impl ExpressionEvaluator {
             }
             (SqlValue::Tsquery(q1), SqlValue::Tsquery(q2)) => {
                 // OR the tsqueries together
-                let combined = format!("{} | {}", q1, q2);
+                let combined = format!("{q1} | {q2}");
                 Ok(SqlValue::Tsquery(combined))
             }
             (SqlValue::Text(t1), SqlValue::Text(t2)) => {
@@ -9140,11 +9110,11 @@ impl ExpressionEvaluator {
         match (left, right) {
             (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
             (SqlValue::Tsquery(q1), SqlValue::Tsquery(q2)) => {
-                let combined = format!("{} & {}", q1, q2);
+                let combined = format!("{q1} & {q2}");
                 Ok(SqlValue::Tsquery(combined))
             }
             (SqlValue::Text(t1), SqlValue::Text(t2)) => {
-                let combined = format!("{} & {}", t1, t2);
+                let combined = format!("{t1} & {t2}");
                 Ok(SqlValue::Text(combined))
             }
             _ => Err(ProtocolError::PostgresError(
@@ -9158,11 +9128,11 @@ impl ExpressionEvaluator {
         match left {
             SqlValue::Null => Ok(SqlValue::Null),
             SqlValue::Tsquery(q) => {
-                let negated = format!("!{}", q);
+                let negated = format!("!{q}");
                 Ok(SqlValue::Tsquery(negated))
             }
             SqlValue::Text(t) => {
-                let negated = format!("!{}", t);
+                let negated = format!("!{t}");
                 Ok(SqlValue::Text(negated))
             }
             _ => Err(ProtocolError::PostgresError(
@@ -9180,11 +9150,11 @@ impl ExpressionEvaluator {
         match (left, right) {
             (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
             (SqlValue::Tsquery(q1), SqlValue::Tsquery(q2)) => {
-                let phrase = format!("{} <-> {}", q1, q2);
+                let phrase = format!("{q1} <-> {q2}");
                 Ok(SqlValue::Tsquery(phrase))
             }
             (SqlValue::Text(t1), SqlValue::Text(t2)) => {
-                let phrase = format!("{} <-> {}", t1, t2);
+                let phrase = format!("{t1} <-> {t2}");
                 Ok(SqlValue::Text(phrase))
             }
             _ => Err(ProtocolError::PostgresError(
@@ -9226,8 +9196,7 @@ impl ExpressionEvaluator {
             SqlValue::Null => return Ok(SqlValue::Null),
             _ => {
                 return Err(ProtocolError::PostgresError(format!(
-                    "ANY/SOME requires an array, got {:?}",
-                    array_val
+                    "ANY/SOME requires an array, got {array_val:?}"
                 )))
             }
         };
@@ -9282,8 +9251,7 @@ impl ExpressionEvaluator {
             SqlValue::Null => return Ok(SqlValue::Null),
             _ => {
                 return Err(ProtocolError::PostgresError(format!(
-                    "ALL requires an array, got {:?}",
-                    array_val
+                    "ALL requires an array, got {array_val:?}"
                 )))
             }
         };
@@ -9349,8 +9317,7 @@ impl ExpressionEvaluator {
                 Ordering::Greater | Ordering::Equal
             ))),
             _ => Err(ProtocolError::PostgresError(format!(
-                "Unsupported operator in quantified comparison: {:?}",
-                operator
+                "Unsupported operator in quantified comparison: {operator:?}"
             ))),
         }
     }

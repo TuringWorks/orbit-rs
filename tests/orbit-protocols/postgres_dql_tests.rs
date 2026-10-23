@@ -63,7 +63,7 @@ async fn test_select_specific_columns() {
     match result {
         ExecutionResult::Select {
             columns,
-            rows,
+            rows: _,
             row_count,
         } => {
             assert_eq!(columns.len(), 2);
@@ -100,7 +100,11 @@ async fn test_select_with_where_equals() {
             row_count,
         } => {
             assert_eq!(columns.len(), 2);
-            assert!(row_count >= 0); // May or may not filter depending on WHERE implementation
+            assert_eq!(row_count, 1);
+            assert_eq!(
+                rows,
+                vec![vec![Some("2".to_string()), Some("Bob".to_string())]]
+            );
         }
         _ => panic!("Expected Select result"),
     }
@@ -129,7 +133,7 @@ async fn test_select_with_where_greater_than() {
             columns, row_count, ..
         } => {
             assert_eq!(columns.len(), 1);
-            assert!(row_count >= 0);
+            assert_eq!(row_count, 3);
         }
         _ => panic!("Expected Select result"),
     }
@@ -158,7 +162,7 @@ async fn test_select_with_where_less_than() {
             columns, row_count, ..
         } => {
             assert_eq!(columns.len(), 1);
-            assert!(row_count >= 0);
+            assert_eq!(row_count, 2);
         }
         _ => panic!("Expected Select result"),
     }
@@ -391,7 +395,7 @@ async fn test_where_boolean_true() {
 
     match result {
         ExecutionResult::Select { row_count, .. } => {
-            assert!(row_count >= 0);
+            assert_eq!(row_count, 2);
         }
         _ => panic!("Expected Select result"),
     }
@@ -417,7 +421,7 @@ async fn test_where_not_equals() {
 
     match result {
         ExecutionResult::Select { row_count, .. } => {
-            assert!(row_count >= 0);
+            assert_eq!(row_count, 2);
         }
         _ => panic!("Expected Select result"),
     }
@@ -443,7 +447,7 @@ async fn test_where_greater_equals() {
 
     match result {
         ExecutionResult::Select { row_count, .. } => {
-            assert!(row_count >= 0);
+            assert_eq!(row_count, 2);
         }
         _ => panic!("Expected Select result"),
     }
@@ -469,7 +473,7 @@ async fn test_where_less_equals() {
 
     match result {
         ExecutionResult::Select { row_count, .. } => {
-            assert!(row_count >= 0);
+            assert_eq!(row_count, 2);
         }
         _ => panic!("Expected Select result"),
     }
@@ -607,7 +611,7 @@ async fn test_select_after_delete() {
     match result {
         ExecutionResult::Select { row_count, .. } => {
             // Should have fewer rows after delete
-            assert!(row_count >= 0);
+            assert_eq!(row_count, 2);
         }
         _ => panic!("Expected Select result"),
     }

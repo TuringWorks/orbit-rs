@@ -93,7 +93,7 @@ impl std::fmt::Display for ActorType {
             ActorType::Index => write!(f, "index"),
             ActorType::Aggregation => write!(f, "aggregation"),
             ActorType::Cache => write!(f, "cache"),
-            ActorType::Custom(id) => write!(f, "custom_{}", id),
+            ActorType::Custom(id) => write!(f, "custom_{id}"),
         }
     }
 }
@@ -269,8 +269,7 @@ impl ActorTierPlacement {
                     return TierRecommendation {
                         tier: StorageTier::Warm,
                         reason: format!(
-                            "High access count ({}) suggests promotion from cold to warm",
-                            access_count
+                            "High access count ({access_count}) suggests promotion from cold to warm"
                         ),
                         confidence: 0.8,
                     };
@@ -280,8 +279,7 @@ impl ActorTierPlacement {
                         return TierRecommendation {
                             tier: StorageTier::Hot,
                             reason: format!(
-                                "Very high access count ({}) suggests promotion to hot tier",
-                                access_count
+                                "Very high access count ({access_count}) suggests promotion to hot tier"
                             ),
                             confidence: 0.9,
                         };
@@ -295,7 +293,7 @@ impl ActorTierPlacement {
 
         TierRecommendation {
             tier: base_tier,
-            reason: format!("Default tier for {} actor type", actor_type),
+            reason: format!("Default tier for {actor_type} actor type"),
             confidence: 0.7,
         }
     }
@@ -370,13 +368,13 @@ impl ActorTierPlacement {
                     let mut stats = self.stats.write().await;
                     match current {
                         StorageTier::Hot => {
-                            stats.hot_tier_actors = stats.hot_tier_actors.saturating_sub(1)
+                            stats.hot_tier_actors = stats.hot_tier_actors.saturating_sub(1);
                         }
                         StorageTier::Warm => {
-                            stats.warm_tier_actors = stats.warm_tier_actors.saturating_sub(1)
+                            stats.warm_tier_actors = stats.warm_tier_actors.saturating_sub(1);
                         }
                         StorageTier::Cold => {
-                            stats.cold_tier_actors = stats.cold_tier_actors.saturating_sub(1)
+                            stats.cold_tier_actors = stats.cold_tier_actors.saturating_sub(1);
                         }
                     }
                     match target_tier {
@@ -393,7 +391,7 @@ impl ActorTierPlacement {
                 );
             }
             None => {
-                return Err(format!("Actor {} not registered", actor_id));
+                return Err(format!("Actor {actor_id} not registered"));
             }
         }
 
@@ -427,13 +425,13 @@ impl ActorTierPlacement {
                     let mut stats = self.stats.write().await;
                     match current {
                         StorageTier::Hot => {
-                            stats.hot_tier_actors = stats.hot_tier_actors.saturating_sub(1)
+                            stats.hot_tier_actors = stats.hot_tier_actors.saturating_sub(1);
                         }
                         StorageTier::Warm => {
-                            stats.warm_tier_actors = stats.warm_tier_actors.saturating_sub(1)
+                            stats.warm_tier_actors = stats.warm_tier_actors.saturating_sub(1);
                         }
                         StorageTier::Cold => {
-                            stats.cold_tier_actors = stats.cold_tier_actors.saturating_sub(1)
+                            stats.cold_tier_actors = stats.cold_tier_actors.saturating_sub(1);
                         }
                     }
                     match target_tier {
@@ -450,7 +448,7 @@ impl ActorTierPlacement {
                 );
             }
             None => {
-                return Err(format!("Actor {} not registered", actor_id));
+                return Err(format!("Actor {actor_id} not registered"));
             }
         }
 
@@ -464,7 +462,7 @@ impl ActorTierPlacement {
 
     /// Get storage key prefix for an actor in its tier
     pub fn get_storage_key(&self, actor_id: &str, namespace: &str) -> String {
-        format!("actor:{}:{}", namespace, actor_id)
+        format!("actor:{namespace}:{actor_id}")
     }
 }
 

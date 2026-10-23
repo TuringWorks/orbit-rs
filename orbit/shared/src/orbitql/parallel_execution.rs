@@ -4,6 +4,7 @@
 //! parallel operators, work scheduling, and data exchange operators for high-performance
 //! query processing. Implements Phase 9.5 of the optimization plan.
 
+use orbit_util::{MutexExt, RwLockExt};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -742,7 +743,7 @@ impl ParallelExecutor {
 
     /// Get execution statistics
     pub fn get_stats(&self) -> ExecutionStats {
-        self.stats.read().unwrap().clone()
+        self.stats.read_recover().clone()
     }
 
     /// Shutdown the executor
@@ -872,7 +873,7 @@ impl ThreadPool {
 
         // Add to worker queue
         {
-            let mut queue = self.queues[worker_id].lock().unwrap();
+            let mut queue = self.queues[worker_id].lock_recover();
             if queue.len() >= self.config.max_queue_size {
                 return Err(ParallelExecutionError::ResourceExhausted(
                     "Worker queue is full".to_string(),
@@ -910,7 +911,7 @@ impl ThreadPool {
 
             // Try to get task from own queue
             let task = {
-                let mut queue_guard = queue.lock().unwrap();
+                let mut queue_guard = queue.lock_recover();
                 if let Some(task) = queue_guard.pop_front() {
                     Some(task)
                 } else if enable_work_stealing {
@@ -934,7 +935,7 @@ impl ThreadPool {
                 None => {
                     // Wait for work
                     let _guard = work_available
-                        .wait_timeout(queue.lock().unwrap(), Duration::from_millis(100))
+                        .wait_timeout(queue.lock_recover(), Duration::from_millis(100))
                         .unwrap();
                 }
             }
@@ -1010,13 +1011,12 @@ impl WorkScheduler {
     }
 
     fn schedule_load_based(&self, _task: &Task) -> Result<usize, ParallelExecutionError> {
-        let loads = self.worker_loads.read().unwrap();
+        let loads = self.worker_loads.read_recover();
         let min_load_worker = loads
             .iter()
             .enumerate()
             .min_by_key(|(_, load)| load.queue_length)
-            .map(|(id, _)| id)
-            .unwrap_or(0);
+            .map_or(0, |(id, _)| id);
         Ok(min_load_worker)
     }
 
@@ -1030,7 +1030,7 @@ impl WorkScheduler {
     }
 
     fn schedule_adaptive(&self, task: &Task) -> Result<usize, ParallelExecutionError> {
-        let adaptive_state = self.adaptive_state.read().unwrap();
+        let adaptive_state = self.adaptive_state.read_recover();
 
         // Use historical performance to make scheduling decisions
         if let Some(history) = adaptive_state.performance_history.get(&task.id) {

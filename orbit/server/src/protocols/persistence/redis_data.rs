@@ -339,7 +339,7 @@ impl RedisDataProvider for MemoryRedisDataProvider {
             _ => String::new(),
         };
 
-        let new_value = format!("{}{}", current, value);
+        let new_value = format!("{current}{value}");
         let length = new_value.len();
         let redis_value = RedisValue::new(new_value);
         data.insert(key.to_string(), redis_value);

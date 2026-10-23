@@ -408,8 +408,7 @@ impl PersistenceConfigBuilder {
         if let Some(ref default) = self.default_addressable {
             if !self.configs.contains_key(default) {
                 return Err(OrbitError::configuration(format!(
-                    "Default addressable provider '{}' not found",
-                    default
+                    "Default addressable provider '{default}' not found"
                 )));
             }
         }
@@ -417,8 +416,7 @@ impl PersistenceConfigBuilder {
         if let Some(ref default) = self.default_cluster {
             if !self.configs.contains_key(default) {
                 return Err(OrbitError::configuration(format!(
-                    "Default cluster provider '{}' not found",
-                    default
+                    "Default cluster provider '{default}' not found"
                 )));
             }
         }
@@ -508,9 +506,9 @@ impl PersistenceConfigBuilder {
 
     /// Validate composite provider configuration
     fn validate_composite_config(name: &str, config: &CompositeConfig) -> OrbitResult<()> {
-        Self::validate_provider_config(&format!("{}_primary", name), &config.primary)?;
+        Self::validate_provider_config(&format!("{name}_primary"), &config.primary)?;
         if let Some(ref backup) = config.backup {
-            Self::validate_provider_config(&format!("{}_backup", name), backup)?;
+            Self::validate_provider_config(&format!("{name}_backup"), backup)?;
         }
         Ok(())
     }
@@ -540,7 +538,7 @@ impl PersistenceConfigBuilder {
         field_name: &str,
     ) -> OrbitResult<()> {
         if value.is_empty() {
-            Self::create_config_error(provider_name, &format!("{} cannot be empty", field_name))
+            Self::create_config_error(provider_name, &format!("{field_name} cannot be empty"))
         } else {
             Ok(())
         }
@@ -553,7 +551,7 @@ impl PersistenceConfigBuilder {
         field_name: &str,
     ) -> OrbitResult<()> {
         if path.is_empty() {
-            Self::create_config_error(provider_name, &format!("{} cannot be empty", field_name))
+            Self::create_config_error(provider_name, &format!("{field_name} cannot be empty"))
         } else {
             Ok(())
         }
@@ -566,7 +564,7 @@ impl PersistenceConfigBuilder {
         field_name: &str,
     ) -> OrbitResult<()> {
         if value <= 0.into() {
-            Self::create_config_error(provider_name, &format!("{} must be > 0", field_name))
+            Self::create_config_error(provider_name, &format!("{field_name} must be > 0"))
         } else {
             Ok(())
         }
@@ -595,8 +593,7 @@ impl PersistenceConfigBuilder {
         );
 
         Err(OrbitError::configuration(format!(
-            "{} provider '{}': {}",
-            capitalized, provider_name, message
+            "{capitalized} provider '{provider_name}': {message}"
         )))
     }
 
@@ -647,7 +644,7 @@ impl PersistenceProviderConfig {
         let path_ref = path.as_ref();
         let content = tokio::fs::read_to_string(path_ref)
             .await
-            .map_err(|e| OrbitError::configuration(format!("Failed to read config file: {}", e)))?;
+            .map_err(|e| OrbitError::configuration(format!("Failed to read config file: {e}")))?;
 
         if path_ref.extension().and_then(|s| s.to_str()) == Some("toml") {
             Self::from_toml(&content)
@@ -658,18 +655,16 @@ impl PersistenceProviderConfig {
 
     /// Load configuration from TOML string
     pub fn from_toml(content: &str) -> OrbitResult<Self> {
-        let config: ConfigFile = toml::from_str(content).map_err(|e| {
-            OrbitError::configuration(format!("Failed to parse TOML config: {}", e))
-        })?;
+        let config: ConfigFile = toml::from_str(content)
+            .map_err(|e| OrbitError::configuration(format!("Failed to parse TOML config: {e}")))?;
 
         Self::from_config_file(config)
     }
 
     /// Load configuration from JSON string
     pub fn from_json(content: &str) -> OrbitResult<Self> {
-        let config: ConfigFile = serde_json::from_str(content).map_err(|e| {
-            OrbitError::configuration(format!("Failed to parse JSON config: {}", e))
-        })?;
+        let config: ConfigFile = serde_json::from_str(content)
+            .map_err(|e| OrbitError::configuration(format!("Failed to parse JSON config: {e}")))?;
 
         Self::from_config_file(config)
     }
@@ -722,7 +717,7 @@ impl PersistenceProviderConfig {
 
                 registry
                     .register_addressable_provider(
-                        format!("{}_addressable", name),
+                        format!("{name}_addressable"),
                         addressable_provider,
                         is_default_addressable,
                     )
@@ -730,7 +725,7 @@ impl PersistenceProviderConfig {
 
                 registry
                     .register_cluster_provider(
-                        format!("{}_cluster", name),
+                        format!("{name}_cluster"),
                         cluster_provider,
                         is_default_cluster,
                     )
@@ -746,7 +741,7 @@ impl PersistenceProviderConfig {
 
                 registry
                     .register_addressable_provider(
-                        format!("{}_addressable", name),
+                        format!("{name}_addressable"),
                         addressable_provider,
                         is_default_addressable,
                     )
@@ -754,7 +749,7 @@ impl PersistenceProviderConfig {
 
                 registry
                     .register_cluster_provider(
-                        format!("{}_cluster", name),
+                        format!("{name}_cluster"),
                         cluster_provider,
                         is_default_cluster,
                     )
@@ -777,7 +772,7 @@ impl PersistenceProviderConfig {
 
                 registry
                     .register_addressable_provider(
-                        format!("{}_addressable", name),
+                        format!("{name}_addressable"),
                         addressable_provider,
                         is_default_addressable,
                     )
@@ -785,7 +780,7 @@ impl PersistenceProviderConfig {
 
                 registry
                     .register_cluster_provider(
-                        format!("{}_cluster", name),
+                        format!("{name}_cluster"),
                         cluster_provider,
                         is_default_cluster,
                     )
@@ -804,7 +799,7 @@ impl PersistenceProviderConfig {
 
                 registry
                     .register_addressable_provider(
-                        format!("{}_addressable", name),
+                        format!("{name}_addressable"),
                         addressable_provider,
                         is_default_addressable,
                     )
@@ -812,7 +807,7 @@ impl PersistenceProviderConfig {
 
                 registry
                     .register_cluster_provider(
-                        format!("{}_cluster", name),
+                        format!("{name}_cluster"),
                         cluster_provider,
                         is_default_cluster,
                     )
@@ -821,8 +816,7 @@ impl PersistenceProviderConfig {
             // Add other provider types here...
             _ => {
                 return Err(OrbitError::configuration(format!(
-                    "Provider type not yet implemented: {:?}",
-                    config
+                    "Provider type not yet implemented: {config:?}"
                 )));
             }
         }
@@ -927,16 +921,13 @@ impl EnvironmentConfig {
     /// Create S3 configuration from environment variables
     pub fn s3_from_env(prefix: &str) -> OrbitResult<S3Config> {
         let get_env = |key: &str| -> OrbitResult<String> {
-            std::env::var(format!("{}_{}", prefix, key)).map_err(|_| {
-                OrbitError::configuration(format!(
-                    "Missing environment variable: {}_{}",
-                    prefix, key
-                ))
+            std::env::var(format!("{prefix}_{key}")).map_err(|_| {
+                OrbitError::configuration(format!("Missing environment variable: {prefix}_{key}"))
             })
         };
 
         let get_env_opt =
-            |key: &str| -> Option<String> { std::env::var(format!("{}_{}", prefix, key)).ok() };
+            |key: &str| -> Option<String> { std::env::var(format!("{prefix}_{key}")).ok() };
 
         Ok(S3Config {
             endpoint: get_env("ENDPOINT")?,
@@ -960,16 +951,13 @@ impl EnvironmentConfig {
     /// Create Azure configuration from environment variables
     pub fn azure_from_env(prefix: &str) -> OrbitResult<AzureConfig> {
         let get_env = |key: &str| -> OrbitResult<String> {
-            std::env::var(format!("{}_{}", prefix, key)).map_err(|_| {
-                OrbitError::configuration(format!(
-                    "Missing environment variable: {}_{}",
-                    prefix, key
-                ))
+            std::env::var(format!("{prefix}_{key}")).map_err(|_| {
+                OrbitError::configuration(format!("Missing environment variable: {prefix}_{key}"))
             })
         };
 
         let get_env_opt =
-            |key: &str| -> Option<String> { std::env::var(format!("{}_{}", prefix, key)).ok() };
+            |key: &str| -> Option<String> { std::env::var(format!("{prefix}_{key}")).ok() };
 
         Ok(AzureConfig {
             account_name: get_env("ACCOUNT_NAME")?,
@@ -987,16 +975,13 @@ impl EnvironmentConfig {
     /// Create etcd configuration from environment variables
     pub fn etcd_from_env(prefix: &str) -> OrbitResult<EtcdConfig> {
         let get_env = |key: &str| -> OrbitResult<String> {
-            std::env::var(format!("{}_{}", prefix, key)).map_err(|_| {
-                OrbitError::configuration(format!(
-                    "Missing environment variable: {}_{}",
-                    prefix, key
-                ))
+            std::env::var(format!("{prefix}_{key}")).map_err(|_| {
+                OrbitError::configuration(format!("Missing environment variable: {prefix}_{key}"))
             })
         };
 
         let get_env_opt =
-            |key: &str| -> Option<String> { std::env::var(format!("{}_{}", prefix, key)).ok() };
+            |key: &str| -> Option<String> { std::env::var(format!("{prefix}_{key}")).ok() };
 
         let endpoints_str = get_env("ENDPOINTS")?;
         let endpoints: Vec<String> = endpoints_str
@@ -1022,16 +1007,13 @@ impl EnvironmentConfig {
     /// Create Digital Ocean Spaces configuration from environment variables
     pub fn digitalocean_spaces_from_env(prefix: &str) -> OrbitResult<DigitalOceanSpacesConfig> {
         let get_env = |key: &str| -> OrbitResult<String> {
-            std::env::var(format!("{}_{}", prefix, key)).map_err(|_| {
-                OrbitError::configuration(format!(
-                    "Missing environment variable: {}_{}",
-                    prefix, key
-                ))
+            std::env::var(format!("{prefix}_{key}")).map_err(|_| {
+                OrbitError::configuration(format!("Missing environment variable: {prefix}_{key}"))
             })
         };
 
         let get_env_opt =
-            |key: &str| -> Option<String> { std::env::var(format!("{}_{}", prefix, key)).ok() };
+            |key: &str| -> Option<String> { std::env::var(format!("{prefix}_{key}")).ok() };
 
         // Parse tags from environment variable format: "key1=value1,key2=value2"
         let mut tags = std::collections::HashMap::new();

@@ -12,7 +12,7 @@ impl MetricsExt {
 
         // Add labels as additional separate metrics for context
         for (key, value) in labels {
-            let metric_name = format!("{}.{}", name, key);
+            let metric_name = format!("{name}.{key}");
             metrics::counter!(metric_name, "value" => value).increment(1);
         }
     }
@@ -23,7 +23,7 @@ impl MetricsExt {
 
         // Add context through separate labeled metrics
         for (key, label_value) in labels {
-            let metric_name = format!("{}.{}", name, key);
+            let metric_name = format!("{name}.{key}");
             metrics::gauge!(metric_name, "value" => label_value).set(value);
         }
     }
@@ -34,7 +34,7 @@ impl MetricsExt {
 
         // Add context through separate labeled metrics
         for (key, label_value) in labels {
-            let metric_name = format!("{}.{}", name, key);
+            let metric_name = format!("{name}.{key}");
             metrics::histogram!(metric_name, "value" => label_value).record(value);
         }
     }

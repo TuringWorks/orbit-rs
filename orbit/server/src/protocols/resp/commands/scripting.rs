@@ -62,8 +62,7 @@ impl ScriptingCommands {
         // Validate we have enough arguments for keys
         if args.len() < 2 + numkeys {
             return Err(ProtocolError::RespError(format!(
-                "ERR wrong number of arguments for 'eval' command (expected at least {} keys)",
-                numkeys
+                "ERR wrong number of arguments for 'eval' command (expected at least {numkeys} keys)"
             )));
         }
 
@@ -102,8 +101,7 @@ impl ScriptingCommands {
         // Validate we have enough arguments for keys
         if args.len() < 2 + numkeys {
             return Err(ProtocolError::RespError(format!(
-                "ERR wrong number of arguments for 'evalsha' command (expected at least {} keys)",
-                numkeys
+                "ERR wrong number of arguments for 'evalsha' command (expected at least {numkeys} keys)"
             )));
         }
 
@@ -283,7 +281,7 @@ impl ScriptingCommands {
             .await
         {
             Ok(result) => Ok(self.lua_value_to_resp(&result)),
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -309,7 +307,7 @@ impl ScriptingCommands {
     ) -> ProtocolResult<RespValue> {
         match self.lua_runtime.eval_sha(sha1, keys, argv).await {
             Ok(result) => Ok(self.lua_value_to_resp(&result)),
-            Err(e) => Err(ProtocolError::RespError(format!("ERR {}", e))),
+            Err(e) => Err(ProtocolError::RespError(format!("ERR {e}"))),
         }
     }
 
@@ -345,14 +343,12 @@ impl CommandHandler for ScriptingCommands {
                     "DEBUG" => self.cmd_script_debug(&args[1..]).await,
                     "HELP" => self.cmd_script_help().await,
                     _ => Err(ProtocolError::RespError(format!(
-                        "ERR Unknown SCRIPT subcommand '{}'",
-                        subcommand
+                        "ERR Unknown SCRIPT subcommand '{subcommand}'"
                     ))),
                 }
             }
             _ => Err(ProtocolError::RespError(format!(
-                "ERR unknown command '{}'",
-                command_name
+                "ERR unknown command '{command_name}'"
             ))),
         }
     }

@@ -108,8 +108,7 @@ impl PubSubManager {
 
         let count = subscriber_channels
             .get(subscriber_id)
-            .map(|s| s.len())
-            .unwrap_or(0);
+            .map_or(0, std::collections::HashSet::len);
 
         info!(
             "Subscriber '{}' subscribed to channel '{}', total subscriptions: {}",
@@ -140,8 +139,7 @@ impl PubSubManager {
             }
             let count = subscriber_channels
                 .get(subscriber_id)
-                .map(|s| s.len())
-                .unwrap_or(0);
+                .map_or(0, std::collections::HashSet::len);
             results.push((channel_name.to_string(), count));
         } else {
             // Unsubscribe from all channels
@@ -175,8 +173,7 @@ impl PubSubManager {
 
         let count = subscriber_patterns
             .get(subscriber_id)
-            .map(|s| s.len())
-            .unwrap_or(0);
+            .map_or(0, std::collections::HashSet::len);
 
         info!(
             "Subscriber '{}' subscribed to pattern '{}', total patterns: {}",
@@ -205,8 +202,7 @@ impl PubSubManager {
             }
             let count = subscriber_patterns
                 .get(subscriber_id)
-                .map(|s| s.len())
-                .unwrap_or(0);
+                .map_or(0, std::collections::HashSet::len);
             results.push((pat.to_string(), count));
         } else {
             // Unsubscribe from all patterns
@@ -224,10 +220,7 @@ impl PubSubManager {
     /// Get number of subscribers for a channel
     pub async fn numsub(&self, channel: &str) -> usize {
         let channels = self.channels.read().await;
-        channels
-            .get(channel)
-            .map(|ch| ch.subscribers.len())
-            .unwrap_or(0)
+        channels.get(channel).map_or(0, |ch| ch.subscribers.len())
     }
 
     /// Get number of pattern subscriptions
@@ -242,10 +235,7 @@ impl PubSubManager {
         channels
             .iter()
             .filter(|(name, ch)| {
-                !ch.subscribers.is_empty()
-                    && pattern
-                        .map(|p| Self::pattern_matches(p, name))
-                        .unwrap_or(true)
+                !ch.subscribers.is_empty() && pattern.is_none_or(|p| Self::pattern_matches(p, name))
             })
             .map(|(name, _)| name.clone())
             .collect()
@@ -540,7 +530,9 @@ impl PubSubCommands {
 
         match subcommand.as_str() {
             "CHANNELS" => {
-                let pattern = args.get(1).and_then(|v| v.as_string());
+                let pattern = args
+                    .get(1)
+                    .and_then(super::super::types::RespValue::as_string);
                 let channels = manager.channels(pattern.as_deref()).await;
                 Ok(RespValue::array(
                     channels
@@ -565,8 +557,7 @@ impl PubSubCommands {
                 Ok(RespValue::integer(count as i64))
             }
             _ => Err(crate::protocols::error::ProtocolError::RespError(format!(
-                "ERR Unknown PUBSUB subcommand '{}'",
-                subcommand
+                "ERR Unknown PUBSUB subcommand '{subcommand}'"
             ))),
         }
     }
