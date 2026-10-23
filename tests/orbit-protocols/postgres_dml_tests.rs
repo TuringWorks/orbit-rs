@@ -23,7 +23,7 @@ async fn test_insert_single_row() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Insert { count } => {
+        ExecutionResult::Insert { count, .. } => {
             assert_eq!(count, 1);
         }
         _ => panic!("Expected Insert result"),
@@ -45,7 +45,7 @@ async fn test_insert_multiple_rows() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Insert { count } => {
+        ExecutionResult::Insert { count, .. } => {
             assert_eq!(count, 3);
         }
         _ => panic!("Expected Insert result"),
@@ -78,7 +78,7 @@ async fn test_insert_all_types() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Insert { count } => {
+        ExecutionResult::Insert { count, .. } => {
             assert_eq!(count, 1);
         }
         _ => panic!("Expected Insert result"),
@@ -100,7 +100,7 @@ async fn test_insert_with_null() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Insert { count } => {
+        ExecutionResult::Insert { count, .. } => {
             assert_eq!(count, 1);
         }
         _ => panic!("Expected Insert result"),
@@ -122,7 +122,7 @@ async fn test_insert_partial_columns() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Insert { count } => {
+        ExecutionResult::Insert { count, .. } => {
             assert_eq!(count, 1);
         }
         _ => panic!("Expected Insert result"),
@@ -149,7 +149,7 @@ async fn test_insert_integers() {
 
     for sql in sqls {
         let result = executor.execute(sql).await.unwrap();
-        assert!(matches!(result, ExecutionResult::Insert { count: 1 }));
+        assert!(matches!(result, ExecutionResult::Insert { count: 1, .. }));
     }
 }
 
@@ -173,7 +173,7 @@ async fn test_insert_text() {
 
     for sql in sqls {
         let result = executor.execute(sql).await.unwrap();
-        assert!(matches!(result, ExecutionResult::Insert { count: 1 }));
+        assert!(matches!(result, ExecutionResult::Insert { count: 1, .. }));
     }
 }
 
@@ -197,7 +197,7 @@ async fn test_insert_booleans() {
 
     for sql in sqls {
         let result = executor.execute(sql).await.unwrap();
-        assert!(matches!(result, ExecutionResult::Insert { count: 1 }));
+        assert!(matches!(result, ExecutionResult::Insert { count: 1, .. }));
     }
 }
 
@@ -224,7 +224,7 @@ async fn test_update_single_column() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Update { count } => {
+        ExecutionResult::Update { count, .. } => {
             assert!(count > 0); // At least one row should be updated
         }
         _ => panic!("Expected Update result"),
@@ -251,7 +251,7 @@ async fn test_update_multiple_columns() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Update { count } => {
+        ExecutionResult::Update { count, .. } => {
             assert!(count > 0);
         }
         _ => panic!("Expected Update result"),
@@ -277,7 +277,7 @@ async fn test_update_all_rows() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Update { count } => {
+        ExecutionResult::Update { count, .. } => {
             assert_eq!(count, 3);
         }
         _ => panic!("Expected Update result"),
@@ -303,7 +303,7 @@ async fn test_update_to_null() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Update { count } => {
+        ExecutionResult::Update { count, .. } => {
             assert!(count > 0);
         }
         _ => panic!("Expected Update result"),
@@ -329,7 +329,7 @@ async fn test_update_with_integer_comparison() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Update { count } => {
+        ExecutionResult::Update { count, .. } => {
             assert!(count >= 0); // May or may not update depending on WHERE evaluation
         }
         _ => panic!("Expected Update result"),
@@ -359,7 +359,7 @@ async fn test_delete_single_row() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Delete { count } => {
+        ExecutionResult::Delete { count, .. } => {
             assert!(count >= 0); // Should delete at least 0 rows
         }
         _ => panic!("Expected Delete result"),
@@ -385,7 +385,7 @@ async fn test_delete_multiple_rows() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Delete { count } => {
+        ExecutionResult::Delete { count, .. } => {
             assert!(count >= 0);
         }
         _ => panic!("Expected Delete result"),
@@ -411,7 +411,7 @@ async fn test_delete_all_rows() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Delete { count } => {
+        ExecutionResult::Delete { count, .. } => {
             assert_eq!(count, 3);
         }
         _ => panic!("Expected Delete result"),
@@ -437,7 +437,7 @@ async fn test_delete_with_comparison() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Delete { count } => {
+        ExecutionResult::Delete { count, .. } => {
             assert!(count >= 0);
         }
         _ => panic!("Expected Delete result"),
@@ -463,7 +463,7 @@ async fn test_insert_update_delete_flow() {
         .execute("INSERT INTO workflow VALUES (1, 'pending')")
         .await
         .unwrap();
-    assert!(matches!(result, ExecutionResult::Insert { count: 1 }));
+    assert!(matches!(result, ExecutionResult::Insert { count: 1, .. }));
 
     // UPDATE
     let result = executor
@@ -502,7 +502,7 @@ async fn test_bulk_operations() {
         .await
         .unwrap();
     match result {
-        ExecutionResult::Update { count } => {
+        ExecutionResult::Update { count, .. } => {
             assert_eq!(count, 5);
         }
         _ => panic!("Expected Update result"),
@@ -511,7 +511,7 @@ async fn test_bulk_operations() {
     // Bulk delete
     let result = executor.execute("DELETE FROM bulk_test").await.unwrap();
     match result {
-        ExecutionResult::Delete { count } => {
+        ExecutionResult::Delete { count, .. } => {
             assert_eq!(count, 5);
         }
         _ => panic!("Expected Delete result"),
@@ -532,7 +532,7 @@ async fn test_sequential_inserts() {
     for i in 1..=10 {
         let sql = format!("INSERT INTO sequence VALUES ({})", i);
         let result = executor.execute(&sql).await.unwrap();
-        assert!(matches!(result, ExecutionResult::Insert { count: 1 }));
+        assert!(matches!(result, ExecutionResult::Insert { count: 1, .. }));
     }
 }
 
@@ -551,7 +551,7 @@ async fn test_update_non_existent_row() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Update { count } => {
+        ExecutionResult::Update { count, .. } => {
             assert_eq!(count, 0);
         }
         _ => panic!("Expected Update result"),
@@ -573,7 +573,7 @@ async fn test_delete_non_existent_row() {
     let result = executor.execute(sql).await.unwrap();
 
     match result {
-        ExecutionResult::Delete { count } => {
+        ExecutionResult::Delete { count, .. } => {
             assert_eq!(count, 0);
         }
         _ => panic!("Expected Delete result"),
