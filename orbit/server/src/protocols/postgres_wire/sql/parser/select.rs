@@ -388,13 +388,18 @@ impl SelectParser {
     }
 
     fn parse_alias(&mut self, tokens: &[Token], pos: &mut usize) -> ProtocolResult<Option<String>> {
-        if self.matches_at(tokens, *pos, &Token::As) {
+        let explicit = self.matches_at(tokens, *pos, &Token::As);
+        if explicit {
             *pos += 1;
         }
 
-        if let Some(alias_name) = tokens.get(*pos).and_then(
-            crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name,
-        ) {
+        // After AS any word is a valid alias (`AS owner`); without it only identifiers are.
+        let name_of = if explicit {
+            crate::protocols::postgres_wire::sql::parser::utilities::keyword_as_name
+        } else {
+            crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name
+        };
+        if let Some(alias_name) = tokens.get(*pos).and_then(name_of) {
             *pos += 1;
             Ok(Some(alias_name))
         } else {
@@ -631,12 +636,17 @@ impl SelectParser {
         tokens: &[Token],
         pos: &mut usize,
     ) -> ProtocolResult<Option<TableAlias>> {
-        if self.matches_at(tokens, *pos, &Token::As) {
+        let explicit = self.matches_at(tokens, *pos, &Token::As);
+        if explicit {
             *pos += 1;
         }
 
-        if let Some(Token::Identifier(alias_name)) = tokens.get(*pos) {
-            let name = alias_name.clone();
+        let alias_name = match tokens.get(*pos) {
+            Some(Token::Identifier(n)) => Some(n.clone()),
+            Some(t) if explicit => crate::protocols::postgres_wire::sql::parser::utilities::keyword_as_name(t),
+            _ => None,
+        };
+        if let Some(name) = alias_name {
             *pos += 1;
 
             let columns = if self.matches_at(tokens, *pos, &Token::LeftParen) {

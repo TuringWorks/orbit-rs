@@ -10,6 +10,15 @@ use crate::protocols::postgres_wire::sql::{
 };
 
 /// Extract identifier string from token (handles both Identifier and keyword tokens used as names)
+/// The text of a keyword token, for use as a name after an explicit `AS`, where any word is allowed.
+pub fn keyword_as_name(token: &Token) -> Option<String> {
+    if let Some(n) = token_to_identifier_name(token) {
+        return Some(n);
+    }
+    let repr = format!("{token:?}");
+    repr.chars().all(|c| c.is_ascii_alphanumeric()).then(|| repr.to_lowercase())
+}
+
 pub fn token_to_identifier_name(token: &Token) -> Option<String> {
     match token {
         Token::Identifier(name) => Some(name.clone()),

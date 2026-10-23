@@ -335,7 +335,8 @@ impl CqlAdapter {
                     transaction_id: None,
                 },
             ),
-            crate::protocols::postgres_wire::QueryResult::Typed { columns, rows } => {
+            crate::protocols::postgres_wire::QueryResult::Typed { columns, rows }
+            | crate::protocols::postgres_wire::QueryResult::Returning { columns, rows, .. } => {
                 let row_count = rows.len();
                 Ok(
                     crate::protocols::postgres_wire::sql::UnifiedExecutionResult::Select {

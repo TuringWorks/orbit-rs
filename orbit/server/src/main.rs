@@ -1379,6 +1379,20 @@ async fn start_postgresql_server(
         QueryEngine::new_with_persistent_storage(rocksdb)
     };
 
+    // The durable SQL engine keeps committed state in RocksDB and runs every statement it supports.
+    // ORBIT_SQL_ENGINE=legacy selects the previous executors, which only persist table definitions and inserts.
+    #[cfg(feature = "storage-rocksdb")]
+    let query_engine = if std::env::var("ORBIT_SQL_ENGINE").map(|v| v == "legacy").unwrap_or(false) {
+        info!("[PostgreSQL] Using the legacy SQL executors (ORBIT_SQL_ENGINE=legacy)");
+        query_engine
+    } else {
+        use orbit_server::protocols::postgres_wire::sql::durable::{DurableEngine, RocksPersist};
+        let dir = args.data_dir.join("sql");
+        info!("[PostgreSQL] Durable SQL engine at {:?}", dir);
+        let persist = RocksPersist::open(&dir)?;
+        query_engine.with_durable(Arc::new(DurableEngine::open(Box::new(persist))?))
+    };
+
     // Create PostgreSQL server with query engine
     let postgres_server =
         PostgresServer::new_with_query_engine(bind_addr, query_engine).with_tls_config(tls_config);

@@ -609,6 +609,20 @@ impl ExpressionEvaluator {
         let left_val = self.evaluate(left, context)?;
         let right_val = self.evaluate(right, context)?;
 
+        // A comparison with NULL is NULL, not true or false.
+        if matches!(
+            operator,
+            BinaryOperator::Equal
+                | BinaryOperator::NotEqual
+                | BinaryOperator::LessThan
+                | BinaryOperator::LessThanOrEqual
+                | BinaryOperator::GreaterThan
+                | BinaryOperator::GreaterThanOrEqual
+        ) && (left_val.is_null() || right_val.is_null())
+        {
+            return Ok(SqlValue::Null);
+        }
+
         match operator {
             BinaryOperator::Plus => self.arithmetic_op(&left_val, &right_val, "+"),
             BinaryOperator::Minus => self.arithmetic_op(&left_val, &right_val, "-"),
@@ -1558,9 +1572,9 @@ impl ExpressionEvaluator {
                 .partial_cmp(&(*b as f64))
                 .ok_or_else(|| ProtocolError::PostgresError("Cannot compare values".to_string())),
 
-            _ => Err(ProtocolError::PostgresError(format!(
-                "Cannot compare {left:?} and {right:?}"
-            ))),
+            _ => super::durable::value::compare_loose(left, right).ok_or_else(|| {
+                ProtocolError::PostgresError(format!("Cannot compare {left:?} and {right:?}"))
+            }),
         }
     }
 

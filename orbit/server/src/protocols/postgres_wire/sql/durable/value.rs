@@ -86,6 +86,42 @@ pub fn cmp(a: &SqlValue, b: &SqlValue) -> Ordering {
     }
 }
 
+/// Ordering for SQL comparison operators. A string is converted to the other operand's type, as
+/// PostgreSQL does for a literal (`created >= '2026-01-01'`, `id = '5'`). `None` means the values
+/// are not comparable (or one is NULL).
+pub(crate) fn compare_loose(a: &SqlValue, b: &SqlValue) -> Option<Ordering> {
+    if a.is_null() || b.is_null() {
+        return None;
+    }
+    let (sa, sb) = (as_str(a).is_some(), as_str(b).is_some());
+    if sa && sb {
+        return Some(cmp(a, b));
+    }
+    if sa != sb {
+        let (s, other, flip) = if sa { (a, b, false) } else { (b, a, true) };
+        let parsed = coerce(s.clone(), &other.sql_type()).ok()?;
+        let o = if family(&parsed) == family(other) { cmp(&parsed, other) } else { return None };
+        return Some(if flip { o.reverse() } else { o });
+    }
+    if family(a) == family(b) {
+        Some(cmp(a, b))
+    } else {
+        None
+    }
+}
+
+fn family(v: &SqlValue) -> u8 {
+    match v {
+        SqlValue::SmallInt(_) | SqlValue::Integer(_) | SqlValue::BigInt(_) | SqlValue::Decimal(_) | SqlValue::Real(_) | SqlValue::DoublePrecision(_) => 1,
+        SqlValue::Boolean(_) => 2,
+        SqlValue::Date(_) | SqlValue::Time(_) | SqlValue::Timestamp(_) | SqlValue::TimestampWithTimezone(_) | SqlValue::TimeWithTimezone(_) => 3,
+        SqlValue::Uuid(_) => 4,
+        SqlValue::Bytea(_) => 5,
+        SqlValue::Json(_) | SqlValue::Jsonb(_) => 6,
+        _ => 0,
+    }
+}
+
 /// SQL equality: `None` when either side is NULL.
 pub fn sql_eq(a: &SqlValue, b: &SqlValue) -> Option<bool> {
     if a.is_null() || b.is_null() {
@@ -245,16 +281,77 @@ pub fn coerce(v: SqlValue, ty: &SqlType) -> Result<SqlValue, String> {
             }
         },
         SqlType::Date | SqlType::Timestamp { .. } | SqlType::Time { .. } | SqlType::Uuid | SqlType::Bytea | SqlType::Interval => {
-            if let Some(s) = text(&v) {
-                SqlValue::parse_string(&s, ty).map_err(|_| bad(&v))
-            } else {
-                v.cast_to(ty)
-            }
+            coerce_temporal_or_binary(&v, ty).ok_or_else(|| bad(&v))
         }
         _ => match text(&v) {
             Some(s) => SqlValue::parse_string(&s, ty).or(Ok(v)),
             None => Ok(v),
         },
+    }
+}
+
+fn parse_naive_timestamp(s: &str) -> Option<chrono::NaiveDateTime> {
+    use chrono::{DateTime, NaiveDate, NaiveDateTime};
+    let s = s.trim();
+    for f in ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%d %H:%M", "%Y-%m-%d"] {
+        if let Ok(d) = NaiveDateTime::parse_from_str(s, f) {
+            return Some(d);
+        }
+    }
+    if let Ok(d) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        return d.and_hms_opt(0, 0, 0);
+    }
+    // with an offset: keep the UTC wall time
+    DateTime::parse_from_rfc3339(&s.replacen(' ', "T", 1)).ok().map(|d| d.naive_utc()).or_else(|| {
+        ["%Y-%m-%d %H:%M:%S%.f%#z", "%Y-%m-%d %H:%M:%S%.f%z"].iter().find_map(|f| DateTime::parse_from_str(s, f).ok().map(|d| d.naive_utc()))
+    })
+}
+
+/// Dates, times, UUIDs, byte strings and intervals from text or from a neighbouring temporal type.
+fn coerce_temporal_or_binary(v: &SqlValue, ty: &SqlType) -> Option<SqlValue> {
+    use chrono::{DateTime, NaiveTime, Utc};
+    match ty {
+        SqlType::Timestamp { with_timezone } => {
+            let naive = match v {
+                SqlValue::Timestamp(t) => *t,
+                SqlValue::TimestampWithTimezone(t) => t.naive_utc(),
+                SqlValue::Date(d) => d.and_hms_opt(0, 0, 0)?,
+                other => parse_naive_timestamp(as_str(other)?)?,
+            };
+            Some(if *with_timezone { SqlValue::TimestampWithTimezone(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc)) } else { SqlValue::Timestamp(naive) })
+        }
+        SqlType::Date => match v {
+            SqlValue::Date(d) => Some(SqlValue::Date(*d)),
+            SqlValue::Timestamp(t) => Some(SqlValue::Date(t.date())),
+            SqlValue::TimestampWithTimezone(t) => Some(SqlValue::Date(t.date_naive())),
+            other => parse_naive_timestamp(as_str(other)?).map(|t| SqlValue::Date(t.date())),
+        },
+        SqlType::Time { .. } => match v {
+            SqlValue::Time(t) => Some(SqlValue::Time(*t)),
+            other => {
+                let s = as_str(other)?.trim();
+                ["%H:%M:%S%.f", "%H:%M"].iter().find_map(|f| NaiveTime::parse_from_str(s, f).ok()).map(SqlValue::Time)
+            }
+        },
+        SqlType::Uuid => match v {
+            SqlValue::Uuid(u) => Some(SqlValue::Uuid(*u)),
+            other => uuid::Uuid::parse_str(as_str(other)?.trim()).ok().map(SqlValue::Uuid),
+        },
+        SqlType::Bytea => match v {
+            SqlValue::Bytea(b) => Some(SqlValue::Bytea(b.clone())),
+            other => {
+                let s = as_str(other)?;
+                match s.strip_prefix("\\x") {
+                    Some(hex_digits) => hex::decode(hex_digits).ok().map(SqlValue::Bytea),
+                    None => Some(SqlValue::Bytea(s.as_bytes().to_vec())),
+                }
+            }
+        },
+        SqlType::Interval => match v {
+            SqlValue::Interval(_) => Some(v.clone()),
+            other => SqlValue::parse_interval(as_str(other)?).ok(),
+        },
+        _ => None,
     }
 }
 
@@ -269,6 +366,8 @@ fn type_name(ty: &SqlType) -> &'static str {
         SqlType::Boolean => "boolean",
         SqlType::Date => "date",
         SqlType::Timestamp { .. } => "timestamp",
+        SqlType::Uuid => "uuid",
+        SqlType::Bytea => "bytea",
         SqlType::Json => "json",
         SqlType::Jsonb => "jsonb",
         _ => "value",
@@ -293,6 +392,18 @@ mod tests {
         assert_eq!(unique_key(&[SqlValue::Integer(5)]), unique_key(&[SqlValue::BigInt(5)]));
         assert_ne!(unique_key(&[SqlValue::Text("5".into())]), unique_key(&[SqlValue::Integer(5)]));
         assert_eq!(unique_key(&[SqlValue::Null, SqlValue::Integer(1)]), None);
+    }
+
+    #[test]
+    fn timestamps_dates_and_uuids_parse_from_text() {
+        let ts = coerce(SqlValue::Text("2026-10-23 20:57:17".into()), &SqlType::Timestamp { with_timezone: false }).unwrap();
+        assert_eq!(ts.to_postgres_string(), "2026-10-23 20:57:17");
+        let d = coerce(SqlValue::Text("2026-10-23".into()), &SqlType::Date).unwrap();
+        assert_eq!(d.to_postgres_string(), "2026-10-23");
+        assert!(coerce(SqlValue::Text("not a date".into()), &SqlType::Date).is_err());
+        assert!(coerce(SqlValue::Text("6f1c2d34-0000-4000-8000-000000000001".into()), &SqlType::Uuid).is_ok());
+        let tz = coerce(SqlValue::Text("2026-10-23T20:57:17+02:00".into()), &SqlType::Timestamp { with_timezone: false }).unwrap();
+        assert_eq!(tz.to_postgres_string(), "2026-10-23 18:57:17");
     }
 
     #[test]
