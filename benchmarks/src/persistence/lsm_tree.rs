@@ -559,7 +559,9 @@ impl LsmTreePersistence {
             if record_size > MAX_RECORD_SIZE {
                 return Err(PersistenceError::CorruptionError(format!(
                     "SSTable record size {} exceeds maximum allowed {} in {}",
-                    record_size, MAX_RECORD_SIZE, path.display()
+                    record_size,
+                    MAX_RECORD_SIZE,
+                    path.display()
                 )));
             }
 

@@ -22,7 +22,7 @@ circuit_breaker_timeout = 300
 
 [dynamic.failover]
 enable_auto_failover = true
-strategy = "Priority"  # Options: "RoundRobin", "Priority", "LowestLatency", "LoadBased"
+strategy = "Priority"       # Options: "RoundRobin", "Priority", "LowestLatency", "LoadBased"
 max_attempts = 3
 retry_delay = 10
 enable_failback = true

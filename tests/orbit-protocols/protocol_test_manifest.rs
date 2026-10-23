@@ -301,7 +301,6 @@ fn postgres_tests() -> Vec<TestResult> {
             file: Some("postgres_ddl_tests.rs".to_string()),
             line: Some(507),
         },
-
         // DML Tests (20/22 passing - 91%)
         TestResult {
             name: "INSERT single row".to_string(),
@@ -479,7 +478,6 @@ fn postgres_tests() -> Vec<TestResult> {
             file: Some("postgres_dml_tests.rs".to_string()),
             line: Some(382),
         },
-
         // DQL Tests (20/21 passing - 95%)
         TestResult {
             name: "SELECT * (all columns)".to_string(),
@@ -649,7 +647,6 @@ fn postgres_tests() -> Vec<TestResult> {
             file: Some("postgres_dql_tests.rs".to_string()),
             line: Some(366),
         },
-
         // Integration Tests (9/9 passing - 100%)
         TestResult {
             name: "CREATE TABLE integration".to_string(),
@@ -727,29 +724,25 @@ fn postgres_tests() -> Vec<TestResult> {
 }
 
 fn mysql_tests() -> Vec<TestResult> {
-    vec![
-        TestResult {
-            name: "Basic connection".to_string(),
-            protocol: "MySQL".to_string(),
-            category: "Connection".to_string(),
-            status: TestStatus::NotImplemented,
-            file: None,
-            line: None,
-        },
-    ]
+    vec![TestResult {
+        name: "Basic connection".to_string(),
+        protocol: "MySQL".to_string(),
+        category: "Connection".to_string(),
+        status: TestStatus::NotImplemented,
+        file: None,
+        line: None,
+    }]
 }
 
 fn cql_tests() -> Vec<TestResult> {
-    vec![
-        TestResult {
-            name: "CREATE KEYSPACE".to_string(),
-            protocol: "CQL".to_string(),
-            category: "DDL".to_string(),
-            status: TestStatus::NotImplemented,
-            file: None,
-            line: None,
-        },
-    ]
+    vec![TestResult {
+        name: "CREATE KEYSPACE".to_string(),
+        protocol: "CQL".to_string(),
+        category: "DDL".to_string(),
+        status: TestStatus::NotImplemented,
+        file: None,
+        line: None,
+    }]
 }
 
 fn redis_tests() -> Vec<TestResult> {
@@ -774,42 +767,36 @@ fn redis_tests() -> Vec<TestResult> {
 }
 
 fn orbitql_tests() -> Vec<TestResult> {
-    vec![
-        TestResult {
-            name: "SELECT simple".to_string(),
-            protocol: "OrbitQL".to_string(),
-            category: "DQL".to_string(),
-            status: TestStatus::Passing,
-            file: Some("orbitql/tests/integration_tests.rs".to_string()),
-            line: None,
-        },
-    ]
+    vec![TestResult {
+        name: "SELECT simple".to_string(),
+        protocol: "OrbitQL".to_string(),
+        category: "DQL".to_string(),
+        status: TestStatus::Passing,
+        file: Some("orbitql/tests/integration_tests.rs".to_string()),
+        line: None,
+    }]
 }
 
 fn aql_tests() -> Vec<TestResult> {
-    vec![
-        TestResult {
-            name: "FOR loop".to_string(),
-            protocol: "AQL".to_string(),
-            category: "Query".to_string(),
-            status: TestStatus::NotImplemented,
-            file: None,
-            line: None,
-        },
-    ]
+    vec![TestResult {
+        name: "FOR loop".to_string(),
+        protocol: "AQL".to_string(),
+        category: "Query".to_string(),
+        status: TestStatus::NotImplemented,
+        file: None,
+        line: None,
+    }]
 }
 
 fn cypher_tests() -> Vec<TestResult> {
-    vec![
-        TestResult {
-            name: "MATCH nodes".to_string(),
-            protocol: "Cypher".to_string(),
-            category: "Query".to_string(),
-            status: TestStatus::Passing,
-            file: Some("neo4j/cypher_parser_tests.rs".to_string()),
-            line: None,
-        },
-    ]
+    vec![TestResult {
+        name: "MATCH nodes".to_string(),
+        protocol: "Cypher".to_string(),
+        category: "Query".to_string(),
+        status: TestStatus::Passing,
+        file: Some("neo4j/cypher_parser_tests.rs".to_string()),
+        line: None,
+    }]
 }
 
 #[cfg(test)]

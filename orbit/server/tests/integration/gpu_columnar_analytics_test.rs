@@ -192,4 +192,3 @@ async fn test_all_null_values() {
     // Should return None when all values are null
     assert_eq!(result.value, None);
 }
-

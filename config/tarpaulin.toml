@@ -5,23 +5,23 @@
 [tool.tarpaulin.coverage]
 # Exclude large examples and integration tests from coverage to reduce linking overhead
 exclude = [
-    "examples/*",
-    "tests/*", 
-    "target/*",
-    "orbit-application/examples/*",
-    "orbit-server/examples/*"
+  "examples/*",
+  "tests/*",
+  "target/*",
+  "orbit-application/examples/*",
+  "orbit-server/examples/*",
 ]
 
 # Include only core library packages for coverage
 include = [
-    "orbit-shared",
-    "orbit-util", 
-    "orbit-proto",
-    "orbit-compute",
-    "orbit-client",
-    "orbit-protocols",
-    "orbit-server",
-    "orbit-operator"
+  "orbit-shared",
+  "orbit-util",
+  "orbit-proto",
+  "orbit-compute",
+  "orbit-client",
+  "orbit-protocols",
+  "orbit-server",
+  "orbit-operator",
 ]
 
 # Optimize compilation for faster coverage runs
@@ -40,8 +40,4 @@ ignore-tests = false
 # Continue on test failure to get partial coverage
 ignore-panics = true
 # Exclude FFI code that might cause linking issues
-exclude-files = [
-    "*/ffi/*",
-    "*/sys/*", 
-    "*/generated/*"
-]
+exclude-files = ["*/ffi/*", "*/sys/*", "*/generated/*"]

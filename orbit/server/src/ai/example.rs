@@ -2,7 +2,7 @@
 //!
 //! This module demonstrates how to initialize and use the AI system.
 
-use crate::ai::{AIMasterController, AIConfig, LearningMode, OptimizationLevel};
+use crate::ai::{AIConfig, AIMasterController, LearningMode, OptimizationLevel};
 use anyhow::Result;
 
 /// Example: Initialize AI system with default configuration
@@ -39,4 +39,3 @@ pub async fn example_start_ai_loop(controller: &AIMasterController) -> Result<()
 
     Ok(())
 }
-

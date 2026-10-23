@@ -1,13 +1,16 @@
+use async_trait::async_trait;
 use orbit_shared::cluster_manager::{EnhancedClusterManager, QuorumConfig};
-use orbit_shared::consensus::{RaftConfig, RaftTransport, VoteRequest, VoteResponse, AppendEntriesRequest, AppendEntriesResponse};
-use orbit_shared::election_state::{ElectionStateManager, ElectionRecord};
+use orbit_shared::consensus::{
+    AppendEntriesRequest, AppendEntriesResponse, RaftConfig, RaftTransport, VoteRequest,
+    VoteResponse,
+};
+use orbit_shared::election_state::{ElectionRecord, ElectionStateManager};
 use orbit_shared::exception::{OrbitError, OrbitResult};
 use orbit_shared::integrated_recovery::IntegratedRecoverySystem;
 use orbit_shared::mesh::NodeId;
-use orbit_shared::recovery::{TransactionRecoveryManager, RecoveryConfig, ClusterManager};
-use orbit_shared::transaction_log::{SqliteTransactionLogger, PersistentLogConfig};
+use orbit_shared::recovery::{ClusterManager, RecoveryConfig, TransactionRecoveryManager};
+use orbit_shared::transaction_log::{PersistentLogConfig, SqliteTransactionLogger};
 use orbit_shared::transactions::{DistributedTransaction, TransactionId, TransactionState};
-use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -36,7 +39,11 @@ impl MockRaftTransport {
 
 #[async_trait]
 impl RaftTransport for MockRaftTransport {
-    async fn send_vote_request(&self, target: &NodeId, _request: VoteRequest) -> OrbitResult<VoteResponse> {
+    async fn send_vote_request(
+        &self,
+        target: &NodeId,
+        _request: VoteRequest,
+    ) -> OrbitResult<VoteResponse> {
         let responses = self.node_responses.read().await;
         let (vote_granted, _) = responses.get(target).copied().unwrap_or((true, true));
 
@@ -47,7 +54,11 @@ impl RaftTransport for MockRaftTransport {
         })
     }
 
-    async fn send_append_entries(&self, target: &NodeId, _request: AppendEntriesRequest) -> OrbitResult<AppendEntriesResponse> {
+    async fn send_append_entries(
+        &self,
+        target: &NodeId,
+        _request: AppendEntriesRequest,
+    ) -> OrbitResult<AppendEntriesResponse> {
         let responses = self.node_responses.read().await;
         let (_, append_success) = responses.get(target).copied().unwrap_or((true, true));
 
@@ -59,7 +70,11 @@ impl RaftTransport for MockRaftTransport {
         })
     }
 
-    async fn broadcast_heartbeat(&self, nodes: &[NodeId], request: AppendEntriesRequest) -> OrbitResult<Vec<AppendEntriesResponse>> {
+    async fn broadcast_heartbeat(
+        &self,
+        nodes: &[NodeId],
+        request: AppendEntriesRequest,
+    ) -> OrbitResult<Vec<AppendEntriesResponse>> {
         let mut responses = Vec::new();
         for node in nodes {
             let response = self.send_append_entries(node, request.clone()).await?;
@@ -88,13 +103,15 @@ async fn create_test_cluster(node_count: usize) -> Vec<IntegratedRecoverySystem>
         };
 
         let logger = Arc::new(SqliteTransactionLogger::new(log_config).await.unwrap());
-        
+
         let system = IntegratedRecoverySystem::new(
             node_id.clone(),
             node_ids.clone(),
             logger,
             Some(state_path),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         systems.push(system);
     }
@@ -116,15 +133,21 @@ async fn test_leader_election_triggers_recovery_scan() {
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Verify at least one node thinks it's a leader (in a real test, we'd have more sophisticated coordination)
-    let leaders: Vec<_> = systems.iter().filter(|s| {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(s.is_leader())
+    let leaders: Vec<_> = systems
+        .iter()
+        .filter(|s| {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(s.is_leader())
+            })
         })
-    }).collect();
+        .collect();
 
     // In a properly functioning cluster, there should be exactly one leader
     // For this test, we just verify the system can handle leadership scenarios
-    assert!(leaders.len() <= 1, "Multiple leaders detected - split brain scenario");
+    assert!(
+        leaders.len() <= 1,
+        "Multiple leaders detected - split brain scenario"
+    );
 
     // Clean up
     for system in &systems {
@@ -146,14 +169,17 @@ async fn test_coordinator_failure_triggers_recovery() {
     let transaction_id = TransactionId::new(coordinator_node.clone());
 
     // Register the transaction in the recovery manager
-    systems[0].recovery_manager
+    systems[0]
+        .recovery_manager
         .register_transaction_coordinator(transaction_id.clone(), coordinator_node.clone())
         .await
         .unwrap();
 
     // Create a checkpoint for the transaction
-    let transaction = DistributedTransaction::new(coordinator_node.clone(), Duration::from_secs(30));
-    systems[0].recovery_manager
+    let transaction =
+        DistributedTransaction::new(coordinator_node.clone(), Duration::from_secs(30));
+    systems[0]
+        .recovery_manager
         .create_checkpoint(&transaction)
         .await
         .unwrap();
@@ -207,15 +233,30 @@ async fn test_transaction_coordinator_reassignment() {
 
     // Register transactions in the recovery manager
     let recovery_manager = &systems[0].recovery_manager;
-    recovery_manager.register_transaction_coordinator(tx1.clone(), coordinator_node.clone()).await.unwrap();
-    recovery_manager.register_transaction_coordinator(tx2.clone(), failed_node.clone()).await.unwrap();
-    recovery_manager.register_transaction_coordinator(tx3.clone(), leader_node.clone()).await.unwrap();
+    recovery_manager
+        .register_transaction_coordinator(tx1.clone(), coordinator_node.clone())
+        .await
+        .unwrap();
+    recovery_manager
+        .register_transaction_coordinator(tx2.clone(), failed_node.clone())
+        .await
+        .unwrap();
+    recovery_manager
+        .register_transaction_coordinator(tx3.clone(), leader_node.clone())
+        .await
+        .unwrap();
 
     // Set the third node as the current leader
-    recovery_manager.update_cluster_leader(Some(leader_node.clone())).await.unwrap();
+    recovery_manager
+        .update_cluster_leader(Some(leader_node.clone()))
+        .await
+        .unwrap();
 
     // Reassign transactions from the failed coordinator to the leader
-    let reassigned = recovery_manager.reassign_transactions_to_leader(failed_node).await.unwrap();
+    let reassigned = recovery_manager
+        .reassign_transactions_to_leader(failed_node)
+        .await
+        .unwrap();
 
     // Verify tx2 was reassigned
     assert_eq!(reassigned.len(), 1);
@@ -263,7 +304,7 @@ async fn test_integrated_recovery_system_leader_monitoring() {
 
     // Test leadership functions
     let leader = systems[0].get_current_leader().await;
-    
+
     // Either there's a leader or not - both are valid in a test environment
     if let Some(leader_id) = leader {
         // Verify one of our nodes is the leader
@@ -289,7 +330,11 @@ async fn test_graceful_leadership_transfer() {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // Force one system to believe it's the leader for testing
-    systems[0].recovery_manager.update_cluster_leader(Some(systems[0].node_id.clone())).await.unwrap();
+    systems[0]
+        .recovery_manager
+        .update_cluster_leader(Some(systems[0].node_id.clone()))
+        .await
+        .unwrap();
 
     // Verify it thinks it's the leader
     assert!(systems[0].is_leader().await);
@@ -326,13 +371,16 @@ async fn test_recovery_system_with_persistent_state() {
         cluster_nodes.clone(),
         logger.clone(),
         Some(state_path.clone()),
-    ).await.unwrap();
+    )
+    .await
+    .unwrap();
 
     system1.start(None).await.unwrap();
 
     // Register a transaction
     let tx_id = TransactionId::new(node_id.clone());
-    system1.recovery_manager
+    system1
+        .recovery_manager
         .register_transaction_coordinator(tx_id.clone(), node_id.clone())
         .await
         .unwrap();
@@ -351,19 +399,20 @@ async fn test_recovery_system_with_persistent_state() {
     };
     let logger2 = Arc::new(SqliteTransactionLogger::new(log_config2).await.unwrap());
 
-    let system2 = IntegratedRecoverySystem::new(
-        node_id.clone(),
-        cluster_nodes,
-        logger2,
-        Some(state_path),
-    ).await.unwrap();
+    let system2 =
+        IntegratedRecoverySystem::new(node_id.clone(), cluster_nodes, logger2, Some(state_path))
+            .await
+            .unwrap();
 
     system2.start(None).await.unwrap();
 
     // Verify persistence - the transaction coordinator mapping should be restored
     // (In a real implementation, this would be persisted and restored)
-    let coordinator = system2.recovery_manager.get_transaction_coordinator(&tx_id).await;
-    
+    let coordinator = system2
+        .recovery_manager
+        .get_transaction_coordinator(&tx_id)
+        .await;
+
     // For now, this tests the system can start with existing state files
     assert!(coordinator.is_none() || coordinator == Some(node_id.clone()));
 
@@ -382,22 +431,32 @@ async fn test_split_brain_prevention() {
     }
 
     // Simulate network partition by making nodes unable to communicate
-    transport.set_node_response(systems[1].node_id.clone(), false, false).await;
-    transport.set_node_response(systems[2].node_id.clone(), false, false).await;
+    transport
+        .set_node_response(systems[1].node_id.clone(), false, false)
+        .await;
+    transport
+        .set_node_response(systems[2].node_id.clone(), false, false)
+        .await;
 
     // Wait for the partition to be detected
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Check that the cluster handles split-brain scenarios appropriately
     // In a proper implementation, nodes should step down if they can't reach quorum
-    let leaders: Vec<_> = systems.iter().filter(|s| {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(s.is_leader())
+    let leaders: Vec<_> = systems
+        .iter()
+        .filter(|s| {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(s.is_leader())
+            })
         })
-    }).collect();
+        .collect();
 
     // The system should prevent multiple leaders in a split-brain scenario
-    assert!(leaders.len() <= 1, "Split-brain scenario not properly handled");
+    assert!(
+        leaders.len() <= 1,
+        "Split-brain scenario not properly handled"
+    );
 
     // Clean up
     for system in &systems {

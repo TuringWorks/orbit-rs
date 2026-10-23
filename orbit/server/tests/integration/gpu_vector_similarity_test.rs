@@ -38,9 +38,7 @@ async fn test_vector_similarity_cpu_parallel() {
 
     // Add 200 vectors to trigger parallel processing
     for i in 0..200 {
-        let data: Vec<f32> = (0..128)
-            .map(|j| ((i + j) as f32) * 0.01)
-            .collect();
+        let data: Vec<f32> = (0..128).map(|j| ((i + j) as f32) * 0.01).collect();
         let vector = Vector::new(format!("v{}", i), data);
         actor.add_vector(vector).unwrap();
     }
@@ -98,15 +96,19 @@ async fn test_vector_similarity_metadata_filters() {
     let mut actor = VectorActor::new();
 
     let mut vec1 = Vector::new("v1".to_string(), vec![1.0, 0.0, 0.0]);
-    vec1.metadata.insert("category".to_string(), "A".to_string());
+    vec1.metadata
+        .insert("category".to_string(), "A".to_string());
     let mut vec2 = Vector::new("v2".to_string(), vec![1.0, 0.0, 0.0]);
-    vec2.metadata.insert("category".to_string(), "B".to_string());
+    vec2.metadata
+        .insert("category".to_string(), "B".to_string());
 
     actor.add_vector(vec1).unwrap();
     actor.add_vector(vec2).unwrap();
 
     let mut params = VectorSearchParams::new(vec![1.0, 0.0, 0.0], SimilarityMetric::Cosine, 10);
-    params.metadata_filters.insert("category".to_string(), "A".to_string());
+    params
+        .metadata_filters
+        .insert("category".to_string(), "A".to_string());
 
     let results = actor.search_vectors(params);
     assert_eq!(results.len(), 1);
@@ -139,9 +141,7 @@ async fn test_vector_similarity_limit() {
 
     // Add 100 vectors
     for i in 0..100 {
-        let data: Vec<f32> = (0..64)
-            .map(|j| ((i + j) as f32) * 0.01)
-            .collect();
+        let data: Vec<f32> = (0..64).map(|j| ((i + j) as f32) * 0.01).collect();
         let vector = Vector::new(format!("v{}", i), data);
         actor.add_vector(vector).unwrap();
     }
@@ -152,4 +152,3 @@ async fn test_vector_similarity_limit() {
     let results = actor.search_vectors(params);
     assert_eq!(results.len(), 5); // Should respect limit
 }
-

@@ -58,7 +58,8 @@ property-tests = ["proptest"]
 integration-tests = []
 performance-tests = []
 compatibility-tests = []
-minio-tests = []  # Run with: cargo test -p orbit-integration-tests --features minio-tests --test tiered_storage_minio_tests -- --ignored
+minio-tests = [
+] # Run with: cargo test -p orbit-integration-tests --features minio-tests --test tiered_storage_minio_tests -- --ignored
 
 # Development and debugging flags
 test-logging = []

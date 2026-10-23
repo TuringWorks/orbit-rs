@@ -4,7 +4,7 @@
 //! using the current command handler pattern.
 
 use super::traits::{BaseCommandHandler, CommandHandler};
-use crate::protocols::error::{ProtocolResult, ProtocolError};
+use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::resp::RespValue;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -18,7 +18,8 @@ pub struct StringCommands {
 
 impl StringCommands {
     pub fn new(orbit_client: Arc<OrbitClient>) -> Self {
-        let local_registry = Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
+        let local_registry =
+            Arc::new(crate::protocols::resp::simple_local::SimpleLocalRegistry::new());
         Self {
             base: BaseCommandHandler::new(orbit_client, local_registry),
         }
@@ -56,9 +57,9 @@ impl StringCommands {
 
     async fn cmd_get(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         self.validate_arg_count("GET", args, 1)?;
-        
+
         let key = self.get_string_arg(args, 0, "GET")?;
-        
+
         let result = self
             .base
             .local_registry
@@ -72,7 +73,10 @@ impl StringCommands {
             })?;
 
         let value: Option<String> = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         debug!("GET {} -> {:?}", key, value);
@@ -95,7 +99,11 @@ impl StringCommands {
         let _result = self
             .base
             .local_registry
-            .execute_keyvalue(&key, "set_value", &[serde_json::Value::String(value.clone())])
+            .execute_keyvalue(
+                &key,
+                "set_value",
+                &[serde_json::Value::String(value.clone())],
+            )
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
@@ -117,10 +125,10 @@ impl StringCommands {
         }
 
         let mut deleted_count = 0i64;
-        
+
         for arg in args {
             let key = self.get_string_arg(&[arg.clone()], 0, "DEL")?;
-            
+
             // Check if key exists first
             match self
                 .base
@@ -165,10 +173,10 @@ impl StringCommands {
         }
 
         let mut exists_count = 0i64;
-        
+
         for arg in args {
             let key = self.get_string_arg(&[arg.clone()], 0, "EXISTS")?;
-            
+
             match self
                 .base
                 .local_registry
@@ -194,9 +202,9 @@ impl StringCommands {
 
     async fn cmd_strlen(&self, args: &[RespValue]) -> ProtocolResult<RespValue> {
         self.validate_arg_count("STRLEN", args, 1)?;
-        
+
         let key = self.get_string_arg(args, 0, "STRLEN")?;
-        
+
         let result = self
             .base
             .local_registry
@@ -210,7 +218,10 @@ impl StringCommands {
             })?;
 
         let value: Option<String> = serde_json::from_value(result).map_err(|e| {
-            crate::protocols::error::ProtocolError::RespError(format!("ERR serialization error: {}", e))
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "ERR serialization error: {}",
+                e
+            ))
         })?;
 
         let length = value.map(|v| v.len() as i64).unwrap_or(0);
@@ -227,10 +238,10 @@ impl StringCommands {
         }
 
         let mut results = Vec::new();
-        
+
         for arg in args {
             let key = self.get_string_arg(&[arg.clone()], 0, "MGET")?;
-            
+
             match self
                 .base
                 .local_registry
@@ -265,11 +276,15 @@ impl StringCommands {
         for chunk in args.chunks(2) {
             let key = self.get_string_arg(&chunk, 0, "MSET")?;
             let value = self.get_string_arg(&chunk, 1, "MSET")?;
-            
+
             let _result = self
                 .base
                 .local_registry
-                .execute_keyvalue(&key, "set_value", &[serde_json::Value::String(value.clone())])
+                .execute_keyvalue(
+                    &key,
+                    "set_value",
+                    &[serde_json::Value::String(value.clone())],
+                )
                 .await
                 .map_err(|e| {
                     crate::protocols::error::ProtocolError::RespError(format!(
@@ -277,7 +292,7 @@ impl StringCommands {
                         e
                     ))
                 })?;
-                
+
             debug!("MSET {} {}", key, value);
         }
 
@@ -316,7 +331,7 @@ impl StringCommands {
 
     async fn cmd_incrby_impl(&self, args: &[RespValue], delta: i64) -> ProtocolResult<RespValue> {
         let key = self.get_string_arg(args, 0, "INCR")?;
-        
+
         // Get current value
         let current_value = match self
             .base
@@ -345,7 +360,11 @@ impl StringCommands {
         let _result = self
             .base
             .local_registry
-            .execute_keyvalue(&key, "set_value", &[serde_json::Value::String(new_value_str)])
+            .execute_keyvalue(
+                &key,
+                "set_value",
+                &[serde_json::Value::String(new_value_str)],
+            )
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
@@ -367,7 +386,7 @@ impl StringCommands {
 
         let key = self.get_string_arg(args, 0, "APPEND")?;
         let append_value = self.get_string_arg(args, 1, "APPEND")?;
-        
+
         // Get current value
         let current_value = match self
             .base
@@ -411,7 +430,7 @@ impl StringCommands {
 
         let key = self.get_string_arg(args, 0, "GETSET")?;
         let new_value = self.get_string_arg(args, 1, "GETSET")?;
-        
+
         // Get the current value first
         let old_value = match self
             .base
@@ -421,7 +440,8 @@ impl StringCommands {
         {
             Ok(result) => {
                 let value: Option<String> = serde_json::from_value(result).unwrap_or(None);
-                value.map(|v| RespValue::BulkString(Bytes::from(v.into_bytes())))
+                value
+                    .map(|v| RespValue::BulkString(Bytes::from(v.into_bytes())))
                     .unwrap_or(RespValue::null())
             }
             Err(_) => RespValue::null(), // Key doesn't exist
@@ -431,7 +451,11 @@ impl StringCommands {
         let _result = self
             .base
             .local_registry
-            .execute_keyvalue(&key, "set_value", &[serde_json::Value::String(new_value.clone())])
+            .execute_keyvalue(
+                &key,
+                "set_value",
+                &[serde_json::Value::String(new_value.clone())],
+            )
             .await
             .map_err(|e| {
                 crate::protocols::error::ProtocolError::RespError(format!(
@@ -475,7 +499,7 @@ impl CommandHandler for StringCommands {
             _ => Err(ProtocolError::RespError(format!(
                 "ERR unknown string command '{}'",
                 command_name
-            )))
+            ))),
         }
     }
 }

@@ -23,7 +23,7 @@ mod tests {
     #[tokio::test]
     async fn test_gpu_routing_logic() {
         let mut engine = MultiHopReasoningEngine::new(3);
-        
+
         // GPU disabled - should not use GPU
         engine.config.enable_gpu_acceleration = false;
         let query = ReasoningQuery {
@@ -45,11 +45,11 @@ mod tests {
     #[tokio::test]
     async fn test_small_graph_cpu_fallback() {
         let _engine = MultiHopReasoningEngine::new(3);
-        
+
         // Create a mock OrbitClient (would need actual implementation)
         // For now, this test verifies the logic without actual graph data
         let config = ReasoningConfig::default();
-        
+
         // Small graph should not trigger GPU
         assert!(config.gpu_min_nodes > 100);
         assert!(config.gpu_min_edges > 500);
@@ -62,18 +62,15 @@ mod tests {
         mapping.insert("entity1".to_string(), 0);
         mapping.insert("entity2".to_string(), 1);
         mapping.insert("entity3".to_string(), 2);
-        
+
         // Test forward mapping
         assert_eq!(mapping.get("entity1"), Some(&0));
         assert_eq!(mapping.get("entity2"), Some(&1));
         assert_eq!(mapping.get("entity3"), Some(&2));
-        
+
         // Test reverse mapping
-        let reverse: HashMap<u64, String> = mapping
-            .iter()
-            .map(|(k, v)| (*v, k.clone()))
-            .collect();
-        
+        let reverse: HashMap<u64, String> = mapping.iter().map(|(k, v)| (*v, k.clone())).collect();
+
         assert_eq!(reverse.get(&0), Some(&"entity1".to_string()));
         assert_eq!(reverse.get(&1), Some(&"entity2".to_string()));
         assert_eq!(reverse.get(&2), Some(&"entity3".to_string()));
@@ -84,7 +81,7 @@ mod tests {
     async fn test_gpu_unavailable_fallback() {
         let mut engine = MultiHopReasoningEngine::new(3);
         engine.config.enable_gpu_acceleration = true;
-        
+
         // This test verifies that the system falls back to CPU
         // when GPU is unavailable (would need actual OrbitClient)
         // For now, we just verify the configuration allows fallback
@@ -95,18 +92,18 @@ mod tests {
     #[tokio::test]
     async fn test_graph_size_thresholds() {
         let config = ReasoningConfig::default();
-        
+
         // Graphs smaller than threshold should use CPU
         let small_graph_nodes = config.gpu_min_nodes - 1;
         let small_graph_edges = config.gpu_min_edges - 1;
-        
+
         assert!(small_graph_nodes < config.gpu_min_nodes);
         assert!(small_graph_edges < config.gpu_min_edges);
-        
+
         // Graphs larger than threshold should use GPU
         let large_graph_nodes = config.gpu_min_nodes + 1000;
         let large_graph_edges = config.gpu_min_edges + 5000;
-        
+
         assert!(large_graph_nodes >= config.gpu_min_nodes);
         assert!(large_graph_edges >= config.gpu_min_edges);
     }
@@ -123,22 +120,21 @@ mod tests {
         .iter()
         .cloned()
         .collect();
-        
+
         // Simulate GPU path (numeric IDs)
         let gpu_path_nodes = vec![0u64, 1u64, 2u64];
-        
+
         // Convert back to entity strings
         let reverse_mapping: HashMap<u64, String> = entity_mapping
             .iter()
             .map(|(k, v)| (*v, k.clone()))
             .collect();
-        
+
         let entity_path: Vec<String> = gpu_path_nodes
             .iter()
             .filter_map(|&id| reverse_mapping.get(&id).cloned())
             .collect();
-        
+
         assert_eq!(entity_path, vec!["entity1", "entity2", "entity3"]);
     }
 }
-

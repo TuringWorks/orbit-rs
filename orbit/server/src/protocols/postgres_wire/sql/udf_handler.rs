@@ -69,9 +69,11 @@ impl UdfHandler {
                     let runtime = match language {
                         Some(FunctionLanguage::Lua) => UdfRuntime::Lua,
                         Some(FunctionLanguage::JavaScript) => UdfRuntime::JavaScript,
-                        Some(lang) => return Err(ProtocolError::PostgresError(format!(
+                        Some(lang) => {
+                            return Err(ProtocolError::PostgresError(format!(
                             "Unsupported language: {lang:?}. Supported languages: Lua, JavaScript"
-                        ))),
+                        )))
+                        }
                         None => {
                             // Default to Lua if not specified
                             UdfRuntime::Lua

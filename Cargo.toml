@@ -2,24 +2,24 @@
 resolver = "2"
 
 members = [
-    # Core crates
-    "orbit/util",
-    "orbit/shared",
-    "orbit/proto",
-    "orbit/client",
-    "orbit/client-spring",
-    "orbit/server",
-    "orbit/server-etcd",
-    "orbit/server-prometheus",
-    "orbit/engine",
-    "orbit/application",
-    "orbit/operator",
-    "orbit/compute",
-    "orbit/ml",
-    "orbit/cli",
+  # Core crates
+  "orbit/util",
+  "orbit/shared",
+  "orbit/proto",
+  "orbit/client",
+  "orbit/client-spring",
+  "orbit/server",
+  "orbit/server-etcd",
+  "orbit/server-prometheus",
+  "orbit/engine",
+  "orbit/application",
+  "orbit/operator",
+  "orbit/compute",
+  "orbit/ml",
+  "orbit/cli",
 
-    # Tests
-    "tests",
+  # Tests
+  "tests",
 ]
 
 # Examples excluded from workspace build
@@ -48,10 +48,7 @@ members = [
 #   - Actor system performance benchmarks
 #   - Storage backend comparison benchmarks (with known WAL issues)
 #   - Heterogeneous compute acceleration benchmarks
-exclude = [
-    "benchmarks",
-    "orbit/desktop",
-]
+exclude = ["benchmarks", "orbit/desktop"]
 
 [workspace.package]
 version = "0.1.0"
@@ -115,7 +112,7 @@ metrics-exporter-prometheus = "0.18"
 # Code quality and patterns
 regex = "1.10"
 paste = "1.0"
-exponential-backoff = "2.0"  # Replaces unmaintained backoff
+exponential-backoff = "2.0" # Replaces unmaintained backoff
 
 # Testing
 mockall = "0.15"

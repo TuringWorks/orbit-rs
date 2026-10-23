@@ -10,7 +10,10 @@ keywords = ["distributed", "actor", "database", "simd", "gpu", "acceleration"]
 categories = ["database-implementations", "concurrency", "hardware-support"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(has_cuda)', 'cfg(has_metal)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(has_cuda)',
+  'cfg(has_metal)',
+] }
 
 [features]
 default = ["cpu-simd", "runtime-detection"]
@@ -26,32 +29,36 @@ cpu-simd-arm-sve = []
 # Note: gpu-cuda is NOT included by default - it requires CUDA toolkit to be installed
 # Enable it explicitly with --features gpu-cuda when CUDA is available
 gpu-acceleration = ["gpu-metal", "gpu-vulkan"]
-gpu-metal = [] # Apple Metal (fully implemented on macOS)
-gpu-cuda = ["cudarc"] # NVIDIA CUDA (opt-in only - requires CUDA toolkit)
-gpu-rocm = [] # AMD ROCm (placeholder - needs implementation)
-gpu-opencl = [] # Cross-platform OpenCL (placeholder - needs implementation)
-gpu-vulkan = ["vulkano"] # Cross-platform Vulkan compute
-gpu-windowsml = [] # Windows ML / DirectML (Windows only)
+gpu-metal = []                                 # Apple Metal (fully implemented on macOS)
+gpu-cuda = ["cudarc"]                          # NVIDIA CUDA (opt-in only - requires CUDA toolkit)
+gpu-rocm = []                                  # AMD ROCm (placeholder - needs implementation)
+gpu-opencl = []                                # Cross-platform OpenCL (placeholder - needs implementation)
+gpu-vulkan = ["vulkano"]                       # Cross-platform Vulkan compute
+gpu-windowsml = []                             # Windows ML / DirectML (Windows only)
 
 # Graph traversal feature
 graph-traversal = []
 
 # Neural engine features (placeholder - real dependencies commented out)
 neural-acceleration = ["neural-apple", "neural-qualcomm", "neural-intel"]
-neural-apple = [] # Apple Neural Engine (dependencies commented out)
-neural-qualcomm = [] # Snapdragon AI Engine (dependencies commented out)
-neural-intel = [] # Intel Neural Compute (dependencies commented out)
+neural-apple = []                                                         # Apple Neural Engine (dependencies commented out)
+neural-qualcomm = []                                                      # Snapdragon AI Engine (dependencies commented out)
+neural-intel = []                                                         # Intel Neural Compute (dependencies commented out)
 
 # ARM-specific features
-arm-specialization = ["cpu-simd-arm-neon", "cpu-simd-arm-sve", "neural-qualcomm"]
+arm-specialization = [
+  "cpu-simd-arm-neon",
+  "cpu-simd-arm-sve",
+  "neural-qualcomm",
+]
 apple-silicon = ["gpu-metal", "neural-apple", "unified-memory"]
 snapdragon = ["gpu-opencl", "neural-qualcomm", "arm-specialization"]
 
 # Memory and runtime features
-unified-memory = [] # Apple Silicon unified memory optimization
+unified-memory = []               # Apple Silicon unified memory optimization
 runtime-detection = ["raw-cpuid"] # Runtime CPU feature detection
-zero-copy = [] # Zero-copy optimizations where possible
-benchmarks = [] # Enable benchmarking functionality
+zero-copy = []                    # Zero-copy optimizations where possible
+benchmarks = []                   # Enable benchmarking functionality
 
 [dependencies]
 # Core dependencies
@@ -128,21 +135,21 @@ core-foundation = "0.10"
 [target.'cfg(target_os = "windows")'.dependencies]
 # Windows-specific system monitoring and GPU libraries  
 windows = { version = "0.52", features = [
-    "Win32_Foundation",
-    "Win32_System_Performance",
-    "Win32_System_SystemInformation",
-    "Win32_System_Power",
-    "Win32_System_WindowsProgramming",
-    "Win32_System_Registry", 
-    "Win32_Graphics_Direct3D11",
-    "Win32_Graphics_Direct3D12", 
-    "Win32_Graphics_Dxgi",
-    "Win32_Graphics_Gdi",
-    "Win32_Storage_FileSystem",
-    "Win32_Security",
-    "Win32_System_Threading",
-    "Win32_System_ProcessStatus",
-    "Win32_System_SystemServices",
+  "Win32_Foundation",
+  "Win32_System_Performance",
+  "Win32_System_SystemInformation",
+  "Win32_System_Power",
+  "Win32_System_WindowsProgramming",
+  "Win32_System_Registry",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Direct3D12",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Gdi",
+  "Win32_Storage_FileSystem",
+  "Win32_Security",
+  "Win32_System_Threading",
+  "Win32_System_ProcessStatus",
+  "Win32_System_SystemServices",
 ] }
 wmi = "0.18"
 sysinfo = "0.37"
@@ -191,4 +198,8 @@ required-features = ["gpu-acceleration"]
 
 [package.metadata.docs.rs]
 features = ["cpu-simd", "gpu-metal", "neural-apple"]
-targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "aarch64-apple-darwin"]
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+]

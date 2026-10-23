@@ -14,14 +14,16 @@ use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::Semaphore;
 
 use orbit_shared::orbitql::ast::{
-    Statement, SelectStatement, SelectField, FromClause, Expression,
-    BinaryOperator, OrderByClause, SortDirection,
+    BinaryOperator, Expression, FromClause, OrderByClause, SelectField, SelectStatement,
+    SortDirection, Statement,
 };
 use orbit_shared::orbitql::cost_based_planner::CostBasedQueryPlanner;
 use orbit_shared::orbitql::optimizer::QueryOptimizer;
 use orbit_shared::orbitql::parallel_execution::ParallelExecutor;
-use orbit_shared::orbitql::query_cache::{QueryCacheManager, CacheStatistics};
-use orbit_shared::orbitql::vectorized_execution::{VectorizedExecutor, RecordBatch, VectorDataType};
+use orbit_shared::orbitql::query_cache::{CacheStatistics, QueryCacheManager};
+use orbit_shared::orbitql::vectorized_execution::{
+    RecordBatch, VectorDataType, VectorizedExecutor,
+};
 use orbit_shared::orbitql::QueryValue;
 
 /// Validate that an output directory path is safe (no path traversal).
@@ -570,8 +572,7 @@ impl BenchmarkFramework {
         let output_dir = validate_output_dir(&self.config.output_dir)?;
 
         // Create output directory
-        create_dir_all(&output_dir)
-            .map_err(|e| BenchmarkError::IoError(e.to_string()))?;
+        create_dir_all(&output_dir).map_err(|e| BenchmarkError::IoError(e.to_string()))?;
 
         // Start system monitoring
         self.monitor.start_monitoring().await;

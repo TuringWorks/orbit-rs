@@ -8,7 +8,7 @@
 //! - Adaptive hotness tracking and garbage collection
 //!
 //! # Core Components
-//! 
+//!
 //! - [`PinManager`] - Manages memory pinning with priority-based budgets
 //! - [`ExtentIndex`] - Tracks object extents and connection patterns
 //! - [`LifetimeManager`] - Handles object lifecycle and garbage collection
@@ -35,30 +35,28 @@
 //! # }
 //! ```
 
-pub mod pin_manager;
+pub mod actor_memory_manager;
 pub mod extent_index;
 pub mod lifetime_manager;
-pub mod actor_memory_manager;
+pub mod pin_manager;
 
 // Re-export main interfaces
 pub use pin_manager::{
-    PinManager, DefaultPinManager, PinKey, PinOpts, PinPriority, 
-    PinStats, PinPriorityStats, LifetimeClass
+    DefaultPinManager, LifetimeClass, PinKey, PinManager, PinOpts, PinPriority, PinPriorityStats,
+    PinStats,
 };
 
 pub use extent_index::{
-    ExtentIndex, DefaultExtentIndex, ExtentRef, ExtentFlags, 
-    ExtentConnections, AccessType
+    AccessType, DefaultExtentIndex, ExtentConnections, ExtentFlags, ExtentIndex, ExtentRef,
 };
 
 pub use lifetime_manager::{
-    LifetimeManager, DefaultLifetimeManager, EpochManager, 
-    RetiredSlice, LifetimePolicy, GcTrigger
+    DefaultLifetimeManager, EpochManager, GcTrigger, LifetimeManager, LifetimePolicy, RetiredSlice,
 };
 
 pub use actor_memory_manager::{
-    ActorMemoryManager, DefaultActorMemoryManager, ActorMemoryStats,
-    MemoryHint, MemoryHintProcessor, AccessPattern, QueryPattern, QueryFrequency
+    AccessPattern, ActorMemoryManager, ActorMemoryStats, DefaultActorMemoryManager, MemoryHint,
+    MemoryHintProcessor, QueryFrequency, QueryPattern,
 };
 
 #[cfg(test)]
@@ -108,7 +106,7 @@ mod integration_tests {
         };
 
         let pin_key = PinKey(extent.as_pin_key());
-        
+
         // Pin key should be deterministic based on file_id and offset
         let expected = ((42u64) << 32) | (8192 >> 12);
         assert_eq!(pin_key.0, expected);

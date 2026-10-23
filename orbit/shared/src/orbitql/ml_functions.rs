@@ -3,8 +3,12 @@
 //! This module provides the registry system that maps ML function names to implementations
 //! and handles execution of ML functions within OrbitQL queries.
 
-use crate::orbitql::ast::{MLFunction, MLAlgorithm, NormalizationMethod, EncodingMethod, Expression};
-use crate::orbitql::advanced_analytics::{MLCostEstimator, ModelType, TrainingExample, QueryFeatures};
+use crate::orbitql::advanced_analytics::{
+    MLCostEstimator, ModelType, QueryFeatures, TrainingExample,
+};
+use crate::orbitql::ast::{
+    EncodingMethod, Expression, MLAlgorithm, MLFunction, NormalizationMethod,
+};
 use crate::orbitql::QueryValue;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -26,11 +30,15 @@ pub struct MLFunctionRegistry {
 /// Trait for ML function executors
 pub trait MLFunctionExecutor: Send + Sync {
     /// Execute the ML function with given arguments
-    fn execute(&self, args: Vec<QueryValue>, context: &ExecutionContext) -> Result<QueryValue, MLError>;
-    
+    fn execute(
+        &self,
+        args: Vec<QueryValue>,
+        context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError>;
+
     /// Get function metadata
     fn metadata(&self) -> MLFunctionMetadata;
-    
+
     /// Validate function arguments
     fn validate_args(&self, args: &[QueryValue]) -> Result<(), MLError>;
 }
@@ -195,20 +203,32 @@ impl MLFunctionRegistry {
         self.register_function("ML_LIGHTGBM", Box::new(LightGBMFunction::new()));
         self.register_function("ML_CATBOOST", Box::new(CatBoostFunction::new()));
         self.register_function("ML_ADABOOST", Box::new(AdaBoostFunction::new()));
-        self.register_function("ML_GRADIENT_BOOSTING", Box::new(GradientBoostingFunction::new()));
+        self.register_function(
+            "ML_GRADIENT_BOOSTING",
+            Box::new(GradientBoostingFunction::new()),
+        );
 
         // Statistical Functions
-        self.register_function("ML_LINEAR_REGRESSION", Box::new(LinearRegressionFunction::new()));
-        self.register_function("ML_LOGISTIC_REGRESSION", Box::new(LogisticRegressionFunction::new()));
+        self.register_function(
+            "ML_LINEAR_REGRESSION",
+            Box::new(LinearRegressionFunction::new()),
+        );
+        self.register_function(
+            "ML_LOGISTIC_REGRESSION",
+            Box::new(LogisticRegressionFunction::new()),
+        );
         self.register_function("ML_CORRELATION", Box::new(CorrelationFunction::new()));
 
         // Feature Engineering
         self.register_function("ML_NORMALIZE", Box::new(NormalizeFunction::new()));
         self.register_function("ML_PCA", Box::new(PCAFunction::new()));
-        
+
         // Vector Operations
         self.register_function("ML_EMBED_TEXT", Box::new(EmbedTextFunction::new()));
-        self.register_function("ML_SIMILARITY_SEARCH", Box::new(SimilaritySearchFunction::new()));
+        self.register_function(
+            "ML_SIMILARITY_SEARCH",
+            Box::new(SimilaritySearchFunction::new()),
+        );
     }
 
     /// Register a new ML function
@@ -223,7 +243,8 @@ impl MLFunctionRegistry {
         args: Vec<QueryValue>,
         context: &ExecutionContext,
     ) -> Result<QueryValue, MLError> {
-        let function = self.functions
+        let function = self
+            .functions
             .get(&name.to_uppercase())
             .ok_or_else(|| MLError::FunctionNotFound(name.to_string()))?;
 
@@ -233,10 +254,7 @@ impl MLFunctionRegistry {
 
     /// Get list of available ML functions
     pub fn list_functions(&self) -> Vec<MLFunctionMetadata> {
-        self.functions
-            .values()
-            .map(|f| f.metadata())
-            .collect()
+        self.functions.values().map(|f| f.metadata()).collect()
     }
 
     /// Get function metadata
@@ -248,14 +266,19 @@ impl MLFunctionRegistry {
 
     /// Store a trained model
     pub fn store_model(&self, model: StoredModel) -> Result<(), MLError> {
-        let mut storage = self.model_storage.write()
-            .map_err(|_| MLError::ExecutionError("Failed to acquire model storage lock".to_string()))?;
-        
+        let mut storage = self.model_storage.write().map_err(|_| {
+            MLError::ExecutionError("Failed to acquire model storage lock".to_string())
+        })?;
+
         let metadata = ModelMetadata {
             name: model.name.clone(),
             description: format!("{:?} model", model.algorithm),
             algorithm: format!("{:?}", model.algorithm),
-            accuracy: model.performance_metrics.get("accuracy").copied().unwrap_or(0.0),
+            accuracy: model
+                .performance_metrics
+                .get("accuracy")
+                .copied()
+                .unwrap_or(0.0),
             training_samples: 0, // Will be filled during training
             feature_count: model.feature_names.len(),
             size_bytes: model.model_data.len(),
@@ -269,10 +292,12 @@ impl MLFunctionRegistry {
 
     /// Get a stored model
     pub fn get_model(&self, name: &str) -> Result<StoredModel, MLError> {
-        let storage = self.model_storage.read()
-            .map_err(|_| MLError::ExecutionError("Failed to acquire model storage lock".to_string()))?;
-        
-        storage.models
+        let storage = self.model_storage.read().map_err(|_| {
+            MLError::ExecutionError("Failed to acquire model storage lock".to_string())
+        })?;
+
+        storage
+            .models
             .get(name)
             .cloned()
             .ok_or_else(|| MLError::ModelNotFound(name.to_string()))
@@ -280,17 +305,19 @@ impl MLFunctionRegistry {
 
     /// List all stored models
     pub fn list_models(&self) -> Result<Vec<ModelMetadata>, MLError> {
-        let storage = self.model_storage.read()
-            .map_err(|_| MLError::ExecutionError("Failed to acquire model storage lock".to_string()))?;
-        
+        let storage = self.model_storage.read().map_err(|_| {
+            MLError::ExecutionError("Failed to acquire model storage lock".to_string())
+        })?;
+
         Ok(storage.metadata.values().cloned().collect())
     }
 
     /// Delete a stored model
     pub fn delete_model(&self, name: &str) -> Result<(), MLError> {
-        let mut storage = self.model_storage.write()
-            .map_err(|_| MLError::ExecutionError("Failed to acquire model storage lock".to_string()))?;
-        
+        let mut storage = self.model_storage.write().map_err(|_| {
+            MLError::ExecutionError("Failed to acquire model storage lock".to_string())
+        })?;
+
         storage.models.remove(name);
         storage.metadata.remove(name);
         Ok(())
@@ -310,7 +337,11 @@ impl XGBoostFunction {
 }
 
 impl MLFunctionExecutor for XGBoostFunction {
-    fn execute(&self, args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         // Stub implementation - would contain actual XGBoost training/prediction
         Ok(QueryValue::Float(0.85)) // Mock accuracy score
     }
@@ -318,7 +349,8 @@ impl MLFunctionExecutor for XGBoostFunction {
     fn metadata(&self) -> MLFunctionMetadata {
         MLFunctionMetadata {
             name: "ML_XGBOOST".to_string(),
-            description: "Extreme Gradient Boosting algorithm for classification and regression".to_string(),
+            description: "Extreme Gradient Boosting algorithm for classification and regression"
+                .to_string(),
             parameters: vec![
                 MLParameter {
                     name: "features".to_string(),
@@ -345,7 +377,9 @@ impl MLFunctionExecutor for XGBoostFunction {
 
     fn validate_args(&self, args: &[QueryValue]) -> Result<(), MLError> {
         if args.len() < 2 {
-            return Err(MLError::InvalidArguments("XGBoost requires at least features and target".to_string()));
+            return Err(MLError::InvalidArguments(
+                "XGBoost requires at least features and target".to_string(),
+            ));
         }
         Ok(())
     }
@@ -353,9 +387,17 @@ impl MLFunctionExecutor for XGBoostFunction {
 
 // Additional stub implementations for other boosting algorithms
 struct LightGBMFunction;
-impl LightGBMFunction { fn new() -> Self { Self } }
+impl LightGBMFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for LightGBMFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Float(0.87))
     }
     fn metadata(&self) -> MLFunctionMetadata {
@@ -368,32 +410,53 @@ impl MLFunctionExecutor for LightGBMFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct CatBoostFunction;
-impl CatBoostFunction { fn new() -> Self { Self } }
+impl CatBoostFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for CatBoostFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Float(0.89))
     }
     fn metadata(&self) -> MLFunctionMetadata {
         MLFunctionMetadata {
             name: "ML_CATBOOST".to_string(),
-            description: "Categorical Boosting algorithm for handling categorical features".to_string(),
+            description: "Categorical Boosting algorithm for handling categorical features"
+                .to_string(),
             parameters: vec![],
             return_type: "float".to_string(),
             category: MLFunctionCategory::BoostingAlgorithms,
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct AdaBoostFunction;
-impl AdaBoostFunction { fn new() -> Self { Self } }
+impl AdaBoostFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for AdaBoostFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Float(0.82))
     }
     fn metadata(&self) -> MLFunctionMetadata {
@@ -406,13 +469,23 @@ impl MLFunctionExecutor for AdaBoostFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct GradientBoostingFunction;
-impl GradientBoostingFunction { fn new() -> Self { Self } }
+impl GradientBoostingFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for GradientBoostingFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Float(0.84))
     }
     fn metadata(&self) -> MLFunctionMetadata {
@@ -425,14 +498,24 @@ impl MLFunctionExecutor for GradientBoostingFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 // Model management function stubs
 struct TrainModelFunction;
-impl TrainModelFunction { fn new() -> Self { Self } }
+impl TrainModelFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for TrainModelFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::String("Model trained successfully".to_string()))
     }
     fn metadata(&self) -> MLFunctionMetadata {
@@ -445,14 +528,27 @@ impl MLFunctionExecutor for TrainModelFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct PredictFunction;
-impl PredictFunction { fn new() -> Self { Self } }
+impl PredictFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for PredictFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
-        Ok(QueryValue::Array(vec![QueryValue::Float(0.7), QueryValue::Float(0.3)]))
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
+        Ok(QueryValue::Array(vec![
+            QueryValue::Float(0.7),
+            QueryValue::Float(0.3),
+        ]))
     }
     fn metadata(&self) -> MLFunctionMetadata {
         MLFunctionMetadata {
@@ -464,14 +560,24 @@ impl MLFunctionExecutor for PredictFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 // Additional stub implementations for other functions...
 struct EvaluateModelFunction;
-impl EvaluateModelFunction { fn new() -> Self { Self } }
+impl EvaluateModelFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for EvaluateModelFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Object(std::collections::HashMap::from([
             ("accuracy".to_string(), QueryValue::Float(0.92)),
             ("precision".to_string(), QueryValue::Float(0.89)),
@@ -488,13 +594,23 @@ impl MLFunctionExecutor for EvaluateModelFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct DropModelFunction;
-impl DropModelFunction { fn new() -> Self { Self } }
+impl DropModelFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for DropModelFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::String("Model deleted successfully".to_string()))
     }
     fn metadata(&self) -> MLFunctionMetadata {
@@ -507,13 +623,23 @@ impl MLFunctionExecutor for DropModelFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct ListModelsFunction;
-impl ListModelsFunction { fn new() -> Self { Self } }
+impl ListModelsFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for ListModelsFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Array(vec![
             QueryValue::String("customer_model".to_string()),
             QueryValue::String("fraud_detector".to_string()),
@@ -529,16 +655,32 @@ impl MLFunctionExecutor for ListModelsFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct ModelInfoFunction;
-impl ModelInfoFunction { fn new() -> Self { Self } }
+impl ModelInfoFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for ModelInfoFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Object(std::collections::HashMap::from([
-            ("name".to_string(), QueryValue::String("customer_model".to_string())),
-            ("algorithm".to_string(), QueryValue::String("XGBoost".to_string())),
+            (
+                "name".to_string(),
+                QueryValue::String("customer_model".to_string()),
+            ),
+            (
+                "algorithm".to_string(),
+                QueryValue::String("XGBoost".to_string()),
+            ),
             ("accuracy".to_string(), QueryValue::Float(0.92)),
         ])))
     }
@@ -552,14 +694,24 @@ impl MLFunctionExecutor for ModelInfoFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 // Additional function stubs for completeness...
 struct LinearRegressionFunction;
-impl LinearRegressionFunction { fn new() -> Self { Self } }
+impl LinearRegressionFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for LinearRegressionFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Float(0.78))
     }
     fn metadata(&self) -> MLFunctionMetadata {
@@ -572,13 +724,23 @@ impl MLFunctionExecutor for LinearRegressionFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct LogisticRegressionFunction;
-impl LogisticRegressionFunction { fn new() -> Self { Self } }
+impl LogisticRegressionFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for LogisticRegressionFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Float(0.81))
     }
     fn metadata(&self) -> MLFunctionMetadata {
@@ -591,13 +753,23 @@ impl MLFunctionExecutor for LogisticRegressionFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct CorrelationFunction;
-impl CorrelationFunction { fn new() -> Self { Self } }
+impl CorrelationFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for CorrelationFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Float(0.73))
     }
     fn metadata(&self) -> MLFunctionMetadata {
@@ -610,14 +782,28 @@ impl MLFunctionExecutor for CorrelationFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct NormalizeFunction;
-impl NormalizeFunction { fn new() -> Self { Self } }
+impl NormalizeFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for NormalizeFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
-        Ok(QueryValue::Array(vec![QueryValue::Float(0.1), QueryValue::Float(0.5), QueryValue::Float(0.9)]))
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
+        Ok(QueryValue::Array(vec![
+            QueryValue::Float(0.1),
+            QueryValue::Float(0.5),
+            QueryValue::Float(0.9),
+        ]))
     }
     fn metadata(&self) -> MLFunctionMetadata {
         MLFunctionMetadata {
@@ -629,14 +815,27 @@ impl MLFunctionExecutor for NormalizeFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct PCAFunction;
-impl PCAFunction { fn new() -> Self { Self } }
+impl PCAFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for PCAFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
-        Ok(QueryValue::Array(vec![QueryValue::Float(0.8), QueryValue::Float(0.2)]))
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
+        Ok(QueryValue::Array(vec![
+            QueryValue::Float(0.8),
+            QueryValue::Float(0.2),
+        ]))
     }
     fn metadata(&self) -> MLFunctionMetadata {
         MLFunctionMetadata {
@@ -648,15 +847,27 @@ impl MLFunctionExecutor for PCAFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct EmbedTextFunction;
-impl EmbedTextFunction { fn new() -> Self { Self } }
+impl EmbedTextFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for EmbedTextFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Array(vec![
-            QueryValue::Float(0.1), QueryValue::Float(0.2), QueryValue::Float(0.3)
+            QueryValue::Float(0.1),
+            QueryValue::Float(0.2),
+            QueryValue::Float(0.3),
         ]))
     }
     fn metadata(&self) -> MLFunctionMetadata {
@@ -669,13 +880,23 @@ impl MLFunctionExecutor for EmbedTextFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 struct SimilaritySearchFunction;
-impl SimilaritySearchFunction { fn new() -> Self { Self } }
+impl SimilaritySearchFunction {
+    fn new() -> Self {
+        Self
+    }
+}
 impl MLFunctionExecutor for SimilaritySearchFunction {
-    fn execute(&self, _args: Vec<QueryValue>, _context: &ExecutionContext) -> Result<QueryValue, MLError> {
+    fn execute(
+        &self,
+        _args: Vec<QueryValue>,
+        _context: &ExecutionContext,
+    ) -> Result<QueryValue, MLError> {
         Ok(QueryValue::Array(vec![
             QueryValue::Object(std::collections::HashMap::from([
                 ("id".to_string(), QueryValue::String("doc1".to_string())),
@@ -697,7 +918,9 @@ impl MLFunctionExecutor for SimilaritySearchFunction {
             examples: vec![],
         }
     }
-    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> { Ok(()) }
+    fn validate_args(&self, _args: &[QueryValue]) -> Result<(), MLError> {
+        Ok(())
+    }
 }
 
 impl Default for ExecutionContext {

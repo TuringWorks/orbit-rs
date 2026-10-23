@@ -57,9 +57,9 @@ cost_center = "engineering"
 [storage.digitalocean_spaces.backup]
 enabled = true
 # Backup retention policies
-retention_policy = "30d"  # Keep backups for 30 days
-backup_interval = "24h"   # Create backups every 24 hours
-compression = "gzip"      # Compress backups
+retention_policy = "30d" # Keep backups for 30 days
+backup_interval = "24h"  # Create backups every 24 hours
+compression = "gzip"     # Compress backups
 
 # Optional: Secondary storage for redundancy
 [storage.backup]
@@ -73,7 +73,7 @@ access_key_id = "${DO_SPACES_BACKUP_ACCESS_KEY}"
 secret_access_key = "${DO_SPACES_BACKUP_SECRET_KEY}"
 prefix = "orbit-rs-backup"
 enable_ssl = true
-enable_cdn = false  # CDN not needed for backup storage
+enable_cdn = false                                   # CDN not needed for backup storage
 
 # Persistence provider registry configuration
 [persistence]
@@ -92,17 +92,17 @@ config = { inherit_from = "storage.backup.digitalocean_spaces" }
 
 # Health monitoring configuration
 [persistence.health_monitor]
-check_interval = 30        # Health check interval in seconds
-check_timeout = 5          # Health check timeout in seconds
-failure_threshold = 3      # Number of failures before marking unhealthy
-success_threshold = 2      # Number of successes before marking healthy
+check_interval = 30           # Health check interval in seconds
+check_timeout = 5             # Health check timeout in seconds
+failure_threshold = 3         # Number of failures before marking unhealthy
+success_threshold = 2         # Number of successes before marking healthy
 enable_circuit_breaker = true
-circuit_breaker_timeout = 300  # Circuit breaker timeout in seconds
+circuit_breaker_timeout = 300 # Circuit breaker timeout in seconds
 
 # Performance monitoring
 [persistence.performance]
 enable_monitoring = true
-monitoring_window = 300    # Performance monitoring window in seconds
+monitoring_window = 300     # Performance monitoring window in seconds
 enable_auto_scaling = false
 
 # Example environment variables for secure credential management:

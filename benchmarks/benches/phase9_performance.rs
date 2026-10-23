@@ -6,7 +6,7 @@
 //! - Vectorized execution vs traditional execution
 //! - End-to-end query performance
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::time::Duration;
 
 // We'll need to add orbit-protocols as a dependency for these benchmarks
@@ -165,45 +165,21 @@ fn bench_storage_layout(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(*size as u64));
 
-        group.bench_with_input(
-            BenchmarkId::new("row_based_filter", size),
-            size,
-            |b, _| {
-                b.iter(|| {
-                    black_box(row_storage.filter_column(5, 5000))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("row_based_filter", size), size, |b, _| {
+            b.iter(|| black_box(row_storage.filter_column(5, 5000)));
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("columnar_filter", size),
-            size,
-            |b, _| {
-                b.iter(|| {
-                    black_box(col_storage.filter_column(5, 5000))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("columnar_filter", size), size, |b, _| {
+            b.iter(|| black_box(col_storage.filter_column(5, 5000)));
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("row_based_sum", size),
-            size,
-            |b, _| {
-                b.iter(|| {
-                    black_box(row_storage.sum_column(5))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("row_based_sum", size), size, |b, _| {
+            b.iter(|| black_box(row_storage.sum_column(5)));
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("columnar_sum", size),
-            size,
-            |b, _| {
-                b.iter(|| {
-                    black_box(col_storage.sum_column(5))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("columnar_sum", size), size, |b, _| {
+            b.iter(|| black_box(col_storage.sum_column(5)));
+        });
     }
 
     group.finish();
@@ -223,9 +199,7 @@ fn bench_scalar_vs_simd(c: &mut Criterion) {
             BenchmarkId::new("scalar_filter_eq", size),
             &data,
             |b, data| {
-                b.iter(|| {
-                    black_box(scalar_filter_eq(data, 500))
-                });
+                b.iter(|| black_box(scalar_filter_eq(data, 500)));
             },
         );
 
@@ -233,9 +207,7 @@ fn bench_scalar_vs_simd(c: &mut Criterion) {
             BenchmarkId::new("simd_like_filter_eq", size),
             &data,
             |b, data| {
-                b.iter(|| {
-                    black_box(simd_like_filter_eq(data, 500))
-                });
+                b.iter(|| black_box(simd_like_filter_eq(data, 500)));
             },
         );
 
@@ -244,30 +216,20 @@ fn bench_scalar_vs_simd(c: &mut Criterion) {
             BenchmarkId::new("scalar_filter_range", size),
             &data,
             |b, data| {
-                b.iter(|| {
-                    black_box(scalar_filter_range(data, 250, 750))
-                });
+                b.iter(|| black_box(scalar_filter_range(data, 250, 750)));
             },
         );
 
         // Aggregation benchmarks
-        group.bench_with_input(
-            BenchmarkId::new("scalar_sum", size),
-            &data,
-            |b, data| {
-                b.iter(|| {
-                    black_box(scalar_sum(data))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("scalar_sum", size), &data, |b, data| {
+            b.iter(|| black_box(scalar_sum(data)));
+        });
 
         group.bench_with_input(
             BenchmarkId::new("scalar_sum_optimized", size),
             &data,
             |b, data| {
-                b.iter(|| {
-                    black_box(scalar_sum_optimized(data))
-                });
+                b.iter(|| black_box(scalar_sum_optimized(data)));
             },
         );
     }
@@ -295,27 +257,17 @@ fn bench_cache_effects(c: &mut Criterion) {
     ] {
         group.throughput(Throughput::Elements(data.len() as u64));
 
-        group.bench_with_input(
-            BenchmarkId::new("sequential_sum", name),
-            data,
-            |b, data| {
-                b.iter(|| {
-                    black_box(scalar_sum(data))
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("sequential_sum", name), data, |b, data| {
+            b.iter(|| black_box(scalar_sum(data)));
+        });
 
-        group.bench_with_input(
-            BenchmarkId::new("filter_and_sum", name),
-            data,
-            |b, data| {
-                b.iter(|| {
-                    let filtered = scalar_filter_range(data, 1000, 500_000);
-                    let sum: i64 = filtered.iter().map(|&idx| data[idx] as i64).sum();
-                    black_box(sum)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("filter_and_sum", name), data, |b, data| {
+            b.iter(|| {
+                let filtered = scalar_filter_range(data, 1000, 500_000);
+                let sum: i64 = filtered.iter().map(|&idx| data[idx] as i64).sum();
+                black_box(sum)
+            });
+        });
     }
 
     group.finish();
@@ -363,15 +315,11 @@ fn bench_batch_processing(c: &mut Criterion) {
 
     // Unbatched baseline
     group.bench_function("unbatched_filter", |b| {
-        b.iter(|| {
-            black_box(scalar_filter_eq(&data, 500))
-        });
+        b.iter(|| black_box(scalar_filter_eq(&data, 500)));
     });
 
     group.bench_function("unbatched_sum", |b| {
-        b.iter(|| {
-            black_box(scalar_sum(&data))
-        });
+        b.iter(|| black_box(scalar_sum(&data)));
     });
 
     group.finish();
@@ -531,7 +479,10 @@ fn bench_complex_queries(c: &mut Criterion) {
     group.bench_function("filter_then_aggregate", |b| {
         b.iter(|| {
             let indices = col_storage.filter_column(1, 50_000);
-            let sum: i64 = indices.iter().map(|&idx| col_storage.columns[0][idx] as i64).sum();
+            let sum: i64 = indices
+                .iter()
+                .map(|&idx| col_storage.columns[0][idx] as i64)
+                .sum();
             black_box(sum)
         });
     });
@@ -540,9 +491,18 @@ fn bench_complex_queries(c: &mut Criterion) {
     group.bench_function("filter_then_multi_aggregate", |b| {
         b.iter(|| {
             let indices = col_storage.filter_column(3, 50_000);
-            let sum0: i64 = indices.iter().map(|&idx| col_storage.columns[0][idx] as i64).sum();
-            let sum1: i64 = indices.iter().map(|&idx| col_storage.columns[1][idx] as i64).sum();
-            let sum2: i64 = indices.iter().map(|&idx| col_storage.columns[2][idx] as i64).sum();
+            let sum0: i64 = indices
+                .iter()
+                .map(|&idx| col_storage.columns[0][idx] as i64)
+                .sum();
+            let sum1: i64 = indices
+                .iter()
+                .map(|&idx| col_storage.columns[1][idx] as i64)
+                .sum();
+            let sum2: i64 = indices
+                .iter()
+                .map(|&idx| col_storage.columns[2][idx] as i64)
+                .sum();
             black_box((sum0, sum1, sum2))
         });
     });

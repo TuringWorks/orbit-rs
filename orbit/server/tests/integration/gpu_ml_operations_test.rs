@@ -2,7 +2,7 @@
 
 #[cfg(feature = "gpu-acceleration")]
 use orbit_compute::ml_operations::{
-    FeatureEngineeringOp, GPUMLOperations, MatrixOp, MLOperationsConfig,
+    FeatureEngineeringOp, GPUMLOperations, MLOperationsConfig, MatrixOp,
 };
 
 #[cfg(feature = "gpu-acceleration")]
@@ -131,4 +131,3 @@ fn test_placeholder() {
     // Placeholder test when GPU acceleration is not enabled
     assert!(true);
 }
-

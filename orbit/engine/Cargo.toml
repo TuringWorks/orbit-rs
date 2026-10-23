@@ -58,7 +58,11 @@ arrow-schema = { version = "58.3", default-features = false }
 parquet = { version = "58.3", default-features = false }
 
 # Multi-cloud storage backends
-opendal = { version = "0.56", features = ["services-azblob", "services-memory", "services-s3"] }
+opendal = { version = "0.56", features = [
+  "services-azblob",
+  "services-memory",
+  "services-s3",
+] }
 
 # Tracing
 tracing = "0.1"

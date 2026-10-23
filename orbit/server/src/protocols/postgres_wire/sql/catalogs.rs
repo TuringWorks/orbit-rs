@@ -58,7 +58,13 @@ pub fn get_system_catalogs() -> Vec<CatalogDefinition> {
                 ("relfrozenxid", SqlType::Xid),
                 ("relminmxid", SqlType::Xid),
                 ("relacl", SqlType::AclItem), // Array of ACL
-                ("reloptions", SqlType::Array { element_type: Box::new(SqlType::Text), dimensions: Some(1) }),
+                (
+                    "reloptions",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Text),
+                        dimensions: Some(1),
+                    },
+                ),
                 ("relpartbound", SqlType::PgNodeTree),
             ],
         ),
@@ -88,9 +94,27 @@ pub fn get_system_catalogs() -> Vec<CatalogDefinition> {
                 ("attinhcount", SqlType::Integer),
                 ("attcollation", SqlType::Oid),
                 ("attacl", SqlType::AclItem),
-                ("attoptions", SqlType::Array { element_type: Box::new(SqlType::Text), dimensions: Some(1) }),
-                ("attfdwoptions", SqlType::Array { element_type: Box::new(SqlType::Text), dimensions: Some(1) }),
-                ("attmissingval", SqlType::Array { element_type: Box::new(SqlType::Bytea), dimensions: Some(1) }), // Simplified
+                (
+                    "attoptions",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Text),
+                        dimensions: Some(1),
+                    },
+                ),
+                (
+                    "attfdwoptions",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Text),
+                        dimensions: Some(1),
+                    },
+                ),
+                (
+                    "attmissingval",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Bytea),
+                        dimensions: Some(1),
+                    },
+                ), // Simplified
             ],
         ),
         // pg_index: Index information
@@ -111,7 +135,7 @@ pub fn get_system_catalogs() -> Vec<CatalogDefinition> {
                 ("indisready", SqlType::Boolean),
                 ("indislive", SqlType::Boolean),
                 ("indisreplident", SqlType::Boolean),
-                ("indkey", SqlType::Int2Vector), 
+                ("indkey", SqlType::Int2Vector),
                 ("indcollation", SqlType::OidVector),
                 ("indclass", SqlType::OidVector),
                 ("indoption", SqlType::Int2Vector),
@@ -163,9 +187,20 @@ pub fn get_system_catalogs() -> Vec<CatalogDefinition> {
                 ("rolreplication", SqlType::Boolean),
                 ("rolconnlimit", SqlType::Integer),
                 ("rolpassword", SqlType::Text),
-                ("rolvaliduntil", SqlType::Timestamp { with_timezone: true }),
+                (
+                    "rolvaliduntil",
+                    SqlType::Timestamp {
+                        with_timezone: true,
+                    },
+                ),
                 ("rolbypassrls", SqlType::Boolean),
-                ("rolconfig", SqlType::Array { element_type: Box::new(SqlType::Text), dimensions: Some(1) }),
+                (
+                    "rolconfig",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Text),
+                        dimensions: Some(1),
+                    },
+                ),
                 ("oid", SqlType::Oid),
             ],
         ),
@@ -193,15 +228,45 @@ pub fn get_system_catalogs() -> Vec<CatalogDefinition> {
                 ("pronargdefaults", SqlType::SmallInt),
                 ("prorettype", SqlType::Oid),
                 ("proargtypes", SqlType::OidVector),
-                ("proallargtypes", SqlType::Array { element_type: Box::new(SqlType::Oid), dimensions: Some(1) }),
-                ("proargmodes", SqlType::Array { element_type: Box::new(SqlType::Char(Some(1))), dimensions: Some(1) }),
-                ("proargnames", SqlType::Array { element_type: Box::new(SqlType::Text), dimensions: Some(1) }),
+                (
+                    "proallargtypes",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Oid),
+                        dimensions: Some(1),
+                    },
+                ),
+                (
+                    "proargmodes",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Char(Some(1))),
+                        dimensions: Some(1),
+                    },
+                ),
+                (
+                    "proargnames",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Text),
+                        dimensions: Some(1),
+                    },
+                ),
                 ("proargdefaults", SqlType::PgNodeTree),
-                ("protrftypes", SqlType::Array { element_type: Box::new(SqlType::Oid), dimensions: Some(1) }),
+                (
+                    "protrftypes",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Oid),
+                        dimensions: Some(1),
+                    },
+                ),
                 ("prosrc", SqlType::Text),
                 ("probin", SqlType::Text),
                 ("prosqlbody", SqlType::PgNodeTree),
-                ("proconfig", SqlType::Array { element_type: Box::new(SqlType::Text), dimensions: Some(1) }),
+                (
+                    "proconfig",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Text),
+                        dimensions: Some(1),
+                    },
+                ),
                 ("proacl", SqlType::AclItem),
             ],
         ),
@@ -248,12 +313,48 @@ pub fn get_system_catalogs() -> Vec<CatalogDefinition> {
                 ("conislocal", SqlType::Boolean),
                 ("coninhcount", SqlType::Integer),
                 ("connoinherit", SqlType::Boolean),
-                ("conkey", SqlType::Array { element_type: Box::new(SqlType::SmallInt), dimensions: Some(1) }),
-                ("confkey", SqlType::Array { element_type: Box::new(SqlType::SmallInt), dimensions: Some(1) }),
-                ("conpfeqop", SqlType::Array { element_type: Box::new(SqlType::Oid), dimensions: Some(1) }),
-                ("conppeqop", SqlType::Array { element_type: Box::new(SqlType::Oid), dimensions: Some(1) }),
-                ("conffeqop", SqlType::Array { element_type: Box::new(SqlType::Oid), dimensions: Some(1) }),
-                ("conexclop", SqlType::Array { element_type: Box::new(SqlType::Oid), dimensions: Some(1) }),
+                (
+                    "conkey",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::SmallInt),
+                        dimensions: Some(1),
+                    },
+                ),
+                (
+                    "confkey",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::SmallInt),
+                        dimensions: Some(1),
+                    },
+                ),
+                (
+                    "conpfeqop",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Oid),
+                        dimensions: Some(1),
+                    },
+                ),
+                (
+                    "conppeqop",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Oid),
+                        dimensions: Some(1),
+                    },
+                ),
+                (
+                    "conffeqop",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Oid),
+                        dimensions: Some(1),
+                    },
+                ),
+                (
+                    "conexclop",
+                    SqlType::Array {
+                        element_type: Box::new(SqlType::Oid),
+                        dimensions: Some(1),
+                    },
+                ),
                 ("conbin", SqlType::PgNodeTree),
             ],
         ),
