@@ -2,6 +2,7 @@
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use bytes::{Buf, Bytes};
+use sha1::Sha1;
 use sha2::{Digest, Sha256};
 
 /// Authentication plugin types
@@ -141,11 +142,8 @@ impl MySqlAuth {
         username: Option<String>,
         password: Option<String>,
     ) -> Self {
-        // Generate random auth data (salt)
-        let auth_data = [
-            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
-            0xFF, 0x00, 0x11, 0x22, 0x33, 0x44,
-        ];
+        // Generate a fresh challenge for every handshake to prevent replay.
+        let auth_data = rand::random::<[u8; 20]>();
 
         Self {
             state: AuthState::AwaitingHandshake,
@@ -220,18 +218,29 @@ impl MySqlAuth {
         // Native password protocol:
         // auth_response = SHA1(password) XOR SHA1(auth_data + SHA1(SHA1(password)))
 
-        // If no password is configured, accept any auth response
+        // Authentication is enabled only when a password is configured. Do not
+        // turn a missing credential into an authentication bypass.
         if self.expected_password.is_none() {
-            return !auth_response.is_empty();
+            return false;
         }
 
-        // For now, use a simple comparison (in production, implement proper MySQL native password)
-        // This is a simplified version - full implementation would require SHA1-based validation
         let expected_password = self.expected_password.as_ref().unwrap();
+        if auth_response.len() != 20 {
+            return false;
+        }
 
-        // Simple validation: check if auth_response is not empty
-        // In production, this should implement the full MySQL native password protocol
-        !auth_response.is_empty() && !expected_password.is_empty()
+        let stage_one = Sha1::digest(expected_password.as_bytes());
+        let stage_two = Sha1::digest(stage_one);
+        let mut hasher = Sha1::new();
+        hasher.update(self.auth_data);
+        hasher.update(stage_two);
+        let stage_three = hasher.finalize();
+        let expected: Vec<u8> = stage_one
+            .iter()
+            .zip(stage_three.iter())
+            .map(|(left, right)| left ^ right)
+            .collect();
+        auth_response == expected
     }
 
     /// Validate clear password authentication
@@ -239,7 +248,7 @@ impl MySqlAuth {
     pub fn validate_clear_password(&self, auth_response: &[u8]) -> bool {
         // Clear password is sent as-is (null-terminated)
         if self.expected_password.is_none() {
-            return !auth_response.is_empty();
+            return false;
         }
 
         let expected_password = self.expected_password.as_ref().unwrap();
@@ -255,7 +264,7 @@ impl MySqlAuth {
     fn validate_caching_sha2_password(&self, _username: &str, auth_response: &[u8]) -> bool {
         // If no password is configured, accept any auth response
         if self.expected_password.is_none() {
-            return !auth_response.is_empty();
+            return false;
         }
 
         let expected_password = self.expected_password.as_ref().unwrap();
@@ -279,13 +288,18 @@ impl MySqlAuth {
         auth_response == calculated_scramble
     }
 
-    /// Compute native password hash (simplified version using SHA256)
+    /// Compute the MySQL `mysql_native_password` challenge response.
     pub fn compute_native_password_hash(password: &str, auth_data: &[u8]) -> Vec<u8> {
-        // Simplified hash for demonstration - in production use proper MySQL SHA1-based auth
-        let mut hasher = Sha256::new();
-        hasher.update(password.as_bytes());
+        let stage_one = Sha1::digest(password.as_bytes());
+        let stage_two = Sha1::digest(stage_one);
+        let mut hasher = Sha1::new();
         hasher.update(auth_data);
-        hasher.finalize().to_vec()
+        hasher.update(stage_two);
+        stage_one
+            .iter()
+            .zip(hasher.finalize().iter())
+            .map(|(left, right)| left ^ right)
+            .collect()
     }
 
     /// Compute caching_sha2_password hash
@@ -353,6 +367,6 @@ mod tests {
         let password = "test123";
         let auth_data = [0u8; 20];
         let hash = MySqlAuth::compute_native_password_hash(password, &auth_data);
-        assert_eq!(hash.len(), 32); // SHA256 produces 32 bytes
+        assert_eq!(hash.len(), 20); // mysql_native_password uses SHA1
     }
 }

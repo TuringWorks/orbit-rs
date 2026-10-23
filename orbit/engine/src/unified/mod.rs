@@ -90,6 +90,8 @@ pub use operations::{
     RelationshipPattern, SortOrder, UniversalOperation,
 };
 pub use schema::{Protocol, ProtocolProjection, SchemaRegistry, SchemaVersion};
+#[cfg(feature = "storage-rocksdb")]
+pub use storage::RocksDbBackend;
 pub use storage::{
     MemoryBackend, UnifiedStorage, UnifiedStorageBackend, UnifiedStorageConfig,
     UnifiedStorageError, UnifiedStorageMetrics, UnifiedStorageResult,

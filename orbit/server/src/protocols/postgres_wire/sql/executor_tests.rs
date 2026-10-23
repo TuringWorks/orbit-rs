@@ -754,4 +754,50 @@ mod tests {
             _ => panic!("Expected Insert result"),
         }
     }
+
+    async fn rows_of(fixture: &SqlExecutorTestFixture, sql: &str) -> Vec<Vec<Option<String>>> {
+        match fixture.execute_sql_ok(sql).await {
+            ExecutionResult::Select { rows, .. } => rows,
+            other => panic!("Expected rows from {sql}, got {other:?}"),
+        }
+    }
+
+    // SqlExecutor::execute_select applies WHERE but not ORDER BY, LIMIT, OFFSET or aggregates; only the optional vectorized path (large tables) does.
+    #[tokio::test]
+    #[ignore = "ORDER BY, LIMIT and count(*) are not implemented in SqlExecutor::execute_select"]
+    async fn select_applies_where_order_and_limit() {
+        let fixture = SqlExecutorTestFixture::new().await;
+        fixture
+            .execute_sql_ok("CREATE TABLE w (id INTEGER PRIMARY KEY, n VARCHAR, q INTEGER)")
+            .await;
+        for (id, n, q) in [(1, "a", 10), (2, "b", 20), (3, "c", 30), (4, "d", 40)] {
+            fixture
+                .execute_sql_ok(&format!(
+                    "INSERT INTO w (id, n, q) VALUES ({id}, '{n}', {q})"
+                ))
+                .await;
+        }
+        assert_eq!(
+            rows_of(&fixture, "SELECT id, n FROM w WHERE id = 2").await,
+            vec![vec![Some("2".into()), Some("b".into())]]
+        );
+        assert_eq!(
+            rows_of(&fixture, "SELECT id FROM w WHERE q > 25 ORDER BY id")
+                .await
+                .len(),
+            2
+        );
+        assert_eq!(
+            rows_of(
+                &fixture,
+                "SELECT id FROM w WHERE id IN (2, 3) ORDER BY id DESC LIMIT 1"
+            )
+            .await,
+            vec![vec![Some("3".into())]]
+        );
+        assert_eq!(
+            rows_of(&fixture, "SELECT count(*) AS c FROM w").await,
+            vec![vec![Some("4".into())]]
+        );
+    }
 }

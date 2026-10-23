@@ -39,6 +39,9 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
+#[cfg(feature = "storage-rocksdb")]
+use rocksdb::{Direction, IteratorMode, Options, WriteBatch, WriteOptions, DB};
+
 /// Errors that can occur during unified storage operations
 #[derive(Error, Debug, Clone)]
 pub enum UnifiedStorageError {
@@ -237,6 +240,116 @@ impl MemoryBackend {
 impl Default for MemoryBackend {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Durable RocksDB backend for unified storage.
+#[cfg(feature = "storage-rocksdb")]
+pub struct RocksDbBackend {
+    db: Arc<DB>,
+}
+
+#[cfg(feature = "storage-rocksdb")]
+impl RocksDbBackend {
+    /// Open or create a RocksDB database at `path`.
+    pub fn open(path: impl AsRef<std::path::Path>) -> UnifiedStorageResult<Self> {
+        let mut options = Options::default();
+        options.create_if_missing(true);
+        let db = DB::open(&options, path)
+            .map_err(|error| UnifiedStorageError::Backend(error.to_string()))?;
+        Ok(Self { db: Arc::new(db) })
+    }
+
+    fn durable_write_options() -> WriteOptions {
+        let mut options = WriteOptions::default();
+        options.set_sync(true);
+        options
+    }
+}
+
+#[cfg(feature = "storage-rocksdb")]
+#[async_trait]
+impl UnifiedStorageBackend for RocksDbBackend {
+    async fn initialize(&self) -> UnifiedStorageResult<()> {
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> UnifiedStorageResult<()> {
+        self.db
+            .flush()
+            .map_err(|error| UnifiedStorageError::Backend(error.to_string()))
+    }
+
+    async fn get(&self, key: &str) -> UnifiedStorageResult<Option<Vec<u8>>> {
+        self.db
+            .get(key.as_bytes())
+            .map_err(|error| UnifiedStorageError::Backend(error.to_string()))
+    }
+
+    async fn put(&self, key: &str, value: &[u8]) -> UnifiedStorageResult<()> {
+        self.db
+            .put_opt(key.as_bytes(), value, &Self::durable_write_options())
+            .map_err(|error| UnifiedStorageError::Backend(error.to_string()))
+    }
+
+    async fn delete(&self, key: &str) -> UnifiedStorageResult<bool> {
+        let existed = self.get(key).await?.is_some();
+        self.db
+            .delete_opt(key.as_bytes(), &Self::durable_write_options())
+            .map_err(|error| UnifiedStorageError::Backend(error.to_string()))?;
+        Ok(existed)
+    }
+
+    async fn exists(&self, key: &str) -> UnifiedStorageResult<bool> {
+        Ok(self.get(key).await?.is_some())
+    }
+
+    async fn scan_prefix(
+        &self,
+        prefix: &str,
+        limit: Option<usize>,
+    ) -> UnifiedStorageResult<Vec<(String, Vec<u8>)>> {
+        let prefix_bytes = prefix.as_bytes();
+        let limit = limit.unwrap_or(usize::MAX);
+        let mut values = Vec::new();
+        let mut iterator = self
+            .db
+            .iterator(IteratorMode::From(prefix_bytes, Direction::Forward));
+        while let Some(item) = iterator.next() {
+            let (key, value) =
+                item.map_err(|error| UnifiedStorageError::Backend(error.to_string()))?;
+            if !key.starts_with(prefix_bytes) || values.len() >= limit {
+                break;
+            }
+            values.push((String::from_utf8_lossy(&key).into_owned(), value.to_vec()));
+        }
+        Ok(values)
+    }
+
+    async fn put_batch(&self, entries: Vec<(String, Vec<u8>)>) -> UnifiedStorageResult<()> {
+        let mut batch = WriteBatch::default();
+        for (key, value) in entries {
+            batch.put(key.as_bytes(), value);
+        }
+        self.db
+            .write_opt(batch, &Self::durable_write_options())
+            .map_err(|error| UnifiedStorageError::Backend(error.to_string()))
+    }
+
+    async fn delete_batch(&self, keys: Vec<String>) -> UnifiedStorageResult<u64> {
+        let count = keys.len() as u64;
+        let mut batch = WriteBatch::default();
+        for key in keys {
+            batch.delete(key.as_bytes());
+        }
+        self.db
+            .write_opt(batch, &Self::durable_write_options())
+            .map_err(|error| UnifiedStorageError::Backend(error.to_string()))?;
+        Ok(count)
+    }
+
+    async fn metrics(&self) -> UnifiedStorageMetrics {
+        UnifiedStorageMetrics::default()
     }
 }
 

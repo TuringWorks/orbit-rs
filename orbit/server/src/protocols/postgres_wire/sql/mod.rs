@@ -41,6 +41,7 @@ pub mod analyzer;
 pub mod array_string;
 pub mod ast;
 pub mod crypto;
+pub mod durable;
 pub mod cte_execution;
 pub mod execution;
 pub mod execution_strategy;

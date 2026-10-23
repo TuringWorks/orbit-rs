@@ -36,7 +36,6 @@ use crate::protocols::error::{ProtocolError, ProtocolResult};
 
 /// RESP protocol codec
 pub struct RespCodec {
-    #[allow(dead_code)]
     max_frame_size: usize,
 }
 
@@ -44,7 +43,7 @@ impl RespCodec {
     /// Create a new RESP codec
     pub fn new() -> Self {
         Self {
-            max_frame_size: 512 * 1024 * 1024, // 512MB default max
+            max_frame_size: 64 * 1024 * 1024, // 64MB default max
         }
     }
 
@@ -67,6 +66,12 @@ impl Decoder for RespCodec {
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if src.is_empty() {
             return Ok(None);
+        }
+        if src.len() > self.max_frame_size {
+            return Err(ProtocolError::RespError(format!(
+                "RESP frame exceeds maximum size of {} bytes",
+                self.max_frame_size
+            )));
         }
 
         match parse_resp_value(src)? {

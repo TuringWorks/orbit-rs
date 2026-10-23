@@ -1038,6 +1038,19 @@ mod tests {
         ) -> EngineResult<Option<TransactionEvent>> {
             Ok(None)
         }
+        async fn save_recovery_checkpoint(
+            &self,
+            _id: &TransactionId,
+            _checkpoint: &serde_json::Value,
+        ) -> EngineResult<()> {
+            Ok(())
+        }
+        async fn delete_recovery_checkpoint(&self, _id: &TransactionId) -> EngineResult<()> {
+            Ok(())
+        }
+        async fn load_recovery_checkpoints(&self) -> EngineResult<Vec<serde_json::Value>> {
+            Ok(vec![])
+        }
     }
 
     #[tokio::test]

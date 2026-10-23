@@ -16,6 +16,7 @@ pub struct RespServer {
     bind_addr: String,
     command_handler: Arc<CommandHandler>,
     tls_acceptor: Option<OrbitTlsAcceptor>,
+    required_password: Option<String>,
 }
 
 impl RespServer {
@@ -39,6 +40,7 @@ impl RespServer {
                 persistent_storage,
             )),
             tls_acceptor: None,
+            required_password: std::env::var("ORBIT_REDIS_PASSWORD").ok(),
         }
     }
 
@@ -58,6 +60,16 @@ impl RespServer {
         // Load data from persistent storage on startup
         self.command_handler.load_from_persistence().await;
 
+        let bind_addr: std::net::SocketAddr = self.bind_addr.parse().map_err(|error| {
+            crate::protocols::error::ProtocolError::RespError(format!(
+                "Invalid bind address: {error}"
+            ))
+        })?;
+        if !bind_addr.ip().is_loopback() && self.required_password.is_none() {
+            return Err(crate::protocols::error::ProtocolError::RespError(
+                "Redis requires ORBIT_REDIS_PASSWORD when bound beyond loopback".to_string(),
+            ));
+        }
         let listener = TcpListener::bind(&self.bind_addr).await?;
         info!("RESP server listening on {}", self.bind_addr);
 
@@ -67,14 +79,19 @@ impl RespServer {
                     debug!("New RESP connection from {}", addr);
                     let handler = Arc::clone(&self.command_handler);
                     let tls_acceptor = self.tls_acceptor.clone();
+                    let required_password = self.required_password.clone();
 
                     tokio::spawn(async move {
                         // Handle TLS handshake if configured
                         if let Some(acceptor) = tls_acceptor {
                             match acceptor.accept(socket).await {
                                 Ok(tls_stream) => {
-                                    if let Err(e) =
-                                        Self::handle_connection(tls_stream, handler).await
+                                    if let Err(e) = Self::handle_connection(
+                                        tls_stream,
+                                        handler,
+                                        required_password,
+                                    )
+                                    .await
                                     {
                                         error!("Connection error: {}", e);
                                     }
@@ -84,7 +101,9 @@ impl RespServer {
                                 }
                             }
                         } else {
-                            if let Err(e) = Self::handle_connection(socket, handler).await {
+                            if let Err(e) =
+                                Self::handle_connection(socket, handler, required_password).await
+                            {
                                 error!("Connection error: {}", e);
                             }
                         }
@@ -97,14 +116,27 @@ impl RespServer {
         }
     }
 
-    async fn handle_connection<S>(socket: S, handler: Arc<CommandHandler>) -> ProtocolResult<()>
+    async fn handle_connection<S>(
+        socket: S,
+        handler: Arc<CommandHandler>,
+        required_password: Option<String>,
+    ) -> ProtocolResult<()>
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {
         let mut framed = Framed::new(socket, RespCodec::new());
+        let mut authenticated = required_password.is_none();
 
         while let Some(result) = framed.next().await {
-            if !Self::process_message_result(&mut framed, &handler, result).await? {
+            if !Self::process_message_result(
+                &mut framed,
+                &handler,
+                result,
+                &required_password,
+                &mut authenticated,
+            )
+            .await?
+            {
                 break;
             }
         }
@@ -118,12 +150,44 @@ impl RespServer {
         framed: &mut Framed<S, RespCodec>,
         handler: &Arc<CommandHandler>,
         result: Result<RespValue, crate::protocols::error::ProtocolError>,
+        required_password: &Option<String>,
+        authenticated: &mut bool,
     ) -> ProtocolResult<bool>
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {
         match result {
             Ok(command) => {
+                if let Some(password) = required_password {
+                    let (name, args) = match &command {
+                        RespValue::Array(values) if !values.is_empty() => (
+                            values[0]
+                                .as_string()
+                                .unwrap_or_default()
+                                .to_ascii_uppercase(),
+                            values.get(1),
+                        ),
+                        _ => (String::new(), None),
+                    };
+                    if name == "AUTH" {
+                        *authenticated = args
+                            .and_then(RespValue::as_string)
+                            .is_some_and(|candidate| candidate == *password);
+                        let response = if *authenticated {
+                            RespValue::ok()
+                        } else {
+                            RespValue::error("ERR invalid password")
+                        };
+                        return Self::send_response(framed, response).await;
+                    }
+                    if !*authenticated {
+                        return Self::send_response(
+                            framed,
+                            RespValue::error("NOAUTH Authentication required"),
+                        )
+                        .await;
+                    }
+                }
                 debug!("Received command: {}", command);
                 let response = Self::handle_command_with_error_handling(handler, command).await;
                 Self::send_response(framed, response).await

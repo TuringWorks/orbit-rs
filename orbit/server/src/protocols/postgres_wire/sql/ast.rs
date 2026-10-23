@@ -593,6 +593,8 @@ pub struct ColumnDefinition {
 pub enum ColumnConstraint {
     NotNull,
     Null,
+    /// `SERIAL`, `BIGSERIAL` or `SMALLSERIAL`: an integer column filled from an owned sequence.
+    Serial,
     Default(Expression),
     PrimaryKey,
     Unique,

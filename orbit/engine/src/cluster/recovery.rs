@@ -255,10 +255,11 @@ impl TransactionRecoveryManager {
         }
 
         // Persist checkpoint to log
-        let _checkpoint_data = serde_json::to_value(&checkpoint)
+        let checkpoint_data = serde_json::to_value(&checkpoint)
             .map_err(|e| EngineError::internal(format!("Failed to serialize checkpoint: {e}")))?;
-
-        // This would ideally be stored in a dedicated recovery log
+        self.logger
+            .save_recovery_checkpoint(&checkpoint.transaction_id, &checkpoint_data)
+            .await?;
         debug!(
             "Created checkpoint for transaction: {}",
             checkpoint.transaction_id
@@ -281,19 +282,30 @@ impl TransactionRecoveryManager {
         votes: Option<HashMap<AddressableReference, TransactionVote>>,
         acks: Option<HashMap<AddressableReference, bool>>,
     ) -> EngineResult<()> {
-        let mut checkpoints = self.checkpoints.write().await;
-        if let Some(checkpoint) = checkpoints.get_mut(transaction_id) {
-            checkpoint.current_state = state;
-            checkpoint.last_updated = chrono::Utc::now().timestamp_millis();
+        let updated_checkpoint = {
+            let mut checkpoints = self.checkpoints.write().await;
+            checkpoints.get_mut(transaction_id).map(|checkpoint| {
+                checkpoint.current_state = state;
+                checkpoint.last_updated = chrono::Utc::now().timestamp_millis();
 
-            if let Some(votes) = votes {
-                checkpoint.votes_received = votes;
-            }
+                if let Some(votes) = votes {
+                    checkpoint.votes_received = votes;
+                }
 
-            if let Some(acks) = acks {
-                checkpoint.acknowledgments_received = acks;
-            }
+                if let Some(acks) = acks {
+                    checkpoint.acknowledgments_received = acks;
+                }
 
+                checkpoint.clone()
+            })
+        };
+        if let Some(checkpoint) = updated_checkpoint {
+            let checkpoint_data = serde_json::to_value(&checkpoint).map_err(|e| {
+                EngineError::internal(format!("Failed to serialize checkpoint: {e}"))
+            })?;
+            self.logger
+                .save_recovery_checkpoint(transaction_id, &checkpoint_data)
+                .await?;
             debug!("Updated checkpoint for transaction: {}", transaction_id);
         }
 
@@ -302,8 +314,10 @@ impl TransactionRecoveryManager {
 
     /// Remove checkpoint after transaction completion
     pub async fn remove_checkpoint(&self, transaction_id: &TransactionId) -> EngineResult<()> {
-        let mut checkpoints = self.checkpoints.write().await;
-        checkpoints.remove(transaction_id);
+        self.checkpoints.write().await.remove(transaction_id);
+        self.logger
+            .delete_recovery_checkpoint(transaction_id)
+            .await?;
         debug!("Removed checkpoint for transaction: {}", transaction_id);
         Ok(())
     }
@@ -777,10 +791,24 @@ impl TransactionRecoveryManager {
     async fn recover_incomplete_transactions(&self) -> EngineResult<()> {
         info!("Recovering incomplete transactions on startup");
 
-        // This would query the persistent log for incomplete transactions
-        // and attempt to recover them
-
-        // For now, this is a placeholder
+        let checkpoints = self.logger.load_recovery_checkpoints().await?;
+        let cutoff =
+            chrono::Utc::now().timestamp_millis() - self.config.max_recovery_age.as_millis() as i64;
+        for value in checkpoints {
+            let checkpoint: TransactionCheckpoint = serde_json::from_value(value)
+                .map_err(|e| EngineError::internal(format!("Invalid recovery checkpoint: {e}")))?;
+            if checkpoint.created_at < cutoff {
+                self.logger
+                    .delete_recovery_checkpoint(&checkpoint.transaction_id)
+                    .await?;
+                continue;
+            }
+            self.checkpoints
+                .write()
+                .await
+                .insert(checkpoint.transaction_id.clone(), checkpoint.clone());
+            self.recover_transaction(checkpoint).await?;
+        }
         debug!("Transaction recovery on startup completed");
         Ok(())
     }

@@ -1388,6 +1388,7 @@ mod persistent_storage_impl {
                         values,
                         created_at: chrono::Utc::now(),
                         updated_at: chrono::Utc::now(),
+                        row_id: None,
                     }
                 })
                 .collect();

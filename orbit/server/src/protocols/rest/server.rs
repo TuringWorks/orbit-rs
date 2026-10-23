@@ -1,6 +1,11 @@
 //! REST API server implementation
 
+use axum::extract::Request;
+use axum::http::StatusCode;
+use axum::middleware::Next;
+use axum::response::Response;
 use axum::{
+    middleware,
     routing::{delete, get, post, put},
     Router,
 };
@@ -146,7 +151,8 @@ impl RestApiServer {
                 get(WebSocketHandler::handle_actor_socket),
             )
             .route("/ws/events", get(WebSocketHandler::handle_events_socket))
-            .with_state(state);
+            .with_state(state)
+            .layer(middleware::from_fn(require_api_token));
 
         // Root router with versioned API
         let mut app = Router::new()
@@ -208,6 +214,20 @@ impl RestApiServer {
     pub fn ws_handler(&self) -> Arc<WebSocketHandler> {
         self.ws_handler.clone()
     }
+}
+
+async fn require_api_token(request: Request, next: Next) -> Result<Response, StatusCode> {
+    let configured =
+        std::env::var("ORBIT_API_TOKEN").map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let supplied = request
+        .headers()
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "));
+    if supplied != Some(configured.as_str()) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(next.run(request).await)
 }
 
 /// Builder for REST API server

@@ -41,6 +41,8 @@ pub struct PostgresWireProtocol {
     portals: HashMap<String, (String, Vec<Option<bytes::Bytes>>)>,
     auth_manager: AuthManager,
     scram_auth: Option<ScramAuth>,
+    /// The durable engine's per-connection state (the open transaction).
+    sql_session: super::sql::durable::Session,
 }
 
 /// Result of processing data in the connection loop
@@ -81,6 +83,7 @@ impl PostgresWireProtocol {
             portals: HashMap::new(),
             auth_manager,
             scram_auth: None,
+            sql_session: super::sql::durable::Session::default(),
         }
     }
 
@@ -103,6 +106,7 @@ impl PostgresWireProtocol {
             portals: HashMap::new(),
             auth_manager,
             scram_auth: None,
+            sql_session: super::sql::durable::Session::default(),
         }
     }
 
@@ -267,14 +271,14 @@ impl PostgresWireProtocol {
                 self.handle_execute(&portal, max_rows, buf).await?;
             }
             FrontendMessage::Describe { target, name } => {
-                self.handle_describe(target, &name, buf)?;
+                self.handle_describe(target, &name, buf).await?;
             }
             FrontendMessage::Close { target, name } => {
                 self.handle_close(target, &name, buf)?;
             }
             FrontendMessage::Sync => {
                 BackendMessage::ReadyForQuery {
-                    status: TransactionStatus::Idle,
+                    status: self.txn_status(),
                 }
                 .encode(buf);
             }
@@ -558,24 +562,19 @@ impl PostgresWireProtocol {
             self.query_engine.set_current_database(db).await;
         }
 
-        match self.query_engine.execute_multiple_queries(query).await {
+        let outcome = self.query_engine.execute_multiple_queries_in(&mut self.sql_session, query).await;
+        match outcome {
             Ok(results) => {
                 for result in results {
                     self.send_query_result(&result, buf);
                 }
-                BackendMessage::ReadyForQuery {
-                    status: TransactionStatus::Idle,
-                }
-                .encode(buf);
             }
             Err(e) => {
-                self.send_error(buf, &e.to_string());
-                BackendMessage::ReadyForQuery {
-                    status: TransactionStatus::Idle,
-                }
-                .encode(buf);
+                let (code, message) = Self::error_parts(&e);
+                self.send_error_with_code(buf, &code, &message);
             }
         }
+        BackendMessage::ReadyForQuery { status: self.txn_status() }.encode(buf);
 
         Ok(())
     }
@@ -641,20 +640,24 @@ impl PostgresWireProtocol {
         // TODO: Implement parameter substitution
         let _ = params;
 
-        match self.query_engine.execute_query(query).await {
-            Ok(result) => {
-                self.send_query_result(&result, buf);
+        let query = query.clone();
+        match self.query_engine.execute_multiple_queries_in(&mut self.sql_session, &query).await {
+            Ok(results) => {
+                for result in &results {
+                    self.send_query_result_as(result, buf, false);
+                }
             }
             Err(e) => {
-                self.send_error(buf, &e.to_string());
+                let (code, message) = Self::error_parts(&e);
+                self.send_error_with_code(buf, &code, &message);
             }
         }
 
         Ok(())
     }
 
-    /// Handle describe message
-    fn handle_describe(
+    /// Handle describe message: report the parameters and result columns of a statement or portal.
+    async fn handle_describe(
         &mut self,
         target: super::messages::DescribeTarget,
         name: &str,
@@ -662,9 +665,39 @@ impl PostgresWireProtocol {
     ) -> ProtocolResult<()> {
         debug!("Describe: target={:?}, name={}", target, name);
 
-        // For now, return NoData
-        // TODO: Implement proper description based on query
-        BackendMessage::NoData.encode(buf);
+        let sql = match target {
+            super::messages::DescribeTarget::Statement => self.prepared_statements.get(name).cloned(),
+            super::messages::DescribeTarget::Portal => self
+                .portals
+                .get(name)
+                .and_then(|(statement, _)| self.prepared_statements.get(statement).cloned()),
+        };
+        let columns = sql.as_deref().and_then(|q| self.query_engine.describe(q));
+        if matches!(target, super::messages::DescribeTarget::Statement) {
+            BackendMessage::ParameterDescription { param_types: vec![] }.encode(buf);
+        }
+        match columns {
+            Some(cols) if !cols.is_empty() => {
+                let fields = cols
+                    .into_iter()
+                    .map(|(name, oid)| FieldDescription {
+                        name,
+                        table_oid: 0,
+                        column_id: 0,
+                        type_oid: oid,
+                        type_size: match oid {
+                            type_oids::BOOL => 1,
+                            type_oids::INT4 => 4,
+                            _ => -1,
+                        },
+                        type_modifier: -1,
+                        format: 0,
+                    })
+                    .collect();
+                BackendMessage::RowDescription { fields }.encode(buf);
+            }
+            _ => BackendMessage::NoData.encode(buf),
+        }
         Ok(())
     }
 
@@ -692,6 +725,12 @@ impl PostgresWireProtocol {
 
     /// Send query result
     fn send_query_result(&self, result: &QueryResult, buf: &mut BytesMut) {
+        self.send_query_result_as(result, buf, true);
+    }
+
+    /// Encode a result. `describe` is false for the extended protocol's `Execute`, where the
+    /// client already received the row description from `Describe`.
+    fn send_query_result_as(&self, result: &QueryResult, buf: &mut BytesMut, describe: bool) {
         match result {
             QueryResult::Select { columns, rows } => {
                 let mut fields: Vec<FieldDescription> = Vec::with_capacity(columns.len());
@@ -720,7 +759,9 @@ impl PostgresWireProtocol {
                     });
                 }
 
-                BackendMessage::RowDescription { fields }.encode(buf);
+                if describe {
+                    BackendMessage::RowDescription { fields }.encode(buf);
+                }
 
                 for row in rows {
                     let values: Vec<Option<bytes::Bytes>> = row
@@ -773,7 +814,9 @@ impl PostgresWireProtocol {
                         })
                         .collect();
 
+                    if describe {
                     BackendMessage::RowDescription { fields }.encode(buf);
+                }
 
                     for row in rows {
                         let values: Vec<Option<bytes::Bytes>> = row
@@ -806,7 +849,9 @@ impl PostgresWireProtocol {
                         format: 0,
                     })
                     .collect();
-                BackendMessage::RowDescription { fields }.encode(buf);
+                if describe {
+                    BackendMessage::RowDescription { fields }.encode(buf);
+                }
                 for row in rows {
                     let values = row
                         .iter()
@@ -819,6 +864,36 @@ impl PostgresWireProtocol {
                 }
                 .encode(buf);
             }
+            QueryResult::Returning { tag, columns, rows } => {
+                let fields = columns
+                    .iter()
+                    .map(|(name, oid)| FieldDescription {
+                        name: name.clone(),
+                        table_oid: 0,
+                        column_id: 0,
+                        type_oid: *oid,
+                        type_size: match *oid {
+                            type_oids::BOOL => 1,
+                            type_oids::INT4 => 4,
+                            _ => -1,
+                        },
+                        type_modifier: -1,
+                        format: 0,
+                    })
+                    .collect();
+                if describe {
+                    BackendMessage::RowDescription { fields }.encode(buf);
+                }
+                for row in rows {
+                    let values = row.iter().map(|v| v.as_ref().map(|s| bytes::Bytes::from(s.clone()))).collect();
+                    BackendMessage::DataRow { values }.encode(buf);
+                }
+                BackendMessage::CommandComplete { tag: tag.clone() }.encode(buf);
+            }
+            QueryResult::Command { tag } => match tag.strip_prefix("ERROR: ") {
+                Some(message) => self.send_error(buf, message),
+                None => BackendMessage::CommandComplete { tag: tag.clone() }.encode(buf),
+            },
             QueryResult::Set { .. } => {
                 BackendMessage::CommandComplete {
                     tag: "SET".to_string(),
@@ -826,6 +901,26 @@ impl PostgresWireProtocol {
                 .encode(buf);
             }
         }
+    }
+
+    /// The transaction status reported in `ReadyForQuery`.
+    fn txn_status(&self) -> TransactionStatus {
+        match self.sql_session.txn_state() {
+            None => TransactionStatus::Idle,
+            Some(false) => TransactionStatus::InTransaction,
+            Some(true) => TransactionStatus::InFailedTransaction,
+        }
+    }
+
+    /// SQLSTATE and message for an error. The durable engine tags its errors as `[SQLSTATE] message`.
+    fn error_parts(e: &ProtocolError) -> (String, String) {
+        if let ProtocolError::PostgresError(m) = e {
+            if m.len() > 8 && m.starts_with('[') && m.as_bytes()[6] == b']' && m.is_char_boundary(8) {
+                return (m[1..6].to_string(), m[8..].to_string());
+            }
+            return ("XX000".to_string(), m.clone());
+        }
+        ("XX000".to_string(), e.to_string())
     }
 
     /// Handle SSL request
@@ -837,9 +932,13 @@ impl PostgresWireProtocol {
 
     /// Send error response
     fn send_error(&self, buf: &mut BytesMut, message: &str) {
+        self.send_error_with_code(buf, "XX000", message);
+    }
+
+    fn send_error_with_code(&self, buf: &mut BytesMut, code: &str, message: &str) {
         let mut fields = HashMap::new();
         fields.insert(b'S', "ERROR".to_string());
-        fields.insert(b'C', "XX000".to_string()); // Internal error
+        fields.insert(b'C', code.to_string());
         fields.insert(b'M', message.to_string());
 
         BackendMessage::ErrorResponse { fields }.encode(buf);

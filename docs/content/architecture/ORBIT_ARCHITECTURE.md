@@ -6,6 +6,14 @@ category: architecture
 
 ## Orbit-RS Architecture
 
+## Security and Durability Invariants
+
+- Network-facing database protocols must fail closed when required credentials are absent. MySQL and CQL credentials are supplied through environment variables; Redis requires `ORBIT_REDIS_PASSWORD` for non-loopback binding.
+- REST data and transaction-management routes require a bearer token from `ORBIT_API_TOKEN`; health and OpenAPI discovery remain separate public routes.
+- Metrics bind to `127.0.0.1` by default through `ORBIT_METRICS_BIND`.
+- Unified cross-protocol storage uses synchronous RocksDB writes in production. The in-memory backend is reserved for explicit tests.
+- Transaction-log entries remain buffered until the database batch succeeds; failed flushes are retryable rather than silently destructive.
+
 ## Project Overview
 
 Orbit-RS is a next-generation distributed actor system framework built in Rust, providing a comprehensive multi-model database platform with advanced query capabilities. It extends the original Orbit concept with native support for graph databases, time series analytics, and unified query processing.

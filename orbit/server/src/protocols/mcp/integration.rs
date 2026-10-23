@@ -58,7 +58,7 @@ impl OrbitMcpIntegration {
     fn convert_query_result(&self, pg_result: PgQueryResult) -> Result<McpQueryResult, McpError> {
         match pg_result {
             // Typed results differ from Select only in wire-level column types.
-            PgQueryResult::Typed { .. } => self.convert_query_result(pg_result.untyped()),
+            PgQueryResult::Typed { .. } | PgQueryResult::Returning { .. } => self.convert_query_result(pg_result.untyped()),
             PgQueryResult::Select { columns, rows } => {
                 // Convert rows to MCP format
                 let mcp_rows: Vec<Row> = rows
@@ -121,6 +121,15 @@ impl OrbitMcpIntegration {
                         "rows_affected".to_string(),
                         serde_json::Value::Number(count.into()),
                     );
+                    row
+                }],
+                row_count: 1,
+            }),
+            PgQueryResult::Command { tag } => Ok(McpQueryResult {
+                columns: vec!["command".to_string()],
+                rows: vec![{
+                    let mut row = Row::new();
+                    row.insert("command".to_string(), serde_json::Value::String(tag));
                     row
                 }],
                 row_count: 1,

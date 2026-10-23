@@ -996,6 +996,35 @@ mod tests {
     }
 
     #[test]
+    fn test_start_transaction_is_begin() {
+        for sql in [
+            "START TRANSACTION",
+            "START TRANSACTION ISOLATION LEVEL READ COMMITTED",
+        ] {
+            let mut engine = SqlEngine::new();
+            let result = engine.parse(sql);
+            assert!(result.is_ok(), "Failed to parse {sql}: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_quoted_identifiers_are_names() {
+        let sql = r#"CREATE TABLE IF NOT EXISTS "order" ("id" SERIAL PRIMARY KEY, "user" INTEGER, "default" VARCHAR)"#;
+        let mut engine = SqlEngine::new();
+        let result = engine.parse(sql);
+        assert!(
+            result.is_ok(),
+            "Failed to parse quoted identifiers: {:?}",
+            result
+        );
+        let insert = r#"INSERT INTO "order" ("id", "user") VALUES (1, 2) RETURNING "id""#;
+        assert!(
+            engine.parse(insert).is_ok(),
+            "Failed to parse quoted INSERT"
+        );
+    }
+
+    #[test]
     fn test_begin_work() {
         let sql = "BEGIN WORK";
         let mut engine = SqlEngine::new();

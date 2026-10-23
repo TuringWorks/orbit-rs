@@ -38,10 +38,21 @@ pub enum QueryResult {
         variable: String,
         value: String,
     },
+    /// Statement acknowledged with a bare command tag (e.g. `CREATE ROLE`).
+    /// A tag starting with `ERROR: ` is reported as an error instead.
+    Command {
+        tag: String,
+    },
     Merge {
         count: usize,
         rows: Vec<Vec<Option<String>>>,
         columns: Vec<String>,
+    },
+    /// `INSERT`, `UPDATE` or `DELETE` with a `RETURNING` list: the command tag plus typed rows.
+    Returning {
+        tag: String,
+        columns: Vec<(String, i32)>,
+        rows: Vec<Vec<Option<String>>>,
     },
     /// Result set whose columns carry explicit PostgreSQL type OIDs, for
     /// catalog answers where inference from text would misreport booleans.
@@ -56,7 +67,7 @@ impl QueryResult {
     #[must_use]
     pub fn untyped(self) -> Self {
         match self {
-            Self::Typed { columns, rows } => Self::Select {
+            Self::Typed { columns, rows } | Self::Returning { columns, rows, .. } => Self::Select {
                 columns: columns.into_iter().map(|(name, _)| name).collect(),
                 rows,
             },
@@ -142,9 +153,58 @@ pub struct QueryEngine {
     sql_engine: Arc<Mutex<ConfigurableSqlEngine>>,
     // Current database context
     current_database: Arc<RwLock<String>>,
+    // The durable SQL engine. When present it runs every statement it supports.
+    durable: Option<Arc<crate::protocols::postgres_wire::sql::durable::DurableEngine>>,
 }
 
 impl QueryEngine {
+    /// Run SQL statements through `engine` (committed state in durable storage) instead of the legacy executors.
+    #[must_use]
+    pub fn with_durable(mut self, engine: Arc<crate::protocols::postgres_wire::sql::durable::DurableEngine>) -> Self {
+        self.durable = Some(engine);
+        self
+    }
+
+    /// The result columns (name and type OID) of the first statement of `sql`, without running it.
+    /// `None` when the durable engine is not in use or does not run the statement.
+    pub fn describe(&self, sql: &str) -> Option<Vec<(String, i32)>> {
+        use crate::protocols::postgres_wire::sql::parser::SqlParser;
+        let engine = self.durable.as_ref()?;
+        let stmt = SqlParser::new().parse_multiple(sql.trim().trim_end_matches(';')).ok()?.into_iter().next()?;
+        engine.describe(&stmt)
+    }
+
+    /// Like [`execute_multiple_queries`](Self::execute_multiple_queries), but the durable engine
+    /// runs what it supports on behalf of `session` (the connection's open transaction).
+    pub async fn execute_multiple_queries_in(
+        &self,
+        session: &mut crate::protocols::postgres_wire::sql::durable::Session,
+        sql: &str,
+    ) -> ProtocolResult<Vec<QueryResult>> {
+        use crate::protocols::postgres_wire::sql::durable::DurableEngine;
+        use crate::protocols::postgres_wire::sql::parser::SqlParser;
+
+        let Some(engine) = self.durable.as_ref() else {
+            return self.execute_multiple_queries(sql).await;
+        };
+        let database = self.get_current_database().await;
+        let mut results = Vec::new();
+        for piece in session_compat::split_statements(sql) {
+            if let Some(result) = session_compat::try_handle(piece, &database, "postgres") {
+                results.push(result);
+                continue;
+            }
+            for stmt in SqlParser::new().parse_multiple(piece)? {
+                if DurableEngine::handles(&stmt) {
+                    results.push(engine.execute(session, &stmt, piece).await?);
+                } else {
+                    results.push(self.execute_ast_statement(stmt).await?);
+                }
+            }
+        }
+        Ok(results)
+    }
+
     /// Create a new query engine
     pub fn new() -> Self {
         println!("DEBUG: QueryEngine::new() called (NO STORAGE)");
@@ -157,6 +217,7 @@ impl QueryEngine {
             vector_engine: None,
             graphrag_engine: None,
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
+            durable: None,
             current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
@@ -172,6 +233,7 @@ impl QueryEngine {
             vector_engine: None,
             graphrag_engine: None,
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
+            durable: None,
             current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
@@ -187,6 +249,7 @@ impl QueryEngine {
             vector_engine: Some(VectorQueryEngine::new(orbit_client)),
             graphrag_engine: Some(GraphRAGQueryEngine::new_placeholder()),
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
+            durable: None,
             current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
@@ -202,6 +265,7 @@ impl QueryEngine {
             vector_engine: Some(VectorQueryEngine::new(orbit_client)),
             graphrag_engine: Some(GraphRAGQueryEngine::new_placeholder()),
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
+            durable: None,
             current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
@@ -1533,6 +1597,7 @@ impl QueryEngine {
                 values: row_values,
                 created_at: now,
                 updated_at: now,
+                row_id: None,
             };
 
             // Insert the row
