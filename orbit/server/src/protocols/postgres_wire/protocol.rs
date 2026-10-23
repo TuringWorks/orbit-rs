@@ -43,6 +43,10 @@ pub struct PostgresWireProtocol {
     scram_auth: Option<ScramAuth>,
     /// The durable engine's per-connection state (the open transaction).
     sql_session: super::sql::durable::Session,
+    /// Create a user on first login with its name as the password. Only for development and tests.
+    auto_register: bool,
+    /// Close the connection once the messages queued for the client have been sent.
+    close_after: bool,
 }
 
 /// Result of processing data in the connection loop
@@ -84,6 +88,8 @@ impl PostgresWireProtocol {
             auth_manager,
             scram_auth: None,
             sql_session: super::sql::durable::Session::default(),
+            auto_register: true,
+            close_after: false,
         }
     }
 
@@ -107,7 +113,18 @@ impl PostgresWireProtocol {
             auth_manager,
             scram_auth: None,
             sql_session: super::sql::durable::Session::default(),
+            auto_register: true,
+            close_after: false,
         }
+    }
+
+    /// Authenticate against `users`, which are provisioned by the operator. With `auto_register` a login
+    /// by an unknown name creates the user with its own name as the password: for development and tests only.
+    #[must_use]
+    pub fn with_auth(mut self, users: UserStore, auto_register: bool) -> Self {
+        self.auth_manager = AuthManager::new(AuthMethod::ScramSha256, users);
+        self.auto_register = auto_register;
+        self
     }
 
     /// Handle a generic connection stream (TCP or TLS)
@@ -176,6 +193,8 @@ impl PostgresWireProtocol {
             match self.process_single_message(msg, write_buf).await {
                 MessageResult::Continue => {}
                 MessageResult::Terminate => {
+                    // a fatal error may be waiting to be sent
+                    self.flush_write_buffer(stream, write_buf).await?;
                     return Ok(ConnectionLoopResult::ClientTerminated);
                 }
                 MessageResult::Error(e) => {
@@ -230,13 +249,40 @@ impl PostgresWireProtocol {
         msg: FrontendMessage,
         buf: &mut BytesMut,
     ) -> ProtocolResult<bool> {
+        // Until the client has authenticated it may only take part in logging in.
+        if !matches!(
+            self.state,
+            ConnectionState::Ready | ConnectionState::InTransaction
+        ) && !matches!(
+            msg,
+            FrontendMessage::Startup { .. }
+                | FrontendMessage::Password { .. }
+                | FrontendMessage::SASLInitialResponse { .. }
+                | FrontendMessage::SASLResponse { .. }
+                | FrontendMessage::SSLRequest
+                | FrontendMessage::Terminate
+        ) {
+            self.send_fatal(buf, "28000", "the connection is not authenticated");
+            return Ok(false);
+        }
+        let keep_open = self.handle_message_authenticated(msg, buf).await?;
+        Ok(keep_open && !self.close_after)
+    }
+
+    async fn handle_message_authenticated(
+        &mut self,
+        msg: FrontendMessage,
+        buf: &mut BytesMut,
+    ) -> ProtocolResult<bool> {
         match msg {
             FrontendMessage::Startup {
                 protocol_version,
                 parameters,
             } => {
-                self.handle_startup(protocol_version, parameters, buf)
-                    .await?;
+                if matches!(self.state, ConnectionState::Initial) {
+                    self.handle_startup(protocol_version, parameters, buf)
+                        .await?;
+                }
             }
             FrontendMessage::Password { password } => {
                 self.handle_password(&password, buf).await?;
@@ -364,8 +410,9 @@ impl PostgresWireProtocol {
         self.parameters = parameters;
         self.state = ConnectionState::Authenticating;
 
-        // Auto-register user for SCRAM testing if needed
-        if matches!(self.auth_manager.auth_method(), AuthMethod::ScramSha256) {
+        // Development only: create the user with its name as the password.
+        if self.auto_register && matches!(self.auth_manager.auth_method(), AuthMethod::ScramSha256)
+        {
             if let Some(user) = &self.username {
                 if self
                     .auth_manager
@@ -374,7 +421,6 @@ impl PostgresWireProtocol {
                     .await
                     .is_none()
                 {
-                    // Auto-create user with password same as username for testing
                     self.auth_manager
                         .user_store()
                         .add_user(user.clone(), user.clone(), &AuthMethod::ScramSha256)
@@ -445,8 +491,8 @@ impl PostgresWireProtocol {
             self.finish_authentication(buf);
             Ok(())
         } else {
-            self.send_error(buf, "Password authentication failed");
-            Ok(()) // Don't terminate, just error? Usually terminate on auth fail.
+            self.auth_failed(buf);
+            Ok(())
         }
     }
 
@@ -458,7 +504,7 @@ impl PostgresWireProtocol {
         buf: &mut BytesMut,
     ) -> ProtocolResult<()> {
         if mechanism != "SCRAM-SHA-256" {
-            self.send_error(buf, "Unsupported SASL mechanism");
+            self.auth_failed(buf);
             return Ok(());
         }
 
@@ -505,13 +551,13 @@ impl PostgresWireProtocol {
                     })
                     .encode(buf);
                 } else {
-                    self.send_error(buf, "Invalid SCRAM client-first-message: missing nonce");
+                    self.auth_failed(buf);
                 }
             } else {
-                self.send_error(buf, "User not configured for SCRAM");
+                self.auth_failed(buf);
             }
         } else {
-            self.send_error(buf, "Authentication failed");
+            self.auth_failed(buf);
         }
         Ok(())
     }
@@ -534,12 +580,10 @@ impl PostgresWireProtocol {
                     BackendMessage::Authentication(AuthenticationResponse::Ok).encode(buf);
                     self.finish_authentication(buf);
                 }
-                Err(e) => {
-                    self.send_error(buf, &format!("SCRAM authentication failed: {}", e));
-                }
+                Err(_) => self.auth_failed(buf),
             }
         } else {
-            self.send_error(buf, "Protocol error: SASL response without initial step");
+            self.auth_failed(buf);
         }
         Ok(())
     }
@@ -947,6 +991,27 @@ impl PostgresWireProtocol {
         // Reject SSL request - send 'N' to indicate SSL not supported
         buf.put_u8(b'N');
         Ok(())
+    }
+
+    /// A fatal error ends the connection: it is sent, then the connection is closed.
+    fn send_fatal(&mut self, buf: &mut BytesMut, code: &str, message: &str) {
+        let mut fields = HashMap::new();
+        fields.insert(b'S', "FATAL".to_string());
+        fields.insert(b'V', "FATAL".to_string());
+        fields.insert(b'C', code.to_string());
+        fields.insert(b'M', message.to_string());
+        BackendMessage::ErrorResponse { fields }.encode(buf);
+        self.close_after = true;
+    }
+
+    /// Wrong password and unknown user look the same to the client.
+    fn auth_failed(&mut self, buf: &mut BytesMut) {
+        let user = self.username.clone().unwrap_or_default();
+        self.send_fatal(
+            buf,
+            "28P01",
+            &format!("password authentication failed for user \"{user}\""),
+        );
     }
 
     /// Send error response

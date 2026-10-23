@@ -17,6 +17,7 @@
 
 mod ddl;
 mod dml;
+mod fk;
 mod persist;
 mod query;
 pub(crate) mod value;
@@ -123,6 +124,8 @@ pub(crate) struct Table {
     pub rows: imbl::OrdMap<u64, Row>,
     pub next_rowid: u64,
     pub indexes: Vec<Index>,
+    /// Foreign keys declared on this table.
+    pub fks: Vec<fk::Fk>,
 }
 
 impl Table {
@@ -363,11 +366,63 @@ pub(crate) fn apply_ops(st: &mut State, ops: &[Op]) -> Result<(), String> {
                     }
                 }
             }
-            Op::SeqHighWater { .. } => {}
+            Op::SeqHighWater { .. } | Op::NodeAddr { .. } => {}
         }
     }
     st.version += 1;
     Ok(())
+}
+
+/// Build the database from what storage holds.
+fn state_from_loaded(loaded: Loaded) -> Result<(State, Seqs), String> {
+    let mut st = State::default();
+    let mut seqs = Seqs::default();
+    for (name, hwm) in loaded.seqs {
+        seqs.set_reserved(&name, hwm);
+    }
+    seqs.resume_above_reserved();
+    for text in &loaded.ddl {
+        apply_ops(&mut st, &[Op::Ddl(text.clone())])?;
+    }
+    for (tid, rowid, mut row) in loaded.rows {
+        let Some(name) = st.ids.get(&tid).cloned() else {
+            continue;
+        };
+        let t = st.tables.get_mut(&name).expect("table by id");
+        row.resize(t.cols.len(), SqlValue::Null);
+        t.next_rowid = t.next_rowid.max(rowid + 1);
+        t.rows.insert(rowid, row);
+    }
+    let names: Vec<String> = st.tables.keys().cloned().collect();
+    for n in names {
+        st.tables.get_mut(&n).expect("table").rebuild_indexes();
+    }
+    st.version = 0;
+    Ok((st, seqs))
+}
+
+/// A persistence error is `"[SQLSTATE] message"` when the store knows what kind it is.
+fn persist_error(e: String) -> DbError {
+    let code = e
+        .get(1..6)
+        .filter(|_| e.starts_with('[') && e.as_bytes().get(6) == Some(&b']'));
+    let known = |c: &str| match c {
+        "25006" => Some("25006"),
+        "40001" => Some("40001"),
+        "40003" => Some("40003"),
+        "57P01" => Some("57P01"),
+        _ => None,
+    };
+    match code.and_then(known) {
+        Some(c) => DbError {
+            code: c,
+            message: e[8..].to_string(),
+        },
+        None => DbError {
+            code: "58030",
+            message: e,
+        },
+    }
 }
 
 /// Statements that change data or schema, or lock rows, and so need the writer gate.
@@ -391,36 +446,26 @@ impl DurableEngine {
 
     /// Open an engine over `persist`, rebuilding the working set from it.
     pub fn open(persist: Box<dyn Persist>) -> Result<Self, String> {
-        let loaded = persist.load()?;
-        let mut st = State::default();
-        let mut seqs = Seqs::default();
-        for (name, hwm) in loaded.seqs {
-            seqs.set_reserved(&name, hwm);
-        }
-        seqs.resume_above_reserved();
-        for text in &loaded.ddl {
-            apply_ops(&mut st, &[Op::Ddl(text.clone())])?;
-        }
-        for (tid, rowid, mut row) in loaded.rows {
-            let Some(name) = st.ids.get(&tid).cloned() else {
-                continue;
-            };
-            let t = st.tables.get_mut(&name).expect("table by id");
-            row.resize(t.cols.len(), SqlValue::Null);
-            t.next_rowid = t.next_rowid.max(rowid + 1);
-            t.rows.insert(rowid, row);
-        }
-        let names: Vec<String> = st.tables.keys().cloned().collect();
-        for n in names {
-            st.tables.get_mut(&n).expect("table").rebuild_indexes();
-        }
-        st.version = 0;
+        let (st, seqs) = state_from_loaded(persist.load()?)?;
         Ok(Self {
             writer: Arc::new(AsyncMutex::new(())),
             committed: Mutex::new(st),
             seqs: Mutex::new(seqs),
             persist,
         })
+    }
+
+    /// Replace the whole database with `loaded` (a snapshot received from the leader).
+    pub fn reload(&self, loaded: Loaded) -> Result<(), String> {
+        let (st, seqs) = state_from_loaded(loaded)?;
+        *self.committed.lock().expect("committed state") = st;
+        *self.seqs.lock().expect("sequences") = seqs;
+        Ok(())
+    }
+
+    /// Whether this node refuses writes right now (a replica, or a leader not yet ready).
+    pub fn read_only(&self) -> bool {
+        self.persist.check_writable().is_err()
     }
 
     fn snapshot(&self) -> State {
@@ -595,6 +640,8 @@ impl DurableEngine {
     ) -> R<QueryResult> {
         if write {
             self.begin_write(txn).await?;
+        } else if let Err(e) = self.persist.check_readable() {
+            return Err(persist_error(e));
         } else if txn.pin && txn.work.is_none() && txn.base.is_none() {
             txn.base = Some(self.snapshot());
         }
@@ -652,6 +699,7 @@ impl DurableEngine {
         if txn.guard.is_some() {
             return Ok(());
         }
+        self.persist.check_writable().map_err(persist_error)?;
         txn.guard = Some(Arc::clone(&self.writer).lock_owned().await);
         let committed = self.snapshot();
         if let Some(base) = &txn.base {
@@ -675,10 +723,7 @@ impl DurableEngine {
             return Ok(());
         }
         let ops = std::mem::take(&mut txn.ops);
-        self.persist.commit(&ops).await.map_err(|e| DbError {
-            code: "58030",
-            message: e,
-        })?;
+        self.persist.commit(&ops).await.map_err(persist_error)?;
         if !self.persist.replicated() {
             // Writers are serialized, so the copy is exactly the committed state plus this transaction.
             if let Some(mut work) = txn.work.take() {
@@ -704,10 +749,7 @@ impl DurableEngine {
         self.persist
             .commit(std::slice::from_ref(&op))
             .await
-            .map_err(|e| DbError {
-                code: "58030",
-                message: e,
-            })?;
+            .map_err(persist_error)?;
         self.seqs
             .lock()
             .expect("sequences")

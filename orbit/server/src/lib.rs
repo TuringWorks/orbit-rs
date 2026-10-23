@@ -32,6 +32,7 @@ pub mod persistence;
 pub mod protocols;
 #[cfg(feature = "python-udf")]
 pub mod python;
+pub mod raft;
 pub mod server;
 pub mod services;
 pub mod tcp_proxy;

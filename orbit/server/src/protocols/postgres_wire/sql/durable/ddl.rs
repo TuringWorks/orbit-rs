@@ -3,6 +3,7 @@
 //! Each statement records its [`Op`]s with the DDL text first, so a replica applying the ops in
 //! order reshapes the table before it receives the rows that changed with it.
 
+use super::fk;
 use super::value::coerce;
 use super::{err, Col, DbError, Index, Op, QueryResult, Seqs, State, Table, R};
 use crate::protocols::postgres_wire::sql::ast::{
@@ -37,13 +38,15 @@ pub(crate) fn apply(
 ) -> Option<R<QueryResult>> {
     let r = match stmt {
         Statement::CreateTable(ct) => create_table(st, &mut ops, ct, text),
-        Statement::DropTable(d) => drop_tables(st, &mut ops, &d.names, d.if_exists, text),
+        Statement::DropTable(d) => {
+            drop_tables(st, &mut ops, &d.names, d.if_exists, d.cascade, text)
+        }
         Statement::CreateIndex(ci) => create_index(st, &mut ops, ci, text),
         Statement::DropIndex(d) => drop_indexes(st, &mut ops, &d.names, d.if_exists, text),
         Statement::AlterTable(a) => {
             alter_table(st, &mut ops, seqs, &a.name, &a.actions, text, replay)
         }
-        Statement::Truncate(t) => truncate(st, &mut ops, &t.tables),
+        Statement::Truncate(t) => truncate(st, &mut ops, &t.tables, t.cascade == Some(true)),
         _ => return None,
     };
     Some(r)
@@ -183,6 +186,9 @@ fn create_table(
     }
     let id = st.next_table_id;
     st.next_table_id += 1;
+    let mut specs: Vec<fk::Spec> = ct.columns.iter().flat_map(fk::specs_from_column).collect();
+    specs.extend(ct.constraints.iter().filter_map(fk::spec_from_constraint));
+    let key = name.clone();
     st.put_table(Table {
         id,
         name,
@@ -190,7 +196,11 @@ fn create_table(
         rows: imbl::OrdMap::new(),
         next_rowid: 1,
         indexes,
+        fks: Vec::new(),
     });
+    for spec in &specs {
+        fk::add(st, &key, spec)?;
+    }
     record(ops, text, vec![]);
     tag("CREATE TABLE")
 }
@@ -200,13 +210,26 @@ fn drop_tables(
     ops: &mut Option<&mut Vec<Op>>,
     names: &[TableName],
     if_exists: bool,
+    cascade: bool,
     text: &str,
 ) -> R<QueryResult> {
     let mut extra = Vec::new();
     for n in names {
         let key = table_key(n);
+        if let Some((owner, fk_name)) = fk::referenced_by_others(st, &key)
+            .into_iter()
+            .find(|(owner, _)| !names.iter().any(|n| table_key(n) == *owner))
+        {
+            if !cascade {
+                return err(
+                    "2BP01",
+                    format!("cannot drop table {key} because other objects depend on it (constraint {fk_name} on table {owner})"),
+                );
+            }
+        }
         match st.remove_table(&key) {
             Some(t) => {
+                fk::drop_references_to(st, &key);
                 extra.push(Op::DropRows { table: t.id });
                 for c in &t.cols {
                     if let Some(seq) = &c.serial {
@@ -330,6 +353,8 @@ fn alter_table(
     };
     let mut rewrite = false;
     let mut renamed_to: Option<String> = None;
+    let mut pending: Vec<fk::Spec> = Vec::new();
+    let mut col_renames: Vec<(String, String)> = Vec::new();
     for action in actions {
         match action {
             AlterTableAction::AddColumn(def) => {
@@ -383,6 +408,7 @@ fn alter_table(
                     table.rows.get_mut(&id).expect("row").push(v);
                 }
                 table.cols.push(col.clone());
+                pending.extend(fk::specs_from_column(def));
                 if primary || unique {
                     table.indexes.push(new_index(
                         if primary {
@@ -409,6 +435,25 @@ fn alter_table(
                         format!("column \"{name}\" of relation \"{key}\" does not exist"),
                     );
                 };
+                let dropped = table.cols[i].name.clone();
+                if st.tables.values().any(|t| {
+                    t.fks
+                        .iter()
+                        .any(|f| f.ref_table == key && f.ref_cols.contains(&dropped))
+                }) {
+                    return err(
+                        "2BP01",
+                        format!("cannot drop column \"{dropped}\" of table {key} because other objects depend on it"),
+                    );
+                }
+                table.fks.retain(|f| !f.cols.contains(&i));
+                for f in &mut table.fks {
+                    for c in &mut f.cols {
+                        if *c > i {
+                            *c -= 1;
+                        }
+                    }
+                }
                 table.indexes.retain(|ix| !ix.cols.contains(&i));
                 for ix in &mut table.indexes {
                     for c in &mut ix.cols {
@@ -428,6 +473,7 @@ fn alter_table(
                 let Some(i) = table.col_index(old_name) else {
                     return err("42703", format!("column \"{old_name}\" does not exist"));
                 };
+                col_renames.push((old_name.to_lowercase(), new_name.to_lowercase()));
                 table.cols[i].name = new_name.to_lowercase();
             }
             AlterTableAction::RenameTable(n) => renamed_to = Some(n.to_lowercase()),
@@ -469,11 +515,17 @@ fn alter_table(
                     }
                     table.indexes.push(idx);
                 }
-                // Foreign keys and checks are not enforced yet.
+                TableConstraint::ForeignKey { .. } => {
+                    pending.extend(fk::spec_from_constraint(c));
+                }
+                // Check constraints are not enforced yet.
                 _ => {}
             },
             AlterTableAction::DropConstraint { name, .. } => {
-                table.indexes.retain(|i| i.name != name.to_lowercase())
+                let n = name.to_lowercase();
+                table.fks.retain(|f| f.name != n);
+                let hidden = format!("{n}_fkidx");
+                table.indexes.retain(|i| i.name != n && i.name != hidden);
             }
             AlterTableAction::Owner(_) | AlterTableAction::SetSchema(_) => {}
             _ => return err("0A000", "this ALTER TABLE action is not supported"),
@@ -499,6 +551,27 @@ fn alter_table(
     }
     st.remove_table(&key);
     st.put_table(table);
+    let final_key = renamed_to.clone().unwrap_or_else(|| key.clone());
+    // keys elsewhere that point at this table follow its new name and renamed columns
+    let names: Vec<String> = st.tables.keys().cloned().collect();
+    for n in names {
+        let t = st.tables.get_mut(&n).expect("table");
+        for f in &mut t.fks {
+            if f.ref_table == key {
+                f.ref_table = final_key.clone();
+                for (old, new) in &col_renames {
+                    for c in &mut f.ref_cols {
+                        if c == old {
+                            *c = new.clone();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for spec in &pending {
+        fk::add(st, &final_key, spec)?;
+    }
     record(ops, text, extra);
     tag("ALTER TABLE")
 }
@@ -507,10 +580,29 @@ fn truncate(
     st: &mut State,
     ops: &mut Option<&mut Vec<Op>>,
     tables: &[TableName],
+    cascade: bool,
 ) -> R<QueryResult> {
-    for n in tables {
-        let key = table_key(n);
-        let Some(t) = st.tables.get_mut(&key) else {
+    let mut keys: Vec<String> = tables.iter().map(table_key).collect();
+    // a table that other tables reference can only be emptied together with them
+    let mut i = 0;
+    while i < keys.len() {
+        for (owner, fk_name) in fk::referenced_by_others(st, &keys[i]) {
+            if !keys.contains(&owner) {
+                if !cascade {
+                    return err(
+                        "0A000",
+                        format!(
+                            "cannot truncate a table referenced in a foreign key constraint ({fk_name} on table {owner})"
+                        ),
+                    );
+                }
+                keys.push(owner);
+            }
+        }
+        i += 1;
+    }
+    for key in &keys {
+        let Some(t) = st.tables.get_mut(key) else {
             return err("42P01", format!("relation \"{key}\" does not exist"));
         };
         if let Some(o) = ops {

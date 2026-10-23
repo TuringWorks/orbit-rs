@@ -138,6 +138,15 @@ struct ActorRecord {
     state: JsonValue,
 }
 
+/// Controls for a clustered node, reached through SQL (`SELECT orbit_raft_status()` and friends).
+#[async_trait::async_trait]
+pub trait ClusterAdmin: Send + Sync {
+    /// One line of JSON describing this node's view of the cluster.
+    fn status(&self) -> String;
+    async fn add_node(&self, id: u64, addr: &str) -> Result<(), String>;
+    async fn remove_node(&self, id: u64) -> Result<(), String>;
+}
+
 /// Query engine that translates SQL to actor operations
 pub struct QueryEngine {
     // In-memory storage for demonstration (legacy actor operations)
@@ -155,6 +164,8 @@ pub struct QueryEngine {
     current_database: Arc<RwLock<String>>,
     // The durable SQL engine. When present it runs every statement it supports.
     durable: Option<Arc<crate::protocols::postgres_wire::sql::durable::DurableEngine>>,
+    // Cluster controls, when this node is part of a cluster.
+    admin: Option<Arc<dyn ClusterAdmin>>,
 }
 
 impl QueryEngine {
@@ -166,6 +177,105 @@ impl QueryEngine {
     ) -> Self {
         self.durable = Some(engine);
         self
+    }
+
+    /// Make this node's cluster controls available to SQL.
+    #[must_use]
+    pub fn with_cluster_admin(mut self, admin: Arc<dyn ClusterAdmin>) -> Self {
+        self.admin = Some(admin);
+        self
+    }
+
+    /// Statements about the node itself rather than the data: its read-only state, and cluster controls.
+    async fn node_statement(&self, piece: &str) -> Option<ProtocolResult<QueryResult>> {
+        let engine = self.durable.as_ref()?;
+        let text = piece.trim().trim_end_matches(';').trim().to_lowercase();
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        let one = |name: &str, v: String| {
+            Some(Ok(QueryResult::Typed {
+                columns: vec![(name.to_string(), 25)],
+                rows: vec![vec![Some(v)]],
+            }))
+        };
+        // `target_session_attrs=read-write` asks exactly this, so a client finds the leader by itself
+        if text == "show transaction_read_only" || text == "show default_transaction_read_only" {
+            return one(
+                "transaction_read_only",
+                if engine.read_only() { "on" } else { "off" }.to_string(),
+            );
+        }
+        if text == "select pg_is_in_recovery()" {
+            return one(
+                "pg_is_in_recovery",
+                if engine.read_only() { "t" } else { "f" }.to_string(),
+            );
+        }
+        let admin = self.admin.as_ref()?;
+        let call = text.strip_prefix("select orbit_raft_")?;
+        let args = |name: &str| -> Option<Vec<String>> {
+            let inner = call
+                .strip_prefix(name)?
+                .strip_prefix('(')?
+                .strip_suffix(')')?;
+            Some(
+                inner
+                    .split(',')
+                    .map(|a| a.trim().trim_matches('\'').to_string())
+                    .filter(|a| !a.is_empty())
+                    .collect(),
+            )
+        };
+        // addresses are case sensitive, so read them from the original text
+        let original = piece.trim().trim_end_matches(';').trim();
+        let orig_args = |name: &str| -> Option<Vec<String>> {
+            let start = original
+                .to_lowercase()
+                .find(&format!("orbit_raft_{name}("))?
+                + "orbit_raft_".len()
+                + name.len()
+                + 1;
+            let end = original.rfind(')')?;
+            Some(
+                original[start..end]
+                    .split(',')
+                    .map(|a| a.trim().trim_matches('\'').to_string())
+                    .filter(|a| !a.is_empty())
+                    .collect(),
+            )
+        };
+        let fail = |e: String| {
+            let code = if e.contains("not the leader") {
+                "25006"
+            } else {
+                "XX000"
+            };
+            Some(Err(ProtocolError::PostgresError(format!("[{code}] {e}"))))
+        };
+        if args("status").is_some() {
+            return one("orbit_raft_status", admin.status());
+        }
+        if args("add_node").is_some() {
+            let a = orig_args("add_node")?;
+            let (Some(id), Some(addr)) = (a.first().and_then(|i| i.parse::<u64>().ok()), a.get(1))
+            else {
+                return fail("usage: SELECT orbit_raft_add_node(id, 'host:port')".into());
+            };
+            return match admin.add_node(id, addr).await {
+                Ok(()) => one("orbit_raft_add_node", format!("node {id} added")),
+                Err(e) => fail(e),
+            };
+        }
+        if args("remove_node").is_some() {
+            let a = args("remove_node")?;
+            let Some(id) = a.first().and_then(|i| i.parse::<u64>().ok()) else {
+                return fail("usage: SELECT orbit_raft_remove_node(id)".into());
+            };
+            return match admin.remove_node(id).await {
+                Ok(()) => one("orbit_raft_remove_node", format!("node {id} removed")),
+                Err(e) => fail(e),
+            };
+        }
+        None
     }
 
     /// The result columns (name and type OID) of the first statement of `sql`, without running it.
@@ -197,6 +307,10 @@ impl QueryEngine {
         let database = self.get_current_database().await;
         let mut results = Vec::new();
         for piece in session_compat::split_statements(sql) {
+            if let Some(r) = self.node_statement(piece).await {
+                results.push(r?);
+                continue;
+            }
             if let Some(result) = session_compat::try_handle(piece, &database, "postgres") {
                 results.push(result);
                 continue;
@@ -225,6 +339,7 @@ impl QueryEngine {
             graphrag_engine: None,
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
             durable: None,
+            admin: None,
             current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
@@ -241,6 +356,7 @@ impl QueryEngine {
             graphrag_engine: None,
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
             durable: None,
+            admin: None,
             current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
@@ -257,6 +373,7 @@ impl QueryEngine {
             graphrag_engine: Some(GraphRAGQueryEngine::new_placeholder()),
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
             durable: None,
+            admin: None,
             current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }
@@ -273,6 +390,7 @@ impl QueryEngine {
             graphrag_engine: Some(GraphRAGQueryEngine::new_placeholder()),
             sql_engine: Arc::new(Mutex::new(ConfigurableSqlEngine::new())),
             durable: None,
+            admin: None,
             current_database: Arc::new(RwLock::new("actors".to_string())),
         }
     }

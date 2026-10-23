@@ -44,7 +44,7 @@ mod resp_server;
 pub use cql_server::CqlServer;
 pub use mongodb::MongoDbServer;
 pub use mysql_server::MySqlServer;
-pub use postgres_server::PostgresServer;
+pub use postgres_server::{users_from_env, PostgresServer};
 pub use resp_server::RespServer;
 
 // Wire protocol servers

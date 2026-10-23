@@ -61,6 +61,11 @@ impl UserStore {
         }
     }
 
+    /// Whether any user has been provisioned.
+    pub async fn has_users(&self) -> bool {
+        !self.users.read().await.is_empty()
+    }
+
     /// Add a user with plaintext password (will be hashed appropriately)
     pub async fn add_user(&self, username: String, password: String, auth_method: &AuthMethod) {
         let credentials = match auth_method {
