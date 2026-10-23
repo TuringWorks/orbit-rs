@@ -117,7 +117,7 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
                     if let Some(alias_name) = parser
                         .current_token
                         .as_ref()
-                        .and_then(super::utilities::token_to_identifier_name)
+                        .and_then(super::utilities::keyword_as_name)
                     {
                         parser.advance()?;
                         Some(alias_name)
@@ -546,7 +546,11 @@ fn parse_select_inner(parser: &mut SqlParser) -> ParseResult<SelectStatement> {
                 // Check for alias
                 let alias = if parser.matches(&[Token::As]) {
                     parser.advance()?;
-                    if let Some(Token::Identifier(alias_name)) = &parser.current_token {
+                    if let Some(alias_name) = parser
+                        .current_token
+                        .as_ref()
+                        .and_then(super::utilities::keyword_as_name)
+                    {
                         let alias = alias_name.clone();
                         parser.advance()?;
                         Some(alias)
@@ -940,7 +944,11 @@ fn parse_join(parser: &mut SqlParser, left: FromClause) -> ParseResult<FromClaus
 fn parse_alias_clause(parser: &mut SqlParser) -> ParseResult<Option<TableAlias>> {
     if parser.matches(&[Token::As]) {
         parser.advance()?;
-        if let Some(Token::Identifier(alias_name)) = &parser.current_token {
+        if let Some(alias_name) = parser
+            .current_token
+            .as_ref()
+            .and_then(super::utilities::keyword_as_name)
+        {
             let name = alias_name.clone();
             parser.advance()?;
 
@@ -1536,7 +1544,11 @@ fn parse_returning_clause(parser: &mut SqlParser) -> ParseResult<Vec<SelectItem>
 
                         let alias = if parser.matches(&[Token::As]) {
                             parser.advance()?;
-                            if let Some(Token::Identifier(alias_name)) = &parser.current_token {
+                            if let Some(alias_name) = parser
+                                .current_token
+                                .as_ref()
+                                .and_then(super::utilities::keyword_as_name)
+                            {
                                 let alias = alias_name.clone();
                                 parser.advance()?;
                                 Some(alias)
@@ -1575,7 +1587,11 @@ fn parse_returning_clause(parser: &mut SqlParser) -> ParseResult<Vec<SelectItem>
 
             let alias = if parser.matches(&[Token::As]) {
                 parser.advance()?;
-                if let Some(Token::Identifier(alias_name)) = &parser.current_token {
+                if let Some(alias_name) = parser
+                    .current_token
+                    .as_ref()
+                    .and_then(super::utilities::keyword_as_name)
+                {
                     let alias = alias_name.clone();
                     parser.advance()?;
                     Some(alias)
@@ -1802,7 +1818,11 @@ pub fn parse_merge(parser: &mut SqlParser) -> ParseResult<Statement> {
     // Alias
     let alias = if parser.matches(&[Token::As]) {
         parser.advance()?;
-        if let Some(Token::Identifier(a)) = &parser.current_token {
+        if let Some(a) = parser
+            .current_token
+            .as_ref()
+            .and_then(super::utilities::keyword_as_name)
+        {
             let alias = a.clone();
             parser.advance()?;
             Some(alias)

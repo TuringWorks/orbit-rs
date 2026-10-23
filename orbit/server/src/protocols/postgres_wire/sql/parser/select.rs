@@ -643,7 +643,9 @@ impl SelectParser {
 
         let alias_name = match tokens.get(*pos) {
             Some(Token::Identifier(n)) => Some(n.clone()),
-            Some(t) if explicit => crate::protocols::postgres_wire::sql::parser::utilities::keyword_as_name(t),
+            Some(t) if explicit => {
+                crate::protocols::postgres_wire::sql::parser::utilities::keyword_as_name(t)
+            }
             _ => None,
         };
         if let Some(name) = alias_name {

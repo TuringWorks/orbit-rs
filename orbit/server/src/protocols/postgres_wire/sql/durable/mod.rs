@@ -13,9 +13,9 @@ mod persist;
 mod query;
 pub(crate) mod value;
 
-pub use persist::{NoPersist, Op, Persist};
 #[cfg(feature = "storage-rocksdb")]
 pub use persist::RocksPersist;
+pub use persist::{NoPersist, Op, Persist};
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::query_engine::QueryResult;
@@ -42,7 +42,10 @@ pub(crate) struct DbError {
 pub(crate) type R<T> = Result<T, DbError>;
 
 pub(crate) fn err<T>(code: &'static str, message: impl Into<String>) -> R<T> {
-    Err(DbError { code, message: message.into() })
+    Err(DbError {
+        code,
+        message: message.into(),
+    })
 }
 
 impl From<ProtocolError> for DbError {
@@ -51,7 +54,11 @@ impl From<ProtocolError> for DbError {
             ProtocolError::PostgresError(m) | ProtocolError::ParseError(m) => m,
             other => other.to_string(),
         };
-        let code = if message.contains("not found") && message.contains("olumn") { "42703" } else { "XX000" };
+        let code = if message.contains("not found") && message.contains("olumn") {
+            "42703"
+        } else {
+            "XX000"
+        };
         DbError { code, message }
     }
 }
@@ -78,6 +85,8 @@ pub(crate) struct Index {
     pub name: String,
     pub cols: Vec<usize>,
     pub unique: bool,
+    /// Whether this is the table's primary key. Not enforced differently yet; `information_schema` will report it.
+    #[allow(dead_code)]
     pub primary: bool,
     pub map: HashMap<String, Vec<u64>>,
 }
@@ -169,11 +178,25 @@ pub(crate) struct State {
 
 /// Undo information for one change, applied in reverse on rollback.
 pub(crate) enum Undo {
-    Inserted { table: String, rowid: u64 },
-    Deleted { table: String, rowid: u64, row: Row },
-    Updated { table: String, rowid: u64, old: Row },
+    Inserted {
+        table: String,
+        rowid: u64,
+    },
+    Deleted {
+        table: String,
+        rowid: u64,
+        row: Row,
+    },
+    Updated {
+        table: String,
+        rowid: u64,
+        old: Row,
+    },
     /// The table as it was before a DDL change (`None` if it did not exist).
-    Table { name: String, prev: Option<Box<Table>> },
+    Table {
+        name: String,
+        prev: Option<Box<Table>>,
+    },
 }
 
 pub(crate) struct Txn {
@@ -181,11 +204,43 @@ pub(crate) struct Txn {
     pub undo: Vec<Undo>,
     failed: bool,
     guard: Option<OwnedMutexGuard<()>>,
+    /// Open savepoints: name, undo entries and ops recorded when it was set.
+    savepoints: Vec<(String, usize, usize)>,
+    /// Lets a transaction that is dropped while open (a client that disconnects) undo its changes.
+    state: Arc<Mutex<State>>,
 }
 
 impl Txn {
-    fn new(guard: Option<OwnedMutexGuard<()>>) -> Self {
-        Self { ops: Vec::new(), undo: Vec::new(), failed: false, guard }
+    fn new(guard: Option<OwnedMutexGuard<()>>, state: Arc<Mutex<State>>) -> Self {
+        Self {
+            ops: Vec::new(),
+            undo: Vec::new(),
+            failed: false,
+            guard,
+            savepoints: Vec::new(),
+            state,
+        }
+    }
+
+    /// The changes are durable: forget how to undo them.
+    fn committed(&mut self) {
+        self.undo.clear();
+        self.ops.clear();
+        self.savepoints.clear();
+    }
+}
+
+impl Drop for Txn {
+    fn drop(&mut self) {
+        if self.undo.is_empty() {
+            return;
+        }
+        // Dropped with uncommitted changes: they were never written, so remove them from memory too.
+        let state = Arc::clone(&self.state);
+        let locked = state.lock();
+        if let Ok(mut st) = locked {
+            undo_to(&mut st, self, 0);
+        }
     }
 }
 
@@ -204,19 +259,28 @@ impl Session {
 
 pub struct DurableEngine {
     gate: Arc<AsyncMutex<()>>,
-    state: Mutex<State>,
+    state: Arc<Mutex<State>>,
     persist: Box<dyn Persist>,
 }
 
 impl State {
     /// Next value of a sequence. Reserves a block durably when the previous block runs out.
     pub(crate) fn nextval(&mut self, name: &str, persist: &dyn Persist) -> R<i64> {
-        let s = self.seqs.entry(name.to_string()).or_insert(SeqState { next: 1, reserved: 0 });
+        let s = self.seqs.entry(name.to_string()).or_insert(SeqState {
+            next: 1,
+            reserved: 0,
+        });
         if s.next > s.reserved {
             let reserved = s.next + SEQUENCE_BLOCK - 1;
             persist
-                .commit(&[Op::SeqHighWater { name: name.to_string(), value: reserved }])
-                .map_err(|e| DbError { code: "58030", message: e })?;
+                .commit(&[Op::SeqHighWater {
+                    name: name.to_string(),
+                    value: reserved,
+                }])
+                .map_err(|e| DbError {
+                    code: "58030",
+                    message: e,
+                })?;
             s.reserved = reserved;
         }
         let v = s.next;
@@ -225,14 +289,24 @@ impl State {
     }
 
     pub(crate) fn reset_seq(&mut self, name: &str) {
-        self.seqs.insert(name.to_string(), SeqState { next: 1, reserved: 0 });
+        self.seqs.insert(
+            name.to_string(),
+            SeqState {
+                next: 1,
+                reserved: 0,
+            },
+        );
     }
 }
 
 impl DurableEngine {
     /// An engine that keeps nothing across restarts.
     pub fn in_memory() -> Self {
-        Self { gate: Arc::new(AsyncMutex::new(())), state: Mutex::new(State::default()), persist: Box::new(NoPersist) }
+        Self {
+            gate: Arc::new(AsyncMutex::new(())),
+            state: Arc::new(Mutex::new(State::default())),
+            persist: Box::new(NoPersist),
+        }
     }
 
     /// Open an engine over `persist`, rebuilding the working set from it.
@@ -240,19 +314,30 @@ impl DurableEngine {
         let loaded = persist.load()?;
         let mut st = State::default();
         for (name, hwm) in loaded.seqs {
-            st.seqs.insert(name, SeqState { next: hwm + 1, reserved: hwm });
+            st.seqs.insert(
+                name,
+                SeqState {
+                    next: hwm + 1,
+                    reserved: hwm,
+                },
+            );
         }
         for text in &loaded.ddl {
-            let stmts = SqlParser::new().parse_multiple(text).map_err(|e| format!("replay `{text}`: {e}"))?;
+            let stmts = SqlParser::new()
+                .parse_multiple(text)
+                .map_err(|e| format!("replay `{text}`: {e}"))?;
             for stmt in &stmts {
                 if let Some(Err(e)) = ddl::apply(&mut st, None, stmt, text, true) {
                     return Err(format!("replay `{text}`: {}", e.message));
                 }
             }
         }
-        let by_id: HashMap<u32, String> = st.tables.values().map(|t| (t.id, t.name.clone())).collect();
+        let by_id: HashMap<u32, String> =
+            st.tables.values().map(|t| (t.id, t.name.clone())).collect();
         for (tid, rowid, mut row) in loaded.rows {
-            let Some(name) = by_id.get(&tid) else { continue };
+            let Some(name) = by_id.get(&tid) else {
+                continue;
+            };
             let t = st.tables.get_mut(name).expect("table by id");
             row.resize(t.cols.len(), SqlValue::Null);
             t.next_rowid = t.next_rowid.max(rowid + 1);
@@ -261,7 +346,11 @@ impl DurableEngine {
         for t in st.tables.values_mut() {
             t.rebuild_indexes();
         }
-        Ok(Self { gate: Arc::new(AsyncMutex::new(())), state: Mutex::new(st), persist })
+        Ok(Self {
+            gate: Arc::new(AsyncMutex::new(())),
+            state: Arc::new(Mutex::new(st)),
+            persist,
+        })
     }
 
     /// Whether the engine runs this kind of statement. Other statements stay with the caller.
@@ -281,6 +370,8 @@ impl DurableEngine {
                 | Statement::Begin(_)
                 | Statement::Commit(_)
                 | Statement::Rollback(_)
+                | Statement::Savepoint(_)
+                | Statement::ReleaseSavepoint(_)
         )
     }
 
@@ -293,26 +384,110 @@ impl DurableEngine {
         let st = self.state.lock().expect("engine state");
         let cols = match stmt {
             Statement::Select(sel) => query::describe_select(&st, sel).ok(),
-            Statement::Insert(i) => i.returning.as_ref().and_then(|r| dml::describe_returning(&st, &i.table, r).ok()),
-            Statement::Update(u) => u.returning.as_ref().and_then(|r| dml::describe_returning(&st, &u.table, r).ok()),
-            Statement::Delete(d) => d.returning.as_ref().and_then(|r| dml::describe_returning(&st, &d.table, r).ok()),
+            Statement::Insert(i) => i
+                .returning
+                .as_ref()
+                .and_then(|r| dml::describe_returning(&st, &i.table, r).ok()),
+            Statement::Update(u) => u
+                .returning
+                .as_ref()
+                .and_then(|r| dml::describe_returning(&st, &u.table, r).ok()),
+            Statement::Delete(d) => d
+                .returning
+                .as_ref()
+                .and_then(|r| dml::describe_returning(&st, &d.table, r).ok()),
             _ => None,
         };
         Some(cols.unwrap_or_default())
     }
 
     /// Run one statement for a session. `text` is the statement's SQL, stored for DDL replay.
-    pub async fn execute(&self, session: &mut Session, stmt: &Statement, text: &str) -> ProtocolResult<QueryResult> {
+    pub async fn execute(
+        &self,
+        session: &mut Session,
+        stmt: &Statement,
+        text: &str,
+    ) -> ProtocolResult<QueryResult> {
         match stmt {
             Statement::Begin(_) => {
                 if session.txn.is_none() {
                     let guard = Arc::clone(&self.gate).lock_owned().await;
-                    session.txn = Some(Txn::new(Some(guard)));
+                    session.txn = Some(Txn::new(Some(guard), Arc::clone(&self.state)));
                 }
-                Ok(QueryResult::Command { tag: "BEGIN".into() })
+                Ok(QueryResult::Command {
+                    tag: "BEGIN".into(),
+                })
             }
-            Statement::Commit(_) => Ok(QueryResult::Command { tag: self.finish(session, true)? }),
-            Statement::Rollback(_) => Ok(QueryResult::Command { tag: self.finish(session, false)? }),
+            Statement::Commit(_) => Ok(QueryResult::Command {
+                tag: self.finish(session, true)?,
+            }),
+            Statement::Rollback(r) if r.to_savepoint.is_some() => {
+                let name = r.to_savepoint.clone().unwrap_or_default();
+                let Some(txn) = session.txn.as_mut() else {
+                    return Err(DbError {
+                        code: "25P01",
+                        message: "ROLLBACK TO SAVEPOINT can only be used in transaction blocks"
+                            .into(),
+                    }
+                    .into());
+                };
+                let mut st = self.state.lock().expect("engine state");
+                let Some(pos) = txn.savepoints.iter().rposition(|(n, _, _)| *n == name) else {
+                    return Err(DbError {
+                        code: "3B001",
+                        message: format!("savepoint \"{name}\" does not exist"),
+                    }
+                    .into());
+                };
+                let (_, undo_len, ops_len) = txn.savepoints[pos].clone();
+                txn.savepoints.truncate(pos + 1);
+                undo_to(&mut st, txn, undo_len);
+                txn.ops.truncate(ops_len);
+                txn.failed = false;
+                Ok(QueryResult::Command {
+                    tag: "ROLLBACK".into(),
+                })
+            }
+            Statement::Rollback(_) => Ok(QueryResult::Command {
+                tag: self.finish(session, false)?,
+            }),
+            Statement::Savepoint(sp) => {
+                let Some(txn) = session.txn.as_mut() else {
+                    return Err(DbError {
+                        code: "25P01",
+                        message: "SAVEPOINT can only be used in transaction blocks".into(),
+                    }
+                    .into());
+                };
+                if txn.failed {
+                    return Err(DbError { code: "25P02", message: "current transaction is aborted, commands ignored until end of transaction block".into() }.into());
+                }
+                txn.savepoints
+                    .push((sp.name.clone(), txn.undo.len(), txn.ops.len()));
+                Ok(QueryResult::Command {
+                    tag: "SAVEPOINT".into(),
+                })
+            }
+            Statement::ReleaseSavepoint(sp) => {
+                let Some(txn) = session.txn.as_mut() else {
+                    return Err(DbError {
+                        code: "25P01",
+                        message: "RELEASE SAVEPOINT can only be used in transaction blocks".into(),
+                    }
+                    .into());
+                };
+                let Some(pos) = txn.savepoints.iter().rposition(|(n, _, _)| *n == sp.name) else {
+                    return Err(DbError {
+                        code: "3B001",
+                        message: format!("savepoint \"{}\" does not exist", sp.name),
+                    }
+                    .into());
+                };
+                txn.savepoints.truncate(pos);
+                Ok(QueryResult::Command {
+                    tag: "RELEASE".into(),
+                })
+            }
             _ => {
                 if let Some(txn) = session.txn.as_mut() {
                     if txn.failed {
@@ -326,14 +501,19 @@ impl DurableEngine {
                     return r.map_err(Into::into);
                 }
                 let guard = Arc::clone(&self.gate).lock_owned().await;
-                let mut txn = Txn::new(Some(guard));
+                let mut txn = Txn::new(Some(guard), Arc::clone(&self.state));
                 let mut st = self.state.lock().expect("engine state");
                 match self.run(&mut st, &mut txn, stmt, text) {
                     Ok(res) => {
                         if let Err(e) = self.persist.commit(&txn.ops) {
                             rollback(&mut st, &mut txn);
-                            return Err(DbError { code: "58030", message: e }.into());
+                            return Err(DbError {
+                                code: "58030",
+                                message: e,
+                            }
+                            .into());
                         }
+                        txn.committed();
                         Ok(res)
                     }
                     Err(e) => {
@@ -356,6 +536,7 @@ impl DurableEngine {
                 rollback(&mut st, &mut txn);
                 return err("58030", e);
             }
+            txn.committed();
             return Ok("COMMIT".into());
         }
         rollback(&mut st, &mut txn);
@@ -368,14 +549,24 @@ impl DurableEngine {
             Statement::Insert(ins) => dml::insert(st, txn, &*self.persist, ins),
             Statement::Update(upd) => dml::update(st, txn, upd),
             Statement::Delete(del) => dml::delete(st, txn, del),
-            other => ddl::apply(st, Some((txn, &*self.persist)), other, text, false).unwrap_or_else(|| err("0A000", "statement not supported")),
+            other => ddl::apply(st, Some((txn, &*self.persist)), other, text, false)
+                .unwrap_or_else(|| err("0A000", "statement not supported")),
         }
     }
 }
 
-/// Undo everything a transaction changed in memory.
+/// Undo everything a transaction changed in memory and release its hold on the engine.
 fn rollback(st: &mut State, txn: &mut Txn) {
-    while let Some(u) = txn.undo.pop() {
+    undo_to(st, txn, 0);
+    txn.ops.clear();
+    txn.savepoints.clear();
+    txn.guard = None;
+}
+
+/// Undo changes until only `keep` undo entries remain.
+fn undo_to(st: &mut State, txn: &mut Txn, keep: usize) {
+    while txn.undo.len() > keep {
+        let Some(u) = txn.undo.pop() else { break };
         match u {
             Undo::Inserted { table, rowid } => {
                 if let Some(t) = st.tables.get_mut(&table) {
@@ -409,8 +600,6 @@ fn rollback(st: &mut State, txn: &mut Txn) {
             },
         }
     }
-    txn.ops.clear();
-    txn.guard = None;
 }
 
 #[cfg(test)]

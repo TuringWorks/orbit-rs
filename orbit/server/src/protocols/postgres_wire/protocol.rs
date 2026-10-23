@@ -562,7 +562,10 @@ impl PostgresWireProtocol {
             self.query_engine.set_current_database(db).await;
         }
 
-        let outcome = self.query_engine.execute_multiple_queries_in(&mut self.sql_session, query).await;
+        let outcome = self
+            .query_engine
+            .execute_multiple_queries_in(&mut self.sql_session, query)
+            .await;
         match outcome {
             Ok(results) => {
                 for result in results {
@@ -574,7 +577,10 @@ impl PostgresWireProtocol {
                 self.send_error_with_code(buf, &code, &message);
             }
         }
-        BackendMessage::ReadyForQuery { status: self.txn_status() }.encode(buf);
+        BackendMessage::ReadyForQuery {
+            status: self.txn_status(),
+        }
+        .encode(buf);
 
         Ok(())
     }
@@ -641,7 +647,11 @@ impl PostgresWireProtocol {
         let _ = params;
 
         let query = query.clone();
-        match self.query_engine.execute_multiple_queries_in(&mut self.sql_session, &query).await {
+        match self
+            .query_engine
+            .execute_multiple_queries_in(&mut self.sql_session, &query)
+            .await
+        {
             Ok(results) => {
                 for result in &results {
                     self.send_query_result_as(result, buf, false);
@@ -666,7 +676,9 @@ impl PostgresWireProtocol {
         debug!("Describe: target={:?}, name={}", target, name);
 
         let sql = match target {
-            super::messages::DescribeTarget::Statement => self.prepared_statements.get(name).cloned(),
+            super::messages::DescribeTarget::Statement => {
+                self.prepared_statements.get(name).cloned()
+            }
             super::messages::DescribeTarget::Portal => self
                 .portals
                 .get(name)
@@ -674,7 +686,10 @@ impl PostgresWireProtocol {
         };
         let columns = sql.as_deref().and_then(|q| self.query_engine.describe(q));
         if matches!(target, super::messages::DescribeTarget::Statement) {
-            BackendMessage::ParameterDescription { param_types: vec![] }.encode(buf);
+            BackendMessage::ParameterDescription {
+                param_types: vec![],
+            }
+            .encode(buf);
         }
         match columns {
             Some(cols) if !cols.is_empty() => {
@@ -815,8 +830,8 @@ impl PostgresWireProtocol {
                         .collect();
 
                     if describe {
-                    BackendMessage::RowDescription { fields }.encode(buf);
-                }
+                        BackendMessage::RowDescription { fields }.encode(buf);
+                    }
 
                     for row in rows {
                         let values: Vec<Option<bytes::Bytes>> = row
@@ -885,7 +900,10 @@ impl PostgresWireProtocol {
                     BackendMessage::RowDescription { fields }.encode(buf);
                 }
                 for row in rows {
-                    let values = row.iter().map(|v| v.as_ref().map(|s| bytes::Bytes::from(s.clone()))).collect();
+                    let values = row
+                        .iter()
+                        .map(|v| v.as_ref().map(|s| bytes::Bytes::from(s.clone())))
+                        .collect();
                     BackendMessage::DataRow { values }.encode(buf);
                 }
                 BackendMessage::CommandComplete { tag: tag.clone() }.encode(buf);
@@ -915,7 +933,8 @@ impl PostgresWireProtocol {
     /// SQLSTATE and message for an error. The durable engine tags its errors as `[SQLSTATE] message`.
     fn error_parts(e: &ProtocolError) -> (String, String) {
         if let ProtocolError::PostgresError(m) = e {
-            if m.len() > 8 && m.starts_with('[') && m.as_bytes()[6] == b']' && m.is_char_boundary(8) {
+            if m.len() > 8 && m.starts_with('[') && m.as_bytes()[6] == b']' && m.is_char_boundary(8)
+            {
                 return (m[1..6].to_string(), m[8..].to_string());
             }
             return ("XX000".to_string(), m.clone());

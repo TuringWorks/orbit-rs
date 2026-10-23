@@ -100,7 +100,11 @@ pub(crate) fn compare_loose(a: &SqlValue, b: &SqlValue) -> Option<Ordering> {
     if sa != sb {
         let (s, other, flip) = if sa { (a, b, false) } else { (b, a, true) };
         let parsed = coerce(s.clone(), &other.sql_type()).ok()?;
-        let o = if family(&parsed) == family(other) { cmp(&parsed, other) } else { return None };
+        let o = if family(&parsed) == family(other) {
+            cmp(&parsed, other)
+        } else {
+            return None;
+        };
         return Some(if flip { o.reverse() } else { o });
     }
     if family(a) == family(b) {
@@ -112,22 +116,22 @@ pub(crate) fn compare_loose(a: &SqlValue, b: &SqlValue) -> Option<Ordering> {
 
 fn family(v: &SqlValue) -> u8 {
     match v {
-        SqlValue::SmallInt(_) | SqlValue::Integer(_) | SqlValue::BigInt(_) | SqlValue::Decimal(_) | SqlValue::Real(_) | SqlValue::DoublePrecision(_) => 1,
+        SqlValue::SmallInt(_)
+        | SqlValue::Integer(_)
+        | SqlValue::BigInt(_)
+        | SqlValue::Decimal(_)
+        | SqlValue::Real(_)
+        | SqlValue::DoublePrecision(_) => 1,
         SqlValue::Boolean(_) => 2,
-        SqlValue::Date(_) | SqlValue::Time(_) | SqlValue::Timestamp(_) | SqlValue::TimestampWithTimezone(_) | SqlValue::TimeWithTimezone(_) => 3,
+        SqlValue::Date(_)
+        | SqlValue::Time(_)
+        | SqlValue::Timestamp(_)
+        | SqlValue::TimestampWithTimezone(_)
+        | SqlValue::TimeWithTimezone(_) => 3,
         SqlValue::Uuid(_) => 4,
         SqlValue::Bytea(_) => 5,
         SqlValue::Json(_) | SqlValue::Jsonb(_) => 6,
         _ => 0,
-    }
-}
-
-/// SQL equality: `None` when either side is NULL.
-pub fn sql_eq(a: &SqlValue, b: &SqlValue) -> Option<bool> {
-    if a.is_null() || b.is_null() {
-        None
-    } else {
-        Some(cmp(a, b) == Ordering::Equal)
     }
 }
 
@@ -211,32 +215,52 @@ pub fn coerce(v: SqlValue, ty: &SqlType) -> Result<SqlValue, String> {
         return Ok(SqlValue::Null);
     }
     let text = |v: &SqlValue| as_str(v).map(str::to_string);
-    let bad = |v: &SqlValue| format!("invalid input syntax for type {}: \"{}\"", type_name(ty), v.to_postgres_string());
+    let bad = |v: &SqlValue| {
+        format!(
+            "invalid input syntax for type {}: \"{}\"",
+            type_name(ty),
+            v.to_postgres_string()
+        )
+    };
     match ty {
         SqlType::SmallInt | SqlType::Integer | SqlType::BigInt => {
             let n = match &v {
                 SqlValue::Boolean(b) => i64::from(*b),
                 SqlValue::Decimal(d) => d.round().to_i64().ok_or_else(|| bad(&v))?,
-                SqlValue::Real(_) | SqlValue::DoublePrecision(_) => as_f64(&v).map(|f| f.round() as i64).ok_or_else(|| bad(&v))?,
+                SqlValue::Real(_) | SqlValue::DoublePrecision(_) => as_f64(&v)
+                    .map(|f| f.round() as i64)
+                    .ok_or_else(|| bad(&v))?,
                 other => match as_i64(other) {
                     Some(n) => n,
                     None => {
                         let s = text(other).ok_or_else(|| bad(&v))?;
                         let t = s.trim();
-                        t.parse::<i64>().or_else(|_| Decimal::from_str(t).ok().and_then(|d| d.round().to_i64()).ok_or(())).map_err(|()| bad(&v))?
+                        t.parse::<i64>()
+                            .or_else(|_| {
+                                Decimal::from_str(t)
+                                    .ok()
+                                    .and_then(|d| d.round().to_i64())
+                                    .ok_or(())
+                            })
+                            .map_err(|()| bad(&v))?
                     }
                 },
             };
             Ok(match ty {
-                SqlType::SmallInt => SqlValue::SmallInt(i16::try_from(n).map_err(|_| "smallint out of range".to_string())?),
-                SqlType::Integer => SqlValue::Integer(i32::try_from(n).map_err(|_| "integer out of range".to_string())?),
+                SqlType::SmallInt => SqlValue::SmallInt(
+                    i16::try_from(n).map_err(|_| "smallint out of range".to_string())?,
+                ),
+                SqlType::Integer => SqlValue::Integer(
+                    i32::try_from(n).map_err(|_| "integer out of range".to_string())?,
+                ),
                 _ => SqlValue::BigInt(n),
             })
         }
         SqlType::Decimal { .. } | SqlType::Numeric { .. } => {
             let d = match as_decimal(&v) {
                 Some(d) => d,
-                None => Decimal::from_str(text(&v).ok_or_else(|| bad(&v))?.trim()).map_err(|_| bad(&v))?,
+                None => Decimal::from_str(text(&v).ok_or_else(|| bad(&v))?.trim())
+                    .map_err(|_| bad(&v))?,
             };
             Ok(SqlValue::Decimal(d))
         }
@@ -266,23 +290,47 @@ pub fn coerce(v: SqlValue, ty: &SqlType) -> Result<SqlValue, String> {
             };
             if let Some(limit) = n {
                 if s.chars().count() > *limit as usize {
-                    return Err(format!("value too long for type {}({limit})", if matches!(ty, SqlType::Char(_)) { "character" } else { "character varying" }));
+                    return Err(format!(
+                        "value too long for type {}({limit})",
+                        if matches!(ty, SqlType::Char(_)) {
+                            "character"
+                        } else {
+                            "character varying"
+                        }
+                    ));
                 }
             }
-            Ok(if matches!(ty, SqlType::Char(_)) { SqlValue::Char(s) } else { SqlValue::Varchar(s) })
+            Ok(if matches!(ty, SqlType::Char(_)) {
+                SqlValue::Char(s)
+            } else {
+                SqlValue::Varchar(s)
+            })
         }
-        SqlType::Text => Ok(SqlValue::Text(text(&v).unwrap_or_else(|| v.to_postgres_string()))),
+        SqlType::Text => Ok(SqlValue::Text(
+            text(&v).unwrap_or_else(|| v.to_postgres_string()),
+        )),
         SqlType::Json | SqlType::Jsonb => match &v {
-            SqlValue::Json(j) | SqlValue::Jsonb(j) => Ok(if matches!(ty, SqlType::Json) { SqlValue::Json(j.clone()) } else { SqlValue::Jsonb(j.clone()) }),
+            SqlValue::Json(j) | SqlValue::Jsonb(j) => Ok(if matches!(ty, SqlType::Json) {
+                SqlValue::Json(j.clone())
+            } else {
+                SqlValue::Jsonb(j.clone())
+            }),
             other => {
                 let s = text(other).ok_or_else(|| bad(&v))?;
                 let j: serde_json::Value = serde_json::from_str(&s).map_err(|_| bad(&v))?;
-                Ok(if matches!(ty, SqlType::Json) { SqlValue::Json(j) } else { SqlValue::Jsonb(j) })
+                Ok(if matches!(ty, SqlType::Json) {
+                    SqlValue::Json(j)
+                } else {
+                    SqlValue::Jsonb(j)
+                })
             }
         },
-        SqlType::Date | SqlType::Timestamp { .. } | SqlType::Time { .. } | SqlType::Uuid | SqlType::Bytea | SqlType::Interval => {
-            coerce_temporal_or_binary(&v, ty).ok_or_else(|| bad(&v))
-        }
+        SqlType::Date
+        | SqlType::Timestamp { .. }
+        | SqlType::Time { .. }
+        | SqlType::Uuid
+        | SqlType::Bytea
+        | SqlType::Interval => coerce_temporal_or_binary(&v, ty).ok_or_else(|| bad(&v)),
         _ => match text(&v) {
             Some(s) => SqlValue::parse_string(&s, ty).or(Ok(v)),
             None => Ok(v),
@@ -293,7 +341,12 @@ pub fn coerce(v: SqlValue, ty: &SqlType) -> Result<SqlValue, String> {
 fn parse_naive_timestamp(s: &str) -> Option<chrono::NaiveDateTime> {
     use chrono::{DateTime, NaiveDate, NaiveDateTime};
     let s = s.trim();
-    for f in ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%d %H:%M", "%Y-%m-%d"] {
+    for f in [
+        "%Y-%m-%d %H:%M:%S%.f",
+        "%Y-%m-%dT%H:%M:%S%.f",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    ] {
         if let Ok(d) = NaiveDateTime::parse_from_str(s, f) {
             return Some(d);
         }
@@ -302,9 +355,14 @@ fn parse_naive_timestamp(s: &str) -> Option<chrono::NaiveDateTime> {
         return d.and_hms_opt(0, 0, 0);
     }
     // with an offset: keep the UTC wall time
-    DateTime::parse_from_rfc3339(&s.replacen(' ', "T", 1)).ok().map(|d| d.naive_utc()).or_else(|| {
-        ["%Y-%m-%d %H:%M:%S%.f%#z", "%Y-%m-%d %H:%M:%S%.f%z"].iter().find_map(|f| DateTime::parse_from_str(s, f).ok().map(|d| d.naive_utc()))
-    })
+    DateTime::parse_from_rfc3339(&s.replacen(' ', "T", 1))
+        .ok()
+        .map(|d| d.naive_utc())
+        .or_else(|| {
+            ["%Y-%m-%d %H:%M:%S%.f%#z", "%Y-%m-%d %H:%M:%S%.f%z"]
+                .iter()
+                .find_map(|f| DateTime::parse_from_str(s, f).ok().map(|d| d.naive_utc()))
+        })
 }
 
 /// Dates, times, UUIDs, byte strings and intervals from text or from a neighbouring temporal type.
@@ -318,7 +376,13 @@ fn coerce_temporal_or_binary(v: &SqlValue, ty: &SqlType) -> Option<SqlValue> {
                 SqlValue::Date(d) => d.and_hms_opt(0, 0, 0)?,
                 other => parse_naive_timestamp(as_str(other)?)?,
             };
-            Some(if *with_timezone { SqlValue::TimestampWithTimezone(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc)) } else { SqlValue::Timestamp(naive) })
+            Some(if *with_timezone {
+                SqlValue::TimestampWithTimezone(DateTime::<Utc>::from_naive_utc_and_offset(
+                    naive, Utc,
+                ))
+            } else {
+                SqlValue::Timestamp(naive)
+            })
         }
         SqlType::Date => match v {
             SqlValue::Date(d) => Some(SqlValue::Date(*d)),
@@ -330,12 +394,17 @@ fn coerce_temporal_or_binary(v: &SqlValue, ty: &SqlType) -> Option<SqlValue> {
             SqlValue::Time(t) => Some(SqlValue::Time(*t)),
             other => {
                 let s = as_str(other)?.trim();
-                ["%H:%M:%S%.f", "%H:%M"].iter().find_map(|f| NaiveTime::parse_from_str(s, f).ok()).map(SqlValue::Time)
+                ["%H:%M:%S%.f", "%H:%M"]
+                    .iter()
+                    .find_map(|f| NaiveTime::parse_from_str(s, f).ok())
+                    .map(SqlValue::Time)
             }
         },
         SqlType::Uuid => match v {
             SqlValue::Uuid(u) => Some(SqlValue::Uuid(*u)),
-            other => uuid::Uuid::parse_str(as_str(other)?.trim()).ok().map(SqlValue::Uuid),
+            other => uuid::Uuid::parse_str(as_str(other)?.trim())
+                .ok()
+                .map(SqlValue::Uuid),
         },
         SqlType::Bytea => match v {
             SqlValue::Bytea(b) => Some(SqlValue::Bytea(b.clone())),
@@ -380,29 +449,62 @@ mod tests {
 
     #[test]
     fn text_zero_stays_text_and_numbers_compare_across_types() {
-        assert_eq!(coerce(SqlValue::Text("0".into()), &SqlType::Varchar(None)).unwrap(), SqlValue::Varchar("0".into()));
-        assert_eq!(coerce(SqlValue::Text("42".into()), &SqlType::Integer).unwrap(), SqlValue::Integer(42));
-        assert_eq!(cmp(&SqlValue::Integer(2), &SqlValue::BigInt(10)), Ordering::Less);
-        assert_eq!(cmp(&SqlValue::Null, &SqlValue::Integer(1)), Ordering::Greater);
-        assert_eq!(sql_eq(&SqlValue::Null, &SqlValue::Null), None);
+        assert_eq!(
+            coerce(SqlValue::Text("0".into()), &SqlType::Varchar(None)).unwrap(),
+            SqlValue::Varchar("0".into())
+        );
+        assert_eq!(
+            coerce(SqlValue::Text("42".into()), &SqlType::Integer).unwrap(),
+            SqlValue::Integer(42)
+        );
+        assert_eq!(
+            cmp(&SqlValue::Integer(2), &SqlValue::BigInt(10)),
+            Ordering::Less
+        );
+        assert_eq!(
+            cmp(&SqlValue::Null, &SqlValue::Integer(1)),
+            Ordering::Greater
+        );
     }
 
     #[test]
     fn equal_numbers_share_a_key() {
-        assert_eq!(unique_key(&[SqlValue::Integer(5)]), unique_key(&[SqlValue::BigInt(5)]));
-        assert_ne!(unique_key(&[SqlValue::Text("5".into())]), unique_key(&[SqlValue::Integer(5)]));
+        assert_eq!(
+            unique_key(&[SqlValue::Integer(5)]),
+            unique_key(&[SqlValue::BigInt(5)])
+        );
+        assert_ne!(
+            unique_key(&[SqlValue::Text("5".into())]),
+            unique_key(&[SqlValue::Integer(5)])
+        );
         assert_eq!(unique_key(&[SqlValue::Null, SqlValue::Integer(1)]), None);
     }
 
     #[test]
     fn timestamps_dates_and_uuids_parse_from_text() {
-        let ts = coerce(SqlValue::Text("2026-10-23 20:57:17".into()), &SqlType::Timestamp { with_timezone: false }).unwrap();
+        let ts = coerce(
+            SqlValue::Text("2026-10-23 20:57:17".into()),
+            &SqlType::Timestamp {
+                with_timezone: false,
+            },
+        )
+        .unwrap();
         assert_eq!(ts.to_postgres_string(), "2026-10-23 20:57:17");
         let d = coerce(SqlValue::Text("2026-10-23".into()), &SqlType::Date).unwrap();
         assert_eq!(d.to_postgres_string(), "2026-10-23");
         assert!(coerce(SqlValue::Text("not a date".into()), &SqlType::Date).is_err());
-        assert!(coerce(SqlValue::Text("6f1c2d34-0000-4000-8000-000000000001".into()), &SqlType::Uuid).is_ok());
-        let tz = coerce(SqlValue::Text("2026-10-23T20:57:17+02:00".into()), &SqlType::Timestamp { with_timezone: false }).unwrap();
+        assert!(coerce(
+            SqlValue::Text("6f1c2d34-0000-4000-8000-000000000001".into()),
+            &SqlType::Uuid
+        )
+        .is_ok());
+        let tz = coerce(
+            SqlValue::Text("2026-10-23T20:57:17+02:00".into()),
+            &SqlType::Timestamp {
+                with_timezone: false,
+            },
+        )
+        .unwrap();
         assert_eq!(tz.to_postgres_string(), "2026-10-23 18:57:17");
     }
 

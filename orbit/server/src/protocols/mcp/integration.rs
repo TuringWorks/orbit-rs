@@ -58,7 +58,9 @@ impl OrbitMcpIntegration {
     fn convert_query_result(&self, pg_result: PgQueryResult) -> Result<McpQueryResult, McpError> {
         match pg_result {
             // Typed results differ from Select only in wire-level column types.
-            PgQueryResult::Typed { .. } | PgQueryResult::Returning { .. } => self.convert_query_result(pg_result.untyped()),
+            PgQueryResult::Typed { .. } | PgQueryResult::Returning { .. } => {
+                self.convert_query_result(pg_result.untyped())
+            }
             PgQueryResult::Select { columns, rows } => {
                 // Convert rows to MCP format
                 let mcp_rows: Vec<Row> = rows

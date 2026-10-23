@@ -16,7 +16,9 @@ pub fn keyword_as_name(token: &Token) -> Option<String> {
         return Some(n);
     }
     let repr = format!("{token:?}");
-    repr.chars().all(|c| c.is_ascii_alphanumeric()).then(|| repr.to_lowercase())
+    repr.chars()
+        .all(|c| c.is_ascii_alphanumeric())
+        .then(|| repr.to_lowercase())
 }
 
 pub fn token_to_identifier_name(token: &Token) -> Option<String> {
@@ -654,8 +656,20 @@ fn parse_equality_expression(parser: &mut SqlParser) -> ParseResult<Expression> 
             Token::NotEqual => BinaryOperator::NotEqual,
             Token::Is => {
                 parser.advance()?;
-                if parser.matches(&[Token::Not]) {
+                let negated = parser.matches(&[Token::Not]);
+                if negated {
                     parser.advance()?;
+                }
+                if parser.matches(&[Token::Distinct]) {
+                    // IS [NOT] DISTINCT FROM
+                    parser.advance()?;
+                    parser.expect(Token::From)?;
+                    if negated {
+                        BinaryOperator::IsNotDistinctFrom
+                    } else {
+                        BinaryOperator::IsDistinctFrom
+                    }
+                } else if negated {
                     BinaryOperator::IsNot
                 } else {
                     BinaryOperator::Is
@@ -664,7 +678,13 @@ fn parse_equality_expression(parser: &mut SqlParser) -> ParseResult<Expression> 
             _ => break,
         };
 
-        if !matches!(operator, BinaryOperator::Is | BinaryOperator::IsNot) {
+        if !matches!(
+            operator,
+            BinaryOperator::Is
+                | BinaryOperator::IsNot
+                | BinaryOperator::IsDistinctFrom
+                | BinaryOperator::IsNotDistinctFrom
+        ) {
             parser.advance()?;
         }
 

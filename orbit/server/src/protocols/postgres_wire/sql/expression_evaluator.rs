@@ -652,6 +652,24 @@ impl ExpressionEvaluator {
                 Ordering::Greater | Ordering::Equal
             ))),
 
+            BinaryOperator::Is | BinaryOperator::IsNot => {
+                let same = match &right_val {
+                    SqlValue::Null => left_val.is_null(),
+                    SqlValue::Boolean(b) => matches!(&left_val, SqlValue::Boolean(x) if x == b),
+                    other => {
+                        return Err(ProtocolError::PostgresError(format!(
+                            "IS requires NULL, TRUE or FALSE, found {other:?}"
+                        )))
+                    }
+                };
+                Ok(SqlValue::Boolean(
+                    if matches!(operator, BinaryOperator::Is) {
+                        same
+                    } else {
+                        !same
+                    },
+                ))
+            }
             BinaryOperator::And => self.logical_and(&left_val, &right_val),
             BinaryOperator::Or => self.logical_or(&left_val, &right_val),
 
