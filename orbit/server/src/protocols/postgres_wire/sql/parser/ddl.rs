@@ -839,21 +839,17 @@ pub fn parse_alter_table(parser: &mut SqlParser) -> ParseResult<Statement> {
                     parser.advance()?;
                     let column = parse_column_definition(parser)?;
                     AlterTableAction::AddColumn(column)
-                } else if parser.matches(&[Token::Constraint]) {
-                    // Constraint parsing not fully wired in AlterTableAction yet, skipping or TODO
-                    return Err(ParseError {
-                        message: "ADD CONSTRAINT not fully supported yet".to_string(),
-                        position: parser.position,
-                        expected: vec!["COLUMN".to_string()],
-                        found: parser.current_token.clone(),
-                    });
+                } else if parser.matches(&[
+                    Token::Constraint,
+                    Token::Primary,
+                    Token::Unique,
+                    Token::Foreign,
+                    Token::Check,
+                ]) {
+                    AlterTableAction::AddConstraint(parse_table_constraint(parser)?)
                 } else {
-                    return Err(ParseError {
-                        message: "Expected COLUMN after ADD".to_string(),
-                        position: parser.position,
-                        expected: vec!["COLUMN".to_string()],
-                        found: parser.current_token.clone(),
-                    });
+                    // the COLUMN keyword is optional: ALTER TABLE t ADD name TEXT
+                    AlterTableAction::AddColumn(parse_column_definition(parser)?)
                 }
             }
             Some(Token::Drop) => {

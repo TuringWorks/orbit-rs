@@ -9,6 +9,12 @@ use tokio_rustls::rustls::{
 };
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 
+/// Both rustls crypto backends are compiled into the server (one through gRPC), so rustls cannot pick a
+/// process-wide default itself and would panic when building a configuration. Always name the backend.
+pub(crate) fn provider() -> Arc<rustls::crypto::CryptoProvider> {
+    Arc::new(rustls::crypto::ring::default_provider())
+}
+
 #[derive(Clone)]
 pub struct OrbitTlsAcceptor {
     acceptor: Option<TlsAcceptor>,
@@ -43,14 +49,16 @@ impl OrbitTlsAcceptor {
                         })?;
                     }
 
-                    let verifier =
-                        rustls::server::WebPkiClientVerifier::builder(Arc::new(root_store))
-                            .build()
-                            .map_err(|e| {
-                                std::io::Error::new(std::io::ErrorKind::InvalidInput, e)
-                            })?;
+                    let verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+                        Arc::new(root_store),
+                        provider(),
+                    )
+                    .build()
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
 
-                    ServerConfig::builder()
+                    ServerConfig::builder_with_provider(provider())
+                        .with_safe_default_protocol_versions()
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?
                         .with_client_cert_verifier(verifier)
                         .with_single_cert(certs, key)
                         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?
@@ -61,7 +69,9 @@ impl OrbitTlsAcceptor {
                     ));
                 }
             } else {
-                ServerConfig::builder()
+                ServerConfig::builder_with_provider(provider())
+                    .with_safe_default_protocol_versions()
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?
                     .with_no_client_auth()
                     .with_single_cert(certs, key)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?

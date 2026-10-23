@@ -33,6 +33,8 @@
 //! - ✅ SQL parsing (SELECT, INSERT, UPDATE, DELETE)
 
 pub mod auth;
+#[cfg(test)]
+mod auth_tests;
 #[cfg(feature = "fts")]
 // pub mod fts;  // Temporarily disabled - needs API update
 pub mod graphrag_engine;

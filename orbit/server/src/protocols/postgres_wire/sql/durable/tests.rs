@@ -884,3 +884,198 @@ mod replication_unit {
         );
     }
 }
+
+mod foreign_keys {
+    use super::*;
+
+    async fn family() -> DurableEngine {
+        let e = DurableEngine::in_memory();
+        x(&e, "CREATE TABLE p (id SERIAL PRIMARY KEY, name VARCHAR)").await;
+        x(
+            &e,
+            "CREATE TABLE c (id SERIAL PRIMARY KEY, p_id INTEGER, note VARCHAR)",
+        )
+        .await;
+        x(&e, "ALTER TABLE c ADD CONSTRAINT c_p_id_fkey FOREIGN KEY (p_id) REFERENCES p (id) ON DELETE CASCADE ON UPDATE CASCADE").await;
+        x(&e, "INSERT INTO p (name) VALUES ('a'), ('b')").await;
+        x(
+            &e,
+            "INSERT INTO c (p_id, note) VALUES (1, 'x'), (1, 'y'), (2, 'z'), (NULL, 'orphan')",
+        )
+        .await;
+        e
+    }
+
+    #[tokio::test]
+    async fn a_child_must_reference_an_existing_parent() {
+        let e = family().await;
+        let bad = msg(run(
+            &e,
+            &mut Session::default(),
+            "INSERT INTO c (p_id) VALUES (99)",
+        )
+        .await);
+        assert!(
+            bad.contains("[23503]") && bad.contains("c_p_id_fkey"),
+            "{bad}"
+        );
+        let bad = msg(run(
+            &e,
+            &mut Session::default(),
+            "UPDATE c SET p_id = 99 WHERE note = 'x'",
+        )
+        .await);
+        assert!(bad.contains("[23503]"), "{bad}");
+        assert_eq!(
+            q(&e, "SELECT count(*) FROM c").await,
+            vec![vec!["4"]],
+            "NULL satisfies the key and a failed statement changes nothing"
+        );
+    }
+
+    #[tokio::test]
+    async fn adding_a_key_checks_existing_rows() {
+        let e = DurableEngine::in_memory();
+        x(&e, "CREATE TABLE p (id INTEGER PRIMARY KEY)").await;
+        x(&e, "CREATE TABLE c (id INTEGER PRIMARY KEY, p_id INTEGER)").await;
+        x(&e, "INSERT INTO p VALUES (1)").await;
+        x(&e, "INSERT INTO c VALUES (1, 1), (2, 2)").await;
+        let bad = msg(run(
+            &e,
+            &mut Session::default(),
+            "ALTER TABLE c ADD CONSTRAINT k FOREIGN KEY (p_id) REFERENCES p (id)",
+        )
+        .await);
+        assert!(bad.contains("[23503]"), "{bad}");
+        x(&e, "DELETE FROM c WHERE id = 2").await;
+        x(
+            &e,
+            "ALTER TABLE c ADD CONSTRAINT k FOREIGN KEY (p_id) REFERENCES p (id)",
+        )
+        .await;
+        assert!(
+            run(&e, &mut Session::default(), "INSERT INTO c VALUES (3, 7)")
+                .await
+                .is_err()
+        );
+        // a key must point at a unique column
+        x(&e, "CREATE TABLE loose (id INTEGER, v INTEGER)").await;
+        let bad = msg(run(
+            &e,
+            &mut Session::default(),
+            "ALTER TABLE c ADD CONSTRAINT k2 FOREIGN KEY (p_id) REFERENCES loose (v)",
+        )
+        .await);
+        assert!(bad.contains("[42830]"), "{bad}");
+    }
+
+    #[tokio::test]
+    async fn delete_and_update_follow_the_declared_actions() {
+        let e = family().await;
+        x(&e, "UPDATE p SET id = 10 WHERE id = 2").await;
+        assert_eq!(
+            q(&e, "SELECT p_id FROM c WHERE note = 'z'").await,
+            vec![vec!["10"]],
+            "ON UPDATE CASCADE"
+        );
+        x(&e, "DELETE FROM p WHERE id = 1").await;
+        assert_eq!(
+            q(&e, "SELECT note FROM c ORDER BY id").await,
+            vec![vec!["z"], vec!["orphan"]],
+            "ON DELETE CASCADE"
+        );
+
+        let e = DurableEngine::in_memory();
+        x(&e, "CREATE TABLE p (id INTEGER PRIMARY KEY)").await;
+        x(&e, "CREATE TABLE n (id INTEGER PRIMARY KEY, p_id INTEGER REFERENCES p (id) ON DELETE SET NULL)").await;
+        x(&e, "CREATE TABLE r (id INTEGER PRIMARY KEY, p_id INTEGER REFERENCES p (id) ON DELETE RESTRICT)").await;
+        x(&e, "INSERT INTO p VALUES (1), (2)").await;
+        x(&e, "INSERT INTO n VALUES (1, 1)").await;
+        x(&e, "INSERT INTO r VALUES (1, 2)").await;
+        x(&e, "DELETE FROM p WHERE id = 1").await;
+        assert_eq!(
+            q(&e, "SELECT p_id FROM n").await,
+            vec![vec!["NULL"]],
+            "ON DELETE SET NULL"
+        );
+        let bad = msg(run(&e, &mut Session::default(), "DELETE FROM p WHERE id = 2").await);
+        assert!(bad.contains("[23503]"), "{bad}");
+        assert_eq!(
+            q(&e, "SELECT count(*) FROM p").await,
+            vec![vec!["1"]],
+            "RESTRICT leaves the parent in place"
+        );
+    }
+
+    #[tokio::test]
+    async fn cascades_reach_grandchildren_and_self_references_work() {
+        let e = DurableEngine::in_memory();
+        x(&e, "CREATE TABLE a (id INTEGER PRIMARY KEY)").await;
+        x(&e, "CREATE TABLE b (id INTEGER PRIMARY KEY, a_id INTEGER REFERENCES a (id) ON DELETE CASCADE)").await;
+        x(&e, "CREATE TABLE c (id INTEGER PRIMARY KEY, b_id INTEGER REFERENCES b (id) ON DELETE CASCADE)").await;
+        x(&e, "INSERT INTO a VALUES (1)").await;
+        x(&e, "INSERT INTO b VALUES (1, 1), (2, 1)").await;
+        x(&e, "INSERT INTO c VALUES (1, 1), (2, 2)").await;
+        x(&e, "DELETE FROM a WHERE id = 1").await;
+        assert_eq!(q(&e, "SELECT count(*) FROM c").await, vec![vec!["0"]]);
+
+        x(&e, "CREATE TABLE tree (id INTEGER PRIMARY KEY, parent INTEGER REFERENCES tree (id) ON DELETE CASCADE)").await;
+        x(&e, "INSERT INTO tree VALUES (1, 1)").await; // a row may reference itself
+        x(&e, "INSERT INTO tree VALUES (2, 1), (3, 2)").await;
+        x(&e, "DELETE FROM tree WHERE id = 1").await;
+        assert_eq!(q(&e, "SELECT count(*) FROM tree").await, vec![vec!["0"]]);
+    }
+
+    #[tokio::test]
+    async fn dropping_or_truncating_a_referenced_table_needs_cascade() {
+        let e = family().await;
+        let bad = msg(run(&e, &mut Session::default(), "DROP TABLE p").await);
+        assert!(bad.contains("[2BP01]"), "{bad}");
+        let bad = msg(run(&e, &mut Session::default(), "TRUNCATE TABLE p").await);
+        assert!(bad.contains("[0A000]"), "{bad}");
+        x(&e, "TRUNCATE TABLE p CASCADE").await;
+        assert_eq!(q(&e, "SELECT count(*) FROM c").await, vec![vec!["0"]]);
+        x(&e, "DROP TABLE p CASCADE").await;
+        x(&e, "INSERT INTO c (p_id) VALUES (123)").await; // the key is gone with its parent
+    }
+
+    #[tokio::test]
+    async fn a_replica_reaches_the_same_state_through_cascades() {
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        struct Capture(std::sync::Arc<std::sync::Mutex<Vec<Vec<Op>>>>);
+        #[async_trait::async_trait]
+        impl Persist for Capture {
+            async fn commit(&self, ops: &[Op]) -> Result<(), String> {
+                self.0.lock().unwrap().push(ops.to_vec());
+                Ok(())
+            }
+            fn load(&self) -> Result<Loaded, String> {
+                Ok(Loaded::default())
+            }
+        }
+        let a = DurableEngine::open(Box::new(Capture(std::sync::Arc::clone(&log)))).unwrap();
+        x(&a, "CREATE TABLE p (id SERIAL PRIMARY KEY, name VARCHAR)").await;
+        x(&a, "CREATE TABLE c (id SERIAL PRIMARY KEY, p_id INTEGER REFERENCES p (id) ON DELETE CASCADE)").await;
+        x(&a, "INSERT INTO p (name) VALUES ('a'), ('b')").await;
+        x(&a, "INSERT INTO c (p_id) VALUES (1), (1), (2)").await;
+        x(&a, "DELETE FROM p WHERE id = 1").await;
+        let b = DurableEngine::in_memory();
+        for batch in log.lock().unwrap().iter() {
+            b.apply_replicated(batch).unwrap();
+        }
+        assert_eq!(
+            q(&b, "SELECT id, p_id FROM c ORDER BY id").await,
+            q(&a, "SELECT id, p_id FROM c ORDER BY id").await
+        );
+        assert!(
+            run(
+                &b,
+                &mut Session::default(),
+                "INSERT INTO c (p_id) VALUES (77)"
+            )
+            .await
+            .is_err(),
+            "the replica enforces the key too"
+        );
+    }
+}

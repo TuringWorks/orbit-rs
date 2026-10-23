@@ -218,6 +218,45 @@ struct Args {
         default_value = "./data"
     )]
     data_dir: PathBuf,
+
+    /// This node's id in a replicated SQL cluster. Without it the SQL store runs on one node.
+    #[arg(
+        long,
+        value_name = "ID",
+        help = "Cluster node id; turns on replication of the SQL store"
+    )]
+    raft_id: Option<u64>,
+
+    /// Address other cluster nodes use to reach this one
+    #[arg(
+        long,
+        value_name = "ADDR",
+        help = "Address to listen on for cluster traffic, e.g. 0.0.0.0:7000"
+    )]
+    raft_listen: Option<String>,
+
+    /// Every node at start, this one included
+    #[arg(
+        long,
+        value_name = "ID=ADDR",
+        help = "Cluster nodes known at start as id=host:port, e.g. 1=a:7000,2=b:7000,3=c:7000",
+        value_delimiter = ','
+    )]
+    raft_peers: Vec<String>,
+
+    /// Start as a new node to be added to a running cluster
+    #[arg(
+        long,
+        help = "Start with no voters, to be added with SELECT orbit_raft_add_node(...) on the leader"
+    )]
+    raft_join: bool,
+
+    /// Serve reads from a replica as well
+    #[arg(
+        long,
+        help = "Let replicas answer reads (they can be slightly behind the leader)"
+    )]
+    raft_stale_reads: bool,
 }
 
 #[tokio::main]
@@ -361,7 +400,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let storage_mode = if unified_storage_enabled {
         // Create unified cross-protocol storage
         let unified_config = toml_config.unified_storage.as_ref().unwrap();
-        let data_dir = unified_config.data_dir.to_string_lossy().to_string();
+        // The built-in default is relative to the working directory; keep it under --data-dir instead, so
+        // nodes started side by side with different data directories do not share (and lock) one store.
+        let data_dir = if unified_config.data_dir == std::path::Path::new("./data/unified") {
+            args.data_dir.join("unified").to_string_lossy().to_string()
+        } else {
+            unified_config.data_dir.to_string_lossy().to_string()
+        };
 
         info!(
             "[Storage] Initializing UNIFIED cross-protocol storage at: {}",
@@ -1359,6 +1404,16 @@ async fn start_postgresql_server(
 
     let bind_addr = format!("{}:{}", args.bind, args.postgres_port);
 
+    // Who may log in: provisioned users, or anyone in development mode. Refusing to start is better than
+    // running a database that accepts any login.
+    let pg_users = orbit_server::protocols::users_from_env().await?;
+    if !args.dev_mode && !pg_users.has_users().await {
+        return Err("no PostgreSQL users are configured: set ORBIT_PG_USERS=name:password (or ORBIT_PG_USERS_FILE), or run with --dev-mode".into());
+    }
+    if args.dev_mode {
+        warn!("[PostgreSQL] development mode: a login by an unknown name creates the user with its name as the password");
+    }
+
     // Create QueryEngine with either unified storage or RocksDB persistence
     let query_engine = if let Some(unified) = unified_storage {
         info!("[PostgreSQL] Using unified storage for cross-protocol data sharing");
@@ -1366,6 +1421,68 @@ async fn start_postgresql_server(
     } else {
         QueryEngine::new_with_persistent_storage(rocksdb)
     };
+
+    // A node with a cluster id replicates the SQL store through Raft instead of keeping it on this machine alone.
+    #[cfg(feature = "storage-rocksdb")]
+    if let Some(id) = args.raft_id {
+        use orbit_server::raft::sql::{Cluster, ClusterConfig};
+        let listen = args
+            .raft_listen
+            .clone()
+            .ok_or("--raft-listen is required with --raft-id")?;
+        let mut peers = std::collections::HashMap::new();
+        for p in &args.raft_peers {
+            let (pid, addr) = p
+                .split_once('=')
+                .ok_or_else(|| format!("--raft-peers entry `{p}` is not id=host:port"))?;
+            peers.insert(
+                pid.trim()
+                    .parse::<u64>()
+                    .map_err(|e| format!("bad node id in `{p}`: {e}"))?,
+                addr.trim().to_string(),
+            );
+        }
+        if !args.raft_join {
+            peers.entry(id).or_insert_with(|| listen.clone());
+        }
+        let token = match std::env::var("ORBIT_RAFT_TOKEN") {
+            Ok(t) if !t.is_empty() => t.into_bytes(),
+            _ => {
+                warn!("[Cluster] ORBIT_RAFT_TOKEN is not set: any process that can reach {listen} can join the cluster traffic");
+                b"orbit-dev-token".to_vec()
+            }
+        };
+        info!(
+            "[Cluster] node {id} listening on {listen}; peers: {peers:?}{}",
+            if args.raft_join { " (joining)" } else { "" }
+        );
+        let cluster = Arc::new(
+            Cluster::start(ClusterConfig {
+                id,
+                listen,
+                peers,
+                join: args.raft_join,
+                token,
+                data_dir: args.data_dir.clone(),
+                stale_reads: args.raft_stale_reads,
+                keep_log: 10_000,
+            })
+            .await?,
+        );
+        let query_engine = query_engine
+            .with_durable(Arc::clone(&cluster.engine))
+            .with_cluster_admin(cluster);
+        let postgres_server = PostgresServer::new_with_query_engine(bind_addr, query_engine)
+            .with_tls_config(tls_config)
+            .with_auth(pg_users, args.dev_mode);
+        let handle = tokio::spawn(async move {
+            postgres_server
+                .run()
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn Error + Send + Sync>)
+        });
+        return Ok(handle);
+    }
 
     // The durable SQL engine keeps committed state in RocksDB and runs every statement it supports.
     // ORBIT_SQL_ENGINE=legacy selects the previous executors, which only persist table definitions and inserts.
@@ -1385,8 +1502,9 @@ async fn start_postgresql_server(
     };
 
     // Create PostgreSQL server with query engine
-    let postgres_server =
-        PostgresServer::new_with_query_engine(bind_addr, query_engine).with_tls_config(tls_config);
+    let postgres_server = PostgresServer::new_with_query_engine(bind_addr, query_engine)
+        .with_tls_config(tls_config)
+        .with_auth(pg_users, args.dev_mode);
 
     let handle = tokio::spawn(async move {
         postgres_server

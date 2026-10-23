@@ -1,6 +1,7 @@
 //! `INSERT`, `UPDATE` and `DELETE`.
 
 use super::ddl::table_key;
+use super::fk::{self, Refs};
 use super::query::{ctx_for, rel_to_result, Rel, RelCol, Runner};
 use super::value::coerce;
 use super::{err, DbError, Op, QueryResult, Row, Seqs, State, Table, R};
@@ -124,6 +125,7 @@ pub(crate) fn insert(
     ins: &InsertStatement,
 ) -> R<QueryResult> {
     let key = table_key(&ins.table);
+    let mut refs = Refs::default();
     let (cols, ncols, tname) = {
         let t = lookup(st, &key)?;
         (t.cols.clone(), t.cols.len(), t.name.clone())
@@ -269,7 +271,8 @@ pub(crate) fn insert(
                         }
                         apply_assignments(&mut r, t, &old, set, &ctx)?
                     };
-                    write_update(st, ops, &key, existing, old, new.clone())?;
+                    let _ = old;
+                    update_row(st, ops, &mut refs, &key, existing, new.clone(), 0)?;
                     affected += 1;
                     inserted.push(new);
                     continue;
@@ -286,6 +289,7 @@ pub(crate) fn insert(
             rowid,
             row: row.clone(),
         });
+        fk::check_child(st, &key, &row)?;
         affected += 1;
         inserted.push(row);
     }
@@ -353,6 +357,45 @@ fn write_update(
     Ok(())
 }
 
+/// Replace row `rowid` of `key` with `new`: unique and foreign key checks, then the actions on rows that reference it.
+pub(crate) fn update_row(
+    st: &mut State,
+    ops: &mut Vec<Op>,
+    refs: &mut Refs,
+    key: &str,
+    rowid: u64,
+    new: Row,
+    depth: usize,
+) -> R<()> {
+    let Some(old) = st.tables.get(key).and_then(|t| t.rows.get(&rowid)).cloned() else {
+        return Ok(());
+    };
+    write_update(st, ops, key, rowid, old.clone(), new.clone())?;
+    fk::check_child_changed(st, key, &old, &new)?;
+    fk::after_key_change(st, ops, refs, key, rowid, &old, &new, depth)
+}
+
+/// Delete row `rowid` of `key`, running the actions of foreign keys that reference it first.
+pub(crate) fn delete_row(
+    st: &mut State,
+    ops: &mut Vec<Op>,
+    refs: &mut Refs,
+    key: &str,
+    rowid: u64,
+    depth: usize,
+) -> R<()> {
+    let Some(old) = st.tables.get(key).and_then(|t| t.rows.get(&rowid)).cloned() else {
+        return Ok(());
+    };
+    fk::before_delete(st, ops, refs, key, rowid, &old, depth)?;
+    let t = st.tables.get_mut(key).expect("table");
+    if let Some(row) = t.rows.remove(&rowid) {
+        t.index_remove(rowid, &row);
+        ops.push(Op::DelRow { table: t.id, rowid });
+    }
+    Ok(())
+}
+
 /// Rows of `t` matching `where_clause`, as `(row id, row)`, evaluated against the committed state.
 fn matching(
     st: &State,
@@ -400,8 +443,9 @@ pub(crate) fn update(st: &mut State, ops: &mut Vec<Op>, upd: &UpdateStatement) -
     };
     let count = plan.len();
     let mut after = Vec::with_capacity(count);
-    for (id, old, new) in plan {
-        write_update(st, ops, &key, id, old, new.clone())?;
+    let mut refs = Refs::default();
+    for (id, _old, new) in plan {
+        update_row(st, ops, &mut refs, &key, id, new.clone(), 0)?;
         after.push(new);
     }
     let ret = match &upd.returning {
@@ -427,17 +471,10 @@ pub(crate) fn delete(st: &mut State, ops: &mut Vec<Op>, del: &DeleteStatement) -
     };
     let count = hits.len();
     let mut gone = Vec::with_capacity(count);
-    {
-        let t = st.tables.get_mut(&key).expect("table");
-        for (id, row) in hits {
-            t.index_remove(id, &row);
-            t.rows.remove(&id);
-            ops.push(Op::DelRow {
-                table: t.id,
-                rowid: id,
-            });
-            gone.push(row);
-        }
+    let mut refs = Refs::default();
+    for (id, row) in hits {
+        delete_row(st, ops, &mut refs, &key, id, 0)?;
+        gone.push(row);
     }
     let ret = match &del.returning {
         Some(items) => Some(returning(st, lookup(st, &key)?, items, gone)?),
