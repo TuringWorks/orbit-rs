@@ -8,6 +8,7 @@
 use crate::protocols::aql::aql_parser::{
     AqlClause, AqlCondition, AqlExpression, ComparisonOperator, UpsertAction,
 };
+use crate::protocols::aql::data_model::CollectionType;
 use crate::protocols::aql::{
     AqlDocument, AqlGraphRAGEngine, AqlParser, AqlQuery, AqlStorage, AqlValue,
 };
@@ -214,6 +215,26 @@ impl AqlQueryEngine {
 
         // Execution context for variables
         let mut context: HashMap<String, AqlValue> = HashMap::new();
+        // Function-only graph and full-text queries still need access to the
+        // collections backing their arguments. Make the storage contents
+        // available to expression evaluation without requiring a FOR clause.
+        if let Some(storage) = storage_opt {
+            for collection in storage.list_collections().await? {
+                let documents = storage.get_collection_documents(&collection).await?;
+                let values: Vec<AqlValue> = documents
+                    .iter()
+                    .map(|document| self.document_to_value(document))
+                    .collect();
+                context.insert(collection.clone(), AqlValue::Array(values.clone()));
+                if let Some(metadata) = storage.get_collection(&collection).await? {
+                    let key = match metadata.collection_type {
+                        CollectionType::Edge => format!("{collection}_edges"),
+                        CollectionType::Document => format!("{collection}_vertices"),
+                    };
+                    context.insert(key, AqlValue::Array(values));
+                }
+            }
+        }
         let mut result_data = Vec::new();
 
         // Process clauses in order
@@ -1503,7 +1524,7 @@ impl AqlQueryEngine {
             if let Some(AqlValue::Array(vertices)) = context.get(key) {
                 for vertex in vertices {
                     if let AqlValue::Object(props) = vertex {
-                        if let Some(AqlValue::String(id)) = props.get("_key").or(props.get("_id")) {
+                        if let Some(AqlValue::String(id)) = props.get("_id").or(props.get("_key")) {
                             let mut properties = HashMap::new();
                             for (k, v) in props {
                                 if k != "_key" && k != "_id" {
@@ -1590,6 +1611,110 @@ impl AqlQueryEngine {
         context: &HashMap<String, AqlValue>,
     ) -> ProtocolResult<AqlValue> {
         match name.to_uppercase().as_str() {
+            "TO_INT" => Ok(AqlValue::Number(serde_json::Number::from(
+                args.first()
+                    .and_then(|value| match value {
+                        AqlValue::Number(number) => number.as_f64().map(|value| value as i64),
+                        AqlValue::String(text) => text.parse::<i64>().ok(),
+                        _ => None,
+                    })
+                    .unwrap_or(0),
+            ))),
+            "CHAR_LENGTH" => Ok(AqlValue::Number(serde_json::Number::from(
+                args.first()
+                    .and_then(|value| match value {
+                        AqlValue::String(text) => Some(text.chars().count()),
+                        _ => None,
+                    })
+                    .unwrap_or(0),
+            ))),
+            "FIND_LAST" => {
+                let (Some(AqlValue::String(text)), Some(AqlValue::String(needle))) =
+                    (args.first(), args.get(1))
+                else {
+                    return Ok(AqlValue::Null);
+                };
+                Ok(AqlValue::Number(serde_json::Number::from(
+                    text.rfind(needle)
+                        .map_or(-1, |index| text[..index].chars().count() as i64),
+                )))
+            }
+            "SUBSTITUTE" => {
+                let (
+                    Some(AqlValue::String(text)),
+                    Some(AqlValue::String(from)),
+                    Some(AqlValue::String(to)),
+                ) = (args.first(), args.get(1), args.get(2))
+                else {
+                    return Ok(AqlValue::Null);
+                };
+                let result = if args.get(3).and_then(|value| match value {
+                    AqlValue::Number(number) => number.as_u64(),
+                    _ => None,
+                }) == Some(1)
+                {
+                    text.replacen(from, to, 1)
+                } else {
+                    text.replace(from, to)
+                };
+                Ok(AqlValue::String(result))
+            }
+            "VARIANCE_SAMPLE" => {
+                let Some(AqlValue::Array(values)) = args.first() else {
+                    return Ok(AqlValue::Null);
+                };
+                let numbers: Vec<f64> = values
+                    .iter()
+                    .filter_map(|value| match value {
+                        AqlValue::Number(number) => number.as_f64(),
+                        _ => None,
+                    })
+                    .collect();
+                if numbers.len() < 2 {
+                    return Ok(AqlValue::Null);
+                }
+                let mean = numbers.iter().sum::<f64>() / numbers.len() as f64;
+                let variance = numbers
+                    .iter()
+                    .map(|value| (value - mean).powi(2))
+                    .sum::<f64>()
+                    / (numbers.len() - 1) as f64;
+                Ok(AqlValue::Number(
+                    serde_json::Number::from_f64(variance)
+                        .unwrap_or_else(|| serde_json::Number::from(0)),
+                ))
+            }
+            "INTERLEAVE" => {
+                let arrays: Vec<&Vec<AqlValue>> = args
+                    .iter()
+                    .filter_map(|value| match value {
+                        AqlValue::Array(array) => Some(array),
+                        _ => None,
+                    })
+                    .collect();
+                let max_len = arrays.iter().map(|array| array.len()).max().unwrap_or(0);
+                let mut result = Vec::new();
+                for index in 0..max_len {
+                    for array in &arrays {
+                        if let Some(value) = array.get(index) {
+                            result.push(value.clone());
+                        }
+                    }
+                }
+                Ok(AqlValue::Array(result))
+            }
+            "DATE_LEAPYEAR" => {
+                let year = args
+                    .first()
+                    .and_then(|value| match value {
+                        AqlValue::Number(number) => number.as_i64(),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+                Ok(AqlValue::Bool(
+                    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0),
+                ))
+            }
             // ============ String Functions ============
             "LENGTH" => {
                 if let Some(AqlValue::String(s)) = args.first() {
@@ -3419,8 +3544,24 @@ impl AqlQueryEngine {
             "FULLTEXT" => {
                 // FULLTEXT(collection, attribute, query) - Full-text search
                 // Returns matching documents from collection where attribute matches query
-                // This is a stub that returns empty array - real implementation needs FTS index
-                Ok(AqlValue::Array(vec![]))
+                let (
+                    Some(AqlValue::String(collection)),
+                    Some(AqlValue::String(attribute)),
+                    Some(AqlValue::String(query)),
+                ) = (args.first(), args.get(1), args.get(2))
+                else {
+                    return Ok(AqlValue::Array(vec![]));
+                };
+                let needle = query.to_lowercase();
+                let matches = match context.get(collection) {
+                    Some(AqlValue::Array(documents)) => documents.iter().filter(|document| {
+                        matches!(document, AqlValue::Object(fields) if fields.get(attribute)
+                            .and_then(|value| match value { AqlValue::String(text) => Some(text.to_lowercase()), _ => None })
+                            .is_some_and(|text| text.contains(&needle)))
+                        }).cloned().collect(),
+                    _ => Vec::new(),
+                };
+                Ok(AqlValue::Array(matches))
             }
             "TOKENS" => {
                 // TOKENS(input, analyzer) - Tokenize text using analyzer

@@ -2445,6 +2445,11 @@ impl ExpressionEvaluator {
                 let multiplier = 10_f32.powi(precision);
                 Ok(SqlValue::Real((f * multiplier).round() / multiplier))
             }
+            SqlValue::Decimal(d) => Ok(SqlValue::Decimal(d.round_dp_with_strategy(
+                precision.max(0) as u32,
+                rust_decimal::RoundingStrategy::MidpointAwayFromZero,
+            ))),
+            SqlValue::SmallInt(i) => Ok(SqlValue::SmallInt(*i)),
             SqlValue::Integer(i) => Ok(SqlValue::Integer(*i)),
             SqlValue::BigInt(i) => Ok(SqlValue::BigInt(*i)),
             SqlValue::Null => Ok(SqlValue::Null),

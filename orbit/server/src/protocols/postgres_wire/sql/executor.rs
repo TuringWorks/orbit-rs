@@ -7,6 +7,7 @@ use crate::protocols::common::storage::{
     StorageBackendConfig, StorageBackendFactory, TableStorage,
 };
 use crate::protocols::error::{ProtocolError, ProtocolResult};
+use crate::protocols::postgres_wire::session_compat;
 use crate::protocols::postgres_wire::sql::{
     ast::{
         AccessMode, AlterDomainStatement, AlterPolicyStatement, AlterRoleStatement,
@@ -693,7 +694,14 @@ impl SqlExecutor {
     /// Create SQL executor with storage and default settings
     fn with_storage_and_settings(storage: Arc<dyn TableStorage>) -> Self {
         let mut settings = HashMap::new();
-        settings.insert("server_version".to_string(), "14.0 (Orbit-RS)".to_string());
+        settings.insert(
+            "server_version".to_string(),
+            session_compat::SERVER_VERSION.to_string(),
+        );
+        settings.insert(
+            "server_version_num".to_string(),
+            session_compat::SERVER_VERSION_NUM.to_string(),
+        );
         settings.insert("server_encoding".to_string(), "UTF8".to_string());
         settings.insert("client_encoding".to_string(), "UTF8".to_string());
         settings.insert("DateStyle".to_string(), "ISO, MDY".to_string());
@@ -5653,13 +5661,13 @@ impl SqlExecutor {
         let settings = vec![
             (
                 "server_version",
-                "16.0",
+                session_compat::SERVER_VERSION,
                 "PostgreSQL server version",
                 "internal",
             ),
             (
                 "server_version_num",
-                "160000",
+                session_compat::SERVER_VERSION_NUM,
                 "Server version number",
                 "internal",
             ),

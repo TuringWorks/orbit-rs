@@ -2,11 +2,11 @@
 # Build from the repository root:  docker build -f containerfiles/Containerfile.server -t orbit-server .
 FROM docker.io/library/rust:1-bookworm AS build
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        clang cmake pkg-config libssl-dev protobuf-compiler \
+        clang cmake pkg-config libssl-dev protobuf-compiler libprotobuf-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
-RUN --mount=type=cache,target=/src/target \
+RUN --mount=type=cache,id=orbit-target-2,target=/src/target \
     --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release -p orbit-server --bin orbit-server \
     && cp target/release/orbit-server /orbit-server

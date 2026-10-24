@@ -526,7 +526,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Disabled: DISCARD handler commented out
     async fn test_handle_discard() {
         // 1. Setup
         let mut run_message = create_run_message("RETURN 1");
@@ -695,7 +694,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Disabled: BEGIN handler commented out
     async fn test_handle_begin() {
         // 1. Setup
         let mut begin_message = create_begin_message();
@@ -899,7 +897,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Disabled: RESET handler commented out
     async fn test_handle_reset() {
         // 1. Setup
         let mut begin_message = create_begin_message();
@@ -1073,7 +1070,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Disabled: TELEMETRY sends IGNORED
     async fn test_handle_telemetry() {
         // 1. Setup
         let mut telemetry_message = create_telemetry_message();

@@ -81,6 +81,9 @@ flate2 = "1.0"                                      # For compression
 toml = "1.1"                                        # For configuration file support
 # New persistence backends
 rocksdb = { version = "0.22", default-features = false, optional = true }
+# PostgreSQL 18 grammar (libpg_query 18.x). crates.io's pg_query stops at PG17 (6.2.1), so this pins the
+# upstream `pg-18` branch by commit; move to the crates.io release once 18.x is published.
+pg_query = { git = "https://github.com/pganalyze/pg_query.rs", rev = "ad0c87ed59c84ec6b42c970bb42d7985b7b5878b", optional = true }
 rand.workspace = true
 uuid = { version = "1.19", features = ["v4", "v7", "serde"] }
 env_logger = "0.11"
@@ -192,6 +195,8 @@ metrics = []
 # Protocol Support
 protocol-redis = ["actor-system"]
 protocol-postgres = ["actor-system"]
+# Real PostgreSQL grammar via libpg_query; selected at run time with ORBIT_SQL_PARSER (see sql/parser/backend.rs)
+pg-query-parser = ["dep:pg_query"]
 protocol-mysql = ["actor-system"]
 protocol-cassandra = ["actor-system"]
 protocol-neo4j = ["actor-system", "model-graph"]

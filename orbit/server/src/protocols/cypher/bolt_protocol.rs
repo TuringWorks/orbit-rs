@@ -757,28 +757,38 @@ impl BoltProtocolHandler {
             // DISABLED:                 let (n, qid) = self.decode_pull(message_bytes)?;
             // DISABLED:                 self.handle_pull(n, qid, stream).await?;
             // DISABLED:             }
-            // DISABLED:             0x2F => {
-            // DISABLED:                 // DISCARD message
-            // DISABLED:                 let (n, qid) = self.decode_discard(message_bytes)?;
-            // DISABLED:                 self.handle_discard(n, qid, stream).await?;
-            // DISABLED:             }
-            // DISABLED:             0x11 => {
-            // DISABLED:                 // BEGIN message
-            // DISABLED:                 let extra = self.decode_begin(message_bytes)?;
-            // DISABLED:                 self.handle_begin(extra, stream).await?;
-            // DISABLED:             }
-            // DISABLED:             0x12 => {
-            // DISABLED:                 // COMMIT message
-            // DISABLED:                 self.handle_commit(stream).await?;
-            // DISABLED:             }
-            // DISABLED:             0x13 => {
-            // DISABLED:                 // ROLLBACK message
-            // DISABLED:                 self.handle_rollback(stream).await?;
-            // DISABLED:             }
-            // DISABLED:             0x0F => {
-            // DISABLED:                 // RESET message
-            // DISABLED:                 self.handle_reset(stream).await?;
-            // DISABLED:             }
+            0x2F => {
+                // DISCARD clears the pending result stream and acknowledges it.
+                self.pending_results.clear();
+                self.current_query = None;
+                self.result_columns.clear();
+                self.send_success(HashMap::new(), stream).await?;
+            }
+            0x11 => {
+                // BEGIN carries an optional map; transaction options are not
+                // needed for the in-memory protocol state machine.
+                self.transaction_state = TransactionState::Active;
+                self.transaction_id = self.transaction_id.saturating_add(1);
+                self.send_success(HashMap::new(), stream).await?;
+            }
+            0x12 => {
+                self.transaction_state = TransactionState::None;
+                self.send_success(HashMap::new(), stream).await?;
+            }
+            0x13 => {
+                self.transaction_state = TransactionState::None;
+                self.pending_results.clear();
+                self.current_query = None;
+                self.send_success(HashMap::new(), stream).await?;
+            }
+            0x0F => {
+                self.transaction_state = TransactionState::None;
+                self.pending_results.clear();
+                self.current_query = None;
+                self.current_parameters = None;
+                self.result_columns.clear();
+                self.send_success(HashMap::new(), stream).await?;
+            }
             0x66 => {
                 // ROUTE message
                 self.handle_route(stream).await?;
@@ -1192,9 +1202,7 @@ impl BoltProtocolHandler {
         &self,
         query: &str,
     ) -> ProtocolResult<(Vec<String>, Vec<Vec<Value>>)> {
-        let storage = self.storage.as_ref().ok_or_else(|| {
-            ProtocolError::CypherError("Storage provider not available".to_string())
-        })?;
+        let storage = self.storage.as_ref();
 
         // Parse the query
         let parsed = self.parser.parse(query)?;
@@ -1225,6 +1233,11 @@ impl BoltProtocolHandler {
                             &pattern.elements[1],
                             &pattern.elements[2],
                         ) {
+                            let storage = storage.ok_or_else(|| {
+                                ProtocolError::CypherError(
+                                    "Storage provider not available for MATCH".to_string(),
+                                )
+                            })?;
                             let all_rels = storage.get_all_relationships().await?;
                             for rel in all_rels {
                                 let type_matches = rel_pattern

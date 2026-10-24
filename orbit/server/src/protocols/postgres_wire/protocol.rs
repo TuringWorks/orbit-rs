@@ -443,7 +443,7 @@ impl PostgresWireProtocol {
     fn finish_authentication(&mut self, buf: &mut BytesMut) {
         // Parameters libpq/psycopg expect to be reported at startup
         for (name, value) in [
-            ("server_version", "14.0"),
+            ("server_version", super::session_compat::SERVER_VERSION),
             ("server_encoding", "UTF8"),
             ("client_encoding", "UTF8"),
             ("DateStyle", "ISO, MDY"),
@@ -1045,5 +1045,32 @@ impl PostgresWireProtocol {
         let mut key = vec![0u8; 4]; // 4 bytes for compatibility
         rand::rng().fill(&mut key[..]);
         key
+    }
+}
+
+#[cfg(test)]
+mod version_tests {
+    use super::*;
+
+    #[test]
+    fn startup_reports_postgresql_18_server_version() {
+        let mut protocol = PostgresWireProtocol::new();
+        let mut buf = BytesMut::new();
+        protocol.finish_authentication(&mut buf);
+        let expected = format!(
+            "server_version\0{}\0",
+            super::super::session_compat::SERVER_VERSION
+        );
+        assert!(
+            buf.windows(expected.len())
+                .any(|w| w == expected.as_bytes()),
+            "ParameterStatus for server_version missing from startup: {:?}",
+            String::from_utf8_lossy(&buf)
+        );
+        assert!(
+            buf.windows(b"server_version\x0018.0\0".len())
+                .any(|w| w == b"server_version\x0018.0\0"),
+            "startup must advertise 18.0"
+        );
     }
 }

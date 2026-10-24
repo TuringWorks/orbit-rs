@@ -24,10 +24,17 @@ static ROLES: Mutex<Vec<Role>> = Mutex::new(Vec::new());
 /// First OID handed to a user-created role (PostgreSQL's first user OID).
 const FIRST_USER_OID: usize = 16384;
 
+/// PostgreSQL release Orbit presents itself as. Every path that reports a version (startup
+/// parameters, `SHOW`, `current_setting`, `pg_settings`, `version()`) must use these.
+pub const SERVER_VERSION: &str = "18.0";
+
+/// [`SERVER_VERSION`] as `server_version_num` (`major * 10000 + minor`).
+pub const SERVER_VERSION_NUM: &str = "180000";
+
 /// Server settings reported to clients, as `(name, value)`.
 const SETTINGS: &[(&str, &str)] = &[
-    ("server_version", "14.0"),
-    ("server_version_num", "140000"),
+    ("server_version", SERVER_VERSION),
+    ("server_version_num", SERVER_VERSION_NUM),
     ("server_encoding", "UTF8"),
     ("client_encoding", "UTF8"),
     ("datestyle", "ISO, MDY"),
@@ -77,7 +84,7 @@ const DATABASE_OID: &str = "5";
 const ROLE_OID: &str = "10";
 
 /// Value reported by `SELECT version()`.
-pub const VERSION_STRING: &str = "PostgreSQL 14.0 (Orbit-RS) on orbit, compiled by rustc, 64-bit";
+pub const VERSION_STRING: &str = "PostgreSQL 18.0 (Orbit-RS) on orbit, compiled by rustc, 64-bit";
 
 /// The connecting role followed by every created role, as `(oid, name, login, super)`.
 fn role_table(user: &str) -> Vec<(String, String, bool, bool)> {
@@ -700,10 +707,20 @@ mod tests {
     }
 
     #[test]
+    fn version_constants_agree() {
+        assert_eq!(SERVER_VERSION, "18.0");
+        assert_eq!(SERVER_VERSION_NUM, "180000");
+        assert!(VERSION_STRING.starts_with(&format!("PostgreSQL {SERVER_VERSION} ")));
+        let (major, minor) = SERVER_VERSION.split_once('.').unwrap();
+        let num = major.parse::<u32>().unwrap() * 10_000 + minor.parse::<u32>().unwrap();
+        assert_eq!(SERVER_VERSION_NUM, num.to_string());
+    }
+
+    #[test]
     fn answers_show_and_functions() {
         assert_eq!(
             single(try_handle("SHOW server_version_num", "d", "u")).as_deref(),
-            Some("140000")
+            Some(SERVER_VERSION_NUM)
         );
         assert_eq!(
             single(try_handle("select current_database()", "mydb", "u")).as_deref(),
@@ -716,7 +733,7 @@ mod tests {
                 "u"
             ))
             .as_deref(),
-            Some("140000")
+            Some(SERVER_VERSION_NUM)
         );
         assert_eq!(
             single(try_handle("SELECT version()", "d", "u")).as_deref(),

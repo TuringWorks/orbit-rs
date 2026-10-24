@@ -96,3 +96,7 @@ harness = false
 name = "bdd_transactions"
 path = "bdd_transactions/mod.rs"
 harness = false
+
+[[test]]
+name = "postgres_version_tests"
+path = "orbit-protocols/postgres_version_tests.rs"

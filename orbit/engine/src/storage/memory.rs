@@ -132,7 +132,7 @@ impl TableStorage for MemoryTableStorage {
         let mut settings = self.settings.write().await;
         settings.insert(
             "server_version".to_string(),
-            "14.0 (Orbit-RS Memory)".to_string(),
+            "18.0".to_string(),
         );
         settings.insert("server_encoding".to_string(), "UTF8".to_string());
         settings.insert("client_encoding".to_string(), "UTF8".to_string());

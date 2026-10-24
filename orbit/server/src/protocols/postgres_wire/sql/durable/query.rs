@@ -1,5 +1,6 @@
 //! `SELECT` execution over the committed tables.
 
+use super::pg_catalog;
 use super::value::{canonical, cmp, group_key, oid_of_type, oid_of_value, truthy, unique_key};
 use super::{err, Row, State, Table, R};
 use crate::protocols::postgres_wire::query_engine::QueryResult;
@@ -248,6 +249,20 @@ fn contains_agg(e: &Expression) -> bool {
     found
 }
 
+/// Whether a table reference names a `pg_catalog` view: it says `pg_catalog`, or it is an unqualified
+/// `pg_*` name that no user table uses.
+fn is_catalog_name(
+    name: &crate::protocols::postgres_wire::sql::ast::TableName,
+    key: &str,
+    st: &State,
+) -> bool {
+    match name.schema.as_deref().map(str::to_lowercase).as_deref() {
+        Some("pg_catalog") => true,
+        None => pg_catalog::is_view(key) && !st.tables.contains_key(key),
+        _ => false,
+    }
+}
+
 /// Functions whose value is a property of the session or server, not of the data.
 fn session_function(f: &FunctionCall) -> Option<SqlValue> {
     if !f.args.is_empty() {
@@ -292,7 +307,10 @@ fn substitute_windows(
 fn has_subquery(e: &Expression) -> bool {
     let mut found = false;
     walk(e, &mut |x| {
-        let session = matches!(x, Expression::Function(f) if session_function(f).is_some());
+        let session = matches!(x, Expression::Function(f) if session_function(f).is_some())
+            || matches!(x, Expression::Function(f) if pg_catalog::is_function(f))
+            || matches!(x, Expression::Cast { target_type, .. } if pg_catalog::is_reg_type(target_type))
+            || matches!(x, Expression::Column(c) if c.table.is_none() && pg_catalog::session_keyword(&c.name).is_some());
         if session
             || matches!(
                 x,
@@ -562,6 +580,27 @@ impl<'a> Runner<'a> {
                 }
                 Expression::Function(f) if session_function(f).is_some() => {
                     session_function(f).map(Expression::Literal)
+                }
+                Expression::Function(f) if pg_catalog::is_function(f) => {
+                    let mut args = Vec::with_capacity(f.args.len());
+                    for a in &f.args {
+                        args.push(me.eval(a, ctx)?);
+                    }
+                    Some(Expression::Literal(pg_catalog::call(me.st, f, &args)?))
+                }
+                Expression::Cast { expr, target_type } if pg_catalog::is_reg_type(target_type) => {
+                    let v = me.eval(expr, ctx)?;
+                    Some(Expression::Literal(pg_catalog::cast(
+                        me.st,
+                        target_type,
+                        v,
+                    )?))
+                }
+                Expression::Column(c)
+                    if c.table.is_none() && pg_catalog::session_keyword(&c.name).is_some() =>
+                {
+                    pg_catalog::session_keyword(&c.name)
+                        .map(|v| Expression::Literal(SqlValue::Text(v.to_string())))
                 }
                 Expression::In {
                     expr,
@@ -1005,6 +1044,7 @@ impl<'a> Runner<'a> {
         if self.ctes.contains_key(&key)
             || name.schema.as_deref().map(str::to_lowercase).as_deref()
                 == Some("information_schema")
+            || is_catalog_name(name, &key, self.st)
         {
             return Ok(None);
         }
@@ -1303,68 +1343,9 @@ impl<'a> Runner<'a> {
         Ok(acc)
     }
 
-    /// The parts of `information_schema` that tools use to find out what tables and columns exist.
+    /// `information_schema.<view>`, computed from the committed tables.
     fn information_schema(&self, view: &str, qual: &str) -> R<Rel> {
-        let col = |n: &str, t: SqlType| RelCol {
-            qual: Some(qual.to_string()),
-            name: n.to_string(),
-            ty: Some(t),
-        };
-        let text = |s: &str| SqlValue::Text(s.to_string());
-        let mut names: Vec<&String> = self.st.tables.keys().collect();
-        names.sort();
-        match view {
-            "columns" => {
-                let cols = vec![
-                    col("table_catalog", SqlType::Text),
-                    col("table_schema", SqlType::Text),
-                    col("table_name", SqlType::Text),
-                    col("column_name", SqlType::Text),
-                    col("ordinal_position", SqlType::Integer),
-                    col("column_default", SqlType::Text),
-                    col("is_nullable", SqlType::Text),
-                    col("data_type", SqlType::Text),
-                ];
-                let mut rows = Vec::new();
-                for n in names {
-                    let t = &self.st.tables[n];
-                    for (i, c) in t.cols.iter().enumerate() {
-                        let default = match &c.serial {
-                            Some(seq) => text(&format!("nextval('{seq}'::regclass)")),
-                            None => SqlValue::Null,
-                        };
-                        rows.push(vec![
-                            text("orbit"),
-                            text("public"),
-                            text(&t.name),
-                            text(&c.name),
-                            SqlValue::Integer(i as i32 + 1),
-                            default,
-                            text(if c.not_null { "NO" } else { "YES" }),
-                            text(&data_type_name(&c.ty)),
-                        ]);
-                    }
-                }
-                Ok(Rel { cols, rows })
-            }
-            "tables" => {
-                let cols = vec![
-                    col("table_catalog", SqlType::Text),
-                    col("table_schema", SqlType::Text),
-                    col("table_name", SqlType::Text),
-                    col("table_type", SqlType::Text),
-                ];
-                let rows = names
-                    .iter()
-                    .map(|n| vec![text("orbit"), text("public"), text(n), text("BASE TABLE")])
-                    .collect();
-                Ok(Rel { cols, rows })
-            }
-            other => err(
-                "42P01",
-                format!("relation \"information_schema.{other}\" does not exist"),
-            ),
-        }
+        super::information_schema::view(self.st, view, qual)
     }
 
     // ---- FROM ----
@@ -1388,6 +1369,11 @@ impl<'a> Runner<'a> {
                     == Some("information_schema")
                 {
                     return self.information_schema(&key, &qual);
+                }
+                if is_catalog_name(name, &key, self.st) {
+                    if let Some(rel) = pg_catalog::view(self.st, &key, &qual) {
+                        return Ok(rel);
+                    }
                 }
                 let Some(t) = self.st.tables.get(&key) else {
                     return err("42P01", format!("relation \"{key}\" does not exist"));
@@ -1714,32 +1700,4 @@ fn sort_keyed(rows: &mut [(Vec<SqlValue>, Row)], items: &[&OrderByItem]) {
 
 fn sort_keyed_pairs(rows: &mut [(SqlValue, Vec<SqlValue>)], items: &[&OrderByItem]) {
     rows.sort_by(|a, b| order_cmp(&a.1, &b.1, items));
-}
-
-/// The name `information_schema.columns.data_type` gives a column type.
-fn data_type_name(t: &SqlType) -> String {
-    match t {
-        SqlType::SmallInt => "smallint",
-        SqlType::Integer => "integer",
-        SqlType::BigInt => "bigint",
-        SqlType::Decimal { .. } | SqlType::Numeric { .. } => "numeric",
-        SqlType::Real => "real",
-        SqlType::DoublePrecision => "double precision",
-        SqlType::Boolean => "boolean",
-        SqlType::Char(_) => "character",
-        SqlType::Varchar(_) => "character varying",
-        SqlType::Text => "text",
-        SqlType::Bytea => "bytea",
-        SqlType::Date => "date",
-        SqlType::Time { .. } => "time without time zone",
-        SqlType::Timestamp {
-            with_timezone: true,
-        } => "timestamp with time zone",
-        SqlType::Timestamp { .. } => "timestamp without time zone",
-        SqlType::Json => "json",
-        SqlType::Jsonb => "jsonb",
-        SqlType::Uuid => "uuid",
-        _ => "USER-DEFINED",
-    }
-    .to_string()
 }

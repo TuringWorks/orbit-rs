@@ -18,7 +18,9 @@
 mod ddl;
 mod dml;
 mod fk;
+mod information_schema;
 mod persist;
+mod pg_catalog;
 mod query;
 pub(crate) mod value;
 mod window;
@@ -827,5 +829,7 @@ fn aborted() -> DbError {
     }
 }
 
+#[cfg(test)]
+mod catalog_tests;
 #[cfg(test)]
 mod tests;

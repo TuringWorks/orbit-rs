@@ -3,6 +3,7 @@
 //! This module provides a recursive descent parser that can handle
 //! all major SQL constructs with proper error handling and recovery.
 
+pub mod backend;
 pub mod dcl;
 pub mod ddl;
 pub mod dml;
@@ -64,6 +65,15 @@ impl SqlParser {
 
     /// Parse multiple SQL statements from string input
     pub fn parse_multiple(&mut self, input: &str) -> ProtocolResult<Vec<Statement>> {
+        let backend = backend::ParserBackend::selected();
+        backend.gate(input)?;
+        let result = self.parse_multiple_hand_rolled(input);
+        backend.compare(input, result.is_ok());
+        result
+    }
+
+    /// The hand-rolled recursive-descent parser; the only one that builds an [`Statement`] today.
+    fn parse_multiple_hand_rolled(&mut self, input: &str) -> ProtocolResult<Vec<Statement>> {
         // Tokenize the input
         let mut lexer = Lexer::new(input);
         // A double-quoted identifier is an ordinary name to the parser, wherever a name is accepted ("order", "id", "uuid-ossp");

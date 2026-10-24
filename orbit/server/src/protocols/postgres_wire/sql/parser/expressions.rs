@@ -587,6 +587,13 @@ impl ExpressionParser {
                             // So we are safe.
                         }
 
+                        // `schema.function(...)`: the schema is dropped, as every function is global here
+                        if *pos + 1 < tokens.len() && matches!(tokens[*pos + 1], Token::LeftParen) {
+                            if let Some(func) = tokens.get(*pos).and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name) {
+                                return self.parse_function_call(tokens, pos, func);
+                            }
+                        }
+
                         if let Some(col) = tokens.get(*pos).and_then(crate::protocols::postgres_wire::sql::parser::utilities::token_to_identifier_name) {
                             *pos += 1;
                             Ok(Expression::Column(

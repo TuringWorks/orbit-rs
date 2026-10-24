@@ -914,6 +914,32 @@ mod replication_unit {
             "a promoted replica must not reuse ids, got {ib} (leader handed out {ia})"
         );
     }
+
+    #[tokio::test]
+    async fn foreign_key_shaped_columns_get_lookup_indexes() {
+        let a = DurableEngine::in_memory();
+        x(
+            &a,
+            "CREATE TABLE relation (id SERIAL PRIMARY KEY, res_id INTEGER, label VARCHAR)",
+        )
+        .await;
+        let state = a.snapshot();
+        let table = state.tables.get("relation").unwrap();
+        assert!(table.indexes.iter().any(|i| i.cols == vec![1] && !i.unique));
+        x(
+            &a,
+            "INSERT INTO relation (res_id, label) VALUES (7, 'a'), (7, 'b'), (8, 'c')",
+        )
+        .await;
+        assert_eq!(
+            q(
+                &a,
+                "SELECT label FROM relation WHERE res_id IN (7) ORDER BY id"
+            )
+            .await,
+            vec![vec!["a"], vec!["b"]]
+        );
+    }
 }
 
 mod foreign_keys {

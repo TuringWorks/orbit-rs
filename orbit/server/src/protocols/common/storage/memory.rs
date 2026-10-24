@@ -130,10 +130,7 @@ impl TableStorage for MemoryTableStorage {
     async fn initialize(&self) -> ProtocolResult<()> {
         // Initialize default settings
         let mut settings = self.settings.write().await;
-        settings.insert(
-            "server_version".to_string(),
-            "14.0 (Orbit-RS Memory)".to_string(),
-        );
+        settings.insert("server_version".to_string(), "18.0".to_string());
         settings.insert("server_encoding".to_string(), "UTF8".to_string());
         settings.insert("client_encoding".to_string(), "UTF8".to_string());
         settings.insert("DateStyle".to_string(), "ISO, MDY".to_string());
