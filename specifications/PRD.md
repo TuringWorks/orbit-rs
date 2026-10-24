@@ -570,6 +570,15 @@ npm run compile
 | Arrow Flight SQL | 50052 | `protocols/flight/` | Specified |
 | OrbitWire | 50053 | `protocols/orbitwire/` | Specified |
 
+### PostgreSQL 18 Clone Controls
+
+The PostgreSQL wire adapter accepts and persists the PostgreSQL 18 clone-control
+settings `SET/SHOW file_copy_method` (`copy` or `clone`) and the
+`CREATE DATABASE ... STRATEGY = FILE_COPY` option. These controls currently
+provide protocol and metadata compatibility. True copy-on-write database
+snapshots are planned for the durable storage layer because Orbit-RS does not
+use a PostgreSQL data directory.
+
 ### OrbitQL Wire Protocols
 
 OrbitQL queries can be executed via two purpose-built wire protocols:

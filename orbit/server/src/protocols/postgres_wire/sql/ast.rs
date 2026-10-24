@@ -299,6 +299,8 @@ pub struct CreateDatabaseStatement {
     pub encoding: Option<String>,
     pub locale: Option<String>,
     pub connection_limit: Option<i32>,
+    /// Requested database creation strategy, such as PostgreSQL 18's `FILE_COPY`.
+    pub strategy: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

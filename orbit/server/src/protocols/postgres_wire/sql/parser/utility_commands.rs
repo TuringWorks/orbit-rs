@@ -11,6 +11,27 @@
 use super::{utilities, ParseResult, SqlParser};
 use crate::protocols::postgres_wire::sql::{ast::*, lexer::Token};
 
+/// Parse SHOW for a session variable or all variables.
+pub fn parse_show(parser: &mut SqlParser) -> ParseResult<Statement> {
+    let variable = if parser.matches(&[Token::All]) {
+        parser.advance()?;
+        ShowVariable::All
+    } else if let Some(Token::Identifier(name)) = &parser.current_token {
+        let name = name.clone();
+        parser.advance()?;
+        ShowVariable::Variable(name)
+    } else {
+        return Err(super::ParseError {
+            message: "Expected variable name after SHOW".to_string(),
+            position: parser.position,
+            expected: vec!["variable name".to_string()],
+            found: parser.current_token.clone(),
+        });
+    };
+
+    Ok(Statement::Show(ShowStatement { variable }))
+}
+
 // ===== RESET / DISCARD =====
 
 pub fn parse_reset(parser: &mut SqlParser) -> ParseResult<Statement> {

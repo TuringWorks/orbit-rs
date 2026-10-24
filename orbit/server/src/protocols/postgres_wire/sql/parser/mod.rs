@@ -141,6 +141,10 @@ impl SqlParser {
 
             // Session Management
             Some(Token::Set) => self.parse_set_statement(),
+            Some(Token::Show) => {
+                self.advance()?;
+                utility_commands::parse_show(self)
+            }
             Some(Token::Reset) => {
                 self.advance()?;
                 utility_commands::parse_reset(self)

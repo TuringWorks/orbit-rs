@@ -4,6 +4,35 @@
 
 use orbit_server::protocols::postgres_wire::sql::executor::{ExecutionResult, SqlExecutor};
 
+#[tokio::test]
+async fn test_postgres18_file_copy_clone_controls() {
+    let executor = SqlExecutor::new().await.unwrap();
+
+    let set_result = executor
+        .execute("SET file_copy_method = 'clone'")
+        .await
+        .unwrap();
+    assert!(matches!(
+        set_result,
+        ExecutionResult::Set { value, .. } if value == "clone"
+    ));
+
+    let show_result = executor.execute("SHOW file_copy_method").await.unwrap();
+    assert!(matches!(
+        show_result,
+        ExecutionResult::Show { value, .. } if value == "clone"
+    ));
+
+    let create_result = executor
+        .execute("CREATE DATABASE clone_target TEMPLATE actors STRATEGY = FILE_COPY")
+        .await
+        .unwrap();
+    assert!(matches!(
+        create_result,
+        ExecutionResult::CreateDatabase { database_name } if database_name == "clone_target"
+    ));
+}
+
 // ============================================================================
 // CREATE TABLE Tests
 // ============================================================================

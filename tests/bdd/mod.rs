@@ -48,6 +48,9 @@ fn result_to_json(result: &ExecutionResult) -> serde_json::Value {
         ExecutionResult::Insert { count, .. }
         | ExecutionResult::Update { count, .. }
         | ExecutionResult::Delete { count, .. } => serde_json::json!({ "count": count }),
+        ExecutionResult::Set { variable, value } | ExecutionResult::Show { variable, value } => {
+            serde_json::json!({ "variable": variable, "value": value })
+        }
         other => serde_json::json!({ "result": format!("{other:?}") }),
     }
 }
@@ -241,6 +244,36 @@ async fn then_first_result_contains(
         .any(|value| value.as_str() == Some(expected.as_str()))
     {
         return Err(format!("First result does not contain '{}'", expected).into());
+    }
+
+    Ok(())
+}
+
+#[then(expr = "the setting {string} should be {string}")]
+async fn then_setting_should_be(
+    world: &mut OrbitWorld,
+    setting: String,
+    expected: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let result = world
+        .last_result
+        .as_ref()
+        .ok_or("No setting result available")?;
+    let actual_setting = result
+        .get("variable")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("Setting result does not contain a variable")?;
+    let actual_value = result
+        .get("value")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("Setting result does not contain a value")?;
+
+    if actual_setting != setting || actual_value != expected {
+        return Err(format!(
+            "Expected setting {} to be {}, got {} = {}",
+            setting, expected, actual_setting, actual_value
+        )
+        .into());
     }
 
     Ok(())

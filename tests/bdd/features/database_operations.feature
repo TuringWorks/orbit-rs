@@ -85,3 +85,12 @@ Feature: Database Operations
     Then the operation should succeed
     And the result should have 1 rows
     And the first result should contain "catalog_test"
+
+  Scenario: PostgreSQL 18 clone controls are accepted
+    When I execute the SQL statement "SET file_copy_method = 'clone'"
+    Then the operation should succeed
+    When I execute the SQL statement "SHOW file_copy_method"
+    Then the operation should succeed
+    And the setting "file_copy_method" should be "clone"
+    When I execute the SQL statement "CREATE DATABASE clone_target TEMPLATE actors STRATEGY = FILE_COPY"
+    Then the operation should succeed

@@ -269,6 +269,8 @@ pub struct DatabaseDefinition {
     pub encoding: Option<String>,
     pub locale: Option<String>,
     pub connection_limit: Option<i32>,
+    /// Requested database creation strategy, such as `FILE_COPY`.
+    pub strategy: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -697,6 +699,7 @@ impl SqlExecutor {
         settings.insert("DateStyle".to_string(), "ISO, MDY".to_string());
         settings.insert("TimeZone".to_string(), "UTC".to_string());
         settings.insert("standard_conforming_strings".to_string(), "on".to_string());
+        settings.insert("file_copy_method".to_string(), "copy".to_string());
 
         let mut users = HashMap::new();
         users.insert(
@@ -719,6 +722,7 @@ impl SqlExecutor {
                 encoding: Some("UTF8".to_string()),
                 locale: Some("en_US.UTF-8".to_string()),
                 connection_limit: None,
+                strategy: Some("WAL_LOG".to_string()),
                 created_at: chrono::Utc::now(),
             },
         );
@@ -1211,6 +1215,7 @@ impl SqlExecutor {
             encoding: stmt.encoding.or_else(|| Some("UTF8".to_string())),
             locale: stmt.locale.or_else(|| Some("en_US.UTF-8".to_string())),
             connection_limit: stmt.connection_limit,
+            strategy: stmt.strategy.or_else(|| Some("WAL_LOG".to_string())),
             created_at: chrono::Utc::now(),
         };
 
@@ -5838,8 +5843,10 @@ impl SqlExecutor {
                 })
             }
             ShowVariable::Variable(var_name) => {
+                let key = var_name.to_ascii_lowercase();
                 let value = settings
-                    .get(&var_name)
+                    .get(&key)
+                    .or_else(|| settings.get(&var_name))
                     .cloned()
                     .unwrap_or_else(|| "unknown".to_string());
 
@@ -5875,22 +5882,28 @@ impl SqlExecutor {
     }
 
     async fn execute_set(&self, stmt: SetStatement) -> ProtocolResult<ExecutionResult> {
-        // For now, we just log the SET command and return success
-        // This allows clients like psycopg2 to connect even if we don't fully support all SET options
         let variable = stmt.variable;
-        let value = if stmt.value.is_empty() {
+        let mut value = if stmt.value.is_empty() {
             "DEFAULT".to_string()
         } else {
-            // Simple string representation of the first value
             match &stmt.value[0] {
-                Expression::Literal(val) => format!("{val:?}"),
+                Expression::Literal(val) => val.to_postgres_string(),
                 _ => "COMPLEX_VALUE".to_string(),
             }
         };
 
-        // TODO: Actually implement session variable storage
-        // let mut settings = self.settings.write().await;
-        // settings.insert(variable.clone(), value.clone());
+        let key = variable.to_ascii_lowercase();
+        if key == "file_copy_method" {
+            value = value.to_ascii_lowercase();
+            if !matches!(value.as_str(), "copy" | "clone" | "default") {
+                return Err(ProtocolError::PostgresError(
+                    "file_copy_method must be one of: copy, clone".to_string(),
+                ));
+            }
+        }
+
+        let mut settings = self.settings.write().await;
+        settings.insert(key, value.clone());
 
         Ok(ExecutionResult::Set { variable, value })
     }

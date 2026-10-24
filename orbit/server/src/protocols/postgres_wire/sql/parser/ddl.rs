@@ -63,8 +63,15 @@ pub fn parse_create_database(parser: &mut SqlParser) -> ParseResult<Statement> {
     let mut encoding = None;
     let locale = None;
     let connection_limit = None;
+    let mut strategy = None;
 
-    while parser.matches(&[Token::With, Token::Owner, Token::Template, Token::Encoding]) {
+    while parser.matches(&[
+        Token::With,
+        Token::Owner,
+        Token::Template,
+        Token::Encoding,
+        Token::Strategy,
+    ]) {
         if parser.matches(&[Token::With]) {
             parser.advance()?;
             continue;
@@ -91,6 +98,22 @@ pub fn parse_create_database(parser: &mut SqlParser) -> ParseResult<Statement> {
                 encoding = Some(enc.clone());
                 parser.advance()?;
             }
+        } else if parser.matches(&[Token::Strategy]) {
+            parser.advance()?;
+            if parser.matches(&[Token::Equal, Token::To]) {
+                parser.advance()?;
+            }
+            if let Some(Token::Identifier(value)) = &parser.current_token {
+                strategy = Some(value.clone());
+                parser.advance()?;
+            } else {
+                return Err(ParseError {
+                    message: "Expected database strategy".to_string(),
+                    position: parser.position,
+                    expected: vec!["strategy".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
         }
     }
 
@@ -102,6 +125,7 @@ pub fn parse_create_database(parser: &mut SqlParser) -> ParseResult<Statement> {
         encoding,
         locale,
         connection_limit,
+        strategy,
     }))
 }
 

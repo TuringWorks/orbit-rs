@@ -619,6 +619,7 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
      - Transaction status tracking
      - Error handling with PostgreSQL-compatible error responses
    - **SQL Support**: SELECT, INSERT, UPDATE, DELETE with WHERE clauses, JSON state management
+   - **PostgreSQL 18 clone-control compatibility**: session-level `file_copy_method` values (`copy` and `clone`) are persisted and `CREATE DATABASE ... STRATEGY = FILE_COPY` is represented in database metadata. Orbit-RS does not use a PostgreSQL data directory, so filesystem reflink/CoW behavior is not implied; logical snapshot isolation will be implemented in the durable storage layer.
    - **Integration**: 9 integration tests (100% passing) with psql client validation
    - **Compatibility**: Works with standard PostgreSQL clients (psql, pgAdmin, DataGrip, etc.)
    - **Future Enhancements**: JOINs, aggregates, window functions, pgvector extension support
