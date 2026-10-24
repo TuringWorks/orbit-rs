@@ -5351,15 +5351,39 @@ impl SqlExecutor {
         Ok(rows)
     }
 
-    /// Query pg_catalog.pg_index - index information
-    /// Note: Without an indexes field, we return an empty result set
+    /// Query pg_catalog.pg_index - index metadata for indexes registered on user tables.
     async fn query_pg_index(
         &self,
-        _columns: &[String],
+        columns: &[String],
     ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
-        // Indexes are not tracked separately in this executor
-        // Return empty result set
-        Ok(Vec::new())
+        self.ensure_oids_assigned().await;
+        let tables = self.tables.read().await;
+        let mut rows = Vec::new();
+        let mut index_oid = 40000;
+        for table in tables.values() {
+            for index in &table.indexes {
+                let mut values = HashMap::new();
+                values.insert("indexrelid", index_oid.to_string());
+                values.insert("indrelid", table.oid.to_string());
+                values.insert("indnatts", index.columns.len().to_string());
+                values.insert("indnkeyatts", index.columns.len().to_string());
+                values.insert("indisunique", if index.unique { "t" } else { "f" }.to_string());
+                values.insert(
+                    "indisprimary",
+                    if index.name.ends_with("_pkey") { "t" } else { "f" }.to_string(),
+                );
+                values.insert("indisvalid", "t".to_string());
+                values.insert("indkey", index.columns.join(" "));
+                rows.push(
+                    columns
+                        .iter()
+                        .map(|column| Some(values.get(column.as_str()).cloned().unwrap_or_default()))
+                        .collect(),
+                );
+                index_oid += 1;
+            }
+        }
+        Ok(rows)
     }
 
     /// Query pg_catalog.pg_constraint - constraint definitions
@@ -5530,15 +5554,39 @@ impl SqlExecutor {
         Ok(rows)
     }
 
-    /// Query pg_catalog.pg_indexes - index details
-    /// Note: Without an indexes field, we return an empty result set
+    /// Query pg_catalog.pg_indexes - index details.
     async fn query_pg_indexes(
         &self,
-        _columns: &[String],
+        columns: &[String],
     ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
-        // Indexes are not tracked separately in this executor
-        // Return empty result set
-        Ok(Vec::new())
+        let tables = self.tables.read().await;
+        let mut rows = Vec::new();
+        for table in tables.values() {
+            for index in &table.indexes {
+                let mut values = HashMap::new();
+                values.insert("schemaname", "public".to_string());
+                values.insert("tablename", table.name.clone());
+                values.insert("indexname", index.name.clone());
+                values.insert(
+                    "indexdef",
+                    format!(
+                        "CREATE {}INDEX {} ON {} USING {} ({})",
+                        if index.unique { "UNIQUE " } else { "" },
+                        index.name,
+                        table.name,
+                        index.index_type,
+                        index.columns.join(", ")
+                    ),
+                );
+                rows.push(
+                    columns
+                        .iter()
+                        .map(|column| Some(values.get(column.as_str()).cloned().unwrap_or_default()))
+                        .collect(),
+                );
+            }
+        }
+        Ok(rows)
     }
 
     /// Query pg_catalog.pg_settings - configuration parameters
