@@ -312,10 +312,10 @@ impl UnifiedStorageBackend for RocksDbBackend {
         let prefix_bytes = prefix.as_bytes();
         let limit = limit.unwrap_or(usize::MAX);
         let mut values = Vec::new();
-        let mut iterator = self
+        let iterator = self
             .db
             .iterator(IteratorMode::From(prefix_bytes, Direction::Forward));
-        while let Some(item) = iterator.next() {
+        for item in iterator {
             let (key, value) =
                 item.map_err(|error| UnifiedStorageError::Backend(error.to_string()))?;
             if !key.starts_with(prefix_bytes) || values.len() >= limit {

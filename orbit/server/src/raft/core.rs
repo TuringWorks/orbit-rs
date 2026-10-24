@@ -553,7 +553,7 @@ impl Raft {
             Vec::new()
         };
         Ready {
-            hard_state: std::mem::take(&mut self.out_hard).then(|| HardState {
+            hard_state: std::mem::take(&mut self.out_hard).then_some(HardState {
                 term: self.term,
                 voted_for: self.voted_for,
             }),

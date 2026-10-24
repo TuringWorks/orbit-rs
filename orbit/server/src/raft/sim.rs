@@ -343,7 +343,7 @@ impl Sim {
             }
         }
         // partitions
-        if self.faults.partition_every > 0 && self.now % self.faults.partition_every == 0 {
+        if self.faults.partition_every > 0 && self.now.is_multiple_of(self.faults.partition_every) {
             if self.rng.chance(50) {
                 for id in &ids {
                     let g = self.rng.below(2) as u8;
@@ -407,6 +407,7 @@ impl Sim {
         }
     }
 
+    #[allow(dead_code)]
     pub fn crash_all_down(&self) -> bool {
         self.nodes.values().all(|n| n.raft.is_none())
     }
@@ -466,7 +467,7 @@ impl Sim {
 
     fn propose_if_leader_idle(&mut self) {
         // a few writes after healing prove the cluster accepts new work
-        if self.now % 20 == 0 {
+        if self.now.is_multiple_of(20) {
             self.propose();
         }
     }
@@ -483,6 +484,7 @@ impl Sim {
         self.acked.len()
     }
 
+    #[allow(dead_code)]
     pub fn committed_count(&self) -> usize {
         self.committed.len()
     }
@@ -594,6 +596,7 @@ impl Sim {
             .join("\n")
     }
 
+    #[allow(dead_code)]
     pub fn is_down(&self, id: NodeId) -> bool {
         self.nodes[&id].raft.is_none()
     }

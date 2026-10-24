@@ -115,9 +115,7 @@ fn role_command(lower: &str) -> Option<QueryResult> {
     let mut roles = ROLES.lock().ok()?;
     let if_exists = rest.starts_with(&["if", "exists"]);
     let name = rest
-        .iter()
-        .skip(if if_exists { 2 } else { 0 })
-        .next()
+        .get(if if_exists { 2 } else { 0 })
         .map(|n| n.trim_matches('"').to_string())?;
     let pos = roles.iter().position(|r| r.name == name);
     match (*verb, pos) {

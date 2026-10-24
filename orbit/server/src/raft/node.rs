@@ -120,7 +120,7 @@ impl RaftNode {
     /// Load what the node persisted and start its thread.
     pub fn start(
         cfg: NodeConfig,
-        mut storage: Box<dyn RaftStorage>,
+        storage: Box<dyn RaftStorage>,
         sm: Arc<dyn StateMachine>,
         transport: Arc<dyn Transport>,
     ) -> Result<(RaftNode, std::thread::JoinHandle<()>), String> {
@@ -410,7 +410,7 @@ impl Driver {
     fn publish(&mut self) {
         let applied = self.sm.applied_index();
         let serving = self.core.is_leader()
-            && self.leader_start.map_or(false, |s| applied >= s)
+            && self.leader_start.is_some_and(|s| applied >= s)
             && self.core.lease_valid();
         let next = Status {
             id: self.cfg.id,

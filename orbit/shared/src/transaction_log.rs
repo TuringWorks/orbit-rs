@@ -266,8 +266,7 @@ impl SqliteTransactionLogger {
             if buffer.is_empty() {
                 return Ok(());
             }
-            let entries = buffer.clone();
-            entries
+            buffer.clone()
         };
 
         if !entries.is_empty() {

@@ -17,6 +17,7 @@ use std::collections::HashMap;
 /// How deep a chain of cascading actions may go before the statement is stopped.
 const MAX_DEPTH: usize = 64;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Action {
     NoAction,
@@ -255,7 +256,7 @@ fn parent_has(parent: &Table, pcols: &[usize], vals: &[SqlValue]) -> bool {
                 }
                 probe
             })
-            .map_or(false, |k| idx.map.contains_key(&k));
+            .is_some_and(|k| idx.map.contains_key(&k));
     }
     let want = group_key(vals);
     parent
