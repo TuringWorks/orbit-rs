@@ -214,24 +214,6 @@ fn create_table(
     for spec in &specs {
         fk::add(st, &key, spec)?;
     }
-    // Symphony's generated relation tables sometimes carry foreign-key-shaped
-    // columns without a declared FK (the application enforces those links at
-    // the ORM layer). Keep their common lookups indexed as PostgreSQL would;
-    // this is especially important for `... WHERE res_id IN (...)` reads
-    // during module seeding.
-    if let Some(table) = st.tables.get_mut(&key) {
-        let existing: Vec<Vec<usize>> = table.indexes.iter().map(|i| i.cols.clone()).collect();
-        for (i, col) in table.cols.iter().enumerate() {
-            if col.name.ends_with("_id") && !existing.iter().any(|cols| cols == &[i]) {
-                table.indexes.push(new_index(
-                    format!("{}_{}_idx", table.name, col.name),
-                    vec![i],
-                    false,
-                    false,
-                ));
-            }
-        }
-    }
     record(ops, text, vec![]);
     tag("CREATE TABLE")
 }

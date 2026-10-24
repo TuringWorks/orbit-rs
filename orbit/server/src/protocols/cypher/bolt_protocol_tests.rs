@@ -1101,7 +1101,7 @@ mod tests {
         // IGNORED message is 0x7E
         let chunk_size = u16::from_be_bytes([response[0], response[1]]) as usize;
         let message_data = &response[2..2 + chunk_size];
-        assert_eq!(message_data[0], 0x7E); // IGNORED signature
+        assert_eq!(message_data[1], 0x7E); // IGNORED signature
     }
 
     fn create_goodbye_message() -> Vec<u8> {

@@ -34,7 +34,7 @@ impl ParserBackend {
         static SELECTED: OnceLock<ParserBackend> = OnceLock::new();
         *SELECTED.get_or_init(|| {
             let requested = std::env::var(Self::ENV)
-                .map(|v| v.parse().unwrap_or_else(|e| fallback(&e)))
+                .map(|v| v.parse::<Self>().unwrap_or_else(|e: String| fallback(&e)))
                 .unwrap_or(Self::HandRolled);
             if requested != Self::HandRolled && !pg_query_available() {
                 tracing::warn!(
@@ -51,9 +51,8 @@ impl ParserBackend {
     /// Reject `sql` up front when `libpg_query` is authoritative and finds a syntax error.
     pub(super) fn gate(self, sql: &str) -> ProtocolResult<()> {
         match self {
-            Self::PgQuery => pg_query_syntax(sql).map_err(|msg| {
-                ProtocolError::PostgresError(format!("SQL Parse Error: {msg}"))
-            }),
+            Self::PgQuery => pg_query_syntax(sql)
+                .map_err(|msg| ProtocolError::PostgresError(format!("SQL Parse Error: {msg}"))),
             Self::HandRolled | Self::Shadow => Ok(()),
         }
     }
@@ -67,7 +66,12 @@ impl ParserBackend {
         SHADOW_TOTAL.fetch_add(1, Ordering::Relaxed);
         if pg_accepted != hand_rolled_accepted {
             SHADOW_DISAGREEMENTS.fetch_add(1, Ordering::Relaxed);
-            tracing::warn!(pg_accepted, hand_rolled_accepted, sql, "SQL parser disagreement");
+            tracing::warn!(
+                pg_accepted,
+                hand_rolled_accepted,
+                sql,
+                "SQL parser disagreement"
+            );
         }
     }
 }
@@ -113,7 +117,9 @@ pub fn pg_query_accepts(sql: &str) -> Option<bool> {
 
 #[cfg(feature = "pg-query-parser")]
 fn pg_query_syntax(sql: &str) -> Result<(), String> {
-    pg_query::parse(sql).map(|_| ()).map_err(|e| e.to_string())
+    pg_query::parse(sql, pg_query::ParserOptions::DEFAULT)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(not(feature = "pg-query-parser"))]

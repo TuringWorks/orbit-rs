@@ -1288,6 +1288,12 @@ impl BoltProtocolHandler {
                             new_results.push(new_row);
                         }
                         results = new_results;
+                    } else {
+                        let mut row = Vec::with_capacity(items.len());
+                        for item in items {
+                            row.push(self.evaluate_expression(&item.expr, &[], &[]));
+                        }
+                        results.push(row);
                     }
                     columns = items
                         .iter()
