@@ -1807,6 +1807,89 @@ impl SqlExecutor {
             rows.push(result_row);
         }
 
+        // The row-oriented executor returns projected values, so apply the
+        // simple result-set operations here.  This keeps the behavior of the
+        // normal and vectorized paths consistent for the common SQL forms.
+        if let Some(SelectItem::Expression {
+            expr: Expression::Function(function),
+            ..
+        }) = stmt.select_list.first()
+        {
+            let is_count = match &function.name {
+                crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name)
+                | crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified {
+                    name, ..
+                } => name.eq_ignore_ascii_case("count"),
+            };
+            if is_count && stmt.select_list.len() == 1 && stmt.group_by.is_none() {
+                rows = vec![vec![Some(rows.len().to_string())]];
+            }
+        }
+
+        if let Some(order_by) = &stmt.order_by {
+            for order in order_by.iter().rev() {
+                let Some(column_name) = (match &order.expression {
+                    Expression::Column(column) => Some(column.name.as_str()),
+                    _ => None,
+                }) else {
+                    continue;
+                };
+                let Some(column_index) = columns
+                    .iter()
+                    .position(|column| column.eq_ignore_ascii_case(column_name))
+                else {
+                    continue;
+                };
+                let descending = matches!(
+                    order.direction,
+                    Some(crate::protocols::postgres_wire::sql::ast::SortDirection::Descending)
+                );
+                rows.sort_by(|left, right| {
+                    let left_value = left.get(column_index).and_then(Option::as_deref);
+                    let right_value = right.get(column_index).and_then(Option::as_deref);
+                    let comparison = match (left_value, right_value) {
+                        (Some(left), Some(right)) => left
+                            .parse::<f64>()
+                            .ok()
+                            .zip(right.parse::<f64>().ok())
+                            .and_then(|(left, right)| left.partial_cmp(&right))
+                            .unwrap_or_else(|| left.cmp(right)),
+                        (None, None) => std::cmp::Ordering::Equal,
+                        (None, Some(_)) => std::cmp::Ordering::Less,
+                        (Some(_), None) => std::cmp::Ordering::Greater,
+                    };
+                    if descending {
+                        comparison.reverse()
+                    } else {
+                        comparison
+                    }
+                });
+            }
+        }
+
+        let offset = stmt.offset.unwrap_or(0) as usize;
+        if offset > 0 {
+            rows = rows.into_iter().skip(offset).collect();
+        }
+        if let Some(limit) = &stmt.limit {
+            if let Some(count) = &limit.count {
+                let value = self
+                    .evaluate_where_condition(count, &EvaluationContext::empty())
+                    .await?;
+                let count = match value {
+                    SqlValue::SmallInt(value) => value.max(0) as usize,
+                    SqlValue::Integer(value) => value.max(0) as usize,
+                    SqlValue::BigInt(value) => value.max(0) as usize,
+                    _ => {
+                        return Err(ProtocolError::PostgresError(
+                            "LIMIT must evaluate to an integer".to_string(),
+                        ));
+                    }
+                };
+                rows.truncate(count);
+            }
+        }
+
         Ok(ExecutionResult::Select {
             columns,
             row_count: rows.len(),

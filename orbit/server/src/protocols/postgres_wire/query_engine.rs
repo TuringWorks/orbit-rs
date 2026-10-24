@@ -210,6 +210,22 @@ impl QueryEngine {
                 if engine.read_only() { "t" } else { "f" }.to_string(),
             );
         }
+        if text.starts_with("select orbit_backup(") {
+            // the path is case sensitive: read it from the original text
+            let original = piece.trim().trim_end_matches(';').trim();
+            let start = original.find('(').map_or(0, |i| i + 1);
+            let end = original.rfind(')').unwrap_or(original.len());
+            let path = original[start..end].trim().trim_matches('\'');
+            if path.is_empty() {
+                return Some(Err(ProtocolError::PostgresError(
+                    "[22023] usage: SELECT orbit_backup('/path/to/new/directory')".into(),
+                )));
+            }
+            return match engine.backup(std::path::Path::new(path)) {
+                Ok(()) => one("orbit_backup", format!("backup written to {path}")),
+                Err(e) => Some(Err(ProtocolError::PostgresError(format!("[58030] {e}")))),
+            };
+        }
         let admin = self.admin.as_ref()?;
         let call = text.strip_prefix("select orbit_raft_")?;
         let args = |name: &str| -> Option<Vec<String>> {

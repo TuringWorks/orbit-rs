@@ -309,23 +309,49 @@ fn apply_assignments(
 ) -> R<Row> {
     let mut new = old.clone();
     for a in set {
-        let AssignmentTarget::Column(name) = &a.target else {
-            return err("0A000", "multi-column SET is not supported");
+        let names: Vec<&String> = match &a.target {
+            AssignmentTarget::Column(n) => vec![n],
+            AssignmentTarget::Columns(ns) => ns.iter().collect(),
         };
-        let Some(i) = t.col_index(name) else {
-            return err(
-                "42703",
-                format!(
-                    "column \"{name}\" of relation \"{}\" does not exist",
-                    t.name
-                ),
-            );
+        // `SET a = x` or `SET (a, b) = (x, y)` / `SET (a, b) = (SELECT ...)`
+        let values: Vec<SqlValue> = if names.len() == 1 {
+            vec![r.eval(&a.value, ctx)?]
+        } else {
+            match &a.value {
+                Expression::Row(items) => items.iter().map(|e| r.eval(e, ctx)).collect::<R<_>>()?,
+                Expression::Subquery(sel) => {
+                    let rel = r.select(sel, Some(&ctx.current_row))?;
+                    rel.rows
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| vec![SqlValue::Null; names.len()])
+                }
+                _ => {
+                    return err(
+                        "42601",
+                        "a multi-column SET needs a row or a subquery on the right",
+                    )
+                }
+            }
         };
-        let v = r.eval(&a.value, ctx)?;
-        new[i] = coerce(v, &t.cols[i].ty).map_err(|m| DbError {
-            code: "22P02",
-            message: m,
-        })?;
+        if values.len() != names.len() {
+            return err("42601", "number of columns and values in SET do not match");
+        }
+        for (name, v) in names.into_iter().zip(values) {
+            let Some(i) = t.col_index(name) else {
+                return err(
+                    "42703",
+                    format!(
+                        "column \"{name}\" of relation \"{}\" does not exist",
+                        t.name
+                    ),
+                );
+            };
+            new[i] = coerce(v, &t.cols[i].ty).map_err(|m| DbError {
+                code: "22P02",
+                message: m,
+            })?;
+        }
     }
     not_null_check(t, &new)?;
     Ok(new)
@@ -406,22 +432,28 @@ fn matching(
     let cols = rel_cols(t, qual);
     let mut r = Runner::new(st);
     let mut out = Vec::new();
-    for (id, row) in &t.rows {
+    let ids: Vec<u64> = match where_clause {
+        Some(w) => r
+            .indexed_ids(t, w, qual)?
+            .unwrap_or_else(|| t.rows.keys().copied().collect()),
+        None => t.rows.keys().copied().collect(),
+    };
+    for id in ids {
+        let Some(row) = t.rows.get(&id) else {
+            continue;
+        };
         let keep = match where_clause {
             Some(w) => super::value::truthy(&r.eval(w, &ctx_for(&cols, row, None))?),
             None => true,
         };
         if keep {
-            out.push((*id, row.clone()));
+            out.push((id, row.clone()));
         }
     }
     Ok(out)
 }
 
 pub(crate) fn update(st: &mut State, ops: &mut Vec<Op>, upd: &UpdateStatement) -> R<QueryResult> {
-    if upd.from.is_some() {
-        return err("0A000", "UPDATE ... FROM is not supported yet");
-    }
     let key = table_key(&upd.table);
     let qual = upd
         .alias
@@ -431,13 +463,40 @@ pub(crate) fn update(st: &mut State, ops: &mut Vec<Op>, upd: &UpdateStatement) -
     let plan: Vec<(u64, Row, Row)> = {
         let t = lookup(st, &key)?;
         let cols = rel_cols(t, &qual);
-        let hits = matching(st, t, &qual, &upd.where_clause)?;
         let mut r = Runner::new(st);
-        let mut out = Vec::with_capacity(hits.len());
-        for (id, old) in hits {
-            let ctx = ctx_for(&cols, &old, None);
-            let new = apply_assignments(&mut r, t, &old, &upd.set, &ctx)?;
-            out.push((id, old, new));
+        let mut out = Vec::new();
+        match &upd.from {
+            None => {
+                let hits = matching(st, t, &qual, &upd.where_clause)?;
+                out.reserve(hits.len());
+                for (id, old) in hits {
+                    let ctx = ctx_for(&cols, &old, None);
+                    let new = apply_assignments(&mut r, t, &old, &upd.set, &ctx)?;
+                    out.push((id, old, new));
+                }
+            }
+            Some(items) => {
+                // UPDATE ... FROM: each target row is changed using the first joined row that satisfies WHERE
+                let from = r.from_items(items)?;
+                let mut all = cols.clone();
+                all.extend(from.cols.iter().cloned());
+                for (id, old) in &t.rows {
+                    for frow in &from.rows {
+                        let mut row = old.clone();
+                        row.extend(frow.iter().cloned());
+                        let ctx = ctx_for(&all, &row, None);
+                        let keep = match &upd.where_clause {
+                            Some(w) => super::value::truthy(&r.eval(w, &ctx)?),
+                            None => true,
+                        };
+                        if keep {
+                            let new = apply_assignments(&mut r, t, old, &upd.set, &ctx)?;
+                            out.push((*id, old.clone(), new));
+                            break;
+                        }
+                    }
+                }
+            }
         }
         out
     };
@@ -456,9 +515,6 @@ pub(crate) fn update(st: &mut State, ops: &mut Vec<Op>, upd: &UpdateStatement) -
 }
 
 pub(crate) fn delete(st: &mut State, ops: &mut Vec<Op>, del: &DeleteStatement) -> R<QueryResult> {
-    if del.using.is_some() {
-        return err("0A000", "DELETE ... USING is not supported yet");
-    }
     let key = table_key(&del.table);
     let qual = del
         .alias
@@ -467,7 +523,33 @@ pub(crate) fn delete(st: &mut State, ops: &mut Vec<Op>, del: &DeleteStatement) -
         .to_lowercase();
     let hits = {
         let t = lookup(st, &key)?;
-        matching(st, t, &qual, &del.where_clause)?
+        match &del.using {
+            None => matching(st, t, &qual, &del.where_clause)?,
+            Some(items) => {
+                // DELETE ... USING: a row goes when some joined row satisfies WHERE
+                let mut r = Runner::new(st);
+                let from = r.from_items(items)?;
+                let mut all = rel_cols(t, &qual);
+                all.extend(from.cols.iter().cloned());
+                let mut out = Vec::new();
+                for (id, old) in &t.rows {
+                    for frow in &from.rows {
+                        let mut row = old.clone();
+                        row.extend(frow.iter().cloned());
+                        let ctx = ctx_for(&all, &row, None);
+                        let keep = match &del.where_clause {
+                            Some(w) => super::value::truthy(&r.eval(w, &ctx)?),
+                            None => true,
+                        };
+                        if keep {
+                            out.push((*id, old.clone()));
+                            break;
+                        }
+                    }
+                }
+                out
+            }
+        }
     };
     let count = hits.len();
     let mut gone = Vec::with_capacity(count);

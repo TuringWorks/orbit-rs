@@ -7,7 +7,7 @@ use super::fk;
 use super::value::coerce;
 use super::{err, Col, DbError, Index, Op, QueryResult, Seqs, State, Table, R};
 use crate::protocols::postgres_wire::sql::ast::{
-    AlterTableAction, ColumnConstraint, ColumnDefinition, CreateIndexStatement,
+    AlterColumnAction, AlterTableAction, ColumnConstraint, ColumnDefinition, CreateIndexStatement,
     CreateTableStatement, Expression, IndexType, Statement, TableConstraint, TableName,
 };
 use crate::protocols::postgres_wire::sql::expression_evaluator::{
@@ -526,6 +526,52 @@ fn alter_table(
                 table.fks.retain(|f| f.name != n);
                 let hidden = format!("{n}_fkidx");
                 table.indexes.retain(|i| i.name != n && i.name != hidden);
+            }
+            AlterTableAction::AlterColumn { name, action } => {
+                let Some(i) = table.col_index(name) else {
+                    return err(
+                        "42703",
+                        format!("column \"{name}\" of relation \"{key}\" does not exist"),
+                    );
+                };
+                match action {
+                    AlterColumnAction::SetNotNull => {
+                        if table.rows.values().any(|r| r[i].is_null()) {
+                            return err(
+                                "23502",
+                                format!(
+                                    "column \"{name}\" of relation \"{key}\" contains null values"
+                                ),
+                            );
+                        }
+                        table.cols[i].not_null = true;
+                    }
+                    AlterColumnAction::DropNotNull => {
+                        if table
+                            .indexes
+                            .iter()
+                            .any(|ix| ix.primary && ix.cols.contains(&i))
+                        {
+                            return err("42P16", format!("column \"{name}\" is in a primary key"));
+                        }
+                        table.cols[i].not_null = false;
+                    }
+                    AlterColumnAction::SetDefault(e) => table.cols[i].default = Some(e.clone()),
+                    AlterColumnAction::DropDefault => table.cols[i].default = None,
+                    AlterColumnAction::SetType(ty) => {
+                        let ids: Vec<u64> = table.rows.keys().copied().collect();
+                        for id in ids {
+                            let row = table.rows.get_mut(&id).expect("row");
+                            let v = std::mem::replace(&mut row[i], SqlValue::Null);
+                            row[i] = coerce(v, ty).map_err(|m| DbError {
+                                code: "42804",
+                                message: m,
+                            })?;
+                        }
+                        table.cols[i].ty = ty.clone();
+                        rewrite = true;
+                    }
+                }
             }
             AlterTableAction::Owner(_) | AlterTableAction::SetSchema(_) => {}
             _ => return err("0A000", "this ALTER TABLE action is not supported"),

@@ -1396,6 +1396,10 @@ impl ExpressionEvaluator {
         if left.is_null() || right.is_null() {
             return Ok(SqlValue::Null);
         }
+        // numbers of any width, numerics and floats, with PostgreSQL's promotion rules
+        if let Some(r) = super::durable::value::numeric_arith(left, right, op) {
+            return r.map_err(ProtocolError::PostgresError);
+        }
 
         match (left, right) {
             (SqlValue::Integer(a), SqlValue::Integer(b)) => match op {

@@ -163,6 +163,10 @@ impl Persist for RaftPersist {
         self.store.load()
     }
 
+    fn backup(&self, dest: &std::path::Path) -> Result<(), String> {
+        self.store.backup(dest)
+    }
+
     fn replicated(&self) -> bool {
         true
     }

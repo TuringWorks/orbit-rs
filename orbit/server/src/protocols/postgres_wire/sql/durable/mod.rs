@@ -21,6 +21,7 @@ mod fk;
 mod persist;
 mod query;
 pub(crate) mod value;
+mod window;
 
 #[cfg(feature = "storage-rocksdb")]
 pub use persist::RocksPersist;
@@ -67,6 +68,20 @@ impl From<ProtocolError> for DbError {
             ProtocolError::PostgresError(m) | ProtocolError::ParseError(m) => m,
             other => other.to_string(),
         };
+        // an error from the evaluator may carry its SQLSTATE as a `[22012] ` prefix
+        const KNOWN: [&str; 7] = [
+            "22012", "22003", "22P02", "22007", "22023", "42883", "42804",
+        ];
+        if let Some(rest) = message.strip_prefix('[') {
+            if let Some((code, text)) = rest.split_once("] ") {
+                if let Some(c) = KNOWN.iter().find(|k| **k == code) {
+                    return DbError {
+                        code: c,
+                        message: text.to_string(),
+                    };
+                }
+            }
+        }
         let code = if message.contains("not found") && message.contains("olumn") {
             "42703"
         } else {
@@ -461,6 +476,12 @@ impl DurableEngine {
         *self.committed.lock().expect("committed state") = st;
         *self.seqs.lock().expect("sequences") = seqs;
         Ok(())
+    }
+
+    /// Write a consistent copy of the database to the new directory `dest`. Open it later with
+    /// [`RocksPersist::open`] to restore; it holds everything committed when the call started.
+    pub fn backup(&self, dest: &std::path::Path) -> Result<(), String> {
+        self.persist.backup(dest)
     }
 
     /// Whether this node refuses writes right now (a replica, or a leader not yet ready).

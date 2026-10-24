@@ -973,10 +973,14 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
             Ok(Expression::Literal(value))
         }
         Some(Token::NumericLiteral(n)) => {
-            let value = if n.contains('.') {
-                SqlValue::DoublePrecision(n.parse().unwrap_or(0.0))
-            } else {
-                SqlValue::Integer(n.parse().unwrap_or(0))
+            // int4 if it fits, else int8, else numeric; a decimal point makes it numeric; an exponent, a float
+            let Some(value) = super::super::durable::value::numeric_literal(n) else {
+                return Err(ParseError {
+                    message: format!("invalid numeric literal `{n}`"),
+                    position: parser.position,
+                    expected: vec!["valid number".to_string()],
+                    found: parser.current_token.clone(),
+                });
             };
             parser.advance()?;
             Ok(Expression::Literal(value))
@@ -1011,7 +1015,23 @@ fn parse_primary_expression(parser: &mut SqlParser) -> ParseResult<Expression> {
         }
         Some(Token::LeftParen) => {
             parser.advance()?;
+            if parser.matches(&[Token::Select, Token::With]) {
+                // a scalar subquery
+                let sub = parse_select_statement(parser)?;
+                parser.expect(Token::RightParen)?;
+                return Ok(Expression::Subquery(Box::new(sub)));
+            }
             let expr = parse_expression(parser)?;
+            // `(a, b, c)` is a row
+            if parser.matches(&[Token::Comma]) {
+                let mut items = vec![expr];
+                while parser.matches(&[Token::Comma]) {
+                    parser.advance()?;
+                    items.push(parse_expression(parser)?);
+                }
+                parser.expect(Token::RightParen)?;
+                return Ok(Expression::Row(items));
+            }
             parser.expect(Token::RightParen)?;
             Ok(expr)
         }

@@ -2,7 +2,7 @@
 //! the PostgreSQL type OID reported for a column.
 
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
-use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::Decimal;
 use std::cmp::Ordering;
 use std::str::FromStr;
@@ -18,8 +18,8 @@ fn as_decimal(v: &SqlValue) -> Option<Decimal> {
         SqlValue::Integer(i) => Some(Decimal::from(*i)),
         SqlValue::BigInt(i) => Some(Decimal::from(*i)),
         SqlValue::Decimal(d) => Some(*d),
-        SqlValue::Real(f) => Decimal::from_f32_retain(*f),
-        SqlValue::DoublePrecision(f) => Decimal::from_f64_retain(*f),
+        SqlValue::Real(f) => Decimal::from_f32(*f),
+        SqlValue::DoublePrecision(f) => Decimal::from_f64(*f),
         _ => None,
     }
 }
@@ -84,6 +84,126 @@ pub fn cmp(a: &SqlValue, b: &SqlValue) -> Ordering {
         (SqlValue::Bytea(x), SqlValue::Bytea(y)) => x.cmp(y),
         _ => a.to_postgres_string().cmp(&b.to_postgres_string()),
     }
+}
+
+/// The value of a numeric literal as PostgreSQL types it: `int4` if it fits, else `int8`, else `numeric`;
+/// a literal with a decimal point is `numeric` (so `10.50 - 0.5` keeps two decimals) and one with an
+/// exponent is a float.
+pub(crate) fn numeric_literal(n: &str) -> Option<SqlValue> {
+    if n.contains('e') || n.contains('E') {
+        return n.parse::<f64>().ok().map(SqlValue::DoublePrecision);
+    }
+    if !n.contains('.') {
+        if let Ok(i) = n.parse::<i32>() {
+            return Some(SqlValue::Integer(i));
+        }
+        if let Ok(i) = n.parse::<i64>() {
+            return Some(SqlValue::BigInt(i));
+        }
+    }
+    Decimal::from_str(n)
+        .ok()
+        .map(SqlValue::Decimal)
+        .or_else(|| n.parse::<f64>().ok().map(SqlValue::DoublePrecision))
+}
+
+/// Arithmetic on two numbers, with PostgreSQL's promotion rules: integers stay integers (`int4` unless
+/// either side is wider), anything with a numeric becomes numeric, anything with a float becomes a float.
+/// `None` when either side is not a number. The error is `"[SQLSTATE] message"`.
+pub(crate) fn numeric_arith(
+    a: &SqlValue,
+    b: &SqlValue,
+    op: &str,
+) -> Option<Result<SqlValue, String>> {
+    let kind = |v: &SqlValue| match v {
+        SqlValue::SmallInt(_) | SqlValue::Integer(_) | SqlValue::BigInt(_) => Some(1),
+        SqlValue::Decimal(_) => Some(2),
+        SqlValue::Real(_) | SqlValue::DoublePrecision(_) => Some(3),
+        _ => None,
+    };
+    let (ka, kb) = (kind(a)?, kind(b)?);
+    let div0 = || Err("[22012] division by zero".to_string());
+    Some(match ka.max(kb) {
+        3 => {
+            let (x, y) = (as_f64(a)?, as_f64(b)?);
+            let v = match op {
+                "+" => x + y,
+                "-" => x - y,
+                "*" => x * y,
+                "/" => {
+                    if y == 0.0 {
+                        return Some(div0());
+                    }
+                    x / y
+                }
+                "%" => x % y,
+                "^" => x.powf(y),
+                _ => return None,
+            };
+            if matches!((a, b), (SqlValue::Real(_), SqlValue::Real(_))) && op != "^" {
+                Ok(SqlValue::Real(v as f32))
+            } else {
+                Ok(SqlValue::DoublePrecision(v))
+            }
+        }
+        2 => {
+            let (x, y) = (as_decimal(a)?, as_decimal(b)?);
+            let r = match op {
+                "+" => x.checked_add(y),
+                "-" => x.checked_sub(y),
+                "*" => x.checked_mul(y),
+                "/" => {
+                    if y.is_zero() {
+                        return Some(div0());
+                    }
+                    x.checked_div(y).map(|d| d.round_dp(16))
+                }
+                "%" => {
+                    if y.is_zero() {
+                        return Some(div0());
+                    }
+                    x.checked_rem(y)
+                }
+                "^" => return Some(Ok(SqlValue::DoublePrecision(x.to_f64()?.powf(y.to_f64()?)))),
+                _ => return None,
+            };
+            r.map(SqlValue::Decimal)
+                .ok_or_else(|| "[22003] numeric field overflow".to_string())
+        }
+        _ => {
+            let (x, y) = (as_i64(a)?, as_i64(b)?);
+            if op == "^" {
+                return Some(Ok(SqlValue::DoublePrecision((x as f64).powf(y as f64))));
+            }
+            let r = match op {
+                "+" => x.checked_add(y),
+                "-" => x.checked_sub(y),
+                "*" => x.checked_mul(y),
+                "/" => {
+                    if y == 0 {
+                        return Some(div0());
+                    }
+                    x.checked_div(y)
+                }
+                "%" => {
+                    if y == 0 {
+                        return Some(div0());
+                    }
+                    x.checked_rem(y)
+                }
+                _ => return None,
+            };
+            let narrow = matches!(a, SqlValue::SmallInt(_) | SqlValue::Integer(_))
+                && matches!(b, SqlValue::SmallInt(_) | SqlValue::Integer(_));
+            match r {
+                Some(v) if narrow => i32::try_from(v)
+                    .map(SqlValue::Integer)
+                    .map_err(|_| "[22003] integer out of range".to_string()),
+                Some(v) => Ok(SqlValue::BigInt(v)),
+                None => Err("[22003] bigint out of range".to_string()),
+            }
+        }
+    })
 }
 
 /// Ordering for SQL comparison operators. A string is converted to the other operand's type, as
@@ -256,12 +376,30 @@ pub fn coerce(v: SqlValue, ty: &SqlType) -> Result<SqlValue, String> {
                 _ => SqlValue::BigInt(n),
             })
         }
-        SqlType::Decimal { .. } | SqlType::Numeric { .. } => {
-            let d = match as_decimal(&v) {
+        SqlType::Decimal { precision, scale } | SqlType::Numeric { precision, scale } => {
+            let mut d = match as_decimal(&v) {
                 Some(d) => d,
                 None => Decimal::from_str(text(&v).ok_or_else(|| bad(&v))?.trim())
                     .map_err(|_| bad(&v))?,
             };
+            if let Some(s) = scale {
+                // NUMERIC(p, s) rounds half away from zero and always shows s decimals
+                d = d.round_dp_with_strategy(
+                    u32::from(*s),
+                    rust_decimal::RoundingStrategy::MidpointAwayFromZero,
+                );
+                d.rescale(u32::from(*s));
+                if let Some(p) = precision {
+                    let whole = d.trunc().abs().to_string();
+                    let digits = if whole == "0" { 0 } else { whole.len() as u32 };
+                    if digits + u32::from(*s) > u32::from(*p) {
+                        return Err(format!(
+                            "numeric field overflow: a field with precision {p}, scale {s} must round to an absolute value less than 10^{}",
+                            u32::from(*p) - u32::from(*s)
+                        ));
+                    }
+                }
+            }
             Ok(SqlValue::Decimal(d))
         }
         SqlType::Real => as_f64(&v)

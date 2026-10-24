@@ -162,6 +162,7 @@ pub struct PoolingConfig {
     pub circuit_breaker: PoolCircuitBreakerConfig,
 
     /// Per-protocol pooling overrides
+    #[serde(default)]
     pub protocol_overrides: HashMap<String, ProtocolPoolConfig>,
 }
 

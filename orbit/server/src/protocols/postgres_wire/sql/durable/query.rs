@@ -1,7 +1,7 @@
 //! `SELECT` execution over the committed tables.
 
-use super::value::{canonical, cmp, group_key, oid_of_type, oid_of_value, truthy};
-use super::{err, Row, State, R};
+use super::value::{canonical, cmp, group_key, oid_of_type, oid_of_value, truthy, unique_key};
+use super::{err, Row, State, Table, R};
 use crate::protocols::postgres_wire::query_engine::QueryResult;
 use crate::protocols::postgres_wire::sql::ast::{
     BinaryOperator, CaseExpression, DistinctClause, Expression, FromClause, FunctionCall,
@@ -30,7 +30,7 @@ pub(crate) struct Rel {
     pub rows: Vec<Row>,
 }
 
-type Outer<'a> = Option<&'a HashMap<String, SqlValue>>;
+pub(super) type Outer<'a> = Option<&'a HashMap<String, SqlValue>>;
 
 /// Evaluation context for one row: every column under `name` and `qualifier.name`, then the outer query's columns.
 pub(crate) fn ctx_for(cols: &[RelCol], row: &[SqlValue], outer: Outer) -> EvaluationContext {
@@ -262,6 +262,33 @@ fn session_function(f: &FunctionCall) -> Option<SqlValue> {
     }))
 }
 
+/// The window function calls inside `e`, each listed once.
+fn collect_windows(e: &Expression, into: &mut Vec<Expression>) {
+    walk(e, &mut |x| {
+        if matches!(x, Expression::WindowFunction { .. }) && !into.contains(x) {
+            into.push(x.clone());
+        }
+    });
+}
+
+/// `e` with each window function call replaced by its value for row `i`.
+fn substitute_windows(
+    e: &Expression,
+    wins: &[Expression],
+    vals: &[Vec<SqlValue>],
+    i: usize,
+) -> R<Expression> {
+    map_expr(e, &mut (), &mut |_, x| {
+        Ok(match x {
+            Expression::WindowFunction { .. } => wins
+                .iter()
+                .position(|w| w == x)
+                .map(|k| Expression::Literal(vals[k][i].clone())),
+            _ => None,
+        })
+    })
+}
+
 fn has_subquery(e: &Expression) -> bool {
     let mut found = false;
     walk(e, &mut |x| {
@@ -355,6 +382,20 @@ pub(crate) fn expr_type(e: &Expression, cols: &[RelCol]) -> Option<SqlType> {
             .when_clauses
             .first()
             .and_then(|w| expr_type(&w.result, cols)),
+        Expression::WindowFunction { function, .. } => {
+            use crate::protocols::postgres_wire::sql::ast::WindowFunctionType as W;
+            match function {
+                W::RowNumber | W::Rank | W::DenseRank => Some(SqlType::BigInt),
+                W::Ntile(_) => Some(SqlType::Integer),
+                W::PercentRank | W::CumeDist => Some(SqlType::DoublePrecision),
+                W::Lag { expr, .. }
+                | W::Lead { expr, .. }
+                | W::FirstValue(expr)
+                | W::LastValue(expr) => expr_type(expr, cols),
+                W::NthValue { expr, .. } => expr_type(expr, cols),
+                W::Aggregate(call) => expr_type(&Expression::Function(call.clone()), cols),
+            }
+        }
         Expression::CurrentTimestamp(_) | Expression::LocalTimestamp(_) => {
             Some(SqlType::Timestamp {
                 with_timezone: true,
@@ -707,7 +748,10 @@ impl<'a> Runner<'a> {
 
     fn select_core(&mut self, sel: &SelectStatement, outer: Outer) -> R<Rel> {
         let src = match &sel.from_clause {
-            Some(f) => self.from(f, outer)?,
+            Some(f) => match self.indexed_from(f, sel.where_clause.as_ref())? {
+                Some(rel) => rel,
+                None => self.from(f, outer)?,
+            },
             None => Rel {
                 cols: vec![],
                 rows: vec![vec![]],
@@ -789,6 +833,18 @@ impl<'a> Runner<'a> {
 
         let mut keyed: Vec<(Vec<SqlValue>, Row)> = Vec::new();
         if grouped {
+            let mut any = Vec::new();
+            for (_, _, o) in &plan {
+                if let Out::Expr(e) = o {
+                    collect_windows(e, &mut any);
+                }
+            }
+            if !any.is_empty() {
+                return err(
+                    "0A000",
+                    "window functions over grouped results are not supported",
+                );
+            }
             // partition rows
             let group_exprs: Vec<Expression> = sel
                 .group_by
@@ -859,20 +915,44 @@ impl<'a> Runner<'a> {
                 keyed.push((k, out));
             }
         } else {
-            for r in &rows {
+            // window functions are computed once over all the rows, then read per row
+            let mut wins: Vec<Expression> = Vec::new();
+            for (_, _, o) in &plan {
+                if let Out::Expr(e) = o {
+                    collect_windows(e, &mut wins);
+                }
+            }
+            for key in &keys {
+                if let OrderKey::Expr(e) = key {
+                    collect_windows(e, &mut wins);
+                }
+            }
+            let mut win_vals: Vec<Vec<SqlValue>> = Vec::new();
+            for w in &wins {
+                win_vals.push(self.compute_window(w, &cols, &rows, outer)?);
+            }
+            for (ri, r) in rows.iter().enumerate() {
                 let c = ctx_for(&cols, r, outer);
                 let mut out = Vec::with_capacity(plan.len());
                 for (_, _, o) in &plan {
                     out.push(match o {
                         Out::Src(i) => r[*i].clone(),
-                        Out::Expr(e) => self.eval(e, &c)?,
+                        Out::Expr(e) if wins.is_empty() => self.eval(e, &c)?,
+                        Out::Expr(e) => {
+                            let e2 = substitute_windows(e, &wins, &win_vals, ri)?;
+                            self.eval(&e2, &c)?
+                        }
                     });
                 }
                 let mut k = Vec::new();
                 for key in &keys {
                     k.push(match key {
                         OrderKey::Out(i) => out[*i].clone(),
-                        OrderKey::Expr(e) => self.eval(e, &c)?,
+                        OrderKey::Expr(e) if wins.is_empty() => self.eval(e, &c)?,
+                        OrderKey::Expr(e) => {
+                            let e2 = substitute_windows(e, &wins, &win_vals, ri)?;
+                            self.eval(&e2, &c)?
+                        }
                     });
                 }
                 keyed.push((k, out));
@@ -910,6 +990,139 @@ impl<'a> Runner<'a> {
         })
     }
 
+    /// Return a direct table relation narrowed by a simple indexed predicate.
+    /// The full WHERE expression is still evaluated below, so this is only a
+    /// candidate-row optimization and cannot change query semantics.
+    fn indexed_from(&mut self, f: &FromClause, filter: Option<&Expression>) -> R<Option<Rel>> {
+        let FromClause::Table { name, alias, .. } = f else {
+            return Ok(None);
+        };
+        let key = name.name.to_lowercase();
+        let qual = alias
+            .as_ref()
+            .map(|a| a.name.to_lowercase())
+            .unwrap_or_else(|| key.clone());
+        if self.ctes.contains_key(&key)
+            || name.schema.as_deref().map(str::to_lowercase).as_deref()
+                == Some("information_schema")
+        {
+            return Ok(None);
+        }
+        let Some(t) = self.st.tables.get(&key) else {
+            return Ok(None);
+        };
+        let Some(filter) = filter else {
+            return Ok(None);
+        };
+        let Some(ids) = self.indexed_ids(t, filter, &qual)? else {
+            return Ok(None);
+        };
+        let cols = t
+            .cols
+            .iter()
+            .map(|c| RelCol {
+                qual: Some(qual.clone()),
+                name: c.name.clone(),
+                ty: Some(c.ty.clone()),
+            })
+            .collect::<Vec<_>>();
+        let rows = if self.describe {
+            Vec::new()
+        } else {
+            ids.into_iter()
+                .filter_map(|id| t.rows.get(&id).cloned())
+                .collect()
+        };
+        Ok(Some(Rel { cols, rows }))
+    }
+
+    /// Find candidates for the first usable equality/IN predicate in an AND.
+    pub(crate) fn indexed_ids(
+        &mut self,
+        t: &Table,
+        e: &Expression,
+        qual: &str,
+    ) -> R<Option<Vec<u64>>> {
+        if let Expression::Binary {
+            left,
+            operator: BinaryOperator::And,
+            right,
+        } = e
+        {
+            if let Some(ids) = self.indexed_ids(t, left, qual)? {
+                return Ok(Some(ids));
+            }
+            return self.indexed_ids(t, right, qual);
+        }
+        let (column, values) = match e {
+            Expression::Binary {
+                left,
+                operator: BinaryOperator::Equal,
+                right,
+            } => {
+                if let (Expression::Column(c), Ok(v)) = (&**left, self.literal(right)) {
+                    (c, vec![v])
+                } else if let (Expression::Column(c), Ok(v)) = (&**right, self.literal(left)) {
+                    (c, vec![v])
+                } else {
+                    return Ok(None);
+                }
+            }
+            Expression::In {
+                expr,
+                list: InList::Expressions(items),
+                negated: false,
+            } => {
+                let Expression::Column(c) = &**expr else {
+                    return Ok(None);
+                };
+                let mut values = Vec::with_capacity(items.len());
+                for item in items {
+                    let Ok(v) = self.literal(item) else {
+                        return Ok(None);
+                    };
+                    values.push(v);
+                }
+                (c, values)
+            }
+            _ => return Ok(None),
+        };
+        if column
+            .table
+            .as_deref()
+            .is_some_and(|q| q.to_lowercase() != qual)
+        {
+            return Ok(None);
+        }
+        let Some(ci) = t.col_index(&column.name) else {
+            return Ok(None);
+        };
+        let Some(index) = t.indexes.iter().find(|i| i.cols == [ci]) else {
+            return Ok(None);
+        };
+        let mut ids = Vec::new();
+        for value in values {
+            let key = if index.unique {
+                unique_key(&[value])
+            } else {
+                Some(group_key(&[value]))
+            };
+            if let Some(key) = key {
+                if let Some(rows) = index.map.get(&key) {
+                    ids.extend(rows.iter().copied());
+                }
+            }
+        }
+        ids.sort_unstable();
+        ids.dedup();
+        Ok(Some(ids))
+    }
+
+    fn literal(&mut self, e: &Expression) -> R<SqlValue> {
+        let empty = EvaluationContext::empty();
+        self.eval(e, &empty)
+    }
+
     /// Evaluate an expression for a group: aggregates are computed over the group's rows and the rest over its first row.
     fn eval_grouped(
         &mut self,
@@ -929,6 +1142,14 @@ impl<'a> Runner<'a> {
             Ok(None)
         })?;
         self.eval(&replaced, rep)
+    }
+
+    pub(super) fn aggregate_public(
+        &mut self,
+        f: &FunctionCall,
+        ctxs: &[EvaluationContext],
+    ) -> R<SqlValue> {
+        self.aggregate(f, ctxs)
     }
 
     fn aggregate(&mut self, f: &FunctionCall, ctxs: &[EvaluationContext]) -> R<SqlValue> {
@@ -1057,6 +1278,29 @@ impl<'a> Runner<'a> {
             }
             other => return err("42883", format!("function {other}() is not supported")),
         })
+    }
+
+    /// A comma-separated list of FROM items as one relation: their cross product.
+    pub fn from_items(&mut self, items: &[FromClause]) -> R<Rel> {
+        let mut it = items.iter();
+        let Some(first) = it.next() else {
+            return Ok(Rel {
+                cols: vec![],
+                rows: vec![vec![]],
+            });
+        };
+        let mut acc = self.from(first, None)?;
+        for f in it {
+            let next = self.from(f, None)?;
+            acc = self.join(
+                acc,
+                next,
+                &JoinType::Cross,
+                &JoinCondition::Using(vec![]),
+                None,
+            )?;
+        }
+        Ok(acc)
     }
 
     /// The parts of `information_schema` that tools use to find out what tables and columns exist.
@@ -1426,7 +1670,7 @@ fn resolve_order(e: &Expression, out: &[RelCol], select: &[Option<&Expression>])
     resolve_order_exprs(e, out, select)
 }
 
-fn order_cmp(a: &[SqlValue], b: &[SqlValue], items: &[&OrderByItem]) -> Ordering {
+pub(super) fn order_cmp(a: &[SqlValue], b: &[SqlValue], items: &[&OrderByItem]) -> Ordering {
     for (i, item) in items.iter().enumerate() {
         let (x, y) = (&a[i], &b[i]);
         let desc = matches!(item.direction, Some(SortDirection::Descending));

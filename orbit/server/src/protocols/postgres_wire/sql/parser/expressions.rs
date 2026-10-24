@@ -539,15 +539,10 @@ impl ExpressionParser {
             }
             Token::NumericLiteral(n) => {
                 *pos += 1;
-                // Try to parse as integer first, then as decimal
-                if let Ok(i) = n.parse::<i32>() {
-                    Ok(Expression::Literal(
-                        crate::protocols::postgres_wire::sql::types::SqlValue::Integer(i),
-                    ))
-                } else if let Ok(f) = n.parse::<f64>() {
-                    Ok(Expression::Literal(
-                        crate::protocols::postgres_wire::sql::types::SqlValue::DoublePrecision(f),
-                    ))
+                if let Some(v) =
+                    crate::protocols::postgres_wire::sql::durable::value::numeric_literal(n)
+                {
+                    Ok(Expression::Literal(v))
                 } else {
                     Ok(Expression::Literal(
                         crate::protocols::postgres_wire::sql::types::SqlValue::Text(n.clone()),
@@ -783,6 +778,22 @@ impl ExpressionParser {
                     Ok(Expression::Subquery(Box::new(subquery)))
                 } else {
                     let expr = self.parse_expression(tokens, pos)?;
+
+                    // `(a, b, c)` is a row
+                    if *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
+                        let mut items = vec![expr];
+                        while *pos < tokens.len() && matches!(tokens[*pos], Token::Comma) {
+                            *pos += 1;
+                            items.push(self.parse_expression(tokens, pos)?);
+                        }
+                        if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
+                            return Err(crate::protocols::error::ProtocolError::ParseError(
+                                "Expected ')' after row".to_string(),
+                            ));
+                        }
+                        *pos += 1; // consume ')'
+                        return Ok(Expression::Row(items));
+                    }
 
                     if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
                         return Err(crate::protocols::error::ProtocolError::ParseError(

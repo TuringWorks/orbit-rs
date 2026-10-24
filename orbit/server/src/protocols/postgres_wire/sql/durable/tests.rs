@@ -1126,3 +1126,347 @@ mod catalog {
         );
     }
 }
+
+#[cfg(feature = "storage-rocksdb")]
+mod backup {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_backup_opens_as_the_database_it_was_taken_from() {
+        let dir = tempfile::tempdir().unwrap();
+        let e = DurableEngine::open(Box::new(
+            RocksPersist::open(dir.path().join("live")).unwrap(),
+        ))
+        .unwrap();
+        x(
+            &e,
+            "CREATE TABLE b (id SERIAL PRIMARY KEY, v VARCHAR UNIQUE)",
+        )
+        .await;
+        x(&e, "INSERT INTO b (v) VALUES ('one'), ('two')").await;
+        let dest = dir.path().join("copy");
+        e.backup(&dest).unwrap();
+        x(&e, "INSERT INTO b (v) VALUES ('after the backup')").await;
+        assert!(
+            e.backup(&dest).is_err(),
+            "an existing destination is never overwritten"
+        );
+
+        let restored = DurableEngine::open(Box::new(RocksPersist::open(&dest).unwrap())).unwrap();
+        assert_eq!(
+            q(&restored, "SELECT id, v FROM b ORDER BY id").await,
+            vec![vec!["1", "one"], vec!["2", "two"]]
+        );
+        assert!(
+            run(
+                &restored,
+                &mut Session::default(),
+                "INSERT INTO b (v) VALUES ('one')"
+            )
+            .await
+            .is_err(),
+            "indexes come back too"
+        );
+    }
+}
+
+mod more_sql {
+    use super::*;
+
+    async fn tables() -> DurableEngine {
+        let e = DurableEngine::in_memory();
+        x(
+            &e,
+            "CREATE TABLE a (id INTEGER PRIMARY KEY, x INTEGER, y INTEGER, tag VARCHAR)",
+        )
+        .await;
+        x(
+            &e,
+            "CREATE TABLE b (id INTEGER PRIMARY KEY, a_id INTEGER, v INTEGER)",
+        )
+        .await;
+        x(
+            &e,
+            "INSERT INTO a VALUES (1, 0, 0, 'p'), (2, 0, 0, 'q'), (3, 0, 0, 'r')",
+        )
+        .await;
+        x(
+            &e,
+            "INSERT INTO b VALUES (10, 1, 100), (11, 2, 200), (12, 2, 300)",
+        )
+        .await;
+        e
+    }
+
+    #[tokio::test]
+    async fn update_from_changes_rows_using_a_joined_table() {
+        let e = tables().await;
+        x(
+            &e,
+            "UPDATE a SET x = b.v FROM b WHERE b.a_id = a.id AND b.v < 300",
+        )
+        .await;
+        assert_eq!(
+            q(&e, "SELECT id, x FROM a ORDER BY id").await,
+            vec![vec!["1", "100"], vec!["2", "200"], vec!["3", "0"]],
+            "rows with no match are left alone"
+        );
+        let r = run(
+            &e,
+            &mut Session::default(),
+            "UPDATE a SET y = 1 FROM b WHERE b.a_id = a.id RETURNING a.id",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            cells(r).len(),
+            2,
+            "each target row is updated once however many rows match"
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_using_removes_rows_that_match_a_joined_table() {
+        let e = tables().await;
+        x(
+            &e,
+            "DELETE FROM a USING b WHERE b.a_id = a.id AND b.v = 200",
+        )
+        .await;
+        assert_eq!(
+            q(&e, "SELECT id FROM a ORDER BY id").await,
+            vec![vec!["1"], vec!["3"]]
+        );
+    }
+
+    #[tokio::test]
+    async fn multi_column_set_takes_a_row_or_a_subquery() {
+        let e = tables().await;
+        x(&e, "UPDATE a SET (x, y) = (7, 8) WHERE id = 1").await;
+        assert_eq!(
+            q(&e, "SELECT x, y FROM a WHERE id = 1").await,
+            vec![vec!["7", "8"]]
+        );
+        x(
+            &e,
+            "UPDATE a SET (x, y) = (SELECT v, a_id FROM b WHERE id = 11) WHERE id = 2",
+        )
+        .await;
+        assert_eq!(
+            q(&e, "SELECT x, y FROM a WHERE id = 2").await,
+            vec![vec!["200", "2"]]
+        );
+        assert!(
+            msg(run(&e, &mut Session::default(), "UPDATE a SET (x, y) = (1)").await)
+                .contains("[42601]")
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_column_changes_nullability_default_and_type() {
+        let e = tables().await;
+        x(&e, "ALTER TABLE a ALTER COLUMN tag SET NOT NULL").await;
+        assert!(
+            msg(run(&e, &mut Session::default(), "INSERT INTO a (id) VALUES (9)").await)
+                .contains("[23502]")
+        );
+        x(&e, "ALTER TABLE a ALTER COLUMN tag DROP NOT NULL").await;
+        x(&e, "ALTER TABLE a ALTER COLUMN tag SET DEFAULT 'none'").await;
+        x(&e, "INSERT INTO a (id) VALUES (9)").await;
+        assert_eq!(
+            q(&e, "SELECT tag FROM a WHERE id = 9").await,
+            vec![vec!["none"]]
+        );
+        x(&e, "ALTER TABLE a ALTER COLUMN tag DROP DEFAULT").await;
+        x(&e, "INSERT INTO a (id) VALUES (10)").await;
+        assert_eq!(
+            q(&e, "SELECT tag FROM a WHERE id = 10").await,
+            vec![vec!["NULL"]]
+        );
+        x(&e, "ALTER TABLE a ALTER COLUMN x TYPE BIGINT").await;
+        assert_eq!(
+            q(&e, "SELECT count(*) FROM a WHERE x = 0").await,
+            vec![vec!["3"]],
+            "the converted column keeps its values; the two new rows have NULL"
+        );
+        // with rows holding NULLs, SET NOT NULL is refused
+        assert!(msg(run(
+            &e,
+            &mut Session::default(),
+            "ALTER TABLE a ALTER COLUMN tag SET NOT NULL"
+        )
+        .await)
+        .contains("[23502]"));
+        assert!(msg(run(
+            &e,
+            &mut Session::default(),
+            "ALTER TABLE a ALTER COLUMN id DROP NOT NULL"
+        )
+        .await)
+        .contains("[42P16]"));
+    }
+}
+
+mod windows {
+    use super::*;
+
+    async fn sales() -> DurableEngine {
+        let e = DurableEngine::in_memory();
+        x(
+            &e,
+            "CREATE TABLE s (id INTEGER PRIMARY KEY, region VARCHAR, amt INTEGER)",
+        )
+        .await;
+        x(
+            &e,
+            "INSERT INTO s VALUES (1,'n',10),(2,'n',20),(3,'n',20),(4,'s',5),(5,'s',15)",
+        )
+        .await;
+        e
+    }
+
+    #[tokio::test]
+    async fn ranking_functions_respect_partitions_and_ties() {
+        let e = sales().await;
+        assert_eq!(
+            q(&e, "SELECT id, row_number() OVER (PARTITION BY region ORDER BY amt DESC, id) AS rn, rank() OVER (PARTITION BY region ORDER BY amt DESC) AS rk, dense_rank() OVER (PARTITION BY region ORDER BY amt DESC) AS dr FROM s ORDER BY id").await,
+            vec![vec!["1", "3", "3", "2"], vec!["2", "1", "1", "1"], vec!["3", "2", "1", "1"], vec!["4", "2", "2", "2"], vec!["5", "1", "1", "1"]]
+        );
+    }
+
+    #[tokio::test]
+    async fn aggregates_over_a_window_use_the_default_and_explicit_frames() {
+        let e = sales().await;
+        // no ORDER BY: the whole partition; with ORDER BY: a running total that includes ties
+        assert_eq!(
+            q(
+                &e,
+                "SELECT id, sum(amt) OVER (PARTITION BY region) FROM s ORDER BY id"
+            )
+            .await,
+            vec![
+                vec!["1", "50"],
+                vec!["2", "50"],
+                vec!["3", "50"],
+                vec!["4", "20"],
+                vec!["5", "20"]
+            ]
+        );
+        assert_eq!(
+            q(
+                &e,
+                "SELECT id, sum(amt) OVER (PARTITION BY region ORDER BY amt) FROM s ORDER BY id"
+            )
+            .await,
+            vec![
+                vec!["1", "10"],
+                vec!["2", "50"],
+                vec!["3", "50"],
+                vec!["4", "5"],
+                vec!["5", "20"]
+            ]
+        );
+        assert_eq!(q(&e, "SELECT id, sum(amt) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM s ORDER BY id").await,
+            vec![vec!["1", "10"], vec!["2", "30"], vec!["3", "40"], vec!["4", "25"], vec!["5", "20"]]);
+        assert_eq!(
+            q(&e, "SELECT count(*) OVER () FROM s LIMIT 1").await,
+            vec![vec!["5"]]
+        );
+    }
+
+    #[tokio::test]
+    async fn lag_lead_first_and_last_value() {
+        let e = sales().await;
+        assert_eq!(
+            q(&e, "SELECT id, lag(amt) OVER (ORDER BY id), lead(amt, 2, -1) OVER (ORDER BY id), first_value(amt) OVER (PARTITION BY region ORDER BY id) FROM s ORDER BY id").await,
+            vec![vec!["1", "NULL", "20", "10"], vec!["2", "10", "5", "10"], vec!["3", "20", "15", "10"], vec!["4", "20", "-1", "5"], vec!["5", "5", "-1", "5"]]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_window_value_can_be_used_inside_an_expression_and_ordered_by() {
+        let e = sales().await;
+        assert_eq!(q(&e, "SELECT id, amt * 100 / sum(amt) OVER () AS pct FROM s ORDER BY pct DESC, id LIMIT 2").await, vec![vec!["2", "28"], vec!["3", "28"]], "20 * 100 / 70 is integer division");
+        assert_eq!(
+            q(
+                &e,
+                "SELECT id FROM s WHERE amt > 5 ORDER BY row_number() OVER (ORDER BY amt DESC, id)"
+            )
+            .await,
+            vec![vec!["2"], vec!["3"], vec!["5"], vec!["1"]]
+        );
+    }
+}
+
+mod arithmetic {
+    use super::*;
+
+    #[tokio::test]
+    async fn numbers_of_different_types_combine_the_way_postgresql_does() {
+        let e = DurableEngine::in_memory();
+        x(
+            &e,
+            "CREATE TABLE n (i INTEGER, b BIGINT, d NUMERIC(12,2), f DOUBLE PRECISION)",
+        )
+        .await;
+        x(&e, "INSERT INTO n VALUES (7, 3000000000, 10.50, 2.5)").await;
+        assert_eq!(
+            q(&e, "SELECT i / 2, i % 4, i * 3 FROM n").await,
+            vec![vec!["3", "3", "21"]],
+            "integer division truncates"
+        );
+        assert_eq!(
+            q(&e, "SELECT b + i, b / i FROM n").await,
+            vec![vec!["3000000007", "428571428"]]
+        );
+        assert_eq!(
+            q(&e, "SELECT d * 2, d + i, d - 0.5 FROM n").await,
+            vec![vec!["21.00", "17.50", "10.00"]]
+        );
+        assert_eq!(
+            q(&e, "SELECT i / d FROM n").await,
+            vec![vec!["0.6666666666666667"]]
+        );
+        assert_eq!(
+            q(&e, "SELECT f * 2, f + i, d * f FROM n").await,
+            vec![vec!["5", "9.5", "26.25"]]
+        );
+        let r = run(&e, &mut Session::default(), "SELECT i FROM n")
+            .await
+            .unwrap();
+        assert!(matches!(r, QueryResult::Typed { .. }));
+        assert!(
+            msg(run(&e, &mut Session::default(), "SELECT i / 0 FROM n").await).contains("[22012]")
+        );
+        assert!(
+            msg(run(&e, &mut Session::default(), "SELECT 2147483647 + 1").await)
+                .contains("[22003]")
+        );
+        assert_eq!(
+            q(&e, "SELECT 2147483647::bigint + 1").await,
+            vec![vec!["2147483648"]]
+        );
+    }
+}
+
+#[tokio::test]
+async fn big_integer_literals_and_numeric_scale_are_kept() {
+    let e = DurableEngine::in_memory();
+    x(&e, "CREATE TABLE big (b BIGINT, d NUMERIC(8,2))").await;
+    x(&e, "INSERT INTO big VALUES (3000000000, 10.5), (9223372036854775807, 0.005), (-5000000000, 1234.567)").await;
+    assert_eq!(
+        q(&e, "SELECT b, d FROM big ORDER BY b").await,
+        vec![
+            vec!["-5000000000", "1234.57"],
+            vec!["3000000000", "10.50"],
+            vec!["9223372036854775807", "0.01"]
+        ]
+    );
+    assert!(msg(run(
+        &e,
+        &mut Session::default(),
+        "INSERT INTO big (d) VALUES (1234567.1)"
+    )
+    .await)
+    .contains("numeric field overflow"));
+}

@@ -62,6 +62,10 @@ pub trait Persist: Send + Sync {
     fn replicated(&self) -> bool {
         false
     }
+    /// Write a consistent copy of everything to `dest`, a directory that must not exist yet.
+    fn backup(&self, _dest: &std::path::Path) -> Result<(), String> {
+        Err("backups are not supported by this store".into())
+    }
     /// Whether this node may take writes now. The error is `"[SQLSTATE] message"`.
     fn check_writable(&self) -> Result<(), String> {
         Ok(())
@@ -373,6 +377,15 @@ mod rocks {
 
         fn load(&self) -> Result<Loaded, String> {
             self.read_all(&ReadOptions::default)
+        }
+
+        fn backup(&self, dest: &Path) -> Result<(), String> {
+            if dest.exists() {
+                return Err(format!("{} already exists", dest.display()));
+            }
+            rocksdb::checkpoint::Checkpoint::new(&self.db)
+                .and_then(|c| c.create_checkpoint(dest))
+                .map_err(|e| format!("backup failed: {e}"))
         }
     }
 }
