@@ -1509,7 +1509,7 @@ impl AqlQueryEngine {
         let mut graph = graph_algo::Graph::new();
 
         // Look for vertices in context - check common variable names
-        let vertex_keys = if let Some(name) = graph_name {
+        let mut vertex_keys = if let Some(name) = graph_name {
             vec![
                 format!("{}_vertices", name),
                 format!("{}Vertices", name),
@@ -1519,6 +1519,12 @@ impl AqlQueryEngine {
         } else {
             vec!["vertices".to_string(), "nodes".to_string()]
         };
+        vertex_keys.extend(
+            context
+                .keys()
+                .filter(|key| key.ends_with("_vertices"))
+                .cloned(),
+        );
 
         for key in &vertex_keys {
             if let Some(AqlValue::Array(vertices)) = context.get(key) {
@@ -1540,7 +1546,7 @@ impl AqlQueryEngine {
         }
 
         // Look for edges in context
-        let edge_keys = if let Some(name) = graph_name {
+        let mut edge_keys = if let Some(name) = graph_name {
             vec![
                 format!("{}_edges", name),
                 format!("{}Edges", name),
@@ -1549,6 +1555,12 @@ impl AqlQueryEngine {
         } else {
             vec!["edges".to_string()]
         };
+        edge_keys.extend(
+            context
+                .keys()
+                .filter(|key| key.ends_with("_edges"))
+                .cloned(),
+        );
 
         for key in &edge_keys {
             if let Some(AqlValue::Array(edges)) = context.get(key) {
@@ -1600,6 +1612,40 @@ impl AqlQueryEngine {
         }
 
         graph
+    }
+
+    fn graph_eccentricity(graph: &graph_algo::Graph, start: &str) -> usize {
+        let mut distances = HashMap::new();
+        let mut queue = std::collections::VecDeque::from([(start.to_string(), 0usize)]);
+        while let Some((node, distance)) = queue.pop_front() {
+            if distances.insert(node.clone(), distance).is_some() {
+                continue;
+            }
+            for (neighbor, _, _) in graph.get_outgoing_neighbors(&node) {
+                if !distances.contains_key(&neighbor) {
+                    queue.push_back((neighbor, distance + 1));
+                }
+            }
+        }
+        distances.values().copied().max().unwrap_or(0)
+    }
+
+    fn graph_diameter(graph: &graph_algo::Graph) -> usize {
+        graph
+            .nodes
+            .keys()
+            .map(|node| Self::graph_eccentricity(graph, node))
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn graph_radius(graph: &graph_algo::Graph) -> usize {
+        graph
+            .nodes
+            .keys()
+            .map(|node| Self::graph_eccentricity(graph, node))
+            .min()
+            .unwrap_or(0)
     }
 
     /// Evaluate built-in AQL functions
@@ -4254,6 +4300,40 @@ impl AqlQueryEngine {
                 } else {
                     Ok(AqlValue::Number(serde_json::Number::from(-1)))
                 }
+            }
+            "GRAPH_ECCENTRICITY" => {
+                let graph_name = args.first().and_then(|value| match value {
+                    AqlValue::String(name) => Some(name.as_str()),
+                    _ => None,
+                });
+                let start = args.get(1).and_then(|value| match value {
+                    AqlValue::String(name) => Some(name.as_str()),
+                    _ => None,
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+                Ok(AqlValue::Number(serde_json::Number::from(
+                    start.map_or(0, |node| Self::graph_eccentricity(&graph, node)),
+                )))
+            }
+            "GRAPH_DIAMETER" => {
+                let graph_name = args.first().and_then(|value| match value {
+                    AqlValue::String(name) => Some(name.as_str()),
+                    _ => None,
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+                Ok(AqlValue::Number(serde_json::Number::from(
+                    Self::graph_diameter(&graph),
+                )))
+            }
+            "GRAPH_RADIUS" => {
+                let graph_name = args.first().and_then(|value| match value {
+                    AqlValue::String(name) => Some(name.as_str()),
+                    _ => None,
+                });
+                let graph = self.build_graph_from_context(context, graph_name);
+                Ok(AqlValue::Number(serde_json::Number::from(
+                    Self::graph_radius(&graph),
+                )))
             }
             "PREGEL_RESULT" => {
                 // PREGEL_RESULT(id) - Get Pregel algorithm result

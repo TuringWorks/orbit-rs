@@ -157,4 +157,17 @@ mod tests {
         assert_eq!(pg_query_accepts("SELEC 1"), Some(false));
         assert!(ParserBackend::PgQuery.gate("SELEC 1").is_err());
     }
+
+    /// Syntax that only PostgreSQL 18's grammar accepts; proves the linked `libpg_query` is 18.x.
+    #[cfg(feature = "pg-query-parser")]
+    #[test]
+    fn linked_libpg_query_speaks_postgres_18() {
+        for sql in [
+            "INSERT INTO t VALUES (1) RETURNING OLD.a, NEW.a",
+            "CREATE TABLE t (a int, b int GENERATED ALWAYS AS (a * 2) VIRTUAL)",
+            "CREATE TABLE t (id int, valid daterange, PRIMARY KEY (id, valid WITHOUT OVERLAPS))",
+        ] {
+            assert_eq!(pg_query_accepts(sql), Some(true), "{sql}");
+        }
+    }
 }
