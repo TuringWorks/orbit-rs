@@ -4,6 +4,7 @@
 use super::pg_catalog;
 use super::query::{Rel, RelCol};
 use super::{err, Row, State, Table, R};
+use crate::protocols::postgres_wire::sql::expression_evaluator::{EvaluationContext, ExpressionEvaluator};
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 
 const CATALOG: &str = "orbit";
@@ -26,6 +27,13 @@ fn yes(b: bool) -> SqlValue {
 
 fn opt_int(v: Option<i32>) -> SqlValue {
     v.map_or(SqlValue::Null, int)
+}
+
+fn constant_default(expr: &crate::protocols::postgres_wire::sql::ast::Expression) -> Option<SqlValue> {
+    match ExpressionEvaluator::new().evaluate(expr, &EvaluationContext::empty()).ok()? {
+        SqlValue::Boolean(b) => Some(text(if b { "true" } else { "false" })),
+        value => Some(value),
+    }
 }
 
 fn rel(qual: &str, cols: &[(&str, SqlType)], rows: Vec<Row>) -> Rel {
@@ -277,7 +285,11 @@ pub(super) fn view(st: &State, view: &str, qual: &str) -> R<Rel> {
                 for (i, c) in t.cols.iter().enumerate() {
                     let default = match &c.serial {
                         Some(seq) => text(&format!("nextval('{seq}'::regclass)")),
-                        None => SqlValue::Null,
+                        None => c
+                            .default
+                            .as_ref()
+                            .and_then(constant_default)
+                            .unwrap_or(SqlValue::Null),
                     };
                     rows.push(column(
                         "public",
@@ -802,14 +814,20 @@ pub(super) fn view(st: &State, view: &str, qual: &str) -> R<Rel> {
     })
 }
 
-/// A table's constraints as `(name, type)`: the primary key, foreign keys and checks.
+/// A table's constraints as `(name, type)`: keys, foreign keys, checks and NOT NULL constraints.
 fn constraints(t: &Table) -> Vec<(String, &'static str)> {
     let mut out: Vec<(String, &'static str)> = Vec::new();
-    for idx in t.indexes.iter().filter(|i| i.primary) {
-        out.push((idx.name.clone(), "PRIMARY KEY"));
+    for idx in t.indexes.iter().filter(|i| i.primary || i.unique) {
+        out.push((
+            idx.name.clone(),
+            if idx.primary { "PRIMARY KEY" } else { "UNIQUE" },
+        ));
     }
     for fk in &t.fks {
         out.push((fk.name.clone(), "FOREIGN KEY"));
+    }
+    for col in t.cols.iter().filter(|c| c.not_null) {
+        out.push((format!("{}_{}_not_null", t.name, col.name), "CHECK"));
     }
     for (i, (name, _)) in t.checks.iter().enumerate() {
         out.push((

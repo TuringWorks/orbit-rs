@@ -124,12 +124,14 @@ async fn cleanup_lingering_instances() {
 
 /// Check if a TCP port is listening
 async fn is_port_listening(port: u16) -> bool {
-    use tokio::net::TcpListener;
+    use tokio::net::TcpStream;
 
-    // Try to bind to the port - if it fails, the port is already in use (listening)
-    TcpListener::bind(format!("127.0.0.1:{}", port))
-        .await
-        .is_err()
+    tokio::time::timeout(
+        Duration::from_millis(250),
+        TcpStream::connect(format!("127.0.0.1:{port}")),
+    )
+    .await
+    .is_ok_and(|result| result.is_ok())
 }
 
 /// Wait for a port to start listening (max timeout in seconds)
@@ -178,7 +180,10 @@ fn server_command() -> Command {
     command
         .arg("--dev-mode")
         .env("ORBIT_MYSQL_USERNAME", "test")
-        .env("ORBIT_MYSQL_PASSWORD", "test");
+        .env("ORBIT_MYSQL_PASSWORD", "test")
+        .env("ORBIT_CQL_USERNAME", "test")
+        .env("ORBIT_CQL_PASSWORD", "test")
+        .env("ORBIT_REDIS_PASSWORD", "test");
     command
 }
 

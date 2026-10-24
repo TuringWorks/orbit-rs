@@ -566,19 +566,29 @@ pub(super) fn view(st: &State, name: &str, qual: &str) -> Option<Rel> {
                 rows.push(class_row(*oid, n, NS_INFORMATION_SCHEMA, "v", 0, false));
             }
             for t in &tables {
+                let visible_indexes: Vec<_> = t
+                    .indexes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, idx)| !idx.name.ends_with("_fkidx"))
+                    .collect();
                 let mut r = class_row(table_oid(t), &t.name, NS_PUBLIC, "r", t.cols.len(), false);
                 r[8] = int(t.rows.len() as i32);
-                r[15] = boolean(!t.indexes.is_empty());
+                r[17] = boolean(!visible_indexes.is_empty());
                 rows.push(r);
-                for (pos, idx) in t.indexes.iter().enumerate() {
-                    rows.push(class_row(
+                for (pos, idx) in visible_indexes {
+                    let mut r = class_row(
                         index_oid(t, pos),
                         &idx.name,
                         NS_PUBLIC,
                         "i",
                         idx.cols.len(),
                         true,
-                    ));
+                    );
+                    // relhasindex describes indexes on a relation; an index relation itself
+                    // does not have an index in PostgreSQL.
+                    r[17] = boolean(false);
+                    rows.push(r);
                 }
                 for (i, c) in t.cols.iter().enumerate() {
                     if let Some(seq) = &c.serial {

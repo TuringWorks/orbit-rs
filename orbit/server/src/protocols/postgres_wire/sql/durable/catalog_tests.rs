@@ -96,6 +96,20 @@ async fn columns_show_type_modifiers_and_defaults() {
 }
 
 #[tokio::test]
+async fn information_schema_columns_exposes_constant_defaults() {
+    let e = DurableEngine::in_memory();
+    let _ = q(&e, "CREATE TABLE defaults_probe (id SERIAL PRIMARY KEY, active BOOLEAN DEFAULT true, label TEXT DEFAULT 'ready'); SELECT 1").await;
+    assert_eq!(
+        q(&e, "SELECT column_name, column_default FROM information_schema.columns WHERE table_name = 'defaults_probe' ORDER BY ordinal_position").await,
+        vec![
+            vec!["id", "nextval('defaults_probe_id_seq'::regclass)"],
+            vec!["active", "true"],
+            vec!["label", "ready"],
+        ]
+    );
+}
+
+#[tokio::test]
 async fn constraints_and_index_definitions_are_readable() {
     let e = shop().await;
     assert_eq!(
@@ -222,7 +236,7 @@ async fn information_schema_describes_constraints_and_keys() {
     let e = shop().await;
     assert_eq!(
         q(&e, "SELECT constraint_name, constraint_type FROM information_schema.table_constraints WHERE table_name = 'sale' ORDER BY constraint_type").await.len(),
-        2
+        4
     );
     let keys = q(
         &e,
