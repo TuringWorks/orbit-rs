@@ -349,6 +349,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_pg_index_reports_created_indexes() {
+        let fixture = SqlExecutorTestFixture::new().await;
+        fixture
+            .execute_sql_ok("CREATE TABLE indexed (id INTEGER PRIMARY KEY, email TEXT)")
+            .await;
+        fixture
+            .execute_sql_ok("CREATE UNIQUE INDEX indexed_email_idx ON indexed (email)")
+            .await;
+
+        let result = fixture
+            .execute_sql_ok(
+                "SELECT indexrelid, indrelid, indisunique, indisprimary FROM pg_catalog.pg_index",
+            )
+            .await;
+        match result {
+            ExecutionResult::Select { rows, .. } => {
+                assert_eq!(rows.len(), 2);
+                assert!(rows.iter().any(|row| row[2] == Some("t".to_string())));
+                assert!(rows.iter().any(|row| row[3] == Some("t".to_string())));
+            }
+            other => panic!("Expected pg_index rows, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn test_drop_table() {
         let fixture = SqlExecutorTestFixture::new().await;
 
