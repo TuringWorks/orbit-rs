@@ -539,7 +539,6 @@ fn alter_table(
                     }
                     table.checks.push((name.clone(), expression.clone()));
                 }
-                _ => {}
             },
             AlterTableAction::DropConstraint { name, .. } => {
                 let n = name.to_lowercase();
