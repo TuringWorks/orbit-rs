@@ -1095,7 +1095,7 @@ cold_tier_pushdown = true              # Push predicates to columnar engine
 | UNDROP TABLE Syntax | Complete | 4 | `sql/parser/ddl.rs`, `sql/lexer.rs` |
 | UNDROP TABLE Executor | Complete | - | `sql/execution_strategy.rs` (requires Iceberg catalog config) |
 | **AQL (ArangoDB) Features** | | | |
-| AQL Parser | Complete | ~20 | `aql/aql_parser.rs` (2941 lines) |
+| AQL Parser | Complete | ~24 | `aql/aql_parser.rs` (2941 lines; LET arithmetic, COLLECT grouping, graph traversal, logical expressions) |
 | AQL Query Engine | Complete | ~30 | `aql/query_engine.rs` (5300+ lines) |
 | Graph Traversal (FOR...IN...OUTBOUND/INBOUND/ANY) | Complete | ~15 | `aql/query_engine.rs`, `common/graph_algorithms.rs` |
 | Shortest Path (SHORTEST_PATH) | Complete | ~5 | `aql/query_engine.rs` (Dijkstra algorithm) |

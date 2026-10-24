@@ -1811,6 +1811,12 @@ RETURN GEO_AREA(polygon)
 - `GEO_CONTAINS`, `GEO_WITHIN`, `GEO_INTERSECTS` relationships
 - `GEO_DISTANCE`, `GEO_AREA`, `GEO_LENGTH` measurements
 
+The AQL parser also covers LET arithmetic, COLLECT grouping, graph traversal,
+logical expressions, and object keys that overlap with reserved function names.
+These parser cases are part of the normal regression suite; graph metrics,
+full-text indexing, and several extended built-ins still require their backing
+engine integrations.
+
 #### Cypher (Neo4j) Protocol
 
 **Graph-Based Spatial Queries:**

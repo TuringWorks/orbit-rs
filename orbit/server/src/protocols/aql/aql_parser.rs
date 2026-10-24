@@ -2322,6 +2322,12 @@ impl AqlTokenParser {
                     self.advance();
                     k
                 }
+                // AQL object keys may use names that are also function or
+                // clause keywords, such as `{count: LENGTH(doc)}`.
+                Some(AqlToken::Count) => {
+                    self.advance();
+                    "count".to_string()
+                }
                 _ => return Err(ProtocolError::AqlError("Expected property key".to_string())),
             };
 

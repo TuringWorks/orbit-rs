@@ -402,7 +402,6 @@ mod aql_tests {
     }
 
     #[tokio::test]
-    #[ignore = "LET clause with arithmetic not yet implemented"]
     async fn test_parser_let_clause() {
         let parser = AqlParser::new();
         let result = parser.parse("FOR doc IN users LET age_plus_ten = doc.age + 10 RETURN {name: doc.name, new_age: age_plus_ten}");
@@ -410,7 +409,6 @@ mod aql_tests {
     }
 
     #[tokio::test]
-    #[ignore = "COLLECT clause not yet implemented"]
     async fn test_parser_collect_clause() {
         let parser = AqlParser::new();
         let result = parser
@@ -440,7 +438,6 @@ mod aql_tests {
     }
 
     #[tokio::test]
-    #[ignore = "Graph traversal not yet implemented"]
     async fn test_parser_graph_traversal() {
         let parser = AqlParser::new();
         let result = parser.parse("FOR vertex, edge, path IN 1..3 OUTBOUND 'users/john' GRAPH 'social' RETURN {vertex, edge, path}");
@@ -448,7 +445,6 @@ mod aql_tests {
     }
 
     #[tokio::test]
-    #[ignore = "Logical AND/OR operators not yet implemented"]
     async fn test_parser_complex_query() {
         let parser = AqlParser::new();
         let result = parser.parse("FOR doc IN users FILTER doc.age > 25 AND doc.active == true SORT doc.age DESC LIMIT 10 RETURN {name: doc.name, age: doc.age}");
