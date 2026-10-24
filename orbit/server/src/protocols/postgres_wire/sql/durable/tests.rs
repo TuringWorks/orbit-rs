@@ -251,14 +251,21 @@ async fn constraints_are_enforced_with_sqlstates() {
 #[tokio::test]
 async fn check_constraints_are_enforced_on_insert_and_update() {
     let e = DurableEngine::in_memory();
-    x(&e, "CREATE TABLE checked (id INTEGER PRIMARY KEY, amount INTEGER CHECK (amount > 0))").await;
+    x(
+        &e,
+        "CREATE TABLE checked (id INTEGER PRIMARY KEY, amount INTEGER CHECK (amount > 0))",
+    )
+    .await;
     let insert = msg(run(
         &e,
         &mut Session::default(),
         "INSERT INTO checked VALUES (1, 0)",
     )
     .await);
-    assert!(insert.contains("[23514]") && insert.contains("check constraint"), "{insert}");
+    assert!(
+        insert.contains("[23514]") && insert.contains("check constraint"),
+        "{insert}"
+    );
     x(&e, "INSERT INTO checked VALUES (1, 10)").await;
     let update = msg(run(
         &e,
@@ -266,7 +273,10 @@ async fn check_constraints_are_enforced_on_insert_and_update() {
         "UPDATE checked SET amount = -1 WHERE id = 1",
     )
     .await);
-    assert!(update.contains("[23514]") && update.contains("check constraint"), "{update}");
+    assert!(
+        update.contains("[23514]") && update.contains("check constraint"),
+        "{update}"
+    );
 }
 
 #[tokio::test]
