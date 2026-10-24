@@ -3719,7 +3719,19 @@ impl SqlExecutor {
                         .await?;
                 }
                 Expression::Function(func) => {
+                    let is_count = match &func.name {
+                        crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(name)
+                        | crate::protocols::postgres_wire::sql::ast::FunctionName::Qualified {
+                            name,
+                            ..
+                        } => name.eq_ignore_ascii_case("count"),
+                    };
                     for arg in &func.args {
+                        if is_count
+                            && matches!(arg, Expression::Column(column) if column.name == "*")
+                        {
+                            continue;
+                        }
                         self.validate_expression_columns(arg, from_clause).await?;
                     }
                 }

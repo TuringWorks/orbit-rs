@@ -762,9 +762,7 @@ mod tests {
         }
     }
 
-    // SqlExecutor::execute_select applies WHERE but not ORDER BY, LIMIT, OFFSET or aggregates; only the optional vectorized path (large tables) does.
     #[tokio::test]
-    #[ignore = "ORDER BY, LIMIT and count(*) are not implemented in SqlExecutor::execute_select"]
     async fn select_applies_where_order_and_limit() {
         let fixture = SqlExecutorTestFixture::new().await;
         fixture

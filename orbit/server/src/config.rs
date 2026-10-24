@@ -727,6 +727,7 @@ pub struct SecurityConfig {
     pub authorization: AuthorizationConfig,
 
     /// Encryption configuration
+    #[serde(default)]
     pub encryption: EncryptionConfig,
 }
 
@@ -2639,5 +2640,15 @@ mod tests {
         let toml_str = toml::to_string_pretty(&config).unwrap();
         let deserialized: OrbitServerConfig = toml::from_str(&toml_str).unwrap();
         assert!(deserialized.validate().is_ok());
+    }
+
+    /// The configuration file that ships with the repository must load and validate.
+    #[tokio::test]
+    async fn the_shipped_configuration_file_loads() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/orbit-server.toml");
+        OrbitServerConfig::load_from_file(&path)
+            .await
+            .unwrap_or_else(|e| panic!("config/orbit-server.toml does not load: {e}"));
     }
 }
