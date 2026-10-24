@@ -123,6 +123,7 @@ impl SqlParser {
 
             // DML Statements
             Some(Token::Select) => self.parse_select_statement(),
+            Some(Token::Values) | Some(Token::Table) => dml::parse_values_or_table(self),
             Some(Token::Insert) => self.parse_insert_statement(),
             Some(Token::Update) => self.parse_update_statement(),
             Some(Token::Delete) => self.parse_delete_statement(),
