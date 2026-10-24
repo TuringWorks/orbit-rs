@@ -25,9 +25,14 @@ proptest = { version = "1.4", optional = true }
 mockall = "0.15"
 rand = "0.8"
 futures = "0.3"
+sqllogictest = "0.29"
+tokio-postgres = "0.7"
 
 [features]
 default = []
+
+# Also run the parser-agreement report against PostgreSQL 18's own grammar (libpg_query)
+pg-query-parser = ["orbit-server/pg-query-parser"]
 
 # Phase-specific feature flags
 phase-9-features = []
@@ -100,3 +105,9 @@ harness = false
 [[test]]
 name = "postgres_version_tests"
 path = "orbit-protocols/postgres_version_tests.rs"
+
+# Conformance: sqllogictest corpus against Orbit (and optionally a real PostgreSQL 18 as oracle).
+# Run with: make conformance   (see specifications/protocols/POSTGRESQL_18_CONFORMANCE_PLAN.md)
+[[test]]
+name = "postgres_conformance"
+path = "orbit-protocols/postgres_conformance.rs"
