@@ -12,7 +12,6 @@
 //! `shadow` and `pg-query` need the `pg-query-parser` cargo feature. Asking for them without it
 //! falls back to `hand-rolled` with a warning rather than failing to start.
 
-use crate::protocols::error::{ProtocolError, ProtocolResult};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
@@ -22,7 +21,11 @@ use std::sync::OnceLock;
 pub enum ParserBackend {
     HandRolled,
     Shadow,
+    /// `libpg_query` parses and its tree is lowered to Orbit's AST; the hand-rolled parser is only
+    /// the fallback for what is not lowered yet and for Orbit's own SQL extensions.
     PgQuery,
+    /// As [`Self::PgQuery`], but a statement PostgreSQL's grammar rejects is rejected, extensions included.
+    PgQueryStrict,
 }
 
 impl ParserBackend {
@@ -46,15 +49,6 @@ impl ParserBackend {
             }
             requested
         })
-    }
-
-    /// Reject `sql` up front when `libpg_query` is authoritative and finds a syntax error.
-    pub(super) fn gate(self, sql: &str) -> ProtocolResult<()> {
-        match self {
-            Self::PgQuery => pg_query_syntax(sql)
-                .map_err(|msg| ProtocolError::PostgresError(format!("SQL Parse Error: {msg}"))),
-            Self::HandRolled | Self::Shadow => Ok(()),
-        }
     }
 
     /// In `shadow` mode, record whether the hand-rolled parser agreed with `libpg_query`.
@@ -84,6 +78,7 @@ impl std::str::FromStr for ParserBackend {
             "" | "hand-rolled" | "handrolled" => Ok(Self::HandRolled),
             "shadow" => Ok(Self::Shadow),
             "pg-query" | "pg_query" => Ok(Self::PgQuery),
+            "pg-query-strict" | "pg_query_strict" => Ok(Self::PgQueryStrict),
             other => Err(format!("unknown {} value {other:?}", Self::ENV)),
         }
     }
@@ -96,6 +91,25 @@ fn fallback(reason: &str) -> ParserBackend {
 
 static SHADOW_TOTAL: AtomicU64 = AtomicU64::new(0);
 static SHADOW_DISAGREEMENTS: AtomicU64 = AtomicU64::new(0);
+
+static LOWERED: AtomicU64 = AtomicU64::new(0);
+static FELL_BACK: AtomicU64 = AtomicU64::new(0);
+
+/// `(lowered from libpg_query, handled by the hand-rolled fallback)` since process start.
+pub fn lowering_counts() -> (u64, u64) {
+    (
+        LOWERED.load(Ordering::Relaxed),
+        FELL_BACK.load(Ordering::Relaxed),
+    )
+}
+
+pub(super) fn count_lowered() {
+    LOWERED.fetch_add(1, Ordering::Relaxed);
+}
+
+pub(super) fn count_fallback() {
+    FELL_BACK.fetch_add(1, Ordering::Relaxed);
+}
 
 /// `(statements compared, disagreements)` since process start, for `shadow` mode.
 pub fn shadow_counts() -> (u64, u64) {
@@ -144,18 +158,11 @@ mod tests {
         assert!("antlr".parse::<ParserBackend>().is_err());
     }
 
-    #[test]
-    fn gate_is_a_no_op_unless_pg_query_is_authoritative() {
-        assert!(ParserBackend::HandRolled.gate("SELEC 1").is_ok());
-        assert!(ParserBackend::Shadow.gate("SELEC 1").is_ok());
-    }
-
     #[cfg(feature = "pg-query-parser")]
     #[test]
     fn libpg_query_rejects_what_postgres_rejects() {
         assert_eq!(pg_query_accepts("SELECT 1"), Some(true));
         assert_eq!(pg_query_accepts("SELEC 1"), Some(false));
-        assert!(ParserBackend::PgQuery.gate("SELEC 1").is_err());
     }
 
     /// Syntax that only PostgreSQL 18's grammar accepts; proves the linked `libpg_query` is 18.x.

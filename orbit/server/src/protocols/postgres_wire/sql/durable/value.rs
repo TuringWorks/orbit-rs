@@ -17,6 +17,7 @@ fn as_decimal(v: &SqlValue) -> Option<Decimal> {
         SqlValue::SmallInt(i) => Some(Decimal::from(*i)),
         SqlValue::Integer(i) => Some(Decimal::from(*i)),
         SqlValue::BigInt(i) => Some(Decimal::from(*i)),
+        SqlValue::Regclass(i) => Some(Decimal::from(*i)),
         SqlValue::Decimal(d) => Some(*d),
         SqlValue::Real(f) => Decimal::from_f32(*f),
         SqlValue::DoublePrecision(f) => Decimal::from_f64(*f),
@@ -37,6 +38,7 @@ pub fn as_i64(v: &SqlValue) -> Option<i64> {
         SqlValue::SmallInt(i) => Some(i64::from(*i)),
         SqlValue::Integer(i) => Some(i64::from(*i)),
         SqlValue::BigInt(i) => Some(*i),
+        SqlValue::Regclass(i) => Some(i64::from(*i)),
         SqlValue::Decimal(d) => d.to_i64(),
         SqlValue::Real(f) => Some(*f as i64),
         SqlValue::DoublePrecision(f) => Some(*f as i64),
@@ -275,6 +277,7 @@ fn family(v: &SqlValue) -> u8 {
         SqlValue::SmallInt(_)
         | SqlValue::Integer(_)
         | SqlValue::BigInt(_)
+        | SqlValue::Regclass(_)
         | SqlValue::Decimal(_)
         | SqlValue::Real(_)
         | SqlValue::DoublePrecision(_) => 1,

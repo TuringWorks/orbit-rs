@@ -35,6 +35,8 @@ const VIEWS: &[(&str, i32)] = &[
     ("pg_user", 12001),
     ("pg_auth_members", 1261),
     ("pg_tablespace", 1213),
+    ("pg_tables", 12005),
+    ("pg_indexes", 12006),
     ("pg_settings", 12002),
     ("pg_stat_activity", 12003),
     ("pg_stat_gssapi", 12004),
@@ -384,9 +386,71 @@ pub(super) fn view(st: &State, name: &str, qual: &str) -> Option<Rel> {
                 ],
             ],
         ),
+        "pg_tables" => rel(
+            qual,
+            &[
+                ("schemaname", T),
+                ("tablename", T),
+                ("tableowner", T),
+                ("tablespace", T),
+                ("hasindexes", B),
+                ("hasrules", B),
+                ("hastriggers", B),
+                ("rowsecurity", B),
+            ],
+            tables
+                .iter()
+                .map(|t| {
+                    vec![
+                        text("public"),
+                        text(&t.name),
+                        text("postgres"),
+                        SqlValue::Null,
+                        boolean(t.indexes.iter().any(|i| !i.name.ends_with("_fkidx"))),
+                        boolean(false),
+                        boolean(false),
+                        boolean(false),
+                    ]
+                })
+                .collect(),
+        ),
+        "pg_indexes" => rel(
+            qual,
+            &[
+                ("schemaname", T),
+                ("tablename", T),
+                ("indexname", T),
+                ("tablespace", T),
+                ("indexdef", T),
+            ],
+            tables
+                .iter()
+                .flat_map(|t| {
+                    t.indexes
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, idx)| !idx.name.ends_with("_fkidx"))
+                        .map(|(pos, idx)| {
+                            let definition = index_definition(st, i64::from(index_oid(t, pos)))
+                                .unwrap_or_default();
+                            vec![
+                                text("public"),
+                                text(&t.name),
+                                text(&idx.name),
+                                SqlValue::Null,
+                                text(&definition),
+                            ]
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect(),
+        ),
         "pg_roles" | "pg_user" => {
             let connected = super::session_vars::current_user();
-            let roles = [(OWNER, "postgres"), (16385, connected.as_str())];
+            let mut roles = vec![(OWNER, "postgres".to_string())];
+            if connected != "postgres" {
+                roles.push((16385, connected));
+            }
             if name == "pg_roles" {
                 rel(
                     qual,
@@ -713,6 +777,9 @@ pub(super) fn view(st: &State, name: &str, qual: &str) -> Option<Rel> {
             let mut rows: Vec<Row> = Vec::new();
             for t in &tables {
                 for (pos, idx) in t.indexes.iter().enumerate() {
+                    if idx.name.ends_with("_fkidx") {
+                        continue;
+                    }
                     let key = idx
                         .cols
                         .iter()
@@ -796,11 +863,11 @@ pub(super) fn view(st: &State, name: &str, qual: &str) -> Option<Rel> {
                 };
             for t in &tables {
                 for (pos, idx) in t.indexes.iter().enumerate() {
-                    if idx.primary {
+                    if idx.primary || idx.unique {
                         rows.push(con(
                             constraint_oid(t, pos as i32),
                             &idx.name,
-                            "p",
+                            if idx.primary { "p" } else { "u" },
                             table_oid(t),
                             index_oid(t, pos),
                             0,
@@ -818,6 +885,17 @@ pub(super) fn view(st: &State, name: &str, qual: &str) -> Option<Rel> {
                         0,
                         target,
                         &fk.cols,
+                    ));
+                }
+                for (i, col) in t.cols.iter().enumerate().filter(|(_, c)| c.not_null) {
+                    rows.push(con(
+                        constraint_oid(t, 900 + i as i32),
+                        &format!("{}_{}_not_null", t.name, col.name),
+                        "n",
+                        table_oid(t),
+                        0,
+                        0,
+                        &[i],
                     ));
                 }
                 for (i, (name, _)) in t.checks.iter().enumerate() {
@@ -1045,7 +1123,21 @@ pub(super) fn view(st: &State, name: &str, qual: &str) -> Option<Rel> {
                 ("prokind", T),
                 ("prorettype", I),
             ],
-            vec![],
+            std::iter::once("lower")
+                .chain(FUNCTIONS.iter().copied())
+                .enumerate()
+                .map(|(i, name)| {
+                    vec![
+                        int(4_500_000 + i as i32),
+                        text(name),
+                        int(NS_CATALOG),
+                        int(OWNER),
+                        int(12),
+                        text("f"),
+                        int(25),
+                    ]
+                })
+                .collect(),
         ),
         _ => return None,
     })
@@ -1090,6 +1182,13 @@ fn regclass(st: &State, name: &str) -> Option<i32> {
         }
     }
     None
+}
+
+pub(super) fn relation_name(st: &State, oid: u32) -> Option<&str> {
+    st.tables
+        .values()
+        .find(|t| table_oid(t) as u32 == oid)
+        .map(|t| t.name.as_str())
 }
 
 fn type_by_name(name: &str) -> Option<i32> {
@@ -1143,6 +1242,7 @@ pub(super) fn cast(st: &State, target: &SqlType, v: SqlValue) -> R<SqlValue> {
                 _ => Some(0),
             };
             match found {
+                Some(oid) if kind == "regclass" => SqlValue::Regclass(oid as u32),
                 Some(oid) => int(oid),
                 None if kind == "regclass" => {
                     return err("42P01", format!("relation \"{s}\" does not exist"))
@@ -1264,20 +1364,50 @@ fn index_definition(st: &State, oid: i64) -> Option<String> {
 fn constraint_definition(st: &State, oid: i64) -> Option<String> {
     for t in st.tables.values() {
         for (pos, idx) in t.indexes.iter().enumerate() {
-            if idx.primary && constraint_oid(t, pos as i32) as i64 == oid {
+            if (idx.primary || idx.unique) && constraint_oid(t, pos as i32) as i64 == oid {
                 let cols: Vec<&str> = idx.cols.iter().map(|c| t.cols[*c].name.as_str()).collect();
-                return Some(format!("PRIMARY KEY ({})", cols.join(", ")));
+                return Some(format!(
+                    "{} ({})",
+                    if idx.primary { "PRIMARY KEY" } else { "UNIQUE" },
+                    cols.join(", ")
+                ));
             }
         }
         for (i, fk) in t.fks.iter().enumerate() {
             if constraint_oid(t, 500 + i as i32) as i64 == oid {
                 let cols: Vec<&str> = fk.cols.iter().map(|c| t.cols[*c].name.as_str()).collect();
-                return Some(format!(
+                let mut definition = format!(
                     "FOREIGN KEY ({}) REFERENCES {}({})",
                     cols.join(", "),
                     fk.ref_table,
                     fk.ref_cols.join(", ")
-                ));
+                );
+                if !matches!(fk.on_delete, super::fk::Action::NoAction) {
+                    definition.push_str(" ON DELETE ");
+                    definition.push_str(match fk.on_delete {
+                        super::fk::Action::Restrict => "RESTRICT",
+                        super::fk::Action::Cascade => "CASCADE",
+                        super::fk::Action::SetNull => "SET NULL",
+                        super::fk::Action::SetDefault => "SET DEFAULT",
+                        super::fk::Action::NoAction => unreachable!(),
+                    });
+                }
+                if !matches!(fk.on_update, super::fk::Action::NoAction) {
+                    definition.push_str(" ON UPDATE ");
+                    definition.push_str(match fk.on_update {
+                        super::fk::Action::Restrict => "RESTRICT",
+                        super::fk::Action::Cascade => "CASCADE",
+                        super::fk::Action::SetNull => "SET NULL",
+                        super::fk::Action::SetDefault => "SET DEFAULT",
+                        super::fk::Action::NoAction => unreachable!(),
+                    });
+                }
+                return Some(definition);
+            }
+        }
+        for (i, col) in t.cols.iter().enumerate().filter(|(_, c)| c.not_null) {
+            if constraint_oid(t, 900 + i as i32) as i64 == oid {
+                return Some(format!("NOT NULL {}", col.name));
             }
         }
         for i in 0..t.checks.len() {

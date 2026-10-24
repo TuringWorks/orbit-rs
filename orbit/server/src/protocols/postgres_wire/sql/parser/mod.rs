@@ -7,6 +7,8 @@ pub mod backend;
 pub mod dcl;
 pub mod ddl;
 pub mod dml;
+#[cfg(feature = "pg-query-parser")]
+pub mod lower;
 pub mod expressions;
 pub mod select;
 pub mod tcl;
@@ -66,7 +68,38 @@ impl SqlParser {
     /// Parse multiple SQL statements from string input
     pub fn parse_multiple(&mut self, input: &str) -> ProtocolResult<Vec<Statement>> {
         let backend = backend::ParserBackend::selected();
-        backend.gate(input)?;
+        #[cfg(feature = "pg-query-parser")]
+        if matches!(
+            backend,
+            backend::ParserBackend::PgQuery | backend::ParserBackend::PgQueryStrict
+        ) {
+            match lower::lower(input) {
+                lower::Lowered::Statements(statements) => {
+                    backend::count_lowered();
+                    return Ok(statements);
+                }
+                lower::Lowered::SyntaxError(message)
+                    if backend == backend::ParserBackend::PgQueryStrict =>
+                {
+                    return Err(ProtocolError::PostgresError(format!("[42601] {message}")));
+                }
+                // Orbit's own SQL (TRAVERSE, time travel, ...) is not PostgreSQL's: let the
+                // hand-rolled parser have it, and report PostgreSQL's message if it cannot either
+                lower::Lowered::SyntaxError(message) => {
+                    let fallback = self.parse_multiple_hand_rolled(input);
+                    if fallback.is_err() {
+                        return Err(ProtocolError::PostgresError(format!("[42601] {message}")));
+                    }
+                    backend::count_fallback();
+                    return fallback;
+                }
+                lower::Lowered::Unsupported(why) => {
+                    tracing::debug!(reason = %why, "SQL not lowered from libpg_query; hand-rolled parser used");
+                    backend::count_fallback();
+                    return self.parse_multiple_hand_rolled(input);
+                }
+            }
+        }
         let result = self.parse_multiple_hand_rolled(input);
         backend.compare(input, result.is_ok());
         result

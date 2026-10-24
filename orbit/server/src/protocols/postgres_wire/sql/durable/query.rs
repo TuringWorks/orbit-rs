@@ -3,7 +3,7 @@
 use super::pg_catalog;
 use super::table_fn;
 use super::value::{canonical, cmp, group_key, oid_of_type, oid_of_value, truthy, unique_key};
-use super::{err, Row, Seqs, State, Table, R};
+use super::{err, DbError, Row, Seqs, State, Table, R};
 use crate::protocols::postgres_wire::query_engine::QueryResult;
 use crate::protocols::postgres_wire::sql::ast::{
     BinaryOperator, CaseExpression, DistinctClause, Expression, FromClause, FunctionCall,
@@ -725,6 +725,23 @@ impl<'a> Runner<'a> {
                 }
                 _ => {}
             }
+        }
+        if let Expression::Cast {
+            expr: inner,
+            target_type: SqlType::Text,
+        } = expr
+        {
+            let value = self.eval(inner, ctx)?;
+            if let SqlValue::Regclass(oid) = value {
+                return Ok(SqlValue::Text(
+                    pg_catalog::relation_name(self.st, oid)
+                        .map_or_else(|| oid.to_string(), str::to_owned),
+                ));
+            }
+            return value.cast_to(&SqlType::Text).map_err(|message| DbError {
+                code: "42846",
+                message,
+            });
         }
         if has_subquery(expr) {
             let e = self.resolve_subqueries(expr, ctx)?;

@@ -114,7 +114,11 @@ async fn constraints_and_index_definitions_are_readable() {
     let e = shop().await;
     assert_eq!(
         q(&e, "SELECT conname, contype, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'customer'::regclass").await,
-        vec![vec!["customer_pkey", "p", "PRIMARY KEY (id)"]]
+        vec![
+            vec!["customer_pkey", "p", "PRIMARY KEY (id)"],
+            vec!["customer_id_not_null", "n", "NOT NULL id"],
+            vec!["customer_name_not_null", "n", "NOT NULL name"],
+        ]
     );
     let fk = q(
         &e,
@@ -195,7 +199,6 @@ async fn catalog_views_with_no_rows_still_have_columns() {
         "pg_inherits",
         "pg_depend",
         "pg_extension",
-        "pg_proc",
         "pg_auth_members",
         "pg_shdescription",
     ] {
