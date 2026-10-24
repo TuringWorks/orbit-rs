@@ -675,16 +675,15 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // WASM execution requires specific runtime conditions
     async fn test_timeout() {
         let config = WasmConfig {
-            timeout: std::time::Duration::from_millis(1),
+            timeout: std::time::Duration::from_secs(1),
             ..Default::default()
         };
         let runtime = WasmRuntime::new(config).unwrap();
 
         // This should timeout (if we had an infinite loop WASM module)
         // For now, just verify timeout configuration works
-        assert!(runtime.config.timeout.as_millis() == 1);
+        assert_eq!(runtime.config.timeout.as_secs(), 1);
     }
 }
