@@ -579,6 +579,18 @@ provide protocol and metadata compatibility. True copy-on-write database
 snapshots are planned for the durable storage layer because Orbit-RS does not
 use a PostgreSQL data directory.
 
+### PostgreSQL Compatibility Boundaries (October 2026)
+
+The durable PostgreSQL engine enforces table and column `CHECK` constraints on
+`INSERT` and `UPDATE` with SQLSTATE `23514`. The wire executor exposes
+registered primary-key and secondary indexes through `pg_catalog.pg_index` and
+`pg_catalog.pg_indexes`, including index identity, uniqueness, and definitions.
+
+Remaining parity limits are explicit: durable writes are serialized through a
+single writer gate, reads are memory-resident, and the legacy executor still
+uses scans for query execution. Arbitrary catalog joins are not yet guaranteed,
+and Raft snapshots are transferred as one bounded frame.
+
 ### OrbitQL Wire Protocols
 
 OrbitQL queries can be executed via two purpose-built wire protocols:

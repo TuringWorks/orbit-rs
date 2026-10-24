@@ -624,6 +624,16 @@ Saga States: NotStarted → Running → Completed | Compensating → Compensated
    - **Compatibility**: Works with standard PostgreSQL clients (psql, pgAdmin, DataGrip, etc.)
    - **Future Enhancements**: JOINs, aggregates, window functions, pgvector extension support
 
+   **Durable compatibility boundaries**: `CHECK` expressions are stored with
+   table metadata and evaluated for every durable `INSERT` and `UPDATE`; false
+   results return SQLSTATE `23514`, while NULL follows PostgreSQL check
+   semantics. The legacy wire catalog handlers expose primary-key and
+   secondary-index metadata through `pg_catalog.pg_index` and
+   `pg_catalog.pg_indexes`. Durable writes use a single writer gate, the
+   dataset is memory-resident, and Raft snapshots currently travel as one
+   bounded frame. Arbitrary system-catalog joins and universal index-backed
+   query lookup remain future compatibility work.
+
 3. **OrbitQL** - Port 8081 (or 8080 via REST)
    - **Status**: **Production-Ready** (90% core functionality complete)
    - **Implementation**: Native query language with comprehensive SQL support
