@@ -1,0 +1,66 @@
+statement ok
+DROP TABLE IF EXISTS cf_acct
+
+statement ok
+CREATE TABLE cf_acct (id integer PRIMARY KEY, bal integer)
+
+statement ok
+INSERT INTO cf_acct VALUES (1, 100), (2, 100)
+
+statement ok
+BEGIN
+
+statement ok
+UPDATE cf_acct SET bal = bal - 30 WHERE id = 1
+
+statement ok
+UPDATE cf_acct SET bal = bal + 30 WHERE id = 2
+
+statement ok
+COMMIT
+
+query II rowsort
+SELECT id, bal FROM cf_acct
+----
+1 70
+2 130
+
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM cf_acct
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) FROM cf_acct
+----
+2
+
+statement ok
+BEGIN
+
+statement ok
+UPDATE cf_acct SET bal = 0 WHERE id = 1
+
+statement ok
+SAVEPOINT sp1
+
+statement ok
+UPDATE cf_acct SET bal = 999 WHERE id = 1
+
+statement ok
+ROLLBACK TO SAVEPOINT sp1
+
+statement ok
+COMMIT
+
+query I
+SELECT bal FROM cf_acct WHERE id = 1
+----
+0
+
+statement ok
+DROP TABLE cf_acct

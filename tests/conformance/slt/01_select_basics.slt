@@ -1,0 +1,96 @@
+# Scalar expressions and basic SELECT. Every expectation here was produced by PostgreSQL 18.
+
+query I
+SELECT 1
+----
+1
+
+query I
+SELECT 1 + 2 * 3
+----
+7
+
+query T
+SELECT 'a' || 'b'
+----
+ab
+
+query T
+SELECT 1 < 2
+----
+t
+
+query I
+SELECT 7 / 2
+----
+3
+
+query R
+SELECT 7.0 / 2
+----
+3.5000000000000000
+
+query I
+SELECT 7 % 4
+----
+3
+
+query T
+SELECT upper('orbit')
+----
+ORBIT
+
+query I
+SELECT length('hello')
+----
+5
+
+query T
+SELECT substring('postgres' FROM 1 FOR 4)
+----
+post
+
+query T
+SELECT CASE WHEN 1 = 1 THEN 'yes' ELSE 'no' END
+----
+yes
+
+query I
+SELECT coalesce(NULL, NULL, 3)
+----
+3
+
+query T
+SELECT nullif(1, 1) IS NULL
+----
+t
+
+query T
+SELECT 5 BETWEEN 1 AND 10
+----
+t
+
+query T
+SELECT 'abc' LIKE 'a%'
+----
+t
+
+query T
+SELECT 3 IN (1, 2, 3)
+----
+t
+
+query I
+SELECT abs(-4)
+----
+4
+
+query I
+SELECT CAST('12' AS integer) + 1
+----
+13
+
+query I
+SELECT '12'::int
+----
+12

@@ -1,0 +1,43 @@
+# Behaviour new in PostgreSQL 18. Each block exercises one feature.
+
+# uuidv7(): version nibble is 7
+query T
+SELECT substring(uuidv7()::text FROM 15 FOR 1) = '7'
+----
+t
+
+statement ok
+DROP TABLE IF EXISTS cf_v
+
+# Virtual generated columns (the default kind in 18)
+statement ok
+CREATE TABLE cf_v (a integer, b integer GENERATED ALWAYS AS (a * 2))
+
+statement ok
+INSERT INTO cf_v (a) VALUES (21)
+
+query II
+SELECT a, b FROM cf_v
+----
+21 42
+
+statement ok
+DROP TABLE cf_v
+
+statement ok
+DROP TABLE IF EXISTS cf_r
+
+statement ok
+CREATE TABLE cf_r (id integer PRIMARY KEY, v integer)
+
+statement ok
+INSERT INTO cf_r VALUES (1, 10)
+
+# RETURNING can name the old and new row
+query II
+UPDATE cf_r SET v = 11 WHERE id = 1 RETURNING OLD.v, NEW.v
+----
+10 11
+
+statement ok
+DROP TABLE cf_r

@@ -1582,6 +1582,18 @@ impl AqlQueryEngine {
                         });
 
                         if let (Some(from_id), Some(to_id)) = (from, to) {
+                            graph.nodes.entry(from_id.clone()).or_insert_with(|| {
+                                graph_algo::GraphNode {
+                                    id: from_id.clone(),
+                                    properties: HashMap::new(),
+                                }
+                            });
+                            graph.nodes.entry(to_id.clone()).or_insert_with(|| {
+                                graph_algo::GraphNode {
+                                    id: to_id.clone(),
+                                    properties: HashMap::new(),
+                                }
+                            });
                             let weight = props
                                 .get("weight")
                                 .or(props.get("cost"))

@@ -1,0 +1,62 @@
+# What drivers, ORMs and psql ask the server about itself.
+
+query T
+SELECT current_setting('server_version_num')::int >= 180000
+----
+t
+
+query T
+SELECT substring(version() FROM 1 FOR 13)
+----
+PostgreSQL 18
+
+statement ok
+DROP TABLE IF EXISTS cf_cat
+
+statement ok
+CREATE TABLE cf_cat (id integer PRIMARY KEY, note text)
+
+query T
+SELECT table_name FROM information_schema.tables WHERE table_name = 'cf_cat'
+----
+cf_cat
+
+query TT rowsort
+SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'cf_cat'
+----
+id integer
+note text
+
+query T
+SELECT relname FROM pg_catalog.pg_class WHERE relname = 'cf_cat'
+----
+cf_cat
+
+query T
+SELECT attname FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid WHERE c.relname = 'cf_cat' AND a.attnum > 0 ORDER BY a.attnum
+----
+id
+note
+
+query T
+SELECT nspname FROM pg_namespace WHERE nspname = 'public'
+----
+public
+
+query T
+SELECT typname FROM pg_type WHERE typname = 'int4'
+----
+int4
+
+query T
+SELECT current_schema()
+----
+public
+
+query T
+SELECT to_regclass('cf_cat') IS NOT NULL
+----
+t
+
+statement ok
+DROP TABLE cf_cat

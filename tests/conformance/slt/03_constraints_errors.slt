@@ -1,0 +1,58 @@
+statement ok
+DROP TABLE IF EXISTS cf_child
+
+statement ok
+DROP TABLE IF EXISTS cf_parent
+
+statement ok
+CREATE TABLE cf_parent (id integer PRIMARY KEY, label text UNIQUE)
+
+statement ok
+CREATE TABLE cf_child (id integer PRIMARY KEY, parent_id integer REFERENCES cf_parent (id), n integer CHECK (n > 0))
+
+statement ok
+INSERT INTO cf_parent VALUES (1, 'a'), (2, 'b')
+
+statement ok
+INSERT INTO cf_child VALUES (10, 1, 5)
+
+statement error
+INSERT INTO cf_parent VALUES (1, 'dup-pk')
+
+statement error
+INSERT INTO cf_parent VALUES (3, 'a')
+
+statement error
+INSERT INTO cf_child VALUES (11, 99, 5)
+
+statement error
+INSERT INTO cf_child VALUES (12, 1, 0)
+
+statement error
+INSERT INTO cf_child VALUES (13, 1, NULL, 'too many values')
+
+statement error
+SELECT * FROM cf_does_not_exist
+
+statement error
+SELECT no_such_column FROM cf_parent
+
+statement error
+SELEC 1
+
+statement error
+SELECT 1 / 0
+
+statement ok
+INSERT INTO cf_parent VALUES (4, NULL), (5, NULL)
+
+query I
+SELECT count(*) FROM cf_parent WHERE label IS NULL
+----
+2
+
+statement ok
+DROP TABLE cf_child
+
+statement ok
+DROP TABLE cf_parent

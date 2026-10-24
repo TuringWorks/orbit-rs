@@ -1,0 +1,84 @@
+statement ok
+DROP TABLE IF EXISTS cf_orders
+
+statement ok
+DROP TABLE IF EXISTS cf_customers
+
+statement ok
+CREATE TABLE cf_customers (id integer PRIMARY KEY, name text)
+
+statement ok
+CREATE TABLE cf_orders (id integer PRIMARY KEY, customer_id integer, amount integer)
+
+statement ok
+INSERT INTO cf_customers VALUES (1, 'ann'), (2, 'bob'), (3, 'cy')
+
+statement ok
+INSERT INTO cf_orders VALUES (1, 1, 10), (2, 1, 20), (3, 2, 5)
+
+query TI rowsort
+SELECT c.name, o.amount FROM cf_customers c JOIN cf_orders o ON o.customer_id = c.id
+----
+ann 10
+ann 20
+bob 5
+
+query TI rowsort
+SELECT c.name, o.amount FROM cf_customers c LEFT JOIN cf_orders o ON o.customer_id = c.id
+----
+ann 10
+ann 20
+bob 5
+cy NULL
+
+query TI rowsort
+SELECT c.name, sum(o.amount) FROM cf_customers c JOIN cf_orders o ON o.customer_id = c.id GROUP BY c.name
+----
+ann 30
+bob 5
+
+query TI
+SELECT c.name, count(o.id) FROM cf_customers c LEFT JOIN cf_orders o ON o.customer_id = c.id GROUP BY c.name HAVING count(o.id) = 0
+----
+cy 0
+
+query T rowsort
+SELECT name FROM cf_customers WHERE id IN (SELECT customer_id FROM cf_orders)
+----
+ann
+bob
+
+query T
+SELECT name FROM cf_customers c WHERE NOT EXISTS (SELECT 1 FROM cf_orders o WHERE o.customer_id = c.id)
+----
+cy
+
+query I
+SELECT count(DISTINCT customer_id) FROM cf_orders
+----
+2
+
+query I rowsort
+SELECT id FROM cf_customers UNION SELECT customer_id FROM cf_orders
+----
+1
+2
+3
+
+query TI
+WITH totals AS (SELECT customer_id, sum(amount) AS total FROM cf_orders GROUP BY customer_id)
+SELECT c.name, t.total FROM totals t JOIN cf_customers c ON c.id = t.customer_id ORDER BY t.total DESC LIMIT 1
+----
+ann 30
+
+query TII
+SELECT name, id, row_number() OVER (ORDER BY id) FROM cf_customers ORDER BY id LIMIT 2
+----
+ann 1 1
+bob 2 2
+
+statement ok
+DROP TABLE cf_orders
+
+statement ok
+DROP TABLE cf_customers
