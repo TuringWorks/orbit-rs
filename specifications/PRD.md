@@ -132,7 +132,7 @@ orbit/server/src/
 │   │   │   └── graphrag.rs          # GraphRAG commands
 │   │   └── simple_local/            # Local registry implementation
 │   │
-│   ├── postgres_wire/               # PostgreSQL wire protocol
+│   ├── postgres_wire/               # PostgreSQL wire protocol (sql/parser/backend.rs: ORBIT_SQL_PARSER switch to libpg_query 18)
 │   │   ├── mod.rs                   # PostgreSQL server
 │   │   ├── messages.rs              # Wire protocol messages
 │   │   ├── sql/                     # SQL processing
@@ -559,7 +559,7 @@ npm run compile
 
 | Protocol | Port | Module | Status |
 |----------|------|--------|--------|
-| PostgreSQL | 5432 | `protocols/postgres_wire/` | Complete |
+| PostgreSQL | 5432 | `protocols/postgres_wire/` | Complete (measured conformance: [`protocols/POSTGRESQL_18_CONFORMANCE_PLAN.md`](protocols/POSTGRESQL_18_CONFORMANCE_PLAN.md); `tests/conformance/`, `make conformance`) |
 | MySQL | 3306 | `protocols/mysql/` | Complete |
 | CQL (Cassandra) | 9042 | `protocols/cql/` | Complete |
 | Redis RESP | 6379 | `protocols/resp/` | Complete |

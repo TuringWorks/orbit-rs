@@ -246,6 +246,9 @@ impl WasmRuntime {
 
         // Create a new store for this execution
         let mut store = Store::new(&self.engine, store_data);
+        // Epoch interruption defaults to deadline zero, which traps every
+        // invocation. Establish a live deadline for normal calls.
+        store.set_epoch_deadline(1);
 
         // Set up resource limiter
         #[cfg(feature = "wasm-wasi")]
@@ -321,17 +324,14 @@ impl WasmRuntime {
         // Call the function (async version for better performance)
         let mut results = vec![Val::I32(0)]; // Placeholder for result
 
-        // Use async call for non-blocking execution
-        func.call_async(store, args, &mut results)
-            .await
-            .map_err(|e| {
-                // Check if it's an out-of-fuel error
-                if e.to_string().contains("fuel") {
-                    WasmError::OutOfFuelError
-                } else {
-                    WasmError::ExecutionError(format!("Function execution failed: {e}"))
-                }
-            })?;
+        func.call(store, args, &mut results).map_err(|e| {
+            // Check if it's an out-of-fuel error
+            if e.to_string().contains("fuel") {
+                WasmError::OutOfFuelError
+            } else {
+                WasmError::ExecutionError(format!("Function execution failed: {e}"))
+            }
+        })?;
 
         // Convert result back to WasmValue
         if results.is_empty() {
@@ -492,6 +492,7 @@ impl WasmRuntime {
 
         // Create a new store for this execution
         let mut store = Store::new(&self.engine, store_data);
+        store.set_epoch_deadline(1);
 
         // Set up resource limiter
         #[cfg(feature = "wasm-wasi")]
@@ -625,7 +626,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // WASM execution requires specific runtime conditions
     async fn test_simple_execution() {
         let runtime = WasmRuntime::new_default().unwrap();
         let result = runtime

@@ -55,8 +55,14 @@ impl std::error::Error for PgError {}
 impl From<tokio_postgres::Error> for PgError {
     fn from(e: tokio_postgres::Error) -> Self {
         match e.as_db_error() {
-            Some(db) => Self { message: db.message().to_owned(), sqlstate: Some(db.code().code().to_owned()) },
-            None => Self { message: format!("{e:?}"), sqlstate: None },
+            Some(db) => Self {
+                message: db.message().to_owned(),
+                sqlstate: Some(db.code().code().to_owned()),
+            },
+            None => Self {
+                message: format!("{e:?}"),
+                sqlstate: None,
+            },
         }
     }
 }
@@ -69,10 +75,12 @@ struct PgDb {
 
 impl PgDb {
     async fn connect(url: &str, name: &'static str) -> Result<Self, PgError> {
-        let (client, connection) = tokio_postgres::connect(url, NoTls).await.inspect_err(|e| {
-            eprintln!("connect to {name}: {e:?}");
-        })
-        .map_err(PgError::from)?;
+        let (client, connection) = tokio_postgres::connect(url, NoTls)
+            .await
+            .inspect_err(|e| {
+                eprintln!("connect to {name}: {e:?}");
+            })
+            .map_err(PgError::from)?;
         tokio::spawn(async move {
             let _ = connection.await;
         });
@@ -177,17 +185,6 @@ async fn run_file(url: &str, name: &'static str, file: &Path) -> FileResult {
     result
 }
 
-/// `outer: inner: innermost`, since the database's own message is several `source()`s down.
-fn error_chain(e: &(dyn std::error::Error + 'static)) -> String {
-    let mut text = e.to_string();
-    let mut next = e.source();
-    while let Some(cause) = next {
-        text.push_str(&format!(": {cause}"));
-        next = cause.source();
-    }
-    text
-}
-
 /// A failure on one line, trimmed, so the report stays readable.
 fn one_line(text: &str) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -203,13 +200,27 @@ async fn run_corpus(url: &str, name: &'static str) -> BTreeMap<String, FileResul
     out
 }
 
-/// An in-process Orbit PostgreSQL server on a free port.
+/// An in-process Orbit PostgreSQL server on a free port, wired as `main.rs` wires it: the query
+/// engine over the durable SQL engine on RocksDB (not the bare in-memory engine).
 async fn start_orbit() -> String {
+    use orbit_server::protocols::postgres_wire::sql::durable::{DurableEngine, RocksPersist};
+    use orbit_server::protocols::postgres_wire::QueryEngine;
+    let dir = std::env::temp_dir().join(format!("orbit-conformance-{}", uuid::Uuid::new_v4()));
+    let persist = RocksPersist::open(&dir).expect("open durable store");
+    let engine = QueryEngine::new().with_durable(std::sync::Arc::new(
+        DurableEngine::open(Box::new(persist)).expect("durable engine"),
+    ));
     let probe = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = probe.local_addr().unwrap().port();
     drop(probe);
-    let server = orbit_server::protocols::PostgresServer::new(format!("127.0.0.1:{port}"))
-        .with_auth(orbit_server::protocols::postgres_wire::auth::UserStore::new(), true);
+    let server = orbit_server::protocols::PostgresServer::new_with_query_engine(
+        format!("127.0.0.1:{port}"),
+        engine,
+    )
+    .with_auth(
+        orbit_server::protocols::postgres_wire::auth::UserStore::new(),
+        true,
+    );
     tokio::spawn(async move {
         if let Err(e) = server.run().await {
             eprintln!("orbit server stopped: {e}");
@@ -308,5 +319,62 @@ async fn reference_postgres_passes_the_whole_corpus() {
         bad.is_empty(),
         "corpus disagrees with real PostgreSQL:\n{}",
         bad.join("\n")
+    );
+}
+
+/// Where the hand-rolled parser and PostgreSQL 18's own grammar (libpg_query) disagree on whether
+/// a corpus statement is valid SQL. Needs `--features pg-query-parser`.
+#[cfg(feature = "pg-query-parser")]
+#[test]
+#[ignore = "parser agreement report; run with `make conformance-parser`"]
+fn hand_rolled_parser_agrees_with_postgres_grammar() {
+    use orbit_server::protocols::postgres_wire::sql::parser::{
+        backend::pg_query_accepts, SqlParser,
+    };
+
+    let mut disagreements = vec![];
+    let mut total = 0;
+    for file in corpus_files() {
+        let records = sqllogictest::parse_file::<DefaultColumnType>(&file).expect("corpus parses");
+        for record in records {
+            let (sql, loc) = match &record {
+                Record::Statement { sql, loc, .. } | Record::Query { sql, loc, .. } => (sql, loc),
+                _ => continue,
+            };
+            total += 1;
+            let hand_rolled = SqlParser::new().parse_multiple(sql).is_ok();
+            let postgres = pg_query_accepts(sql).expect("built with pg-query-parser");
+            if hand_rolled != postgres {
+                let name = file.file_name().unwrap().to_string_lossy();
+                disagreements.push(format!(
+                    "{name}:{} hand-rolled={hand_rolled} postgres={postgres}  {}",
+                    loc.line(),
+                    one_line(sql)
+                ));
+            }
+        }
+    }
+    println!(
+        "\nParser agreement: {}/{total} statements",
+        total - disagreements.len()
+    );
+    disagreements.iter().for_each(|d| println!("  {d}"));
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/conformance");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("parser.json"),
+        serde_json::to_string_pretty(&disagreements).unwrap(),
+    )
+    .unwrap();
+    let ceiling: usize = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("conformance/parser_disagreements_max"),
+    )
+    .ok()
+    .and_then(|t| t.trim().parse().ok())
+    .unwrap_or(usize::MAX);
+    assert!(
+        disagreements.len() <= ceiling,
+        "{} disagreements > ceiling {ceiling}",
+        disagreements.len()
     );
 }

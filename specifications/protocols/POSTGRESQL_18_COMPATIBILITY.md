@@ -3,7 +3,7 @@
 **Target**: Full PostgreSQL 18 Wire Protocol Compatibility
 **Reference**: https://www.postgresql.org/docs/18/index.html
 **Last Updated**: 2025-12-13
-**Current Estimated Coverage**: ~85%
+**Current Estimated Coverage**: superseded — see [`POSTGRESQL_18_CONFORMANCE_PLAN.md`](POSTGRESQL_18_CONFORMANCE_PLAN.md). The former "~85%" counted parsing as implemented; use the measured pass rates there.
 
 ---
 
