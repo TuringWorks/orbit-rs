@@ -1,7 +1,7 @@
 # Orbit-RS Development Makefile
 # Common tasks for development workflow
 
-.PHONY: help format check test build clean commit-ready commit-light \
+.PHONY: conformance conformance-reference help format check test build clean commit-ready commit-light \
         pre-commit-full pre-commit-light all \
         dev run cluster cluster-stop cluster-status cluster-lb cluster-lb-stop \
         test-ignored test-include-ignored test-quick test-server test-verbose \
@@ -131,6 +131,19 @@ cluster-lb: build-release
 
 cluster-lb-stop:
 	./scripts/start-cluster-lb.sh --stop
+
+# PostgreSQL conformance: measure Orbit against the sqllogictest corpus (ratchet vs tests/conformance/baseline.json)
+conformance:
+	cargo test -p orbit-integration-tests --test postgres_conformance -- --ignored --nocapture orbit_does_not_regress
+
+# Validate the corpus itself against a real PostgreSQL 18 (needs docker)
+conformance-reference:
+	@docker rm -f orbit-pg18-ref >/dev/null 2>&1; \
+	docker run -d --rm --name orbit-pg18-ref -e POSTGRES_PASSWORD=pw -p 55432:5432 postgres:18 >/dev/null && \
+	until docker exec orbit-pg18-ref pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done; sleep 2; \
+	ORBIT_CONFORMANCE_REFERENCE_URL="host=127.0.0.1 port=55432 user=postgres password=pw dbname=postgres" \
+	cargo test -p orbit-integration-tests --test postgres_conformance -- --ignored --nocapture reference_postgres; \
+	status=$$?; docker rm -f orbit-pg18-ref >/dev/null 2>&1; exit $$status
 
 commit-ready: format check test
 	@echo "🎉 Code is ready for commit!"
