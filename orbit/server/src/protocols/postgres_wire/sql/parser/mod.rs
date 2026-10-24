@@ -419,6 +419,21 @@ impl SqlParser {
             false
         };
 
+        // CREATE [GLOBAL|LOCAL] {TEMP|TEMPORARY|UNLOGGED} TABLE: the persistence class is accepted, but
+        // such a table is created like any other (it is not yet dropped with the session)
+        let persistence_word = |t: &Option<Token>| match t {
+            Some(Token::Identifier(w)) => Some(w.to_ascii_uppercase()),
+            Some(other) => Some(format!("{other:?}").to_ascii_uppercase()),
+            None => None,
+        };
+        while matches!(
+            persistence_word(&self.current_token).as_deref(),
+            Some("TEMP" | "TEMPORARY" | "UNLOGGED" | "GLOBAL" | "LOCAL")
+        ) && !matches!(self.current_token, Some(Token::Table))
+        {
+            self.advance()?;
+        }
+
         match &self.current_token {
             Some(Token::Database) => ddl::parse_create_database(self),
             Some(Token::Table) => ddl::parse_create_table(self),

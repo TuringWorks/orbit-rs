@@ -82,7 +82,7 @@ async fn select_applies_where_order_limit_and_aggregates() {
     assert_eq!(q(&e, "SELECT count(*) AS c FROM w").await, vec![vec!["4"]]);
     assert_eq!(
         q(&e, "SELECT sum(q), min(q), max(q), avg(q) FROM w").await,
-        vec![vec!["100", "10", "40", "25"]]
+        vec![vec!["100", "10", "40", "25.0000000000000000"]]
     );
     assert_eq!(
         q(&e, "SELECT count(*) FROM w WHERE q > 100").await,
@@ -1500,4 +1500,58 @@ async fn big_integer_literals_and_numeric_scale_are_kept() {
     )
     .await)
     .contains("numeric field overflow"));
+}
+
+/// `stddev`/`variance` once returned 0 for every group; 2,4,4,4,5,5,7,9 is the textbook set with
+/// population variance 4 and standard deviation 2.
+#[tokio::test]
+async fn statistical_aggregates_compute_over_the_group() {
+    let e = DurableEngine::in_memory();
+    x(&e, "CREATE TABLE stat (g int, v int)").await;
+    x(
+        &e,
+        "INSERT INTO stat VALUES (1,2),(1,4),(1,4),(1,4),(1,5),(1,5),(1,7),(1,9),(2,10)",
+    )
+    .await;
+    assert_eq!(
+        q(
+            &e,
+            "SELECT round(var_pop(v), 4), round(stddev_pop(v), 4) FROM stat WHERE g = 1"
+        )
+        .await,
+        vec![vec!["4.0000", "2.0000"]]
+    );
+    assert_eq!(
+        q(
+            &e,
+            "SELECT round(var_samp(v), 4), round(stddev_samp(v), 4) FROM stat WHERE g = 1"
+        )
+        .await,
+        vec![vec!["4.5714", "2.1381"]]
+    );
+    // one value: the sample statistics are NULL, the population ones are 0
+    assert_eq!(
+        q(
+            &e,
+            "SELECT stddev(v) IS NULL, var_pop(v) FROM stat WHERE g = 2"
+        )
+        .await,
+        vec![vec!["t", "0"]]
+    );
+    assert_eq!(
+        q(
+            &e,
+            "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY v) FROM stat WHERE g = 1"
+        )
+        .await,
+        vec![vec!["4.5"]]
+    );
+    assert_eq!(
+        q(
+            &e,
+            "SELECT mode() WITHIN GROUP (ORDER BY v) FROM stat WHERE g = 1"
+        )
+        .await,
+        vec![vec!["4"]]
+    );
 }

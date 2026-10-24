@@ -6,14 +6,14 @@
   "05_transactions.slt": 20,
   "06_catalog.slt": 13,
   "07_postgres18.slt": 11,
-  "08_types_casts.slt": 16,
-  "09_string_functions.slt": 12,
-  "10_datetime.slt": 2,
-  "11_aggregates_windows.slt": 21,
-  "12_ddl.slt": 43,
+  "08_types_casts.slt": 22,
+  "09_string_functions.slt": 16,
+  "10_datetime.slt": 5,
+  "11_aggregates_windows.slt": 25,
+  "12_ddl.slt": 62,
   "13_dml_advanced.slt": 36,
-  "14_transactions_errors.slt": 56,
-  "15_introspection.slt": 25,
-  "16_json_arrays.slt": 14,
-  "17_queries.slt": 42
+  "14_transactions_errors.slt": 63,
+  "15_introspection.slt": 29,
+  "16_json_arrays.slt": 33,
+  "17_queries.slt": 49
 }

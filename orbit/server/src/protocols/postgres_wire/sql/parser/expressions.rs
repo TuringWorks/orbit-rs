@@ -226,8 +226,10 @@ impl ExpressionParser {
                 // Check if this is a subquery
                 let in_list = if *pos < tokens.len() && matches!(&tokens[*pos], Token::Select) {
                     // Parse as subquery
-                    use crate::protocols::postgres_wire::sql::parser::select::SelectParser;
-                    let select_stmt = crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(tokens, pos)?;
+                    let select_stmt =
+                        crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(
+                            tokens, pos,
+                        )?;
 
                     if *pos >= tokens.len() || !matches!(&tokens[*pos], Token::RightParen) {
                         return Err(crate::protocols::error::ProtocolError::ParseError(
@@ -480,8 +482,10 @@ impl ExpressionParser {
                 }
                 *pos += 1;
 
-                use crate::protocols::postgres_wire::sql::parser::select::SelectParser;
-                let subquery = crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(tokens, pos)?;
+                let subquery =
+                    crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(
+                        tokens, pos,
+                    )?;
 
                 if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
                     return Err(crate::protocols::error::ProtocolError::ParseError(
@@ -548,18 +552,45 @@ impl ExpressionParser {
                     };
                 }
                 Token::LeftBracket => {
-                    // Array indexing
+                    // Array subscript `a[i]` or slice `a[lo:hi]` (either bound optional)
                     *pos += 1;
-                    let index = self.parse_expression(tokens, pos)?;
-                    if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightBracket) {
+                    let lower = if matches!(tokens.get(*pos), Some(Token::Colon)) {
+                        None
+                    } else {
+                        Some(self.parse_expression(tokens, pos)?)
+                    };
+                    let slice = matches!(tokens.get(*pos), Some(Token::Colon));
+                    let upper = if slice {
+                        *pos += 1;
+                        if matches!(tokens.get(*pos), Some(Token::RightBracket)) {
+                            None
+                        } else {
+                            Some(self.parse_expression(tokens, pos)?)
+                        }
+                    } else {
+                        None
+                    };
+                    if !matches!(tokens.get(*pos), Some(Token::RightBracket)) {
                         return Err(crate::protocols::error::ProtocolError::ParseError(
                             "Expected ']' after array index".to_string(),
                         ));
                     }
                     *pos += 1;
-                    left = Expression::ArrayIndex {
-                        array: Box::new(left),
-                        index: Box::new(index),
+                    left = match (slice, lower) {
+                        (true, start) => Expression::ArraySlice {
+                            array: Box::new(left),
+                            start: start.map(Box::new),
+                            end: upper.map(Box::new),
+                        },
+                        (false, Some(index)) => Expression::ArrayIndex {
+                            array: Box::new(left),
+                            index: Box::new(index),
+                        },
+                        (false, None) => {
+                            return Err(crate::protocols::error::ProtocolError::ParseError(
+                                "Expected an array index".to_string(),
+                            ))
+                        }
                     };
                 }
                 Token::Colon
@@ -682,8 +713,14 @@ impl ExpressionParser {
             }
 
             // LEFT(s, n) and RIGHT(s, n) share their names with the join keywords
-            Token::Left | Token::Right if matches!(tokens.get(*pos + 1), Some(Token::LeftParen)) => {
-                let func = if matches!(tokens[*pos], Token::Left) { "LEFT" } else { "RIGHT" };
+            Token::Left | Token::Right
+                if matches!(tokens.get(*pos + 1), Some(Token::LeftParen)) =>
+            {
+                let func = if matches!(tokens[*pos], Token::Left) {
+                    "LEFT"
+                } else {
+                    "RIGHT"
+                };
                 self.parse_function_call(tokens, pos, func.to_string())
             }
 
@@ -714,6 +751,31 @@ impl ExpressionParser {
             | Token::NthValue => self.parse_window_function(tokens, pos),
 
             // Handle ARRAY constructor
+            // ARRAY(SELECT ..): the subquery's first column as an array
+            Token::Array if matches!(tokens.get(*pos + 1), Some(Token::LeftParen)) => {
+                *pos += 2; // ARRAY (
+                let query = crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(
+                    tokens, pos,
+                )?;
+                if !matches!(tokens.get(*pos), Some(Token::RightParen)) {
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected ')' after ARRAY subquery".to_string(),
+                    ));
+                }
+                *pos += 1;
+                Ok(Expression::Function(Box::new(
+                    crate::protocols::postgres_wire::sql::ast::FunctionCall {
+                        name: crate::protocols::postgres_wire::sql::ast::FunctionName::Simple(
+                            "array_from_subquery".to_string(),
+                        ),
+                        args: vec![Expression::Subquery(Box::new(query))],
+                        distinct: false,
+                        order_by: None,
+                        filter: None,
+                        within_group: None,
+                    },
+                )))
+            }
             Token::Array => {
                 *pos += 1; // consume 'ARRAY'
 
@@ -840,8 +902,10 @@ impl ExpressionParser {
 
                 // Check if this is a subquery (SELECT ...)
                 if *pos < tokens.len() && matches!(tokens[*pos], Token::Select) {
-                    use crate::protocols::postgres_wire::sql::parser::select::SelectParser;
-                    let subquery = crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(tokens, pos)?;
+                    let subquery =
+                        crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(
+                            tokens, pos,
+                        )?;
 
                     if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
                         return Err(crate::protocols::error::ProtocolError::ParseError(
@@ -1111,9 +1175,9 @@ impl ExpressionParser {
         };
         match name.to_ascii_uppercase().as_str() {
             "EXTRACT" => {
-                let Some(field) = word(tokens.get(*pos)).filter(|_| {
-                    matches!(tokens.get(*pos + 1), Some(Token::From))
-                }) else {
+                let Some(field) = word(tokens.get(*pos))
+                    .filter(|_| matches!(tokens.get(*pos + 1), Some(Token::From)))
+                else {
                     return Ok((name, None));
                 };
                 *pos += 2; // field, FROM
@@ -1148,10 +1212,13 @@ impl ExpressionParser {
                     Some("trailing") => "RTRIM",
                     _ => "BTRIM",
                 };
-                Ok((func.to_string(), Some(chars.into_iter().fold(vec![source], |mut a, c| {
-                    a.push(c);
-                    a
-                }))))
+                Ok((
+                    func.to_string(),
+                    Some(chars.into_iter().fold(vec![source], |mut a, c| {
+                        a.push(c);
+                        a
+                    })),
+                ))
             }
             "POSITION" => {
                 let start = *pos;

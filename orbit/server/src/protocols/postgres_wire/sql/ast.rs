@@ -317,6 +317,8 @@ pub struct CreateTableStatement {
     pub columns: Vec<ColumnDefinition>,
     pub constraints: Vec<TableConstraint>,
     pub options: Vec<TableOption>,
+    /// `CREATE TABLE t AS <query>`: the table takes its columns and rows from the query
+    pub as_query: Option<Box<SelectStatement>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -597,6 +599,10 @@ pub enum ColumnConstraint {
     Null,
     /// `SERIAL`, `BIGSERIAL` or `SMALLSERIAL`: an integer column filled from an owned sequence.
     Serial,
+    /// `GENERATED ALWAYS | BY DEFAULT AS IDENTITY`: a serial column that, when ALWAYS, refuses explicit values.
+    Identity {
+        always: bool,
+    },
     Default(Expression),
     PrimaryKey,
     Unique,

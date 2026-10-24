@@ -71,6 +71,17 @@ fn is_agg_name(n: &str) -> bool {
             | "bool_and"
             | "bool_or"
             | "every"
+            | "variance"
+            | "var_pop"
+            | "var_samp"
+            | "stddev"
+            | "stddev_pop"
+            | "stddev_samp"
+            | "percentile_cont"
+            | "percentile_disc"
+            | "mode"
+            | "json_agg"
+            | "jsonb_agg"
     )
 }
 
@@ -266,16 +277,27 @@ fn is_catalog_name(
 
 /// Functions whose value is a property of the session or server, not of the data.
 fn session_function(f: &FunctionCall) -> Option<SqlValue> {
-    if !f.args.is_empty() {
-        return None;
+    use super::session_vars::{current_database, current_user};
+    let name = fname(f);
+    let text = |s: String| Some(SqlValue::Text(s));
+    match (name.as_str(), f.args.len()) {
+        ("current_schema", 0) => text("public".into()),
+        ("current_database", 0) => text(current_database()),
+        ("current_user" | "session_user" | "user", 0) => text(current_user()),
+        ("version", 0) => text("PostgreSQL 18.0 (orbit-rs)".into()),
+        ("current_schemas", 1) => Some(SqlValue::Array(vec![SqlValue::Text("public".into())])),
+        ("pg_backend_pid", 0) => Some(SqlValue::Integer(std::process::id() as i32)),
+        ("pg_is_in_recovery", 0) => Some(SqlValue::Boolean(false)),
+        ("inet_server_port", 0) => Some(SqlValue::Integer(5432)),
+        ("pg_postmaster_start_time", 0) => {
+            Some(SqlValue::TimestampWithTimezone(chrono::DateTime::<
+                chrono::Utc,
+            >::from(
+                super::session_vars::process_start(),
+            )))
+        }
+        _ => None,
     }
-    Some(SqlValue::Text(match fname(f).as_str() {
-        "current_schema" => "public".into(),
-        "current_database" => "orbit".into(),
-        "current_user" | "session_user" | "user" => "orbit".into(),
-        "version" => "PostgreSQL 18.0 (orbit-rs)".into(),
-        _ => return None,
-    }))
 }
 
 /// The window function calls inside `e`, each listed once.
@@ -305,11 +327,73 @@ fn substitute_windows(
     })
 }
 
+/// The set-returning functions that may appear in a select list.
+fn is_srf(name: &str) -> bool {
+    matches!(
+        name,
+        "generate_series"
+            | "unnest"
+            | "json_array_elements"
+            | "jsonb_array_elements"
+            | "json_array_elements_text"
+            | "jsonb_array_elements_text"
+            | "json_object_keys"
+            | "jsonb_object_keys"
+    )
+}
+
+/// `SELECT unnest(a), x FROM t` is `SELECT s.unnest, x FROM t, LATERAL unnest(a) AS s`: one row per
+/// element, and none for a row whose set is empty, which is what PostgreSQL does. Only a single
+/// set-returning function is rewritten; several (which PostgreSQL runs in lockstep) are left as they are.
+fn srf_in_select_list(sel: &SelectStatement) -> Option<SelectStatement> {
+    use crate::protocols::postgres_wire::sql::ast::{ColumnRef, TableAlias};
+    let is_srf_item = |item: &SelectItem| matches!(item, SelectItem::Expression { expr: Expression::Function(f), .. } if is_srf(&fname(f)));
+    if sel.select_list.iter().filter(|i| is_srf_item(i)).count() != 1 {
+        return None;
+    }
+    let mut out = sel.clone();
+    let mut function = None;
+    for item in &mut out.select_list {
+        if let SelectItem::Expression { expr, alias } = item {
+            if let Expression::Function(f) = expr {
+                if is_srf(&fname(f)) {
+                    alias.get_or_insert_with(|| fname(f));
+                    function = Some((**f).clone());
+                    *expr = Expression::Column(ColumnRef {
+                        table: None,
+                        name: "__srf".to_string(),
+                    });
+                }
+            }
+        }
+    }
+    let right = FromClause::TableFunction {
+        function: function?,
+        alias: Some(TableAlias {
+            name: "__srf_t".to_string(),
+            columns: Some(vec!["__srf".to_string()]),
+        }),
+        lateral: true,
+        with_ordinality: false,
+    };
+    out.from_clause = Some(match out.from_clause.take() {
+        Some(left) => FromClause::Join {
+            left: Box::new(left),
+            join_type: JoinType::Cross,
+            right: Box::new(right),
+            condition: JoinCondition::Natural,
+        },
+        None => right,
+    });
+    Some(out)
+}
+
 fn has_subquery(e: &Expression) -> bool {
     let mut found = false;
     walk(e, &mut |x| {
         let session = matches!(x, Expression::Function(f) if session_function(f).is_some())
             || matches!(x, Expression::Function(f) if pg_catalog::is_function(f))
+            || matches!(x, Expression::Function(f) if fname(f) == "array_from_subquery")
             || matches!(x, Expression::Cast { target_type, .. } if pg_catalog::is_reg_type(target_type))
             || matches!(x, Expression::Column(c) if c.table.is_none() && pg_catalog::session_keyword(&c.name).is_some());
         if session
@@ -602,6 +686,21 @@ impl<'a> Runner<'a> {
                         _ => Expression::Any(array),
                     })
                 }
+                Expression::Function(f)
+                    if fname(f) == "array_from_subquery"
+                        && matches!(f.args.first(), Some(Expression::Subquery(_))) =>
+                {
+                    let Some(Expression::Subquery(s)) = f.args.first() else {
+                        unreachable!("guarded by the match arm")
+                    };
+                    let rel = me.select(s, Some(&outer))?;
+                    Some(Expression::Literal(SqlValue::Array(
+                        rel.rows
+                            .into_iter()
+                            .map(|r| r.into_iter().next().unwrap_or(SqlValue::Null))
+                            .collect(),
+                    )))
+                }
                 Expression::Function(f) if session_function(f).is_some() => {
                     session_function(f).map(Expression::Literal)
                 }
@@ -624,7 +723,7 @@ impl<'a> Runner<'a> {
                     if c.table.is_none() && pg_catalog::session_keyword(&c.name).is_some() =>
                 {
                     pg_catalog::session_keyword(&c.name)
-                        .map(|v| Expression::Literal(SqlValue::Text(v.to_string())))
+                        .map(|v| Expression::Literal(SqlValue::Text(v)))
                 }
                 Expression::In {
                     expr,
@@ -810,6 +909,9 @@ impl<'a> Runner<'a> {
     }
 
     fn select_core(&mut self, sel: &SelectStatement, outer: Outer) -> R<Rel> {
+        if let Some(rewritten) = srf_in_select_list(sel) {
+            return self.select_core(&rewritten, outer);
+        }
         let src = match &sel.from_clause {
             Some(f) => match self.indexed_from(f, sel.where_clause.as_ref())? {
                 Some(rel) => rel,
@@ -1216,6 +1318,73 @@ impl<'a> Runner<'a> {
         self.aggregate(f, ctxs)
     }
 
+    /// `percentile_cont(p)`, `percentile_disc(p)` and `mode()` `WITHIN GROUP (ORDER BY expr)`.
+    fn ordered_set_aggregate(
+        &mut self,
+        name: &str,
+        f: &FunctionCall,
+        within: &[OrderByItem],
+        ctxs: &[EvaluationContext],
+        idxs: &[usize],
+    ) -> R<SqlValue> {
+        let Some(key) = within.first() else {
+            return err(
+                "42601",
+                format!("{name}() needs WITHIN GROUP (ORDER BY ..)"),
+            );
+        };
+        let mut sorted: Vec<SqlValue> = Vec::with_capacity(idxs.len());
+        for &i in idxs {
+            let v = self.eval(&key.expression, &ctxs[i])?;
+            if !v.is_null() {
+                sorted.push(v);
+            }
+        }
+        sorted.sort_by(cmp);
+        if matches!(key.direction, Some(SortDirection::Descending)) {
+            sorted.reverse();
+        }
+        if sorted.is_empty() {
+            return Ok(SqlValue::Null);
+        }
+        if name == "mode" {
+            let mut best: (usize, &SqlValue) = (0, &sorted[0]);
+            let mut i = 0;
+            while i < sorted.len() {
+                let run = sorted[i..]
+                    .iter()
+                    .take_while(|v| cmp(v, &sorted[i]) == Ordering::Equal)
+                    .count();
+                if run > best.0 {
+                    best = (run, &sorted[i]);
+                }
+                i += run;
+            }
+            return Ok(best.1.clone());
+        }
+        let fraction = match f.args.first() {
+            Some(e) => super::value::as_f64(&self.eval(e, &EvaluationContext::empty())?),
+            None => None,
+        };
+        let Some(p) = fraction.filter(|p| (0.0..=1.0).contains(p)) else {
+            return err("22003", "percentile value must be between 0 and 1");
+        };
+        let n = sorted.len();
+        if name == "percentile_disc" {
+            let rank = ((p * n as f64).ceil() as usize).clamp(1, n);
+            return Ok(sorted[rank - 1].clone());
+        }
+        let position = p * (n - 1) as f64;
+        let (lo, hi) = (position.floor() as usize, position.ceil() as usize);
+        let (a, b) = (
+            super::value::as_f64(&sorted[lo]).unwrap_or(0.0),
+            super::value::as_f64(&sorted[hi]).unwrap_or(0.0),
+        );
+        Ok(SqlValue::DoublePrecision(
+            a + (position - lo as f64) * (b - a),
+        ))
+    }
+
     fn aggregate(&mut self, f: &FunctionCall, ctxs: &[EvaluationContext]) -> R<SqlValue> {
         let name = fname(f);
         let mut idxs = Vec::new();
@@ -1232,6 +1401,9 @@ impl<'a> Runner<'a> {
             || matches!(f.args.first(), Some(Expression::Column(c)) if c.name == "*");
         if name == "count" && star {
             return Ok(SqlValue::BigInt(idxs.len() as i64));
+        }
+        if let Some(within) = &f.within_group {
+            return self.ordered_set_aggregate(&name, f, within, ctxs, &idxs);
         }
         let Some(arg) = f.args.first() else {
             return err("42883", format!("{name}() requires an argument"));
@@ -1253,6 +1425,17 @@ impl<'a> Runner<'a> {
         let mut values: Vec<SqlValue> = vals.into_iter().map(|(v, _)| v).collect();
         if name == "array_agg" {
             return Ok(SqlValue::Array(values));
+        }
+        if matches!(name.as_str(), "json_agg" | "jsonb_agg") {
+            // NULLs are kept: json_agg of (1, NULL) is [1, null]
+            use crate::protocols::postgres_wire::sql::json::JsonOperations;
+            return if values.is_empty() {
+                Ok(SqlValue::Null)
+            } else if name == "jsonb_agg" {
+                JsonOperations::jsonb_agg(values).map_err(Into::into)
+            } else {
+                JsonOperations::json_agg(values).map_err(Into::into)
+            };
         }
         values.retain(|v| !v.is_null());
         if f.distinct {
@@ -1296,6 +1479,35 @@ impl<'a> Runner<'a> {
                     )
                 }
             }
+            "variance" | "var_pop" | "var_samp" | "stddev" | "stddev_pop" | "stddev_samp" => {
+                let xs: Vec<f64> = values.iter().filter_map(super::value::as_f64).collect();
+                let population = name.ends_with("_pop");
+                let n = xs.len();
+                if n == 0 || (!population && n == 1) {
+                    return Ok(SqlValue::Null);
+                }
+                let mean = xs.iter().sum::<f64>() / n as f64;
+                let squares: f64 = xs.iter().map(|x| (x - mean).powi(2)).sum();
+                let variance = squares / if population { n as f64 } else { (n - 1) as f64 };
+                let out = if name.starts_with("stddev") {
+                    variance.sqrt()
+                } else {
+                    variance
+                };
+                let floats = values
+                    .iter()
+                    .any(|v| matches!(v, SqlValue::Real(_) | SqlValue::DoublePrecision(_)));
+                match (floats, Decimal::from_f64_retain(out)) {
+                    // numeric results carry 16 decimals; a single value's variance is a bare 0
+                    (false, Some(_)) if n == 1 => SqlValue::Decimal(Decimal::ZERO),
+                    (false, Some(d)) => {
+                        let mut d = d.round_dp(16);
+                        d.rescale(16);
+                        SqlValue::Decimal(d)
+                    }
+                    _ => SqlValue::DoublePrecision(out),
+                }
+            }
             "sum" | "avg" => {
                 if values.is_empty() {
                     return Ok(SqlValue::Null);
@@ -1324,11 +1536,12 @@ impl<'a> Runner<'a> {
                     };
                 }
                 if name == "avg" {
-                    SqlValue::Decimal(
-                        (total / Decimal::from(values.len() as i64))
-                            .round_dp(16)
-                            .normalize(),
-                    )
+                    // numeric division scale, as PostgreSQL does: avg of ints is 5.4000000000000000
+                    let count = Decimal::from(values.len() as i64);
+                    let scale = super::value::numeric_div_scale(total, count);
+                    let mut mean = (total / count).round_dp(scale);
+                    mean.rescale(scale);
+                    SqlValue::Decimal(mean)
                 } else if values
                     .iter()
                     .all(|v| matches!(v, SqlValue::SmallInt(_) | SqlValue::Integer(_)))
@@ -1386,6 +1599,20 @@ impl<'a> Runner<'a> {
                     let mut rel = c.clone();
                     for col in &mut rel.cols {
                         col.qual = Some(qual.clone());
+                    }
+                    return Ok(rel);
+                }
+                if let Some(view) = self.st.views.get(&key).cloned() {
+                    let mut rel = self.select(&view.query, outer)?;
+                    let names = alias
+                        .as_ref()
+                        .and_then(|a| a.columns.clone())
+                        .or(view.columns);
+                    for (i, col) in rel.cols.iter_mut().enumerate() {
+                        col.qual = Some(qual.clone());
+                        if let Some(n) = names.as_ref().and_then(|n| n.get(i)) {
+                            col.name = n.to_lowercase();
+                        }
                     }
                     return Ok(rel);
                 }
@@ -1511,7 +1738,9 @@ impl<'a> Runner<'a> {
             Some(p) => p,
             None => table_fn::Produced {
                 cols: vec![(name.clone(), None)],
-                rows: vec![vec![self.eval(&Expression::Function(Box::new(function.clone())), &ctx)?]],
+                rows: vec![vec![
+                    self.eval(&Expression::Function(Box::new(function.clone())), &ctx)?
+                ]],
             },
         };
         let qual = alias.map_or_else(|| name.clone(), |a| a.name.to_lowercase());
@@ -1598,7 +1827,12 @@ impl<'a> Runner<'a> {
     /// `l.c = r.c AND ...` for each named column (`USING (c, ..)` and `NATURAL JOIN`).
     fn using_condition(&self, names: &[String], l: &Rel, r: &Rel) -> Option<Expression> {
         use crate::protocols::postgres_wire::sql::ast::ColumnRef;
-        let qual = |rel: &Rel, name: &str| rel.cols.iter().find(|c| c.name == name).and_then(|c| c.qual.clone());
+        let qual = |rel: &Rel, name: &str| {
+            rel.cols
+                .iter()
+                .find(|c| c.name == name)
+                .and_then(|c| c.qual.clone())
+        };
         names
             .iter()
             .map(|n| {

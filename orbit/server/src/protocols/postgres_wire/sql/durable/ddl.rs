@@ -37,10 +37,13 @@ pub(crate) fn apply(
     replay: bool,
 ) -> Option<R<QueryResult>> {
     let r = match stmt {
+        Statement::CreateTable(ct) if ct.as_query.is_some() => create_table_as(st, &mut ops, ct),
         Statement::CreateTable(ct) => create_table(st, &mut ops, ct, text),
         Statement::DropTable(d) => {
             drop_tables(st, &mut ops, &d.names, d.if_exists, d.cascade, text)
         }
+        Statement::CreateView(cv) => create_view(st, &mut ops, cv, text),
+        Statement::DropView(d) => drop_views(st, &mut ops, d, text),
         Statement::CreateIndex(ci) => create_index(st, &mut ops, ci, text),
         Statement::DropIndex(d) => drop_indexes(st, &mut ops, &d.names, d.if_exists, text),
         Statement::AlterTable(a) => {
@@ -71,6 +74,7 @@ fn build_col(table: &str, def: &ColumnDefinition) -> (Col, bool, bool) {
         not_null: false,
         default: None,
         serial: None,
+        identity_always: false,
         generated: false,
     };
     let (mut primary, mut unique) = (false, false);
@@ -78,6 +82,11 @@ fn build_col(table: &str, def: &ColumnDefinition) -> (Col, bool, bool) {
         match c {
             ColumnConstraint::NotNull => col.not_null = true,
             ColumnConstraint::Serial => col.serial = Some(format!("{table}_{}_seq", col.name)),
+            ColumnConstraint::Identity { always } => {
+                col.serial = Some(format!("{table}_{}_seq", col.name));
+                col.identity_always = *always;
+                col.not_null = true;
+            }
             ColumnConstraint::Default(e) => col.default = Some(e.clone()),
             ColumnConstraint::PrimaryKey => {
                 primary = true;
@@ -218,6 +227,170 @@ fn create_table(
     }
     record(ops, text, vec![]);
     tag("CREATE TABLE")
+}
+
+/// The SQL spelling of a column type, for the plain `CREATE TABLE` recorded for `CREATE TABLE AS`.
+fn sql_type_text(ty: &crate::protocols::postgres_wire::sql::types::SqlType) -> String {
+    use crate::protocols::postgres_wire::sql::types::SqlType as T;
+    match ty {
+        T::SmallInt => "smallint".into(),
+        T::Integer => "integer".into(),
+        T::BigInt => "bigint".into(),
+        T::Real => "real".into(),
+        T::DoublePrecision => "double precision".into(),
+        T::Decimal { .. } | T::Numeric { .. } => "numeric".into(),
+        T::Boolean => "boolean".into(),
+        T::Varchar(Some(n)) => format!("varchar({n})"),
+        T::Varchar(None) => "varchar".into(),
+        T::Char(Some(n)) => format!("char({n})"),
+        T::Char(None) => "char".into(),
+        T::Date => "date".into(),
+        T::Time {
+            with_timezone: true,
+        } => "time with time zone".into(),
+        T::Time { .. } => "time".into(),
+        T::Timestamp {
+            with_timezone: true,
+        } => "timestamp with time zone".into(),
+        T::Timestamp { .. } => "timestamp".into(),
+        T::Interval => "interval".into(),
+        T::Uuid => "uuid".into(),
+        T::Json => "json".into(),
+        T::Jsonb => "jsonb".into(),
+        T::Bytea => "bytea".into(),
+        T::Array { element_type, .. } => format!("{}[]", sql_type_text(element_type)),
+        _ => "text".into(),
+    }
+}
+
+/// `CREATE TABLE t AS SELECT ..`: run the query, create a table shaped like its result, and fill it.
+/// The log records the plain `CREATE TABLE` plus the rows, so replay never re-runs the query.
+fn create_table_as(
+    st: &mut State,
+    ops: &mut Option<&mut Vec<Op>>,
+    ct: &CreateTableStatement,
+) -> R<QueryResult> {
+    let name = table_key(&ct.name);
+    if st.tables.contains_key(&name) {
+        if ct.if_not_exists {
+            return tag("CREATE TABLE");
+        }
+        return err("42P07", format!("relation \"{name}\" already exists"));
+    }
+    let query = ct.as_query.as_deref().expect("checked by the caller");
+    let rel = super::query::Runner::new(st).select(query, None)?;
+    let column_types: Vec<crate::protocols::postgres_wire::sql::types::SqlType> = rel
+        .cols
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            c.ty.clone().unwrap_or_else(|| {
+                rel.rows
+                    .iter()
+                    .map(|r| &r[i])
+                    .find(|v| !v.is_null())
+                    .map_or(
+                        crate::protocols::postgres_wire::sql::types::SqlType::Text,
+                        |v| v.sql_type(),
+                    )
+            })
+        })
+        .collect();
+    let definition: Vec<String> = rel
+        .cols
+        .iter()
+        .zip(&column_types)
+        .map(|(c, ty)| format!("\"{}\" {}", c.name.replace('"', "\"\""), sql_type_text(ty)))
+        .collect();
+    let text = format!("CREATE TABLE \"{name}\" ({})", definition.join(", "));
+    let plain = match crate::protocols::postgres_wire::sql::parser::SqlParser::new()
+        .parse_multiple(&text)
+        .map_err(|e| DbError {
+            code: "42601",
+            message: e.to_string(),
+        })?
+        .into_iter()
+        .next()
+    {
+        Some(crate::protocols::postgres_wire::sql::ast::Statement::CreateTable(plain)) => plain,
+        _ => return err("XX000", "could not build the table for CREATE TABLE AS"),
+    };
+    create_table(st, ops, &plain, &text)?;
+    let t = st.tables.get_mut(&name).expect("table just created");
+    let count = rel.rows.len();
+    for row in rel.rows {
+        let row: Vec<SqlValue> = row
+            .into_iter()
+            .zip(&column_types)
+            .map(|(v, ty)| coerce(v, ty))
+            .collect::<Result<_, _>>()
+            .map_err(|message| DbError {
+                code: "22P02",
+                message,
+            })?;
+        let rowid = t.next_rowid;
+        t.next_rowid += 1;
+        t.index_add(rowid, &row);
+        t.rows.insert(rowid, row.clone());
+        if let Some(o) = ops {
+            o.push(Op::PutRow {
+                table: t.id,
+                rowid,
+                row,
+            });
+        }
+    }
+    Ok(QueryResult::Command {
+        tag: format!("SELECT {count}"),
+    })
+}
+
+fn create_view(
+    st: &mut State,
+    ops: &mut Option<&mut Vec<Op>>,
+    cv: &crate::protocols::postgres_wire::sql::ast::CreateViewStatement,
+    text: &str,
+) -> R<QueryResult> {
+    if cv.materialized {
+        return err("0A000", "materialized views are not supported");
+    }
+    let name = table_key(&cv.name);
+    if st.tables.contains_key(&name) {
+        return err("42P07", format!("relation \"{name}\" already exists"));
+    }
+    if st.views.contains_key(&name) && !cv.replace {
+        if cv.if_not_exists {
+            return tag("CREATE VIEW");
+        }
+        return err("42P07", format!("relation \"{name}\" already exists"));
+    }
+    // a view over something that is not there is refused now, as PostgreSQL does
+    super::query::describe_select(st, &cv.query)?;
+    st.views.insert(
+        name,
+        super::View {
+            query: cv.query.clone(),
+            columns: cv.columns.clone(),
+        },
+    );
+    record(ops, text, vec![]);
+    tag("CREATE VIEW")
+}
+
+fn drop_views(
+    st: &mut State,
+    ops: &mut Option<&mut Vec<Op>>,
+    d: &crate::protocols::postgres_wire::sql::ast::DropViewStatement,
+    text: &str,
+) -> R<QueryResult> {
+    for n in &d.names {
+        let key = table_key(n);
+        if st.views.remove(&key).is_none() && !d.if_exists {
+            return err("42P01", format!("view \"{key}\" does not exist"));
+        }
+    }
+    record(ops, text, vec![]);
+    tag("DROP VIEW")
 }
 
 fn drop_tables(

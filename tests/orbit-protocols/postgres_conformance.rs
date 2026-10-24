@@ -226,7 +226,7 @@ async fn start_orbit() -> String {
         }
     });
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    format!("host=127.0.0.1 port={port} user=test password=test dbname=test")
+    format!("host=127.0.0.1 port={port} user=postgres password=postgres dbname=postgres")
 }
 
 fn write_report(target: &str, results: &BTreeMap<String, FileResult>) {
@@ -412,16 +412,25 @@ async fn probe() {
 async fn record() {
     let input = std::env::var("CONFORMANCE_RECORD_IN").expect("CONFORMANCE_RECORD_IN");
     let output = std::env::var("CONFORMANCE_RECORD_OUT").expect("CONFORMANCE_RECORD_OUT");
-    let url = std::env::var("ORBIT_CONFORMANCE_REFERENCE_URL").expect("ORBIT_CONFORMANCE_REFERENCE_URL");
+    let url =
+        std::env::var("ORBIT_CONFORMANCE_REFERENCE_URL").expect("ORBIT_CONFORMANCE_REFERENCE_URL");
     let (client, connection) = tokio_postgres::connect(&url, NoTls).await.expect("connect");
     tokio::spawn(async move {
         let _ = connection.await;
     });
-    let mut out = String::from("# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.\n\n");
-    for block in std::fs::read_to_string(&input).expect("input").split("\n\n") {
+    let mut out = String::from(
+        "# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.\n\n",
+    );
+    for block in std::fs::read_to_string(&input)
+        .expect("input")
+        .split("\n\n")
+    {
         let block = block.trim();
-        let (comments, sql): (Vec<&str>, Vec<&str>) = block.lines().partition(|l| l.starts_with('#'));
-        comments.iter().for_each(|c| out.push_str(&format!("{c}\n")));
+        let (comments, sql): (Vec<&str>, Vec<&str>) =
+            block.lines().partition(|l| l.starts_with('#'));
+        comments
+            .iter()
+            .for_each(|c| out.push_str(&format!("{c}\n")));
         if sql.is_empty() {
             out.push('\n');
             continue;
@@ -440,7 +449,9 @@ async fn record_one(client: &Client, sql: &str) -> String {
             return format!("statement error ({code})\n{sql}\n\n");
         }
     };
-    let described = messages.iter().any(|m| matches!(m, SimpleQueryMessage::RowDescription(_)));
+    let described = messages
+        .iter()
+        .any(|m| matches!(m, SimpleQueryMessage::RowDescription(_)));
     if !described {
         return format!("statement ok\n{sql}\n\n");
     }
@@ -457,7 +468,10 @@ async fn record_one(client: &Client, sql: &str) -> String {
         })
         .collect();
     if rows.iter().any(|r| r.contains('\n')) {
-        return format!("# skipped (multi-line value): {}\n\n", sql.replace('\n', " "));
+        return format!(
+            "# skipped (multi-line value): {}\n\n",
+            sql.replace('\n', " ")
+        );
     }
     let columns = messages.iter().find_map(|m| match m {
         SimpleQueryMessage::RowDescription(c) => Some(c.len()),
@@ -470,6 +484,13 @@ async fn record_one(client: &Client, sql: &str) -> String {
     } else {
         ""
     };
-    let body = if rows.is_empty() { String::new() } else { format!("{}\n", rows.join("\n")) };
-    format!("query {}{sort}\n{sql}\n----\n{body}\n", "T".repeat(columns.unwrap_or(1)))
+    let body = if rows.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", rows.join("\n"))
+    };
+    format!(
+        "query {}{sort}\n{sql}\n----\n{body}\n",
+        "T".repeat(columns.unwrap_or(1))
+    )
 }

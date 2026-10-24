@@ -156,7 +156,12 @@ async fn session_values_and_server_functions() {
         one(q(&e, "SELECT pg_size_pretty(5242880)").await),
         "5120 kB"
     );
-    assert_eq!(one(q(&e, "SELECT pg_backend_pid()").await), "1");
+    assert!(
+        one(q(&e, "SELECT pg_backend_pid()").await)
+            .parse::<u32>()
+            .is_ok_and(|pid| pid > 0),
+        "pg_backend_pid() is a positive process id"
+    );
     assert_eq!(
         one(q(
             &e,

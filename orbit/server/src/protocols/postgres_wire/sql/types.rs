@@ -588,8 +588,8 @@ impl SqlValue {
             SqlValue::Integer(i) => i.to_string(),
             SqlValue::BigInt(i) => i.to_string(),
             SqlValue::Decimal(d) => d.to_string(),
-            SqlValue::Real(f) => f.to_string(),
-            SqlValue::DoublePrecision(f) => f.to_string(),
+            SqlValue::Real(f) => pg_float_text(f64::from(*f), format!("{f:e}")),
+            SqlValue::DoublePrecision(f) => pg_float_text(*f, format!("{f:e}")),
             SqlValue::Char(s) | SqlValue::Varchar(s) | SqlValue::Text(s) => s.clone(),
             SqlValue::Bytea(bytes) => {
                 format!("\\x{}", hex::encode(bytes))
@@ -599,15 +599,11 @@ impl SqlValue {
             SqlValue::TimeWithTimezone(dt) => dt.format("%H:%M:%S%.f%z").to_string(),
             SqlValue::Timestamp(dt) => dt.format("%Y-%m-%d %H:%M:%S%.f").to_string(),
             SqlValue::TimestampWithTimezone(dt) => dt.format("%Y-%m-%d %H:%M:%S%.f%z").to_string(),
-            SqlValue::Interval(interval) => format!(
-                "{}mons {}days {}microseconds",
-                interval.months, interval.days, interval.microseconds
-            ),
-            SqlValue::Json(v) | SqlValue::Jsonb(v) => v.to_string(),
+            SqlValue::Interval(interval) => pg_interval_text(interval),
+            SqlValue::Json(v) | SqlValue::Jsonb(v) => pg_json_text(v),
             SqlValue::JsonPath(s) => s.clone(),
             SqlValue::Array(values) => {
-                let elements: Vec<String> =
-                    values.iter().map(SqlValue::to_postgres_string).collect();
+                let elements: Vec<String> = values.iter().map(array_element_text).collect();
                 format!("{{{}}}", elements.join(","))
             }
             SqlValue::Uuid(u) => u.to_string(),
@@ -1029,4 +1025,113 @@ impl std::fmt::Display for SqlType {
             _ => write!(f, "{self:?}"),
         }
     }
+}
+
+/// How PostgreSQL prints `json`/`jsonb`: `", "` between members and `": "` after keys, with keys in
+/// jsonb's storage order (shorter first, then bytewise).
+pub fn pg_json_text(value: &serde_json::Value) -> String {
+    use serde_json::Value;
+    match value {
+        Value::Object(map) => {
+            let mut members: Vec<(&String, &Value)> = map.iter().collect();
+            members.sort_by(|(a, _), (b, _)| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+            let body: Vec<String> = members
+                .into_iter()
+                .map(|(k, v)| format!("{}: {}", Value::String(k.clone()), pg_json_text(v)))
+                .collect();
+            format!("{{{}}}", body.join(", "))
+        }
+        Value::Array(items) => {
+            let body: Vec<String> = items.iter().map(pg_json_text).collect();
+            format!("[{}]", body.join(", "))
+        }
+        scalar => scalar.to_string(),
+    }
+}
+
+/// One element of an array literal: NULL bare, nested arrays as they print, and text quoted when it
+/// would otherwise be ambiguous (empty, `NULL`, or containing a delimiter, brace, quote, backslash or space).
+fn array_element_text(value: &SqlValue) -> String {
+    match value {
+        SqlValue::Null => "NULL".to_string(),
+        SqlValue::Array(_) => value.to_postgres_string(),
+        other => {
+            let text = other.to_postgres_string();
+            let needs_quotes = text.is_empty()
+                || text.eq_ignore_ascii_case("null")
+                || text
+                    .chars()
+                    .any(|c| matches!(c, ',' | '{' | '}' | '"' | '\\') || c.is_whitespace());
+            if needs_quotes {
+                format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
+            } else {
+                text
+            }
+        }
+    }
+}
+
+/// A float as PostgreSQL prints it: shortest round-trip digits, `NaN`/`Infinity`, and an exponent
+/// (`1e+16`, `1.5e-05`) only below 1e-4 or from 1e15 up. `scientific` is Rust's `{:e}` of the value.
+fn pg_float_text(value: f64, scientific: String) -> String {
+    if value.is_nan() {
+        return "NaN".to_string();
+    }
+    if value.is_infinite() {
+        return if value > 0.0 { "Infinity" } else { "-Infinity" }.to_string();
+    }
+    if value == 0.0 {
+        return if value.is_sign_negative() { "-0" } else { "0" }.to_string();
+    }
+    let (mantissa, exp) = scientific.split_once('e').unwrap_or((&scientific, "0"));
+    let exp: i32 = exp.parse().unwrap_or(0);
+    if (-4..15).contains(&exp) {
+        // Display of an f64 is the shortest round-trip digits in plain decimal
+        let plain = format!("{value}");
+        return plain
+            .strip_suffix(".0")
+            .map_or(plain.clone(), str::to_string);
+    }
+    format!(
+        "{mantissa}e{}{:02}",
+        if exp < 0 { '-' } else { '+' },
+        exp.abs()
+    )
+}
+
+/// An interval in PostgreSQL's default `postgres` style: `1 year 2 mons 3 days 04:05:06.5`.
+pub fn pg_interval_text(i: &PostgresInterval) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let unit =
+        |n: i64, word: &str| format!("{n} {word}{}", if n == 1 || n == -1 { "" } else { "s" });
+    let (years, months) = (i.months / 12, i.months % 12);
+    if years != 0 {
+        parts.push(unit(i64::from(years), "year"));
+    }
+    if months != 0 {
+        parts.push(unit(i64::from(months), "mon"));
+    }
+    if i.days != 0 {
+        parts.push(unit(i64::from(i.days), "day"));
+    }
+    if i.microseconds != 0 || parts.is_empty() {
+        let micros = i.microseconds.unsigned_abs();
+        let (h, rem) = (micros / 3_600_000_000, micros % 3_600_000_000);
+        let (m, rem) = (rem / 60_000_000, rem % 60_000_000);
+        let (s, frac) = (rem / 1_000_000, rem % 1_000_000);
+        let mut time = format!("{h:02}:{m:02}:{s:02}");
+        if frac != 0 {
+            time.push_str(format!(".{frac:06}").trim_end_matches('0'));
+        }
+        let earlier_negative = i.months < 0 || i.days < 0;
+        let sign = if i.microseconds < 0 {
+            "-"
+        } else if earlier_negative {
+            "+"
+        } else {
+            ""
+        };
+        parts.push(format!("{sign}{time}"));
+    }
+    parts.join(" ")
 }

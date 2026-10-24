@@ -57,7 +57,10 @@ fn as_int(v: &SqlValue) -> Option<i64> {
 
 fn generate_series(args: &[SqlValue]) -> R<Produced> {
     let [start, stop, rest @ ..] = args else {
-        return err("42883", "function generate_series requires 2 or 3 arguments");
+        return err(
+            "42883",
+            "function generate_series requires 2 or 3 arguments",
+        );
     };
     if args.iter().any(SqlValue::is_null) {
         return Ok(Produced::one("generate_series", None, []));
@@ -71,7 +74,9 @@ fn generate_series(args: &[SqlValue]) -> R<Produced> {
         if by == 0 {
             return err("22023", "step size cannot equal zero");
         }
-        let narrow = args.iter().all(|v| matches!(v, SqlValue::Integer(_) | SqlValue::SmallInt(_)));
+        let narrow = args
+            .iter()
+            .all(|v| matches!(v, SqlValue::Integer(_) | SqlValue::SmallInt(_)));
         let count = if (by > 0 && a > b) || (by < 0 && a < b) {
             0
         } else {
@@ -129,10 +134,15 @@ fn naive(v: &SqlValue) -> Option<NaiveDateTime> {
 /// `generate_series(timestamp, timestamp, interval)` and the date form (which yields timestamps).
 fn temporal_series(start: &SqlValue, stop: &SqlValue, step: Option<&SqlValue>) -> R<Produced> {
     let (Some(a), Some(b), Some(SqlValue::Interval(by))) = (naive(start), naive(stop), step) else {
-        return err("42883", "function generate_series(unknown types) does not exist");
+        return err(
+            "42883",
+            "function generate_series(unknown types) does not exist",
+        );
     };
-    let forward = by.months > 0 || by.days > 0 || (by.months == 0 && by.days == 0 && by.microseconds > 0);
-    let backward = by.months < 0 || by.days < 0 || (by.months == 0 && by.days == 0 && by.microseconds < 0);
+    let forward =
+        by.months > 0 || by.days > 0 || (by.months == 0 && by.days == 0 && by.microseconds > 0);
+    let backward =
+        by.months < 0 || by.days < 0 || (by.months == 0 && by.days == 0 && by.microseconds < 0);
     if !forward && !backward {
         return err("22023", "step size cannot equal zero");
     }
@@ -179,9 +189,17 @@ fn unnest(args: &[SqlValue]) -> Produced {
         .collect();
     let height = arrays.iter().map(|a| a.len()).max().unwrap_or(0);
     Produced {
-        cols: arrays.iter().map(|_| ("unnest".to_string(), None)).collect(),
+        cols: arrays
+            .iter()
+            .map(|_| ("unnest".to_string(), None))
+            .collect(),
         rows: (0..height)
-            .map(|i| arrays.iter().map(|a| a.get(i).cloned().unwrap_or(SqlValue::Null)).collect())
+            .map(|i| {
+                arrays
+                    .iter()
+                    .map(|a| a.get(i).cloned().unwrap_or(SqlValue::Null))
+                    .collect()
+            })
             .collect(),
     }
 }
@@ -213,8 +231,16 @@ fn json_text(v: &serde_json::Value) -> SqlValue {
 
 fn each(name: &str, args: &[SqlValue], text: bool) -> Produced {
     let binary = name.starts_with("jsonb");
-    let value_ty = if text { SqlType::Text } else if binary { SqlType::Jsonb } else { SqlType::Json };
-    let object = json_arg(args).and_then(|j| j.as_object().cloned()).unwrap_or_default();
+    let value_ty = if text {
+        SqlType::Text
+    } else if binary {
+        SqlType::Jsonb
+    } else {
+        SqlType::Json
+    };
+    let object = json_arg(args)
+        .and_then(|j| j.as_object().cloned())
+        .unwrap_or_default();
     Produced {
         cols: vec![
             ("key".to_string(), Some(SqlType::Text)),
@@ -223,7 +249,11 @@ fn each(name: &str, args: &[SqlValue], text: bool) -> Produced {
         rows: object
             .into_iter()
             .map(|(k, v)| {
-                let value = if text { json_text(&v) } else { json_value(binary, v) };
+                let value = if text {
+                    json_text(&v)
+                } else {
+                    json_value(binary, v)
+                };
                 vec![SqlValue::Text(k), value]
             })
             .collect(),
@@ -232,11 +262,25 @@ fn each(name: &str, args: &[SqlValue], text: bool) -> Produced {
 
 fn elements(name: &str, args: &[SqlValue], text: bool) -> Produced {
     let binary = name.starts_with("jsonb");
-    let ty = if text { SqlType::Text } else if binary { SqlType::Jsonb } else { SqlType::Json };
-    let items = json_arg(args).and_then(|j| j.as_array().cloned()).unwrap_or_default();
+    let ty = if text {
+        SqlType::Text
+    } else if binary {
+        SqlType::Jsonb
+    } else {
+        SqlType::Json
+    };
+    let items = json_arg(args)
+        .and_then(|j| j.as_array().cloned())
+        .unwrap_or_default();
     Produced::one(
         "value",
         Some(ty),
-        items.into_iter().map(|v| if text { json_text(&v) } else { json_value(binary, v) }),
+        items.into_iter().map(|v| {
+            if text {
+                json_text(&v)
+            } else {
+                json_value(binary, v)
+            }
+        }),
     )
 }

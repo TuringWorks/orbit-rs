@@ -186,11 +186,12 @@ pub(super) fn is_reg_type(t: &SqlType) -> bool {
 }
 
 /// Words that name a session value when written without parentheses.
-pub(super) fn session_keyword(name: &str) -> Option<&'static str> {
+pub(super) fn session_keyword(name: &str) -> Option<String> {
+    use super::session_vars::{current_database, current_user};
     match name.to_lowercase().as_str() {
-        "current_user" | "session_user" | "user" => Some("orbit"),
-        "current_schema" => Some("public"),
-        "current_catalog" => Some("orbit"),
+        "current_user" | "session_user" | "user" => Some(current_user()),
+        "current_schema" => Some("public".to_string()),
+        "current_catalog" => Some(current_database()),
         _ => None,
     }
 }
@@ -344,7 +345,7 @@ pub(super) fn view(st: &State, name: &str, qual: &str) -> Option<Rel> {
             ],
             vec![vec![
                 int(DATABASE_OID),
-                text("orbit"),
+                text(&super::session_vars::current_database()),
                 int(OWNER),
                 int(6),
                 text("en_US.UTF-8"),
@@ -384,7 +385,8 @@ pub(super) fn view(st: &State, name: &str, qual: &str) -> Option<Rel> {
             ],
         ),
         "pg_roles" | "pg_user" => {
-            let roles = [(OWNER, "postgres"), (16385, "orbit")];
+            let connected = super::session_vars::current_user();
+            let roles = [(OWNER, "postgres"), (16385, connected.as_str())];
             if name == "pg_roles" {
                 rel(
                     qual,
@@ -933,10 +935,10 @@ pub(super) fn view(st: &State, name: &str, qual: &str) -> Option<Rel> {
             ],
             vec![vec![
                 int(DATABASE_OID),
-                text("orbit"),
+                text(&super::session_vars::current_database()),
                 int(1),
                 int(16385),
-                text("orbit"),
+                text(&super::session_vars::current_user()),
                 text(""),
                 SqlValue::Null,
                 SqlValue::Null,
@@ -1125,7 +1127,7 @@ pub(super) fn cast(st: &State, target: &SqlType, v: SqlValue) -> R<SqlValue> {
                 },
                 "regrole" => match s.trim().trim_matches('"') {
                     "postgres" => Some(OWNER),
-                    "orbit" => Some(16385),
+                    other if other == super::session_vars::current_user() => Some(16385),
                     _ => None,
                 },
                 _ => Some(0),
@@ -1323,7 +1325,7 @@ pub(super) fn call(st: &State, f: &FunctionCall, args: &[SqlValue]) -> R<SqlValu
             }
         }
         "pg_get_userbyid" => match first.and_then(as_int) {
-            Some(16385) => text("orbit"),
+            Some(16385) => text(&super::session_vars::current_user()),
             Some(_) => text("postgres"),
             None => SqlValue::Null,
         },

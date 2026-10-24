@@ -407,6 +407,9 @@ impl PostgresWireProtocol {
 
         self.username = parameters.get("user").cloned();
         self.database = parameters.get("database").cloned();
+        self.sql_session
+            .vars
+            .set_identity(self.username.as_deref(), self.database.as_deref());
         self.parameters = parameters;
         self.state = ConnectionState::Authenticating;
 
@@ -981,7 +984,10 @@ impl PostgresWireProtocol {
             {
                 return (m[1..6].to_string(), m[8..].to_string());
             }
-            return (super::sql::durable::classify_error(m).to_string(), m.clone());
+            return (
+                super::sql::durable::classify_error(m).to_string(),
+                m.clone(),
+            );
         }
         let text = e.to_string();
         (super::sql::durable::classify_error(&text).to_string(), text)

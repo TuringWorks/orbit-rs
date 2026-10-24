@@ -127,11 +127,14 @@ fn base_10000_weight(d: Decimal) -> Option<(i32, u32)> {
 
 /// The scale of `x / y` in PostgreSQL's `numeric` (`select_div_scale`): at least 16 significant
 /// digits, and never fewer decimals than either operand. Capped at what `Decimal` can hold.
-fn numeric_div_scale(x: Decimal, y: Decimal) -> u32 {
+pub(crate) fn numeric_div_scale(x: Decimal, y: Decimal) -> u32 {
     let (w1, lead1) = base_10000_weight(x).unwrap_or((0, 0));
     let (w2, lead2) = base_10000_weight(y).unwrap_or((0, 0));
     let qweight = w1 - w2 - i32::from(lead1 <= lead2);
-    let scale = (16 - qweight * 4).max(x.scale() as i32).max(y.scale() as i32).max(0);
+    let scale = (16 - qweight * 4)
+        .max(x.scale() as i32)
+        .max(y.scale() as i32)
+        .max(0);
     scale.min(28) as u32
 }
 
@@ -502,11 +505,87 @@ pub fn coerce(v: SqlValue, ty: &SqlType) -> Result<SqlValue, String> {
         | SqlType::Uuid
         | SqlType::Bytea
         | SqlType::Interval => coerce_temporal_or_binary(&v, ty).ok_or_else(|| bad(&v)),
+        SqlType::Array { element_type, .. } => match &v {
+            SqlValue::Array(items) => items
+                .iter()
+                .map(|item| match item {
+                    SqlValue::Array(_) => coerce(item.clone(), ty),
+                    other => coerce(other.clone(), element_type),
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map(SqlValue::Array),
+            other => match text(other) {
+                Some(s) => parse_array_literal(&s, element_type).ok_or_else(|| bad(&v)),
+                None => Err(bad(&v)),
+            },
+        },
         _ => match text(&v) {
             Some(s) => SqlValue::parse_string(&s, ty).or(Ok(v)),
             None => Ok(v),
         },
     }
+}
+
+/// PostgreSQL array text (`{1,2,3}`, `{{1,2},{3,4}}`, `{a,"b c",NULL}`) as an array of `element_type`.
+fn parse_array_literal(text: &str, element_type: &SqlType) -> Option<SqlValue> {
+    fn group(
+        chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+        element_type: &SqlType,
+    ) -> Option<Vec<SqlValue>> {
+        let mut out = Vec::new();
+        loop {
+            while chars.peek().is_some_and(|c| c.is_whitespace()) {
+                chars.next();
+            }
+            match chars.peek()? {
+                '}' => {
+                    chars.next();
+                    return Some(out);
+                }
+                ',' => {
+                    chars.next();
+                }
+                '{' => {
+                    chars.next();
+                    out.push(SqlValue::Array(group(chars, element_type)?));
+                }
+                '"' => {
+                    chars.next();
+                    let mut item = String::new();
+                    loop {
+                        match chars.next()? {
+                            '\\' => item.push(chars.next()?),
+                            '"' => break,
+                            c => item.push(c),
+                        }
+                    }
+                    out.push(coerce(SqlValue::Text(item), element_type).ok()?);
+                }
+                _ => {
+                    let mut item = String::new();
+                    while let Some(&c) = chars.peek() {
+                        if c == ',' || c == '}' {
+                            break;
+                        }
+                        item.push(c);
+                        chars.next();
+                    }
+                    let item = item.trim();
+                    out.push(if item.eq_ignore_ascii_case("null") {
+                        SqlValue::Null
+                    } else {
+                        coerce(SqlValue::Text(item.to_string()), element_type).ok()?
+                    });
+                }
+            }
+        }
+    }
+    let mut chars = text.trim().chars().peekable();
+    if chars.next()? != '{' {
+        return None;
+    }
+    let items = group(&mut chars, element_type)?;
+    chars.next().is_none().then_some(SqlValue::Array(items))
 }
 
 fn parse_naive_timestamp(s: &str) -> Option<chrono::NaiveDateTime> {

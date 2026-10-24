@@ -279,7 +279,9 @@ impl SelectParser {
         }
         self.expect_token(tokens, pos, &Token::LeftParen)?;
 
-        let query = Box::new(crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(tokens, pos)?);
+        let query = Box::new(
+            crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(tokens, pos)?,
+        );
 
         self.expect_token(tokens, pos, &Token::RightParen)?;
 

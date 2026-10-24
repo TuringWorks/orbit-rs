@@ -327,6 +327,15 @@ impl QueryEngine {
                 results.push(r?);
                 continue;
             }
+            if let Some(result) =
+                crate::protocols::postgres_wire::sql::durable::session_vars::handle_command(
+                    &mut session.vars,
+                    piece,
+                )
+            {
+                results.push(result?);
+                continue;
+            }
             if let Some(result) = session_compat::try_handle(piece, &database, "postgres") {
                 results.push(result);
                 continue;

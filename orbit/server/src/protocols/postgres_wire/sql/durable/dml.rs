@@ -1,11 +1,11 @@
 //! `INSERT`, `UPDATE` and `DELETE`.
 
 use super::ddl::table_key;
-use crate::protocols::postgres_wire::sql::ast::ColumnRef;
 use super::fk::{self, Refs};
 use super::query::{ctx_for, rel_to_result, Rel, RelCol, Runner};
 use super::value::coerce;
 use super::{err, DbError, Op, QueryResult, Row, Seqs, State, Table, R};
+use crate::protocols::postgres_wire::sql::ast::ColumnRef;
 use crate::protocols::postgres_wire::sql::ast::{
     Assignment, AssignmentTarget, ConflictAction, ConflictTarget, DeleteStatement, Expression,
     FromClause, InsertSource, InsertStatement, SelectItem, SelectStatement, UpdateStatement,
@@ -38,12 +38,13 @@ fn lookup<'a>(st: &'a State, key: &str) -> R<&'a Table> {
 fn bind_old_new(t: &Table, items: &[SelectItem]) -> R<Vec<SelectItem>> {
     use super::query::map_expr;
     let version = |e: &Expression| match e {
-        Expression::Column(ColumnRef { table: Some(q), name }) => {
-            match q.to_ascii_lowercase().as_str() {
-                prefix @ ("old" | "new") => Some((prefix.to_string(), name.clone())),
-                _ => None,
-            }
-        }
+        Expression::Column(ColumnRef {
+            table: Some(q),
+            name,
+        }) => match q.to_ascii_lowercase().as_str() {
+            prefix @ ("old" | "new") => Some((prefix.to_string(), name.clone())),
+            _ => None,
+        },
         _ => None,
     };
     let mut out = Vec::with_capacity(items.len());
@@ -57,7 +58,9 @@ fn bind_old_new(t: &Table, items: &[SelectItem]) -> R<Vec<SelectItem>> {
                 alias: None,
             })),
             SelectItem::Expression { expr, alias } => {
-                let alias = alias.clone().or_else(|| version(expr).map(|(_, name)| name));
+                let alias = alias
+                    .clone()
+                    .or_else(|| version(expr).map(|(_, name)| name));
                 let expr = map_expr(expr, &mut (), &mut |_, e| {
                     Ok(version(e).map(|(prefix, name)| {
                         Expression::Column(ColumnRef {
@@ -276,6 +279,15 @@ pub(crate) fn insert(
         let mut row: Row = vec![SqlValue::Null; ncols];
         let mut given = vec![false; ncols];
         for (&i, v) in target.iter().zip(vals) {
+            if cols[i].identity_always {
+                return err(
+                    "428C9",
+                    format!(
+                        "cannot insert a non-DEFAULT value into column \"{}\"",
+                        cols[i].name
+                    ),
+                );
+            }
             row[i] = coerce(v, &cols[i].ty).map_err(|m| DbError {
                 code: "22P02",
                 message: m,

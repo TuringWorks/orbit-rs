@@ -56,7 +56,8 @@ pub(crate) fn parse_nested_select(
         position: *pos,
         current_token: tokens.get(*pos).cloned(),
     };
-    let statement = parse_select(&mut nested).map_err(crate::protocols::error::ProtocolError::from)?;
+    let statement =
+        parse_select(&mut nested).map_err(crate::protocols::error::ProtocolError::from)?;
     *pos = nested.position;
     match statement {
         Statement::Select(select) => Ok(*select),
@@ -442,7 +443,8 @@ fn parse_lock_clause(parser: &mut SqlParser) -> ParseResult<Option<ForClause>> {
             true
         } else if eat_word(parser, "SHARE")? {
             false
-        } else if eat_word(parser, "NO")? && eat_word(parser, "KEY")? && eat_word(parser, "UPDATE")? {
+        } else if eat_word(parser, "NO")? && eat_word(parser, "KEY")? && eat_word(parser, "UPDATE")?
+        {
             true
         } else if eat_word(parser, "KEY")? && eat_word(parser, "SHARE")? {
             false
@@ -470,9 +472,15 @@ fn parse_lock_clause(parser: &mut SqlParser) -> ParseResult<Option<ForClause>> {
         let nowait = eat_word(parser, "NOWAIT")?;
         let skip_locked = !nowait && eat_word(parser, "SKIP")? && eat_word(parser, "LOCKED")?;
         first.get_or_insert(if exclusive {
-            ForClause::Update { nowait, skip_locked }
+            ForClause::Update {
+                nowait,
+                skip_locked,
+            }
         } else {
-            ForClause::Share { nowait, skip_locked }
+            ForClause::Share {
+                nowait,
+                skip_locked,
+            }
         });
     }
     Ok(first)
@@ -901,7 +909,9 @@ fn parse_table_ref(parser: &mut SqlParser) -> ParseResult<FromClause> {
     let lateral = eat_word(parser, "LATERAL")?;
 
     if let Some(Token::Identifier(name)) = &parser.current_token {
-        if name.eq_ignore_ascii_case("JSON_TABLE") && matches!(parser.peek(), Some(Token::LeftParen)) {
+        if name.eq_ignore_ascii_case("JSON_TABLE")
+            && matches!(parser.peek(), Some(Token::LeftParen))
+        {
             return parse_json_table(parser);
         }
     }

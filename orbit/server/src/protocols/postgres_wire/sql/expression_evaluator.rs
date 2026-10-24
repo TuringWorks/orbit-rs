@@ -682,7 +682,8 @@ impl ExpressionEvaluator {
                 self.json_concat(&left_val, &right_val)
             }
             BinaryOperator::Concat
-                if matches!(left_val, SqlValue::Array(_)) || matches!(right_val, SqlValue::Array(_)) =>
+                if matches!(left_val, SqlValue::Array(_))
+                    || matches!(right_val, SqlValue::Array(_)) =>
             {
                 Ok(Self::array_concat(left_val, right_val))
             }
@@ -721,18 +722,24 @@ impl ExpressionEvaluator {
 
             // Range operators (PostgreSQL range types)
             // `@>`, `<@` and `&&` are shared by ranges, JSONB and arrays
-            BinaryOperator::RangeContains => match Self::container_operator(&left_val, &right_val, "contains") {
-                Some(result) => result,
-                None => self.range_contains(&left_val, &right_val),
-            },
-            BinaryOperator::RangeContainedBy => match Self::container_operator(&left_val, &right_val, "contained") {
-                Some(result) => result,
-                None => self.range_contained_by(&left_val, &right_val),
-            },
-            BinaryOperator::RangeOverlaps => match Self::container_operator(&left_val, &right_val, "overlaps") {
-                Some(result) => result,
-                None => self.range_overlaps(&left_val, &right_val),
-            },
+            BinaryOperator::RangeContains => {
+                match Self::container_operator(&left_val, &right_val, "contains") {
+                    Some(result) => result,
+                    None => self.range_contains(&left_val, &right_val),
+                }
+            }
+            BinaryOperator::RangeContainedBy => {
+                match Self::container_operator(&left_val, &right_val, "contained") {
+                    Some(result) => result,
+                    None => self.range_contained_by(&left_val, &right_val),
+                }
+            }
+            BinaryOperator::RangeOverlaps => {
+                match Self::container_operator(&left_val, &right_val, "overlaps") {
+                    Some(result) => result,
+                    None => self.range_overlaps(&left_val, &right_val),
+                }
+            }
             BinaryOperator::RangeAdjacent => self.range_adjacent(&left_val, &right_val),
             BinaryOperator::RangeStrictlyLeft => self.range_strictly_left(&left_val, &right_val),
             BinaryOperator::RangeStrictlyRight => self.range_strictly_right(&left_val, &right_val),
@@ -868,6 +875,39 @@ impl ExpressionEvaluator {
             "REGR_SXY" => self.evaluate_regr_sxy(&args),
 
             "CURRENT_SETTING" => self.evaluate_current_setting(&args),
+            "SET_CONFIG" => match args.as_slice() {
+                [SqlValue::Text(name), SqlValue::Text(value), SqlValue::Boolean(local)] => {
+                    super::durable::session_vars::set_config(name, value, *local)
+                        .map(SqlValue::Text)
+                        .map_err(|e| {
+                            ProtocolError::PostgresError(format!("[{}] {}", e.code, e.message))
+                        })
+                }
+                _ => Err(ProtocolError::PostgresError(
+                    "[42883] function set_config requires (text, text, boolean)".to_string(),
+                )),
+            },
+
+            // JSON constructors, inspectors and editors
+            "JSON_BUILD_OBJECT"
+            | "JSONB_BUILD_OBJECT"
+            | "JSON_BUILD_ARRAY"
+            | "JSONB_BUILD_ARRAY"
+            | "JSON_TYPEOF"
+            | "JSONB_TYPEOF"
+            | "JSON_ARRAY_LENGTH"
+            | "JSONB_ARRAY_LENGTH"
+            | "JSON_EXTRACT_PATH"
+            | "JSONB_EXTRACT_PATH"
+            | "JSON_EXTRACT_PATH_TEXT"
+            | "JSONB_EXTRACT_PATH_TEXT"
+            | "JSONB_SET"
+            | "JSONB_INSERT"
+            | "JSON_STRIP_NULLS"
+            | "JSONB_STRIP_NULLS"
+            | "JSONB_PRETTY"
+            | "TO_JSON"
+            | "TO_JSONB" => self.evaluate_json_function(&func_name, args),
 
             // String functions
             "LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" => self.evaluate_length(&args),
@@ -906,6 +946,31 @@ impl ExpressionEvaluator {
             "QUOTE_IDENT" => self.evaluate_quote_ident(&args),
             "QUOTE_NULLABLE" => self.evaluate_quote_nullable(&args),
             "FORMAT" => self.evaluate_format(&args),
+            "CONCAT_WS" => self.evaluate_concat_ws(&args),
+            "TO_HEX" => match args.as_slice() {
+                [SqlValue::Null] => Ok(SqlValue::Null),
+                [v] => Self::integer_arg(v)
+                    .map(|n| SqlValue::Text(format!("{:x}", n as u64)))
+                    .ok_or_else(|| {
+                        ProtocolError::PostgresError("to_hex requires an integer".to_string())
+                    }),
+                _ => Err(ProtocolError::PostgresError(
+                    "to_hex requires one argument".to_string(),
+                )),
+            },
+            "STARTS_WITH" => match args.as_slice() {
+                [a, b] if a.is_null() || b.is_null() => Ok(SqlValue::Null),
+                [a, b] => Ok(SqlValue::Boolean(
+                    a.to_postgres_string().starts_with(&b.to_postgres_string()),
+                )),
+                _ => Err(ProtocolError::PostgresError(
+                    "starts_with requires two arguments".to_string(),
+                )),
+            },
+            "PG_TYPEOF" => Ok(SqlValue::Text(
+                args.first()
+                    .map_or("unknown".to_string(), Self::type_name_of),
+            )),
             "STRING_TO_ARRAY" => self.evaluate_string_to_array(&args),
             "REGEXP_MATCH" => self.evaluate_regexp_match(&args),
             "REGEXP_MATCHES" => self.evaluate_regexp_matches(&args),
@@ -1592,6 +1657,10 @@ impl ExpressionEvaluator {
                 }
             }
 
+            _ if Self::temporal_arithmetic(left, right, op).is_some() => {
+                Self::temporal_arithmetic(left, right, op).expect("checked")
+            }
+
             _ => Err(ProtocolError::PostgresError(format!(
                 "Cannot perform arithmetic operation {op} on {left:?} and {right:?}"
             ))),
@@ -1672,17 +1741,38 @@ impl ExpressionEvaluator {
             return Ok(SqlValue::Null);
         }
 
-        let left_str = left.to_postgres_string();
-        let right_str = right.to_postgres_string();
-        Ok(SqlValue::Text(format!("{left_str}{right_str}")))
+        // char(n) is blank-padded, but the padding is not part of its value when concatenated
+        let text = |v: &SqlValue| match v {
+            SqlValue::Char(c) => c.trim_end().to_string(),
+            other => other.to_postgres_string(),
+        };
+        Ok(SqlValue::Text(format!("{}{}", text(left), text(right))))
     }
 
     fn negate_value(&self, value: &SqlValue) -> ProtocolResult<SqlValue> {
+        let overflow =
+            |ty: &str| ProtocolError::PostgresError(format!("[22003] {ty} out of range"));
         match value {
-            SqlValue::Integer(i) => Ok(SqlValue::Integer(-i)),
-            SqlValue::BigInt(i) => Ok(SqlValue::BigInt(-i)),
+            SqlValue::SmallInt(i) => i
+                .checked_neg()
+                .map(SqlValue::SmallInt)
+                .ok_or_else(|| overflow("smallint")),
+            SqlValue::Integer(i) => i
+                .checked_neg()
+                .map(SqlValue::Integer)
+                .ok_or_else(|| overflow("integer")),
+            SqlValue::BigInt(i) => i
+                .checked_neg()
+                .map(SqlValue::BigInt)
+                .ok_or_else(|| overflow("bigint")),
+            SqlValue::Decimal(d) => Ok(SqlValue::Decimal(-*d)),
             SqlValue::DoublePrecision(f) => Ok(SqlValue::DoublePrecision(-f)),
             SqlValue::Real(f) => Ok(SqlValue::Real(-f)),
+            SqlValue::Interval(i) => Ok(SqlValue::Interval(PostgresInterval {
+                months: -i.months,
+                days: -i.days,
+                microseconds: -i.microseconds,
+            })),
             SqlValue::Null => Ok(SqlValue::Null),
             _ => Err(ProtocolError::PostgresError(format!(
                 "Cannot negate {value:?}"
@@ -2337,13 +2427,108 @@ impl ExpressionEvaluator {
                 ))
             }
         };
-        match crate::protocols::postgres_wire::session_compat::setting(name) {
-            Some(value) => Ok(SqlValue::Text(value.to_string())),
+        let known = super::durable::session_vars::lookup(name).or_else(|| {
+            crate::protocols::postgres_wire::session_compat::setting(name).map(str::to_string)
+        });
+        match known {
+            Some(value) => Ok(SqlValue::Text(value)),
             None if missing_ok => Ok(SqlValue::Null),
             None => Err(ProtocolError::PostgresError(format!(
                 "[42704] unrecognized configuration parameter \"{name}\""
             ))),
         }
+    }
+
+    /// Date, timestamp and interval arithmetic: `date +/- int`, `date - date`, `date +/- interval`,
+    /// `timestamp - timestamp`, `interval +/- interval`, `interval * n`, `interval / n`.
+    fn temporal_arithmetic(
+        left: &SqlValue,
+        right: &SqlValue,
+        op: &str,
+    ) -> Option<ProtocolResult<SqlValue>> {
+        use super::durable::table_fn::add_interval;
+        let days = |d: &chrono::NaiveDate, n: i64| {
+            d.checked_add_signed(chrono::Duration::days(n))
+                .map(SqlValue::Date)
+        };
+        let out_of_range = || ProtocolError::PostgresError("[22008] date out of range".to_string());
+        let as_int = |v: &SqlValue| match v {
+            SqlValue::SmallInt(n) => Some(i64::from(*n)),
+            SqlValue::Integer(n) => Some(i64::from(*n)),
+            SqlValue::BigInt(n) => Some(*n),
+            _ => None,
+        };
+        let interval_between = |a: chrono::NaiveDateTime, b: chrono::NaiveDateTime| {
+            let diff = a - b;
+            let whole_days = diff.num_days();
+            SqlValue::Interval(PostgresInterval {
+                months: 0,
+                days: whole_days as i32,
+                microseconds: (diff - chrono::Duration::days(whole_days))
+                    .num_microseconds()
+                    .unwrap_or(0),
+            })
+        };
+        let negated = |i: &PostgresInterval| PostgresInterval {
+            months: -i.months,
+            days: -i.days,
+            microseconds: -i.microseconds,
+        };
+        Some(match (left, right, op) {
+            (SqlValue::Date(d), n, "+") if as_int(n).is_some() => {
+                days(d, as_int(n)?).ok_or_else(out_of_range)
+            }
+            (n, SqlValue::Date(d), "+") if as_int(n).is_some() => {
+                days(d, as_int(n)?).ok_or_else(out_of_range)
+            }
+            (SqlValue::Date(d), n, "-") if as_int(n).is_some() => {
+                days(d, -as_int(n)?).ok_or_else(out_of_range)
+            }
+            (SqlValue::Date(a), SqlValue::Date(b), "-") => {
+                Ok(SqlValue::Integer((*a - *b).num_days() as i32))
+            }
+            (SqlValue::Date(d), SqlValue::Interval(i), "+") => d
+                .and_hms_opt(0, 0, 0)
+                .and_then(|t| add_interval(t, i))
+                .map(SqlValue::Timestamp)
+                .ok_or_else(out_of_range),
+            (SqlValue::Date(d), SqlValue::Interval(i), "-") => d
+                .and_hms_opt(0, 0, 0)
+                .and_then(|t| add_interval(t, &negated(i)))
+                .map(SqlValue::Timestamp)
+                .ok_or_else(out_of_range),
+            (SqlValue::Timestamp(a), SqlValue::Timestamp(b), "-") => Ok(interval_between(*a, *b)),
+            (SqlValue::TimestampWithTimezone(a), SqlValue::TimestampWithTimezone(b), "-") => {
+                Ok(interval_between(a.naive_utc(), b.naive_utc()))
+            }
+            (SqlValue::Interval(a), SqlValue::Interval(b), "+" | "-") => {
+                let sign = if op == "+" { 1 } else { -1 };
+                Ok(SqlValue::Interval(PostgresInterval {
+                    months: a.months + sign * b.months,
+                    days: a.days + sign * b.days,
+                    microseconds: a.microseconds + i64::from(sign) * b.microseconds,
+                }))
+            }
+            (SqlValue::Interval(i), n, "*") | (n, SqlValue::Interval(i), "*")
+                if as_int(n).is_some() =>
+            {
+                let k = as_int(n)?;
+                Ok(SqlValue::Interval(PostgresInterval {
+                    months: i.months * k as i32,
+                    days: i.days * k as i32,
+                    microseconds: i.microseconds * k,
+                }))
+            }
+            (SqlValue::Interval(i), n, "/") if as_int(n).is_some_and(|k| k != 0) => {
+                let k = as_int(n)?;
+                Ok(SqlValue::Interval(PostgresInterval {
+                    months: i.months / k as i32,
+                    days: i.days / k as i32,
+                    microseconds: i.microseconds / k,
+                }))
+            }
+            _ => return None,
+        })
     }
 
     /// `a || b` where either side is an array: array || array concatenates, array || element appends,
@@ -2395,6 +2580,128 @@ impl ExpressionEvaluator {
                 })))
             }
             _ => None,
+        }
+    }
+
+    /// The `json[b]_*` function family, over [`super::json::JsonOperations`]. The `jsonb_` and `to_jsonb`
+    /// spellings return `jsonb`, the others `json`.
+    fn evaluate_json_function(&self, name: &str, args: Vec<SqlValue>) -> ProtocolResult<SqlValue> {
+        use super::json::JsonOperations as Json;
+        let binary = name.starts_with("JSONB_") || name == "TO_JSONB";
+        let json_arg = |i: usize| -> ProtocolResult<serde_json::Value> {
+            self.get_json_value(args.get(i).ok_or_else(|| {
+                ProtocolError::PostgresError(format!("function {name} is missing an argument"))
+            })?)
+        };
+        let result = match name {
+            "JSON_BUILD_OBJECT" | "JSONB_BUILD_OBJECT" => Json::json_build_object(args.clone())?,
+            "JSON_BUILD_ARRAY" | "JSONB_BUILD_ARRAY" => Json::json_build_array(args.clone())?,
+            "JSON_TYPEOF" | "JSONB_TYPEOF" => Json::json_typeof(&json_arg(0)?)?,
+            "JSON_ARRAY_LENGTH" | "JSONB_ARRAY_LENGTH" => Json::json_array_length(&json_arg(0)?)?,
+            "JSON_EXTRACT_PATH"
+            | "JSONB_EXTRACT_PATH"
+            | "JSON_EXTRACT_PATH_TEXT"
+            | "JSONB_EXTRACT_PATH_TEXT" => {
+                let path: Vec<String> = args
+                    .iter()
+                    .skip(1)
+                    .map(|a| a.to_postgres_string())
+                    .collect();
+                if name.ends_with("_TEXT") {
+                    Json::json_extract_path_text(&json_arg(0)?, path)?
+                } else {
+                    Json::json_extract_path(&json_arg(0)?, path)?
+                }
+            }
+            "JSONB_SET" | "JSONB_INSERT" => {
+                let path = self.get_json_path(args.get(1).unwrap_or(&SqlValue::Null))?;
+                let flag = matches!(args.get(3), Some(SqlValue::Boolean(true)));
+                if name == "JSONB_SET" {
+                    // create_missing defaults to true
+                    let create = args.get(3).is_none_or(|_| flag);
+                    Json::jsonb_set(&json_arg(0)?, &path, &json_arg(2)?, create)?
+                } else {
+                    Json::jsonb_insert(&json_arg(0)?, &path, &json_arg(2)?, flag)?
+                }
+            }
+            "JSON_STRIP_NULLS" | "JSONB_STRIP_NULLS" => Json::json_strip_nulls(&json_arg(0)?)?,
+            "JSONB_PRETTY" => {
+                // PostgreSQL indents four spaces
+                let mut out = Vec::new();
+                let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+                let mut ser = serde_json::Serializer::with_formatter(&mut out, formatter);
+                serde::Serialize::serialize(&json_arg(0)?, &mut ser)
+                    .map_err(|e| ProtocolError::PostgresError(e.to_string()))?;
+                SqlValue::Text(String::from_utf8_lossy(&out).into_owned())
+            }
+            _ => Json::to_json(args.first().cloned().unwrap_or(SqlValue::Null))?,
+        };
+        Ok(match result {
+            SqlValue::Json(v) if binary => SqlValue::Jsonb(v),
+            other => other,
+        })
+    }
+
+    /// `concat_ws(sep, a, b, ...)`: the non-NULL arguments joined by `sep`.
+    fn evaluate_concat_ws(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let Some(sep) = args.first() else {
+            return Err(ProtocolError::PostgresError(
+                "concat_ws requires a separator".to_string(),
+            ));
+        };
+        if sep.is_null() {
+            return Ok(SqlValue::Null);
+        }
+        let sep = sep.to_postgres_string();
+        Ok(SqlValue::Text(
+            args[1..]
+                .iter()
+                .filter(|v| !v.is_null())
+                .map(SqlValue::to_postgres_string)
+                .collect::<Vec<_>>()
+                .join(&sep),
+        ))
+    }
+
+    fn integer_arg(v: &SqlValue) -> Option<i64> {
+        match v {
+            SqlValue::SmallInt(n) => Some(i64::from(*n)),
+            SqlValue::Integer(n) => Some(i64::from(*n)),
+            SqlValue::BigInt(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    /// `pg_typeof` of a value: the type name PostgreSQL would print.
+    fn type_name_of(v: &SqlValue) -> String {
+        match v {
+            SqlValue::Null => "unknown".to_string(),
+            SqlValue::Boolean(_) => "boolean".to_string(),
+            SqlValue::SmallInt(_) => "smallint".to_string(),
+            SqlValue::Integer(_) => "integer".to_string(),
+            SqlValue::BigInt(_) => "bigint".to_string(),
+            SqlValue::Decimal(_) => "numeric".to_string(),
+            SqlValue::Real(_) => "real".to_string(),
+            SqlValue::DoublePrecision(_) => "double precision".to_string(),
+            SqlValue::Text(_) => "text".to_string(),
+            SqlValue::Varchar(_) => "character varying".to_string(),
+            SqlValue::Char(_) => "character".to_string(),
+            SqlValue::Date(_) => "date".to_string(),
+            SqlValue::Time(_) => "time without time zone".to_string(),
+            SqlValue::Timestamp(_) => "timestamp without time zone".to_string(),
+            SqlValue::TimestampWithTimezone(_) => "timestamp with time zone".to_string(),
+            SqlValue::Interval(_) => "interval".to_string(),
+            SqlValue::Uuid(_) => "uuid".to_string(),
+            SqlValue::Json(_) => "json".to_string(),
+            SqlValue::Jsonb(_) => "jsonb".to_string(),
+            SqlValue::Bytea(_) => "bytea".to_string(),
+            SqlValue::Array(items) => {
+                format!(
+                    "{}[]",
+                    items.first().map_or("text".to_string(), Self::type_name_of)
+                )
+            }
+            other => format!("{:?}", other.sql_type()).to_ascii_lowercase(),
         }
     }
 
@@ -2538,6 +2845,12 @@ impl ExpressionEvaluator {
         };
 
         match &args[0] {
+            // round(double precision) goes to the nearest even on a tie (2.5 -> 2); round(numeric, s)
+            // goes away from zero and always shows s decimals
+            SqlValue::DoublePrecision(f) if precision == 0 => {
+                Ok(SqlValue::DoublePrecision(f.round_ties_even()))
+            }
+            SqlValue::Real(f) if precision == 0 => Ok(SqlValue::Real(f.round_ties_even())),
             SqlValue::DoublePrecision(f) => {
                 let multiplier = 10_f64.powi(precision);
                 Ok(SqlValue::DoublePrecision(
@@ -2548,10 +2861,25 @@ impl ExpressionEvaluator {
                 let multiplier = 10_f32.powi(precision);
                 Ok(SqlValue::Real((f * multiplier).round() / multiplier))
             }
-            SqlValue::Decimal(d) => Ok(SqlValue::Decimal(d.round_dp_with_strategy(
-                precision.max(0) as u32,
-                rust_decimal::RoundingStrategy::MidpointAwayFromZero,
-            ))),
+            SqlValue::Decimal(d) if precision >= 0 => {
+                let mut rounded = d.round_dp_with_strategy(
+                    precision as u32,
+                    rust_decimal::RoundingStrategy::MidpointAwayFromZero,
+                );
+                rounded.rescale(precision as u32);
+                Ok(SqlValue::Decimal(rounded))
+            }
+            SqlValue::Decimal(d) => {
+                // a negative scale rounds to tens, hundreds, ...
+                let unit =
+                    rust_decimal::Decimal::from(10_i64.pow(precision.unsigned_abs().min(18)));
+                Ok(SqlValue::Decimal(
+                    (d / unit).round_dp_with_strategy(
+                        0,
+                        rust_decimal::RoundingStrategy::MidpointAwayFromZero,
+                    ) * unit,
+                ))
+            }
             SqlValue::SmallInt(i) => Ok(SqlValue::SmallInt(*i)),
             SqlValue::Integer(i) => Ok(SqlValue::Integer(*i)),
             SqlValue::BigInt(i) => Ok(SqlValue::BigInt(*i)),
@@ -5112,79 +5440,76 @@ impl ExpressionEvaluator {
         }
     }
 
+    /// `encode(bytes, 'hex'|'base64'|'escape')`: the bytes of a bytea (or of a text's UTF-8) as text.
     fn evaluate_encode(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        if args.len() != 2 {
+        let [data, format] = args else {
             return Err(ProtocolError::PostgresError(
                 "ENCODE requires exactly two arguments".to_string(),
             ));
-        }
-
-        let data = Self::get_string_arg(&args[0])?;
-        let format = Self::get_string_arg(&args[1])?;
-
-        match (data, format) {
-            (Some(data), Some(format)) => {
-                match format.to_lowercase().as_str() {
-                    "base64" => {
-                        use base64::{engine::general_purpose, Engine as _};
-                        Ok(SqlValue::Text(
-                            general_purpose::STANDARD.encode(data.as_bytes()),
-                        ))
-                    }
-                    "hex" => Ok(SqlValue::Text(hex::encode(data.as_bytes()))),
-                    "escape" => {
-                        // Simple escape encoding
-                        Ok(SqlValue::Text(data.escape_default().to_string()))
-                    }
-                    _ => Err(ProtocolError::PostgresError(format!(
-                        "Unknown encoding format: {format}"
-                    ))),
-                }
+        };
+        let (Some(bytes), Some(format)) = (Self::bytes_arg(data)?, Self::get_string_arg(format)?)
+        else {
+            return Ok(SqlValue::Null);
+        };
+        match format.to_lowercase().as_str() {
+            "base64" => {
+                use base64::{engine::general_purpose, Engine as _};
+                Ok(SqlValue::Text(general_purpose::STANDARD.encode(&bytes)))
             }
-            _ => Ok(SqlValue::Null),
+            "hex" => Ok(SqlValue::Text(hex::encode(&bytes))),
+            "escape" => Ok(SqlValue::Text(
+                bytes
+                    .iter()
+                    .map(|b| match b {
+                        b'\\' => "\\\\".to_string(),
+                        0x20..=0x7e => (*b as char).to_string(),
+                        other => format!("\\{other:03o}"),
+                    })
+                    .collect(),
+            )),
+            other => Err(ProtocolError::PostgresError(format!(
+                "[22023] unrecognized encoding: \"{other}\""
+            ))),
         }
     }
 
+    fn bytes_arg(v: &SqlValue) -> ProtocolResult<Option<Vec<u8>>> {
+        Ok(match v {
+            SqlValue::Null => None,
+            SqlValue::Bytea(b) => Some(b.clone()),
+            other => Self::get_string_arg(other)?.map(String::into_bytes),
+        })
+    }
+
+    /// `decode(text, 'hex'|'base64'|'escape')` back to bytea.
     fn evaluate_decode(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        if args.len() != 2 {
+        let [data, format] = args else {
             return Err(ProtocolError::PostgresError(
                 "DECODE requires exactly two arguments".to_string(),
             ));
-        }
-
-        let data = Self::get_string_arg(&args[0])?;
-        let format = Self::get_string_arg(&args[1])?;
-
-        match (data, format) {
-            (Some(data), Some(format)) => match format.to_lowercase().as_str() {
-                "base64" => {
-                    use base64::{engine::general_purpose, Engine as _};
-                    match general_purpose::STANDARD.decode(&data) {
-                        Ok(bytes) => match String::from_utf8(bytes) {
-                            Ok(s) => Ok(SqlValue::Text(s)),
-                            Err(_) => Ok(SqlValue::Bytea(
-                                general_purpose::STANDARD.decode(&data).unwrap(),
-                            )),
-                        },
-                        Err(e) => Err(ProtocolError::PostgresError(format!(
-                            "Invalid base64 data: {e}"
-                        ))),
-                    }
-                }
-                "hex" => match hex::decode(&data) {
-                    Ok(bytes) => match String::from_utf8(bytes) {
-                        Ok(s) => Ok(SqlValue::Text(s)),
-                        Err(_) => Ok(SqlValue::Bytea(hex::decode(&data).unwrap())),
-                    },
-                    Err(e) => Err(ProtocolError::PostgresError(format!(
-                        "Invalid hex data: {e}"
-                    ))),
-                },
-                _ => Err(ProtocolError::PostgresError(format!(
-                    "Unknown decoding format: {format}"
-                ))),
-            },
-            _ => Ok(SqlValue::Null),
+        };
+        let (Some(data), Some(format)) =
+            (Self::get_string_arg(data)?, Self::get_string_arg(format)?)
+        else {
+            return Ok(SqlValue::Null);
+        };
+        let invalid =
+            |what: &str| ProtocolError::PostgresError(format!("[22023] invalid {what} input"));
+        match format.to_lowercase().as_str() {
+            "hex" => hex::decode(data.trim())
+                .map(SqlValue::Bytea)
+                .map_err(|_| invalid("hexadecimal")),
+            "base64" => {
+                use base64::{engine::general_purpose, Engine as _};
+                general_purpose::STANDARD
+                    .decode(data.trim())
+                    .map(SqlValue::Bytea)
+                    .map_err(|_| invalid("base64"))
+            }
+            "escape" => Ok(SqlValue::Bytea(data.into_bytes())),
+            other => Err(ProtocolError::PostgresError(format!(
+                "[22023] unrecognized encoding: \"{other}\""
+            ))),
         }
     }
 
@@ -5340,66 +5665,102 @@ impl ExpressionEvaluator {
         }
     }
 
+    /// `format(fmt, args...)`: `%s`, `%I` (identifier), `%L` (literal) and `%%`, each with an optional
+    /// `N$` argument position and `-`/width padding (`%-5s`, `%5s`, `%2$s`).
     fn evaluate_format(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
-        if args.is_empty() {
+        let Some(first) = args.first() else {
             return Err(ProtocolError::PostgresError(
                 "FORMAT requires at least one argument".to_string(),
             ));
-        }
-
-        let format_str = Self::get_string_arg(&args[0])?;
-
-        match format_str {
-            Some(format_str) => {
-                // Simple format implementation supporting %s, %I, %L
-                let mut result = format_str.clone();
-                let mut arg_idx = 1;
-
-                // Process format specifiers
-                let mut i = 0;
-                while i < result.len() {
-                    if result[i..].starts_with('%') && i + 1 < result.len() {
-                        let spec = result.chars().nth(i + 1).unwrap();
-                        match spec {
-                            's' if arg_idx < args.len() => {
-                                let val = args[arg_idx].to_postgres_string();
-                                result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
-                                i += val.len();
-                                arg_idx += 1;
-                            }
-                            'I' if arg_idx < args.len() => {
-                                let s = args[arg_idx].to_postgres_string();
-                                let escaped = s.replace('"', "\"\"");
-                                let val = format!("\"{escaped}\"");
-                                result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
-                                i += val.len();
-                                arg_idx += 1;
-                            }
-                            'L' if arg_idx < args.len() => {
-                                let s = args[arg_idx].to_postgres_string();
-                                let escaped = s.replace('\'', "''");
-                                let val = format!("'{escaped}'");
-                                result = format!("{}{}{}", &result[..i], val, &result[i + 2..]);
-                                i += val.len();
-                                arg_idx += 1;
-                            }
-                            '%' => {
-                                result = format!("{}{}", &result[..i], &result[i + 1..]);
-                                i += 1;
-                            }
-                            _ => {
-                                i += 2;
-                            }
-                        }
+        };
+        let Some(template) = Self::get_string_arg(first)? else {
+            return Ok(SqlValue::Null);
+        };
+        let mut out = String::new();
+        let mut next_arg = 1usize;
+        let mut chars = template.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c != '%' {
+                out.push(c);
+                continue;
+            }
+            let mut spec = String::new();
+            while let Some(&n) = chars.peek() {
+                if n.is_ascii_digit() || n == '$' || n == '-' {
+                    spec.push(n);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            let Some(kind) = chars.next() else {
+                return Err(ProtocolError::PostgresError(
+                    "[22023] unterminated format() type specifier".to_string(),
+                ));
+            };
+            if kind == '%' {
+                out.push('%');
+                continue;
+            }
+            let (position, rest) = match spec.split_once('$') {
+                Some((p, r)) => (p.parse::<usize>().ok(), r.to_string()),
+                None => (None, spec.clone()),
+            };
+            let left_align = rest.starts_with('-');
+            let width: usize = rest.trim_start_matches('-').parse().unwrap_or(0);
+            let index = position.unwrap_or_else(|| {
+                let i = next_arg;
+                next_arg += 1;
+                i
+            });
+            let Some(value) = args.get(index) else {
+                return Err(ProtocolError::PostgresError(
+                    "[22023] too few arguments for format()".to_string(),
+                ));
+            };
+            let text = match kind {
+                's' => {
+                    if value.is_null() {
+                        String::new()
                     } else {
-                        i += 1;
+                        value.to_postgres_string()
                     }
                 }
-
-                Ok(SqlValue::Text(result))
+                'I' => {
+                    let s = value.to_postgres_string();
+                    let plain = !s.is_empty()
+                        && s.chars()
+                            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+                        && !s.starts_with(|c: char| c.is_ascii_digit());
+                    if plain {
+                        s
+                    } else {
+                        format!("\"{}\"", s.replace('"', "\"\""))
+                    }
+                }
+                'L' => {
+                    if value.is_null() {
+                        "NULL".to_string()
+                    } else {
+                        format!("'{}'", value.to_postgres_string().replace('\'', "''"))
+                    }
+                }
+                other => {
+                    return Err(ProtocolError::PostgresError(format!(
+                        "[22023] unrecognized format() type specifier \"{other}\""
+                    )))
+                }
+            };
+            let pad = width.saturating_sub(text.chars().count());
+            if left_align {
+                out.push_str(&text);
+                out.push_str(&" ".repeat(pad));
+            } else {
+                out.push_str(&" ".repeat(pad));
+                out.push_str(&text);
             }
-            None => Ok(SqlValue::Null),
         }
+        Ok(SqlValue::Text(out))
     }
 
     /// Helper to extract string from SqlValue
@@ -5540,7 +5901,21 @@ impl ExpressionEvaluator {
             return Ok(SqlValue::Null);
         }
 
-        self.extract_field_from_value(&field, source)
+        let value = self.extract_field_from_value(&field, source)?;
+        // since PostgreSQL 14 extract() returns numeric; seconds and epoch carry microseconds
+        Ok(match (field.as_str(), value) {
+            ("SECOND" | "SECONDS" | "EPOCH", SqlValue::DoublePrecision(f)) => {
+                match rust_decimal::Decimal::from_f64_retain(f) {
+                    Some(mut d) => {
+                        d = d.round_dp(6);
+                        d.rescale(6);
+                        SqlValue::Decimal(d)
+                    }
+                    None => SqlValue::DoublePrecision(f),
+                }
+            }
+            (_, other) => other,
+        })
     }
 
     /// Internal helper to extract a field from a date/time value

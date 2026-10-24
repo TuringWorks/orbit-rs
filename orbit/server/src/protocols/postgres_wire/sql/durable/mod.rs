@@ -22,7 +22,8 @@ mod information_schema;
 mod persist;
 mod pg_catalog;
 mod query;
-mod table_fn;
+pub(crate) mod session_vars;
+pub(crate) mod table_fn;
 pub(crate) mod value;
 mod window;
 
@@ -32,7 +33,9 @@ pub use persist::{Loaded, NoPersist, Op, Persist};
 
 use crate::protocols::error::{ProtocolError, ProtocolResult};
 use crate::protocols::postgres_wire::query_engine::QueryResult;
-use crate::protocols::postgres_wire::sql::ast::{Expression, IsolationLevel, Statement};
+use crate::protocols::postgres_wire::sql::ast::{
+    AccessMode, Expression, IsolationLevel, Statement,
+};
 use crate::protocols::postgres_wire::sql::parser::SqlParser;
 use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 use std::collections::HashMap;
@@ -64,7 +67,11 @@ pub(crate) type R<T> = Result<T, DbError>;
 pub(crate) fn classify_error(message: &str) -> &'static str {
     let m = message.to_ascii_lowercase();
     let has = |needle: &str| m.contains(needle);
-    if has("parse error") || has("unexpected token") || m.starts_with("expected ") || has("syntax error") {
+    if has("parse error")
+        || has("unexpected token")
+        || m.starts_with("expected ")
+        || has("syntax error")
+    {
         "42601"
     } else if has("division by zero") {
         "22012"
@@ -135,6 +142,8 @@ pub(crate) struct Col {
     pub default: Option<Expression>,
     /// Name of the owned sequence for a `SERIAL` column.
     pub serial: Option<String>,
+    /// `GENERATED ALWAYS AS IDENTITY`: explicit values are refused.
+    pub identity_always: bool,
     /// `GENERATED ALWAYS AS (expr)`: `default` holds `expr`, recomputed from the row on every write.
     pub generated: bool,
 }
@@ -238,6 +247,15 @@ pub(crate) struct State {
     pub next_table_id: u32,
     /// Number of commits applied; lets a REPEATABLE READ session notice that it is out of date.
     pub version: u64,
+    /// Views by name: a stored query, expanded wherever the view is read.
+    pub views: imbl::HashMap<String, View>,
+}
+
+/// A `CREATE VIEW`: the query and the optional output column names.
+#[derive(Clone)]
+pub(crate) struct View {
+    pub query: Box<crate::protocols::postgres_wire::sql::ast::SelectStatement>,
+    pub columns: Option<Vec<String>>,
 }
 
 impl State {
@@ -351,6 +369,8 @@ impl Txn {
 #[derive(Default)]
 pub struct Session {
     txn: Option<Txn>,
+    /// The connection's settings and identity.
+    pub vars: session_vars::SessionVars,
 }
 
 impl Session {
@@ -552,6 +572,8 @@ impl DurableEngine {
                 | Statement::DropTable(_)
                 | Statement::CreateIndex(_)
                 | Statement::DropIndex(_)
+                | Statement::CreateView(_)
+                | Statement::DropView(_)
                 | Statement::AlterTable(_)
                 | Statement::Truncate(_)
                 | Statement::Select(_)
@@ -608,11 +630,20 @@ impl DurableEngine {
                         Some(IsolationLevel::RepeatableRead | IsolationLevel::Serializable)
                     );
                     session.txn = Some(Txn::new(pin));
+                    let level = b.isolation_level.as_ref().map(|l| match l {
+                        IsolationLevel::ReadUncommitted => "read uncommitted",
+                        IsolationLevel::ReadCommitted => "read committed",
+                        IsolationLevel::RepeatableRead => "repeatable read",
+                        IsolationLevel::Serializable => "serializable",
+                    });
+                    let read_only = matches!(b.access_mode, Some(AccessMode::ReadOnly));
+                    session.vars.begin_txn(level, read_only);
                 }
                 tag("BEGIN")
             }
             Statement::Commit(_) => {
                 let t = self.finish(session, true).await?;
+                session.vars.end_txn(true);
                 tag(&t)
             }
             Statement::Rollback(r) if r.to_savepoint.is_some() => {
@@ -634,6 +665,7 @@ impl DurableEngine {
             }
             Statement::Rollback(_) => {
                 let t = self.finish(session, false).await?;
+                session.vars.end_txn(false);
                 tag(&t)
             }
             Statement::Savepoint(sp) => {
@@ -668,18 +700,30 @@ impl DurableEngine {
     ) -> R<QueryResult> {
         let write = is_write(stmt);
         metrics::counter!("orbit_sql_statements_total", "kind" => if write { "write" } else { "read" }).increment(1);
-        if let Some(txn) = session.txn.as_mut() {
+        let Session { txn, vars } = session;
+        if write && vars.in_txn() && vars.txn_read_only() {
+            let verb = text
+                .split_whitespace()
+                .next()
+                .unwrap_or("statement")
+                .to_ascii_uppercase();
+            return err(
+                "25006",
+                format!("cannot execute {verb} in a read-only transaction"),
+            );
+        }
+        if let Some(txn) = txn.as_mut() {
             if txn.failed {
                 return Err(aborted());
             }
-            let r = self.run_in(txn, stmt, text, write).await;
+            let r = self.run_in(txn, vars, stmt, text, write).await;
             if r.is_err() {
                 txn.failed = true;
             }
             return r;
         }
         let mut txn = Txn::new(false);
-        let res = self.run_in(&mut txn, stmt, text, write).await?;
+        let res = self.run_in(&mut txn, vars, stmt, text, write).await?;
         if write {
             self.commit(&mut txn).await?;
         }
@@ -687,9 +731,11 @@ impl DurableEngine {
     }
 
     /// Run `stmt` inside `txn`. A statement that fails leaves the transaction's data as it was.
+    /// `vars` are the connection's settings, visible to the statement while it runs.
     async fn run_in(
         &self,
         txn: &mut Txn,
+        vars: &mut session_vars::SessionVars,
         stmt: &Statement,
         text: &str,
         write: bool,
@@ -706,7 +752,7 @@ impl DurableEngine {
             let backup = txn.work.clone();
             let outcome = if write {
                 let st = txn.work.as_mut().expect("a writing transaction has a copy");
-                self.exec_write(st, &mut txn.ops, stmt, text)
+                session_vars::scoped(vars, || self.exec_write(st, &mut txn.ops, stmt, text))
             } else {
                 let snap = match (&txn.work, &txn.base) {
                     (Some(w), _) => w.clone(),
@@ -714,7 +760,9 @@ impl DurableEngine {
                     _ => self.snapshot(),
                 };
                 match stmt {
-                    Statement::Select(sel) => query::run_select_statement(&snap, sel),
+                    Statement::Select(sel) => {
+                        session_vars::scoped(vars, || query::run_select_statement(&snap, sel))
+                    }
                     _ => err("0A000", "statement not supported"),
                 }
             };
