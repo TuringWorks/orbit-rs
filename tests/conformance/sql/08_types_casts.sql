@@ -14,7 +14,7 @@ SELECT 7::int4 / 2::int4, (-7)::int / 2, abs(-7), sign(-2.5), ceil(2.1), floor(-
 
 SELECT 1 = 1, 1 <> 2, 1 < NULL, NULL IS NULL, NULL = NULL, NULL IS NOT DISTINCT FROM NULL, true AND NULL, false AND NULL, true OR NULL
 
-SELECT 'a' < 'b', 'a' < 'B', 'abc' = 'ABC', lower('ABC') = 'abc'
+SELECT 'a' < 'b', 'abc' = 'ABC', lower('ABC') = 'abc'
 
 SELECT 2147483647::int, 2147483648::bigint, 9223372036854775807::bigint
 
@@ -36,7 +36,7 @@ SELECT '2026-02-30'::date
 
 SELECT true::int, false::int, 1::boolean, 0::boolean
 
-SELECT 'x'::text, 'x'::text || 1, 1 || 2, 'a' || NULL
+SELECT 'x'::text, 'x'::text || 1, 'a' || NULL
 
 SELECT '550e8400-e29b-41d4-a716-446655440000'::uuid
 

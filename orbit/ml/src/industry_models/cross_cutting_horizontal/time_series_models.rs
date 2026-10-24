@@ -1746,32 +1746,34 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore] // Slow test - takes > 60 seconds
     async fn test_lstm_forecaster() {
-        let mut model = LSTMTimeSeriesForecaster::new(30, 7, 5, 128, 2);
+        let mut model = LSTMTimeSeriesForecaster::new(8, 3, 2, 16, 1);
         assert_eq!(model.model_type(), "time_series.lstm_forecaster");
 
         let metrics = model.train(&[]).await.unwrap();
         assert!(metrics.mae.unwrap() < 0.5);
 
         let predictions = model.predict(&[]).await.unwrap();
-        assert_eq!(predictions.len(), 7);
+        assert_eq!(predictions.len(), 3);
     }
 
     #[tokio::test]
-    #[ignore] // Slow test - takes > 60 seconds
     async fn test_transformer_time_series() {
-        let mut model = TransformerTimeSeriesModel::new(60, 14, 10, 256, 8, 3, 3);
+        let mut model = TransformerTimeSeriesModel::new(12, 4, 2, 32, 2, 1, 1);
         assert_eq!(model.model_type(), "time_series.transformer");
 
-        let metrics = model.train(&[]).await.unwrap();
+        let sample = TrainingSample {
+            sequence: vec![vec![0.1, 0.2]; 12],
+            target: vec![0.3; 4],
+        };
+        let training_data = serde_json::to_vec(&vec![sample]).unwrap();
+        let metrics = model.train(&training_data).await.unwrap();
         assert!(metrics.rmse.unwrap() < 0.6);
     }
 
     #[tokio::test]
-    #[ignore] // Slow test - takes > 60 seconds
     async fn test_deepar_forecaster() {
-        let mut model = DeepARForecaster::new(30, 7, 3, 64, 2, 100);
+        let mut model = DeepARForecaster::new(8, 3, 1, 16, 1, 10);
         assert_eq!(model.model_type(), "time_series.deepar");
 
         let metrics = model.train(&[]).await.unwrap();

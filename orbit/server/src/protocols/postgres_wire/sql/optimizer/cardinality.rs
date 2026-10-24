@@ -201,6 +201,7 @@ impl CardinalityEstimator {
 
             // String pattern matching
             BinaryOperator::Like => self.estimate_like_selectivity(right),
+            BinaryOperator::StartsWith => self.estimate_like_selectivity(right),
             BinaryOperator::ILike => {
                 // Case-insensitive LIKE typically has similar selectivity
                 self.estimate_like_selectivity(right)

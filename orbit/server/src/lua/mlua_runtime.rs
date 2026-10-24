@@ -41,7 +41,7 @@ impl MluaRuntime {
     /// Create a new Lua runtime with custom configuration
     pub fn with_config(config: SecurityConfig) -> Self {
         Self {
-        validator: ScriptValidator::default(),
+            validator: ScriptValidator::default(),
             config,
             function_registry: Arc::new(RwLock::new(HashMap::new())),
             script_cache: Arc::new(RwLock::new(HashMap::new())),

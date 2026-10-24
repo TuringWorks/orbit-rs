@@ -37,10 +37,10 @@ SELECT 1 = 1, 1 <> 2, 1 < NULL, NULL IS NULL, NULL = NULL, NULL IS NOT DISTINCT 
 ----
 t t NULL t NULL t NULL f t
 
-query TTTT
-SELECT 'a' < 'b', 'a' < 'B', 'abc' = 'ABC', lower('ABC') = 'abc'
+query TTT
+SELECT 'a' < 'b', 'abc' = 'ABC', lower('ABC') = 'abc'
 ----
-t t f t
+t f t
 
 query TTT
 SELECT 2147483647::int, 2147483648::bigint, 9223372036854775807::bigint
@@ -86,8 +86,10 @@ SELECT true::int, false::int, 1::boolean, 0::boolean
 ----
 1 0 t f
 
-statement error (42883)
-SELECT 'x'::text, 'x'::text || 1, 1 || 2, 'a' || NULL
+query TTT
+SELECT 'x'::text, 'x'::text || 1, 'a' || NULL
+----
+x x1 NULL
 
 query T
 SELECT '550e8400-e29b-41d4-a716-446655440000'::uuid

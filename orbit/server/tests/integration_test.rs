@@ -173,6 +173,15 @@ fn wal_directory_exists(base_path: &str) -> bool {
     PathBuf::from(base_path).join("wal").exists()
 }
 
+fn server_command() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_orbit-server"));
+    command
+        .arg("--dev-mode")
+        .env("ORBIT_MYSQL_USERNAME", "test")
+        .env("ORBIT_MYSQL_PASSWORD", "test");
+    command
+}
+
 // =============================================================================
 // Integration Tests
 // =============================================================================
@@ -188,8 +197,7 @@ async fn test_data_directories_created() {
     cleanup_lingering_instances().await;
 
     // Start server in background
-    let mut child = Command::new("cargo")
-        .args(["run", "-p", "orbit-server", "--"])
+    let mut child = server_command()
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -235,8 +243,7 @@ async fn test_rocksdb_persistence_initialized() {
     cleanup_lingering_instances().await;
 
     // Start server in background
-    let mut child = Command::new("cargo")
-        .args(["run", "-p", "orbit-server", "--"])
+    let mut child = server_command()
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -261,8 +268,7 @@ async fn test_all_protocol_ports_listening() {
     cleanup_lingering_instances().await;
 
     // Start server in background
-    let mut child = Command::new("cargo")
-        .args(["run", "-p", "orbit-server", "--"])
+    let mut child = server_command()
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -296,8 +302,7 @@ async fn test_prometheus_metrics_endpoint() {
     cleanup_lingering_instances().await;
 
     // Start server in background
-    let mut child = Command::new("cargo")
-        .args(["run", "-p", "orbit-server", "--"])
+    let mut child = server_command()
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -329,8 +334,7 @@ async fn test_minio_configuration_loaded() {
     std::env::set_var("MINIO_SECRET_KEY", "minioadmin");
 
     // Start server in background
-    let mut child = Command::new("cargo")
-        .args(["run", "-p", "orbit-server", "--"])
+    let mut child = server_command()
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -359,8 +363,7 @@ async fn test_wal_enabled() {
     cleanup_lingering_instances().await;
 
     // Start server in background
-    let mut child = Command::new("cargo")
-        .args(["run", "-p", "orbit-server", "--"])
+    let mut child = server_command()
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -386,8 +389,7 @@ async fn test_postgresql_wire_protocol_connection() {
     cleanup_lingering_instances().await;
 
     // Start server in background
-    let mut child = Command::new("cargo")
-        .args(["run", "-p", "orbit-server", "--"])
+    let mut child = server_command()
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -414,8 +416,7 @@ async fn test_redis_resp_protocol_connection() {
     cleanup_lingering_instances().await;
 
     // Start server in background
-    let mut child = Command::new("cargo")
-        .args(["run", "-p", "orbit-server", "--"])
+    let mut child = server_command()
         .spawn()
         .expect("Failed to start orbit-server");
 
@@ -451,8 +452,7 @@ async fn test_multiple_restarts_no_lingering_instances() {
         println!("Restart iteration {}/5", i);
 
         // Start server
-        let mut child = Command::new("cargo")
-            .args(["run", "-p", "orbit-server", "--"])
+        let mut child = server_command()
             .spawn()
             .expect("Failed to start orbit-server");
 
@@ -485,8 +485,7 @@ async fn test_concurrent_protocol_connections() {
     cleanup_lingering_instances().await;
 
     // Start server
-    let mut child = Command::new("cargo")
-        .args(["run", "-p", "orbit-server", "--"])
+    let mut child = server_command()
         .spawn()
         .expect("Failed to start orbit-server");
 

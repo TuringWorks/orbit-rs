@@ -825,42 +825,91 @@ impl SqlValue {
 
     /// Parse an interval string like "1 hour", "30 minutes", "1 day"
     pub fn parse_interval(s: &str) -> Result<SqlValue, String> {
-        let s = s.trim();
-        let parts: Vec<&str> = s.split_whitespace().collect();
-
-        if parts.len() != 2 {
-            return Err(format!("Invalid interval format: {s}"));
+        let invalid = || format!("[22007] invalid input syntax for type interval: \"{s}\"");
+        let words: Vec<&str> = s.split_whitespace().collect();
+        if words.is_empty() {
+            return Err(invalid());
         }
-
-        let value: i32 = parts[0]
-            .parse()
-            .map_err(|_| format!("Invalid interval value: {}", parts[0]))?;
-        let unit = parts[1].to_lowercase();
-
-        // Convert to PostgreSQL interval representation (months, days, microseconds)
-        let (months, days, microseconds) = match unit.as_str() {
-            "microsecond" | "microseconds" => (0, 0, value as i64),
-            "millisecond" | "milliseconds" => (0, 0, value as i64 * 1000),
-            "second" | "seconds" => (0, 0, value as i64 * 1_000_000),
-            "minute" | "minutes" => (0, 0, value as i64 * 60 * 1_000_000),
-            "hour" | "hours" => (0, 0, value as i64 * 3600 * 1_000_000),
-            "day" | "days" => (0, value, 0),
-            "week" | "weeks" => (0, value * 7, 0),
-            "month" | "months" => (value, 0, 0),
-            "year" | "years" => (value * 12, 0, 0),
-            _ => return Err(format!("Unknown interval unit: {unit}")),
-        };
-
+        let (mut months, mut days, mut micros) = (0f64, 0f64, 0f64);
+        let mut ago = false;
+        let mut i = 0;
+        while i < words.len() {
+            let word = words[i];
+            if word.eq_ignore_ascii_case("ago") {
+                ago = true;
+                i += 1;
+                continue;
+            }
+            // [-]HH:MM[:SS[.ffffff]]
+            if word.contains(':') {
+                let negative = word.starts_with('-');
+                let fields: Vec<&str> = word.trim_start_matches(['-', '+']).split(':').collect();
+                let number = |f: &str| f.parse::<f64>().map_err(|_| invalid());
+                let seconds = match fields.as_slice() {
+                    [h, m] => number(h)? * 3600.0 + number(m)? * 60.0,
+                    [h, m, sec] => number(h)? * 3600.0 + number(m)? * 60.0 + number(sec)?,
+                    _ => return Err(invalid()),
+                };
+                micros += if negative { -seconds } else { seconds } * 1e6;
+                i += 1;
+                continue;
+            }
+            // a number, then its unit (which may be glued on: "5d")
+            let split = word
+                .find(|c: char| c.is_ascii_alphabetic())
+                .unwrap_or(word.len());
+            let (number, glued) = word.split_at(split);
+            let value: f64 = number.parse().map_err(|_| invalid())?;
+            let unit = if glued.is_empty() {
+                i += 1;
+                words.get(i).ok_or_else(invalid)?.to_ascii_lowercase()
+            } else {
+                glued.to_ascii_lowercase()
+            };
+            i += 1;
+            match unit.trim_end_matches('s') {
+                "microsecond" | "usec" | "us" => micros += value,
+                "millisecond" | "msec" | "ms" => micros += value * 1e3,
+                "second" | "sec" | "s" => micros += value * 1e6,
+                "minute" | "min" | "m" => micros += value * 60e6,
+                "hour" | "hr" | "h" => micros += value * 3600e6,
+                "day" | "d" => days += value,
+                "week" | "w" => days += value * 7.0,
+                "month" | "mon" => months += value,
+                "year" | "yr" | "y" => months += value * 12.0,
+                "decade" | "dec" => months += value * 120.0,
+                "century" | "cent" | "c" => months += value * 1200.0,
+                "millennium" | "mil" => months += value * 12000.0,
+                _ => {
+                    return Err(format!(
+                        "[22007] invalid input syntax for type interval: \"{s}\""
+                    ))
+                }
+            }
+        }
+        // fractions spill into the next smaller unit, as PostgreSQL does (a month is 30 days)
+        let whole_months = months.trunc();
+        let days = days + (months - whole_months) * 30.0;
+        let whole_days = days.trunc();
+        let micros = micros + (days - whole_days) * 86_400e6;
+        let sign = if ago { -1.0 } else { 1.0 };
         Ok(SqlValue::Interval(PostgresInterval {
-            months,
-            days,
-            microseconds,
+            months: (whole_months * sign) as i32,
+            days: (whole_days * sign) as i32,
+            microseconds: (micros * sign).round() as i64,
         }))
     }
 
     /// Parse a timestamp string
     pub fn parse_timestamp(s: &str, _with_timezone: bool) -> Result<SqlValue, String> {
         use chrono::NaiveDateTime;
+
+        // PostgreSQL accepts date-only timestamp literals as midnight.
+        let s = if s.len() == 10 && s.as_bytes().get(4) == Some(&b'-') {
+            format!("{s} 00:00:00")
+        } else {
+            s.to_string()
+        };
 
         // Try parsing common timestamp formats
         let formats = vec![
@@ -871,7 +920,7 @@ impl SqlValue {
         ];
 
         for format in formats {
-            if let Ok(dt) = NaiveDateTime::parse_from_str(s, format) {
+            if let Ok(dt) = NaiveDateTime::parse_from_str(&s, format) {
                 return Ok(SqlValue::Timestamp(dt));
             }
         }
@@ -883,9 +932,21 @@ impl SqlValue {
     pub fn parse_date(s: &str) -> Result<SqlValue, String> {
         use chrono::NaiveDate;
 
-        NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        let text = s.trim();
+        NaiveDate::parse_from_str(text, "%Y-%m-%d")
             .map(SqlValue::Date)
-            .map_err(|_| format!("Invalid date format: {s}"))
+            .map_err(|_| {
+                // well-formed but impossible (2026-02-30) is a range error; anything else is bad syntax
+                let numeric = text
+                    .split('-')
+                    .map(|p| p.parse::<u32>().is_ok())
+                    .collect::<Vec<_>>();
+                if numeric.len() == 3 && numeric.iter().all(|ok| *ok) {
+                    format!("[22008] date/time field value out of range: \"{text}\"")
+                } else {
+                    format!("[22007] invalid input syntax for type date: \"{text}\"")
+                }
+            })
     }
 
     /// Parse a string value into a SQL value of the specified type

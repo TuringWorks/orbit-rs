@@ -1275,6 +1275,7 @@ pub enum BinaryOperator {
     Like,
     ILike,
     Similar,
+    StartsWith,
 
     // Array
     Contains,

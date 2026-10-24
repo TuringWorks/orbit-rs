@@ -110,6 +110,14 @@ def create_safe_namespace():
     """Create a restricted namespace for function execution."""
     import builtins
     safe_builtins = {name: getattr(builtins, name, None) for name in SAFE_BUILTINS}
+
+    def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+        """Allow imports only for libraries loaded into the worker."""
+        if name in PRELOADED_LIBS:
+            return PRELOADED_LIBS[name]
+        raise ImportError(f"Import of {name!r} is not allowed")
+
+    safe_builtins['__import__'] = safe_import
     
     # Add pre-loaded libraries
     namespace = {'__builtins__': safe_builtins}

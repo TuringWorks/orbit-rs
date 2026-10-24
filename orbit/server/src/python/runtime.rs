@@ -71,9 +71,14 @@ impl PythonWorker {
             path.pop(); // Remove binary name
             path.push("worker.py");
 
-            // If not found, try src/python/worker.py (development)
+            // If not found, try package-relative development paths.
             if !path.exists() {
-                path = std::path::PathBuf::from("src/python/worker.py");
+                path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("src/python/worker.py");
+            }
+
+            if !path.exists() {
+                path = std::path::PathBuf::from("orbit/server/src/python/worker.py");
             }
 
             if !path.exists() {
@@ -84,6 +89,17 @@ impl PythonWorker {
 
             path
         };
+
+        // The worker can fall back to JSON when the optional Python msgpack
+        // package is unavailable. Probe once so both sides select the same
+        // wire format instead of waiting forever for an incompatible frame.
+        let use_msgpack = python_config.use_msgpack
+            && Command::new(&python_config.python_path)
+                .args(["-c", "import msgpack"])
+                .stderr(Stdio::null())
+                .status()
+                .map(|status| status.success())
+                .unwrap_or(false);
 
         // Spawn Python process
         let mut process = Command::new(&python_config.python_path)
@@ -111,7 +127,7 @@ impl PythonWorker {
             stdout,
             execution_count: Arc::new(Mutex::new(0)),
             config: python_config.worker.clone(),
-            use_msgpack: python_config.use_msgpack,
+            use_msgpack,
         })
     }
 

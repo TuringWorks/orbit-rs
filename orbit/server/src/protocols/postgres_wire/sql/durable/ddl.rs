@@ -8,7 +8,8 @@ use super::value::coerce;
 use super::{err, Col, DbError, Index, Op, QueryResult, Seqs, State, Table, R};
 use crate::protocols::postgres_wire::sql::ast::{
     AlterColumnAction, AlterTableAction, ColumnConstraint, ColumnDefinition, CreateIndexStatement,
-    CreateTableStatement, Expression, IndexType, Statement, TableConstraint, TableName,
+    CreateSequenceStatement, CreateTableStatement, Expression, IndexType, Statement,
+    TableConstraint, TableName,
 };
 use crate::protocols::postgres_wire::sql::expression_evaluator::{
     EvaluationContext, ExpressionEvaluator,
@@ -45,6 +46,7 @@ pub(crate) fn apply(
         Statement::CreateView(cv) => create_view(st, &mut ops, cv, text),
         Statement::DropView(d) => drop_views(st, &mut ops, d, text),
         Statement::CreateIndex(ci) => create_index(st, &mut ops, ci, text),
+        Statement::CreateSequence(cs) => create_sequence(&mut ops, seqs, cs, text),
         Statement::DropIndex(d) => drop_indexes(st, &mut ops, &d.names, d.if_exists, text),
         Statement::AlterTable(a) => {
             alter_table(st, &mut ops, seqs, &a.name, &a.actions, text, replay)
@@ -375,6 +377,24 @@ fn create_view(
     );
     record(ops, text, vec![]);
     tag("CREATE VIEW")
+}
+
+fn create_sequence(
+    ops: &mut Option<&mut Vec<Op>>,
+    seqs: Option<&Mutex<Seqs>>,
+    cs: &CreateSequenceStatement,
+    text: &str,
+) -> R<QueryResult> {
+    let name = table_key(&cs.name);
+    let start = cs.options.start.unwrap_or(1);
+    let increment = cs.options.increment.unwrap_or(1);
+    if let Some(seqs) = seqs {
+        seqs.lock()
+            .expect("sequences")
+            .configure(&name, start, increment);
+    }
+    record(ops, text, vec![]);
+    tag("CREATE SEQUENCE")
 }
 
 fn drop_views(

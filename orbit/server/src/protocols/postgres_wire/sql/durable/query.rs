@@ -3,7 +3,7 @@
 use super::pg_catalog;
 use super::table_fn;
 use super::value::{canonical, cmp, group_key, oid_of_type, oid_of_value, truthy, unique_key};
-use super::{err, Row, State, Table, R};
+use super::{err, Row, Seqs, State, Table, R};
 use crate::protocols::postgres_wire::query_engine::QueryResult;
 use crate::protocols::postgres_wire::sql::ast::{
     BinaryOperator, CaseExpression, DistinctClause, Expression, FromClause, FunctionCall,
@@ -17,6 +17,7 @@ use crate::protocols::postgres_wire::sql::types::{SqlType, SqlValue};
 use rust_decimal::Decimal;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::sync::Mutex;
 
 /// One column of an intermediate relation.
 #[derive(Clone, Debug)]
@@ -285,6 +286,20 @@ fn session_function(f: &FunctionCall) -> Option<SqlValue> {
         ("current_database", 0) => text(current_database()),
         ("current_user" | "session_user" | "user", 0) => text(current_user()),
         ("version", 0) => text("PostgreSQL 18.0 (orbit-rs)".into()),
+        ("current_setting", 1 | 2) => {
+            let Some(Expression::Literal(SqlValue::Text(setting))) = f.args.first() else {
+                return None;
+            };
+            let missing_ok = matches!(
+                f.args.get(1),
+                Some(Expression::Literal(SqlValue::Boolean(true)))
+            );
+            match super::session_vars::lookup(setting) {
+                Some(value) => text(value.to_string()),
+                None if missing_ok => Some(SqlValue::Null),
+                None => None,
+            }
+        }
         ("current_schemas", 1) => Some(SqlValue::Array(vec![SqlValue::Text("public".into())])),
         ("pg_backend_pid", 0) => Some(SqlValue::Integer(std::process::id() as i32)),
         ("pg_is_in_recovery", 0) => Some(SqlValue::Boolean(false)),
@@ -557,13 +572,18 @@ enum OrderKey {
 pub(crate) struct Runner<'a> {
     pub st: &'a State,
     ev: ExpressionEvaluator,
+    seqs: Option<&'a Mutex<Seqs>>,
     ctes: HashMap<String, Rel>,
     /// Only the shape of the result is wanted: tables are read as empty.
     describe: bool,
 }
 
-pub(crate) fn run_select_statement(st: &State, sel: &SelectStatement) -> R<QueryResult> {
-    let mut r = Runner::new(st);
+pub(crate) fn run_select_statement(
+    st: &State,
+    sel: &SelectStatement,
+    seqs: Option<&Mutex<Seqs>>,
+) -> R<QueryResult> {
+    let mut r = Runner::with_sequences(st, seqs);
     let rel = r.select(sel, None)?;
     Ok(rel_to_result(rel))
 }
@@ -617,9 +637,16 @@ impl<'a> Runner<'a> {
         Self {
             st,
             ev: ExpressionEvaluator::new(),
+            seqs: None,
             ctes: HashMap::new(),
             describe: false,
         }
+    }
+
+    pub fn with_sequences(st: &'a State, seqs: Option<&'a Mutex<Seqs>>) -> Self {
+        let mut r = Self::new(st);
+        r.seqs = seqs;
+        r
     }
 
     /// A runner that reads every table as empty, for finding a statement's result columns.
@@ -636,6 +663,69 @@ impl<'a> Runner<'a> {
 
     /// Evaluate `expr`, running any subqueries it contains first.
     pub fn eval(&mut self, expr: &Expression, ctx: &EvaluationContext) -> R<SqlValue> {
+        if let Expression::Function(f) = expr {
+            match fname(f).as_str() {
+                "nextval" if f.args.len() == 1 => {
+                    let name = self.eval(&f.args[0], ctx)?.to_postgres_string();
+                    let Some(seqs) = self.seqs else {
+                        return err(
+                            "0A000",
+                            "Sequence operations are not available in this context",
+                        );
+                    };
+                    return seqs
+                        .lock()
+                        .expect("sequences")
+                        .alloc(&name)
+                        .map(SqlValue::BigInt);
+                }
+                "currval" if f.args.len() == 1 => {
+                    let name = self.eval(&f.args[0], ctx)?.to_postgres_string();
+                    let Some(seqs) = self.seqs else {
+                        return err(
+                            "0A000",
+                            "Sequence operations are not available in this context",
+                        );
+                    };
+                    return seqs
+                        .lock()
+                        .expect("sequences")
+                        .currval(&name)
+                        .map(SqlValue::BigInt);
+                }
+                "setval" if (2..=3).contains(&f.args.len()) => {
+                    let name = self.eval(&f.args[0], ctx)?.to_postgres_string();
+                    let value = self
+                        .eval(&f.args[1], ctx)?
+                        .to_postgres_string()
+                        .parse::<i64>()
+                        .map_err(|_| {
+                            crate::protocols::error::ProtocolError::PostgresError(
+                                "setval() value must be an integer".into(),
+                            )
+                        })?;
+                    let called = if f.args.len() == 3 {
+                        self.eval(&f.args[2], ctx)?
+                            .to_postgres_string()
+                            .eq_ignore_ascii_case("true")
+                    } else {
+                        true
+                    };
+                    let Some(seqs) = self.seqs else {
+                        return err(
+                            "0A000",
+                            "Sequence operations are not available in this context",
+                        );
+                    };
+                    return seqs
+                        .lock()
+                        .expect("sequences")
+                        .setval(&name, value, called)
+                        .map(SqlValue::BigInt);
+                }
+                _ => {}
+            }
+        }
         if has_subquery(expr) {
             let e = self.resolve_subqueries(expr, ctx)?;
             return Ok(self.ev.evaluate(&e, ctx)?);

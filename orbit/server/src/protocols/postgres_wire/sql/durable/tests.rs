@@ -55,6 +55,61 @@ async fn seeded() -> DurableEngine {
 }
 
 #[tokio::test]
+async fn explicit_sequence_functions_use_durable_sequence_state() {
+    let e = DurableEngine::in_memory();
+    let mut s = Session::default();
+    run(&e, &mut s, "CREATE TABLE cf_seq (id SERIAL PRIMARY KEY)")
+        .await
+        .unwrap();
+    run(&e, &mut s, "INSERT INTO cf_seq DEFAULT VALUES")
+        .await
+        .unwrap();
+    assert_eq!(
+        cells(
+            run(
+                &e,
+                &mut s,
+                "SELECT nextval('cf_seq_id_seq'), currval('cf_seq_id_seq')"
+            )
+            .await
+            .unwrap()
+        ),
+        vec![vec!["2", "2"]]
+    );
+    assert_eq!(
+        cells(
+            run(
+                &e,
+                &mut s,
+                "SELECT setval('cf_seq_id_seq', 40), nextval('cf_seq_id_seq')"
+            )
+            .await
+            .unwrap()
+        ),
+        vec![vec!["40", "41"]]
+    );
+    run(
+        &e,
+        &mut s,
+        "CREATE SEQUENCE explicit_seq START 10 INCREMENT 5",
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        cells(
+            run(
+                &e,
+                &mut s,
+                "SELECT nextval('explicit_seq'), nextval('explicit_seq'), currval('explicit_seq')"
+            )
+            .await
+            .unwrap()
+        ),
+        vec![vec!["10", "15", "15"]]
+    );
+}
+
+#[tokio::test]
 async fn select_applies_where_order_limit_and_aggregates() {
     let e = seeded().await;
     assert_eq!(

@@ -457,6 +457,7 @@ pub enum Token {
     Divide,
     Modulo,
     Power,
+    StartsWith, // ^@ - string starts with
 
     // Operators - Comparison
     Equal,
@@ -1410,6 +1411,10 @@ impl Lexer {
                         }
                         '^' => {
                             self.advance();
+                            if self.current_char == Some('@') {
+                                self.advance();
+                                return Token::StartsWith;
+                            }
                             return Token::Power;
                         }
 

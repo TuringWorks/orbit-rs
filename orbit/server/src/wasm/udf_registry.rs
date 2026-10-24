@@ -237,7 +237,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // WASM execution requires specific runtime conditions
     async fn test_execute_function() {
         let registry = create_test_registry();
         let metadata = create_test_metadata();
@@ -275,7 +274,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // WASM execution requires specific runtime conditions
     async fn test_execute_batch() {
         let registry = create_test_registry();
         let metadata = create_test_metadata();

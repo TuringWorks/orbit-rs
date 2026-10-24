@@ -162,7 +162,6 @@ mod tests {
     use crate::python::config::PythonConfig;
 
     #[tokio::test]
-    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_create_and_execute_function() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());
@@ -203,7 +202,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_function_with_schema() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());
@@ -234,7 +232,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_batch_execution() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());
@@ -321,7 +318,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_list_functions() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());
@@ -361,7 +357,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Requires Python runtime - run with --ignored
     async fn test_get_metadata() {
         let config = PythonConfig::default();
         let registry = Arc::new(PythonUdfRegistry::new(config).await.unwrap());

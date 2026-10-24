@@ -274,6 +274,8 @@ impl State {
 struct SeqState {
     next: i64,
     reserved: i64,
+    increment: i64,
+    last: Option<i64>,
 }
 
 /// Sequences are not transactional (a rolled back insert keeps its id), so they live outside
@@ -289,13 +291,42 @@ impl Seqs {
         let s = self.map.entry(name.to_string()).or_insert(SeqState {
             next: 1,
             reserved: 0,
+            increment: 1,
+            last: None,
         });
         if s.next > s.reserved {
             return err(NEED_RESERVE, name);
         }
         let v = s.next;
-        s.next += 1;
+        s.next += s.increment;
+        s.last = Some(v);
         Ok(v)
+    }
+
+    pub(crate) fn currval(&self, name: &str) -> R<i64> {
+        let Some(s) = self.map.get(name) else {
+            return err("42P01", format!("relation \"{name}\" does not exist"));
+        };
+        s.last.ok_or_else(|| DbError {
+            code: "55000",
+            message: format!("currval of sequence \"{name}\" is not yet defined in this session"),
+        })
+    }
+
+    pub(crate) fn setval(&mut self, name: &str, value: i64, is_called: bool) -> R<i64> {
+        let s = self.map.entry(name.to_string()).or_insert(SeqState {
+            next: 1,
+            reserved: 0,
+            increment: 1,
+            last: None,
+        });
+        s.next = if is_called {
+            value + s.increment
+        } else {
+            value
+        };
+        s.last = Some(value);
+        Ok(value)
     }
 
     /// The high-water mark to reserve next for `name`.
@@ -303,8 +334,10 @@ impl Seqs {
         let s = self.map.entry(name.to_string()).or_insert(SeqState {
             next: 1,
             reserved: 0,
+            increment: 1,
+            last: None,
         });
-        s.next + SEQUENCE_BLOCK - 1
+        s.next + s.increment * (SEQUENCE_BLOCK - 1)
     }
 
     fn set_reserved(&mut self, name: &str, value: i64) {
@@ -315,8 +348,23 @@ impl Seqs {
         let s = self.map.entry(name.to_string()).or_insert(SeqState {
             next: 1,
             reserved: 0,
+            increment: 1,
+            last: None,
         });
         s.reserved = s.reserved.max(value);
+    }
+
+    fn configure(&mut self, name: &str, start: i64, increment: i64) {
+        let s = self.map.entry(name.to_string()).or_insert(SeqState {
+            next: start,
+            reserved: 0,
+            increment,
+            last: None,
+        });
+        if s.reserved == 0 {
+            s.next = start;
+        }
+        s.increment = increment;
     }
 
     /// Apply the sequence changes in committed `ops`.
@@ -390,7 +438,11 @@ pub struct DurableEngine {
 
 /// Advance `st` by committed `ops`. Used when opening the engine and on replicas; a leader's own
 /// transactions arrive here as the copy they were run on.
-pub(crate) fn apply_ops(st: &mut State, ops: &[Op]) -> Result<(), String> {
+pub(crate) fn apply_ops(
+    st: &mut State,
+    ops: &[Op],
+    mut seqs: Option<&mut Seqs>,
+) -> Result<(), String> {
     for op in ops {
         match op {
             Op::Ddl(text) => {
@@ -398,6 +450,15 @@ pub(crate) fn apply_ops(st: &mut State, ops: &[Op]) -> Result<(), String> {
                     .parse_multiple(text)
                     .map_err(|e| format!("apply `{text}`: {e}"))?;
                 for stmt in &stmts {
+                    if let Some(seqs) = seqs.as_deref_mut() {
+                        if let Statement::CreateSequence(cs) = stmt {
+                            seqs.configure(
+                                &cs.name.name.to_lowercase(),
+                                cs.options.start.unwrap_or(1),
+                                cs.options.increment.unwrap_or(1),
+                            );
+                        }
+                    }
                     if let Some(Err(e)) = ddl::apply(st, None, None, stmt, text, true) {
                         return Err(format!("apply `{text}`: {}", e.message));
                     }
@@ -451,7 +512,7 @@ fn state_from_loaded(loaded: Loaded) -> Result<(State, Seqs), String> {
     }
     seqs.resume_above_reserved();
     for text in &loaded.ddl {
-        apply_ops(&mut st, &[Op::Ddl(text.clone())])?;
+        apply_ops(&mut st, &[Op::Ddl(text.clone())], Some(&mut seqs))?;
     }
     for (tid, rowid, mut row) in loaded.rows {
         let Some(name) = st.ids.get(&tid).cloned() else {
@@ -552,10 +613,10 @@ impl DurableEngine {
     pub fn apply_replicated(&self, ops: &[Op]) -> Result<(), String> {
         let mut c = self.committed.lock().expect("committed state");
         let mut next = c.clone();
-        apply_ops(&mut next, ops)?;
+        let mut seqs = self.seqs.lock().expect("sequences");
+        apply_ops(&mut next, ops, Some(&mut seqs))?;
         *c = next;
-        drop(c);
-        self.seqs.lock().expect("sequences").apply(ops);
+        seqs.apply(ops);
         Ok(())
     }
 
@@ -569,6 +630,7 @@ impl DurableEngine {
         matches!(
             stmt,
             Statement::CreateTable(_)
+                | Statement::CreateSequence(_)
                 | Statement::DropTable(_)
                 | Statement::CreateIndex(_)
                 | Statement::DropIndex(_)
@@ -760,9 +822,9 @@ impl DurableEngine {
                     _ => self.snapshot(),
                 };
                 match stmt {
-                    Statement::Select(sel) => {
-                        session_vars::scoped(vars, || query::run_select_statement(&snap, sel))
-                    }
+                    Statement::Select(sel) => session_vars::scoped(vars, || {
+                        query::run_select_statement(&snap, sel, Some(&self.seqs))
+                    }),
                     _ => err("0A000", "statement not supported"),
                 }
             };
@@ -789,7 +851,7 @@ impl DurableEngine {
         text: &str,
     ) -> R<QueryResult> {
         match stmt {
-            Statement::Select(sel) => query::run_select_statement(st, sel),
+            Statement::Select(sel) => query::run_select_statement(st, sel, Some(&self.seqs)),
             Statement::Insert(ins) => dml::insert(st, ops, &self.seqs, ins),
             Statement::Update(upd) => dml::update(st, ops, upd),
             Statement::Delete(del) => dml::delete(st, ops, del),

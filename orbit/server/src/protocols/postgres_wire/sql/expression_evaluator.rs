@@ -693,6 +693,12 @@ impl ExpressionEvaluator {
             BinaryOperator::NotLike => self.pattern_match(&left_val, &right_val, false, true),
             BinaryOperator::SimilarTo => self.pattern_match(&left_val, &right_val, false, false), // TODO: Proper SIMILAR TO regex conversion
             BinaryOperator::NotSimilarTo => self.pattern_match(&left_val, &right_val, false, true),
+            BinaryOperator::StartsWith => match (&left_val, &right_val) {
+                (SqlValue::Null, _) | (_, SqlValue::Null) => Ok(SqlValue::Null),
+                (a, b) => Ok(SqlValue::Boolean(
+                    a.to_postgres_string().starts_with(&b.to_postgres_string()),
+                )),
+            },
 
             BinaryOperator::VectorDistance => {
                 self.vector_distance(&left_val, &right_val, VectorOperator::L2Distance)
@@ -1056,6 +1062,7 @@ impl ExpressionEvaluator {
             "TO_TIMESTAMP" => self.evaluate_to_timestamp(&args),
             "TO_DATE" => self.evaluate_to_date(&args),
             "TO_CHAR" => self.evaluate_to_char(&args),
+            "TO_NUMBER" => self.evaluate_to_number(&args),
             "ISFINITE" => self.evaluate_isfinite(&args),
             "JUSTIFY_DAYS" => self.evaluate_justify_days(&args),
             "JUSTIFY_HOURS" => self.evaluate_justify_hours(&args),
@@ -4767,12 +4774,31 @@ impl ExpressionEvaluator {
         };
 
         let duration = end - start;
-        let days = duration.num_days() as i32;
-        let microseconds =
-            (duration.num_seconds() % 86400) * 1_000_000 + (duration.subsec_nanos() as i64 / 1000);
+        let (months, days, microseconds) = if end >= start {
+            use chrono::{Datelike, Months};
+            let mut months =
+                (end.year() - start.year()) * 12 + end.month() as i32 - start.month() as i32;
+            if end.day() < start.day() {
+                months -= 1;
+            }
+            let shifted = start
+                .checked_add_months(Months::new(months.max(0) as u32))
+                .unwrap_or(start);
+            let remainder = end - shifted;
+            let days = remainder.num_days() as i32;
+            let microseconds = (remainder.num_seconds() % 86400) * 1_000_000
+                + (remainder.subsec_nanos() as i64 / 1000);
+            (months, days, microseconds)
+        } else {
+            (
+                0,
+                duration.num_days() as i32,
+                (duration.num_seconds() % 86400) * 1_000_000,
+            )
+        };
 
         Ok(SqlValue::Interval(PostgresInterval {
-            months: 0,
+            months,
             days,
             microseconds,
         }))
@@ -4972,6 +4998,44 @@ impl ExpressionEvaluator {
                 (SqlValue::Date(d), SqlValue::Text(fmt)) => {
                     Ok(SqlValue::Text(d.format(fmt).to_string()))
                 }
+                (SqlValue::Integer(n), SqlValue::Text(fmt)) => {
+                    let raw = n.to_string();
+                    let format = fmt.trim_start_matches("FM");
+                    if format.chars().all(|c| c == '0') {
+                        Ok(SqlValue::Text(format!(
+                            "{:0>width$}",
+                            raw,
+                            width = format.len()
+                        )))
+                    } else {
+                        Ok(SqlValue::Text(raw))
+                    }
+                }
+                (SqlValue::BigInt(n), SqlValue::Text(fmt)) => {
+                    let raw = n.to_string();
+                    let format = fmt.trim_start_matches("FM");
+                    if format.chars().all(|c| c == '0') {
+                        Ok(SqlValue::Text(format!(
+                            "{:0>width$}",
+                            raw,
+                            width = format.len()
+                        )))
+                    } else {
+                        Ok(SqlValue::Text(raw))
+                    }
+                }
+                (SqlValue::Decimal(n), SqlValue::Text(fmt)) => {
+                    if let Some((_, fraction)) = fmt.split_once('.') {
+                        let places = fraction.chars().filter(|c| *c == '0' || *c == '9').count();
+                        Ok(SqlValue::Text(format!("{n:.places$}")))
+                    } else {
+                        Ok(SqlValue::Text(n.to_string()))
+                    }
+                }
+                (SqlValue::Real(n), SqlValue::Text(_)) => Ok(SqlValue::Text(n.to_string())),
+                (SqlValue::DoublePrecision(n), SqlValue::Text(_)) => {
+                    Ok(SqlValue::Text(n.to_string()))
+                }
                 _ => Err(ProtocolError::PostgresError(
                     "TO_CHAR types not supported".to_string(),
                 )),
@@ -4981,6 +5045,22 @@ impl ExpressionEvaluator {
                 "TO_CHAR requires 2 args".to_string(),
             ))
         }
+    }
+
+    fn evaluate_to_number(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        if args.len() != 2 {
+            return Err(ProtocolError::PostgresError(
+                "TO_NUMBER requires 2 args".to_string(),
+            ));
+        }
+        let Some(text) = Self::get_string_arg(&args[0])? else {
+            return Ok(SqlValue::Null);
+        };
+        let cleaned = text.replace(',', "").replace(' ', "");
+        cleaned
+            .parse::<rust_decimal::Decimal>()
+            .map(SqlValue::Decimal)
+            .map_err(|_| ProtocolError::PostgresError("TO_NUMBER input is invalid".to_string()))
     }
 
     fn evaluate_isfinite(&self, _args: &[SqlValue]) -> ProtocolResult<SqlValue> {

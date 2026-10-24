@@ -312,6 +312,7 @@ impl ExpressionParser {
                         Token::GreaterThanOrEqual => BinaryOperator::GreaterThanOrEqual,
                         Token::Like => BinaryOperator::Like,
                         Token::ILike => BinaryOperator::ILike,
+                        Token::StartsWith => BinaryOperator::StartsWith,
                         Token::VectorDistance => BinaryOperator::VectorDistance,
                         Token::VectorInnerProduct => BinaryOperator::VectorInnerProduct,
                         Token::VectorCosineDistance => BinaryOperator::VectorCosineDistance,

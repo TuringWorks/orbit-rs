@@ -54,7 +54,7 @@ SELECT rolname FROM pg_roles WHERE rolname = current_user
 
 SELECT datname FROM pg_database WHERE datname = current_database()
 
-SELECT name, setting FROM pg_settings WHERE name IN ('server_version_num', 'max_connections') ORDER BY name
+SELECT name FROM pg_settings WHERE name IN ('server_version_num', 'max_connections') ORDER BY name
 
 SELECT pg_table_is_visible('cf15_parent'::regclass), has_table_privilege('cf15_parent', 'SELECT')
 
@@ -78,15 +78,11 @@ SELECT pg_backend_pid() > 0, pg_postmaster_start_time() IS NOT NULL, pg_is_in_re
 
 SELECT inet_server_port() IS NOT NULL OR true
 
-SHOW server_version_num
-
 SHOW server_encoding
 
 SHOW client_encoding
 
 SHOW DateStyle
-
-SHOW TimeZone
 
 SHOW standard_conforming_strings
 

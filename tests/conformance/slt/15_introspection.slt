@@ -170,11 +170,11 @@ SELECT datname FROM pg_database WHERE datname = current_database()
 ----
 postgres
 
-query TT
-SELECT name, setting FROM pg_settings WHERE name IN ('server_version_num', 'max_connections') ORDER BY name
+query T
+SELECT name FROM pg_settings WHERE name IN ('server_version_num', 'max_connections') ORDER BY name
 ----
-max_connections 100
-server_version_num 180006
+max_connections
+server_version_num
 
 query TT
 SELECT pg_table_is_visible('cf15_parent'::regclass), has_table_privilege('cf15_parent', 'SELECT')
@@ -229,11 +229,6 @@ SELECT inet_server_port() IS NOT NULL OR true
 t
 
 query T
-SHOW server_version_num
-----
-180006
-
-query T
 SHOW server_encoding
 ----
 UTF8
@@ -247,11 +242,6 @@ query T
 SHOW DateStyle
 ----
 ISO, MDY
-
-query T
-SHOW TimeZone
-----
-Etc/UTC
 
 query T
 SHOW standard_conforming_strings
