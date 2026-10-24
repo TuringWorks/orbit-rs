@@ -251,6 +251,35 @@ struct Args {
     )]
     raft_join: bool,
 
+    /// CA that signs the cluster's node certificates; with it, node-to-node traffic uses mutual TLS
+    #[arg(long, value_name = "FILE", requires_all = ["raft_tls_cert", "raft_tls_key"], help = "CA certificate for cluster node certificates (turns on mutual TLS between nodes)")]
+    raft_tls_ca: Option<PathBuf>,
+
+    /// This node's certificate
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "This node's certificate, valid as a TLS server and client"
+    )]
+    raft_tls_cert: Option<PathBuf>,
+
+    /// This node's private key
+    #[arg(
+        long,
+        value_name = "FILE",
+        help = "Private key of the node certificate"
+    )]
+    raft_tls_key: Option<PathBuf>,
+
+    /// Name nodes expect in each other's certificates
+    #[arg(
+        long,
+        value_name = "NAME",
+        default_value = "orbit-raft",
+        help = "Subject alternative name every node certificate carries"
+    )]
+    raft_tls_name: String,
+
     /// Serve reads from a replica as well
     #[arg(
         long,
@@ -1466,6 +1495,20 @@ async fn start_postgresql_server(
                 data_dir: args.data_dir.clone(),
                 stale_reads: args.raft_stale_reads,
                 keep_log: 10_000,
+                tls: match (&args.raft_tls_ca, &args.raft_tls_cert, &args.raft_tls_key) {
+                    (Some(ca), Some(cert), Some(key)) => Some(orbit_server::raft::net::RaftTls {
+                        server_cert: cert.clone(),
+                        server_key: key.clone(),
+                        client_cert: cert.clone(),
+                        client_key: key.clone(),
+                        ca: ca.clone(),
+                        server_name: args.raft_tls_name.clone(),
+                    }),
+                    _ => {
+                        warn!("[Cluster] node-to-node traffic is not encrypted: set --raft-tls-ca, --raft-tls-cert and --raft-tls-key");
+                        None
+                    }
+                },
             })
             .await?,
         );

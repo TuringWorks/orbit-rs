@@ -14,7 +14,7 @@ use crate::protocols::postgres_wire::sql::types::SqlValue;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-fn rel_cols(t: &Table, qual: &str) -> Vec<RelCol> {
+pub(super) fn rel_cols(t: &Table, qual: &str) -> Vec<RelCol> {
     t.cols
         .iter()
         .map(|c| RelCol {
@@ -90,6 +90,24 @@ fn not_null_check(t: &Table, row: &Row) -> R<()> {
                 format!(
                     "null value in column \"{}\" of relation \"{}\" violates not-null constraint",
                     c.name, t.name
+                ),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn check_constraints(st: &State, t: &Table, row: &Row) -> R<()> {
+    let cols = rel_cols(t, &t.name);
+    let ctx = ctx_for(&cols, row, None);
+    let mut runner = Runner::new(st);
+    for (name, expression) in &t.checks {
+        if matches!(runner.eval(expression, &ctx)?, SqlValue::Boolean(false)) {
+            return err(
+                "23514",
+                format!(
+                    "check constraint \"{}\" is violated",
+                    name.as_deref().unwrap_or("")
                 ),
             );
         }
@@ -216,6 +234,7 @@ pub(crate) fn insert(
         {
             let t = lookup(st, &key)?;
             not_null_check(t, &row)?;
+            check_constraints(st, t, &row)?;
         }
         // uniqueness
         let conflict = {
@@ -396,6 +415,7 @@ pub(crate) fn update_row(
     let Some(old) = st.tables.get(key).and_then(|t| t.rows.get(&rowid)).cloned() else {
         return Ok(());
     };
+    check_constraints(st, st.tables.get(key).expect("table"), &new)?;
     write_update(st, ops, key, rowid, old.clone(), new.clone())?;
     fk::check_child_changed(st, key, &old, &new)?;
     fk::after_key_change(st, ops, refs, key, rowid, &old, &new, depth)
@@ -477,7 +497,7 @@ pub(crate) fn update(st: &mut State, ops: &mut Vec<Op>, upd: &UpdateStatement) -
             }
             Some(items) => {
                 // UPDATE ... FROM: each target row is changed using the first joined row that satisfies WHERE
-                let from = r.from_items(items)?;
+                let from = r.join_all(items)?;
                 let mut all = cols.clone();
                 all.extend(from.cols.iter().cloned());
                 for (id, old) in &t.rows {
@@ -528,7 +548,7 @@ pub(crate) fn delete(st: &mut State, ops: &mut Vec<Op>, del: &DeleteStatement) -
             Some(items) => {
                 // DELETE ... USING: a row goes when some joined row satisfies WHERE
                 let mut r = Runner::new(st);
-                let from = r.from_items(items)?;
+                let from = r.join_all(items)?;
                 let mut all = rel_cols(t, &qual);
                 all.extend(from.cols.iter().cloned());
                 let mut out = Vec::new();

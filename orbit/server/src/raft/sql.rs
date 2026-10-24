@@ -211,6 +211,8 @@ pub struct ClusterConfig {
     pub data_dir: PathBuf,
     pub stale_reads: bool,
     pub keep_log: u64,
+    /// Encrypt node-to-node traffic and require node certificates.
+    pub tls: Option<super::net::RaftTls>,
 }
 
 /// A running cluster node: the engine to give the PostgreSQL port, and the controls for operating it.
@@ -230,7 +232,8 @@ impl Cluster {
         for (id, addr) in store.load()?.peers {
             peers.entry(id).or_insert(addr);
         }
-        let transport = TcpTransport::new(peers.clone(), cfg.token.clone());
+        let transport = TcpTransport::with_tls(peers.clone(), cfg.token.clone(), cfg.tls.as_ref())
+            .map_err(|e| format!("cluster TLS: {e}"))?;
         let engine_cell: EngineCell = Arc::default();
         let node_cell: NodeCell = Arc::default();
         let t = Arc::clone(&transport);

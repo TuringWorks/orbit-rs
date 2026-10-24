@@ -1281,7 +1281,7 @@ impl<'a> Runner<'a> {
     }
 
     /// A comma-separated list of FROM items as one relation: their cross product.
-    pub fn from_items(&mut self, items: &[FromClause]) -> R<Rel> {
+    pub fn join_all(&mut self, items: &[FromClause]) -> R<Rel> {
         let mut it = items.iter();
         let Some(first) = it.next() else {
             return Ok(Rel {

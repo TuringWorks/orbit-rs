@@ -85,10 +85,7 @@ impl Member {
 }
 
 fn free_ports(n: usize) -> Vec<u16> {
-    let ls: Vec<_> = (0..n)
-        .map(|_| std::net::TcpListener::bind("127.0.0.1:0").unwrap())
-        .collect();
-    ls.iter().map(|l| l.local_addr().unwrap().port()).collect()
+    crate::raft::test_ports(n)
 }
 
 async fn start(
@@ -381,5 +378,128 @@ async fn a_server_can_be_added_and_removed_while_running() {
     ms[l].node.propose(val(77)).await.unwrap();
     for m in &mut ms {
         m.stop();
+    }
+}
+
+mod tls {
+    use super::*;
+    use crate::raft::net::RaftTls;
+
+    fn certs() -> RaftTls {
+        let d = concat!(env!("CARGO_MANIFEST_DIR"), "/../../config/certs");
+        RaftTls {
+            server_cert: format!("{d}/server_cert.pem").into(),
+            server_key: format!("{d}/server_key.pem").into(),
+            client_cert: format!("{d}/client_cert.pem").into(),
+            client_key: format!("{d}/client_key.pem").into(),
+            ca: format!("{d}/ca_cert.pem").into(),
+            server_name: "localhost".into(),
+        }
+    }
+
+    async fn start_tls(
+        id: NodeId,
+        voters: Vec<NodeId>,
+        addrs: &HashMap<NodeId, String>,
+        tls: Option<&RaftTls>,
+    ) -> Member {
+        let transport = TcpTransport::with_tls(addrs.clone(), b"test-token".to_vec(), tls).unwrap();
+        let sm = Arc::new(Toy::default());
+        let storage = SharedMem::default();
+        let mut cfg = NodeConfig::new(id, voters);
+        cfg.tick = Duration::from_millis(20);
+        cfg.options.election_ticks = 25;
+        let (node, handle) = RaftNode::start(
+            cfg,
+            Box::new(storage.clone()),
+            sm.clone(),
+            transport.clone(),
+        )
+        .unwrap();
+        let listener = transport.listen(&addrs[&id], node.clone()).await.unwrap();
+        Member {
+            node,
+            sm,
+            storage,
+            handle: Some(handle),
+            listener,
+            transport,
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn nodes_elect_and_replicate_over_mutual_tls_and_refuse_plaintext() {
+        let _serial = crate::raft::TCP_TESTS.lock().await;
+        let ports = free_ports(3);
+        let addrs: HashMap<NodeId, String> = (1..=3)
+            .map(|i| (i, format!("127.0.0.1:{}", ports[i as usize - 1])))
+            .collect();
+        let tls = certs();
+        let mut ms = Vec::new();
+        for i in 1..=3 {
+            ms.push(start_tls(i, vec![1, 2, 3], &addrs, Some(&tls)).await);
+        }
+        wait_until("a serving leader over TLS", 15, || leader_of(&ms).is_some()).await;
+        let l = leader_of(&ms).unwrap();
+        for i in 0..10 {
+            ms[l].node.propose(val(i)).await.unwrap();
+        }
+        let want: Vec<Vec<u8>> = (0..10).map(val).collect();
+        wait_until("replicated over TLS", 10, || {
+            ms.iter().all(|m| m.sm.values() == want)
+        })
+        .await;
+
+        // a client that speaks plaintext gets nowhere: the connection is dropped before any message is read
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut raw = tokio::net::TcpStream::connect(&addrs[&1]).await.unwrap();
+        let mut frame = (10u32.to_be_bytes()).to_vec();
+        frame.extend_from_slice(b"test-token");
+        raw.write_all(&frame).await.unwrap();
+        let mut buf = [0u8; 16];
+        let n = tokio::time::timeout(Duration::from_secs(8), raw.read(&mut buf))
+            .await
+            .expect("the server closes the connection")
+            .unwrap_or(0);
+        assert!(
+            n == 0 || buf[0] == 0x15,
+            "no application data comes back to a plaintext peer (closed or a TLS alert)"
+        );
+        for m in &mut ms {
+            m.stop();
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_node_without_the_cluster_certificate_cannot_take_part() {
+        let _serial = crate::raft::TCP_TESTS.lock().await;
+        let ports = free_ports(3);
+        let addrs: HashMap<NodeId, String> = (1..=3)
+            .map(|i| (i, format!("127.0.0.1:{}", ports[i as usize - 1])))
+            .collect();
+        let tls = certs();
+        // nodes 1 and 2 use TLS; node 3 speaks plaintext, so it can neither be heard nor hear them
+        let mut ms = vec![
+            start_tls(1, vec![1, 2, 3], &addrs, Some(&tls)).await,
+            start_tls(2, vec![1, 2, 3], &addrs, Some(&tls)).await,
+            start_tls(3, vec![1, 2, 3], &addrs, None).await,
+        ];
+        wait_until("the two TLS nodes elect a leader between them", 15, || {
+            ms[..2].iter().any(|m| m.node.status().serving)
+        })
+        .await;
+        let l = ms[..2]
+            .iter()
+            .position(|m| m.node.status().serving)
+            .unwrap();
+        ms[l].node.propose(val(7)).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(
+            ms[2].sm.values().is_empty(),
+            "the plaintext node received nothing"
+        );
+        for m in &mut ms {
+            m.stop();
+        }
     }
 }

@@ -216,7 +216,7 @@ struct Driver {
     cfg: NodeConfig,
     status_tx: watch::Sender<Status>,
     /// Proposals waiting to be applied: index -> (term proposed in, completion).
-    waiters: HashMap<Index, (Term, oneshot::Sender<Result<(), RaftError>>)>,
+    waiters: HashMap<Index, (Term, Instant, oneshot::Sender<Result<(), RaftError>>)>,
     /// Index of this leader's first entry (its no-op): the node serves once it has applied it.
     leader_start: Option<Index>,
     was_leader: bool,
@@ -257,7 +257,7 @@ impl Driver {
     }
 
     fn stop(&mut self) {
-        for (_, (_, tx)) in self.waiters.drain() {
+        for (_, (_, _, tx)) in self.waiters.drain() {
             let _ = tx.send(Err(RaftError::Stopped));
         }
         let mut s = self.status_tx.borrow().clone();
@@ -273,7 +273,9 @@ impl Driver {
             Cmd::Net(env) => self.core.step(env),
             Cmd::Propose(data, done) => match self.core.propose(data) {
                 Ok(index) => {
-                    self.waiters.insert(index, (self.core.term(), done));
+                    metrics::counter!("orbit_raft_proposals_total").increment(1);
+                    self.waiters
+                        .insert(index, (self.core.term(), Instant::now(), done));
                 }
                 Err(ProposeError::NotLeader { leader }) => {
                     let _ = done.send(Err(RaftError::NotLeader { leader }));
@@ -284,7 +286,9 @@ impl Driver {
             },
             Cmd::Config(voters, done) => match self.core.propose_config(voters) {
                 Ok(index) => {
-                    self.waiters.insert(index, (self.core.term(), done));
+                    metrics::counter!("orbit_raft_proposals_total").increment(1);
+                    self.waiters
+                        .insert(index, (self.core.term(), Instant::now(), done));
                 }
                 Err(ProposeError::NotLeader { leader }) => {
                     let _ = done.send(Err(RaftError::NotLeader { leader }));
@@ -350,7 +354,9 @@ impl Driver {
             Payload::Data(d) => self.sm.apply(e.index, Some(d))?,
             Payload::Noop | Payload::Config(_) => self.sm.apply(e.index, None)?,
         }
-        if let Some((term, done)) = self.waiters.remove(&e.index) {
+        if let Some((term, started, done)) = self.waiters.remove(&e.index) {
+            metrics::histogram!("orbit_raft_commit_seconds")
+                .record(started.elapsed().as_secs_f64());
             let _ = done.send(if term == e.term {
                 Ok(())
             } else {
@@ -388,7 +394,8 @@ impl Driver {
         }
         if !leading && self.was_leader {
             self.leader_start = None;
-            for (_, (_, tx)) in self.waiters.drain() {
+            metrics::counter!("orbit_raft_leadership_lost_total").increment(1);
+            for (_, (_, _, tx)) in self.waiters.drain() {
                 let _ = tx.send(Err(RaftError::Uncertain(
                     "leadership was lost before the write was confirmed".into(),
                 )));
@@ -399,7 +406,7 @@ impl Driver {
             let leader = self.core.leader();
             let stale: Vec<Index> = self.waiters.keys().copied().collect();
             for i in stale {
-                if let Some((_, tx)) = self.waiters.remove(&i) {
+                if let Some((_, _, tx)) = self.waiters.remove(&i) {
                     let _ = tx.send(Err(RaftError::NotLeader { leader }));
                 }
             }
@@ -423,6 +430,16 @@ impl Driver {
             serving,
             stopped: false,
         };
+        metrics::gauge!("orbit_raft_term").set(next.term as f64);
+        metrics::gauge!("orbit_raft_is_leader").set(if next.role == Role::Leader {
+            1.0
+        } else {
+            0.0
+        });
+        metrics::gauge!("orbit_raft_serving").set(if next.serving { 1.0 } else { 0.0 });
+        metrics::gauge!("orbit_raft_commit_index").set(next.commit as f64);
+        metrics::gauge!("orbit_raft_applied_index").set(next.applied as f64);
+        metrics::gauge!("orbit_raft_voters").set(next.voters.len() as f64);
         if *self.status_tx.borrow() != next {
             let _ = self.status_tx.send(next);
         }

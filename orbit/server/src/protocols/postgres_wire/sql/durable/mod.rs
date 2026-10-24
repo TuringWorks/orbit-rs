@@ -141,6 +141,8 @@ pub(crate) struct Table {
     pub indexes: Vec<Index>,
     /// Foreign keys declared on this table.
     pub fks: Vec<fk::Fk>,
+    /// Table and column CHECK constraints, retained for validation on writes.
+    pub checks: Vec<(Option<String>, Expression)>,
 }
 
 impl Table {
@@ -633,6 +635,7 @@ impl DurableEngine {
         text: &str,
     ) -> R<QueryResult> {
         let write = is_write(stmt);
+        metrics::counter!("orbit_sql_statements_total", "kind" => if write { "write" } else { "read" }).increment(1);
         if let Some(txn) = session.txn.as_mut() {
             if txn.failed {
                 return Err(aborted());
@@ -744,7 +747,15 @@ impl DurableEngine {
             return Ok(());
         }
         let ops = std::mem::take(&mut txn.ops);
-        self.persist.commit(&ops).await.map_err(persist_error)?;
+        let started = std::time::Instant::now();
+        let committed = self.persist.commit(&ops).await.map_err(persist_error);
+        metrics::histogram!("orbit_sql_commit_seconds").record(started.elapsed().as_secs_f64());
+        match &committed {
+            Ok(()) => metrics::counter!("orbit_sql_commits_total").increment(1),
+            Err(e) => metrics::counter!("orbit_sql_commit_errors_total", "sqlstate" => e.code)
+                .increment(1),
+        }
+        committed?;
         if !self.persist.replicated() {
             // Writers are serialized, so the copy is exactly the committed state plus this transaction.
             if let Some(mut work) = txn.work.take() {

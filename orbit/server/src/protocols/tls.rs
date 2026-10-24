@@ -156,13 +156,13 @@ impl tokio::io::AsyncWrite for TlsStreamOrPlain {
     }
 }
 
-fn load_certs(path: &Path) -> std::io::Result<Vec<CertificateDer<'static>>> {
+pub(crate) fn load_certs(path: &Path) -> std::io::Result<Vec<CertificateDer<'static>>> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()
 }
 
-fn load_private_key(path: &Path) -> std::io::Result<PrivateKeyDer<'static>> {
+pub(crate) fn load_private_key(path: &Path) -> std::io::Result<PrivateKeyDer<'static>> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 

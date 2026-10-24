@@ -117,8 +117,15 @@ fn create_table(
     }
     let mut cols = Vec::new();
     let mut indexes: Vec<Index> = Vec::new();
+    let mut checks = Vec::new();
     for (i, def) in ct.columns.iter().enumerate() {
         let (col, primary, unique) = build_col(&name, def);
+        checks.extend(def.constraints.iter().filter_map(|constraint| {
+            match constraint {
+                ColumnConstraint::Check(expression) => Some((None, expression.clone())),
+                _ => None,
+            }
+        }));
         if cols.iter().any(|c: &Col| c.name == col.name) {
             return err(
                 "42701",
@@ -180,7 +187,10 @@ fn create_table(
                 });
                 indexes.push(new_index(iname, idx, true, primary));
             }
-            // Foreign keys and checks are not enforced yet.
+            TableConstraint::Check { name, expression } => {
+                checks.push((name.clone(), expression.clone()));
+            }
+            // Foreign keys are installed after the table exists.
             _ => {}
         }
     }
@@ -197,6 +207,7 @@ fn create_table(
         next_rowid: 1,
         indexes,
         fks: Vec::new(),
+        checks,
     });
     for spec in &specs {
         fk::add(st, &key, spec)?;
@@ -518,7 +529,16 @@ fn alter_table(
                 TableConstraint::ForeignKey { .. } => {
                     pending.extend(fk::spec_from_constraint(c));
                 }
-                // Check constraints are not enforced yet.
+                TableConstraint::Check { name, expression } => {
+                    let mut evaluator = ExpressionEvaluator::new();
+                    for row in table.rows.values() {
+                        let ctx = super::query::ctx_for(&super::dml::rel_cols(&table, &table.name), row, None);
+                        if matches!(evaluator.evaluate(expression, &ctx)?, SqlValue::Boolean(false)) {
+                            return err("23514", format!("check constraint \"{}\" is violated", name.as_deref().unwrap_or("")));
+                        }
+                    }
+                    table.checks.push((name.clone(), expression.clone()));
+                }
                 _ => {}
             },
             AlterTableAction::DropConstraint { name, .. } => {
@@ -526,6 +546,7 @@ fn alter_table(
                 table.fks.retain(|f| f.name != n);
                 let hidden = format!("{n}_fkidx");
                 table.indexes.retain(|i| i.name != n && i.name != hidden);
+                table.checks.retain(|(constraint_name, _)| constraint_name.as_deref() != Some(&n));
             }
             AlterTableAction::AlterColumn { name, action } => {
                 let Some(i) = table.col_index(name) else {

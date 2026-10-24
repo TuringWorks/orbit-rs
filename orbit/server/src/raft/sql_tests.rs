@@ -32,10 +32,7 @@ impl SqlNode {
 }
 
 fn free_ports(n: usize) -> Vec<u16> {
-    let ls: Vec<_> = (0..n)
-        .map(|_| std::net::TcpListener::bind("127.0.0.1:0").unwrap())
-        .collect();
-    ls.iter().map(|l| l.local_addr().unwrap().port()).collect()
+    crate::raft::test_ports(n)
 }
 
 async fn start(
