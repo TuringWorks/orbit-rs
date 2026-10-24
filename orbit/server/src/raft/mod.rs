@@ -16,19 +16,17 @@ pub mod storage;
 pub(crate) fn test_ports(n: usize) -> Vec<u16> {
     use std::sync::atomic::{AtomicU32, Ordering};
     static NEXT: AtomicU32 = AtomicU32::new(0);
-    let base = 20_000 + (std::process::id() % 200) as u16 * 100;
-    let mut out = Vec::new();
-    while out.len() < n {
-        // Keep the counter wider than the port offset: the full Raft test
-        // suite can allocate enough ports to overflow an AtomicU16 in debug
-        // builds. Reuse the bounded per-process range after checking it is
-        // currently free.
-        let p = base + (NEXT.fetch_add(1, Ordering::SeqCst) % 80) as u16;
-        if std::net::TcpListener::bind(("127.0.0.1", p)).is_ok() {
-            out.push(p);
-        }
-    }
-    out
+    // Allocate disjoint blocks before the test acquires TCP_TESTS. Checking a
+    // port and dropping the probe listener is racy when tests reserve ports in
+    // parallel, and a bounded retry loop can otherwise spin forever.
+    assert!(
+        n <= 8,
+        "Raft tests must not request more than one port block"
+    );
+    let base = 20_000 + (std::process::id() % 80) as u16 * 300;
+    let block = NEXT.fetch_add(1, Ordering::SeqCst) % 80;
+    let first = base + block as u16 * 8;
+    (0..n).map(|i| first + i as u16).collect()
 }
 
 #[cfg(test)]
