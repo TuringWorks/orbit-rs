@@ -22,6 +22,7 @@ mod information_schema;
 mod persist;
 mod pg_catalog;
 mod query;
+mod table_fn;
 pub(crate) mod value;
 mod window;
 
@@ -57,6 +58,35 @@ pub(crate) struct DbError {
 
 pub(crate) type R<T> = Result<T, DbError>;
 
+/// The SQLSTATE for an error that arrived without one, from what its message says. Parsers and
+/// evaluators report plain text; drivers branch on the code, so `XX000` (internal error) is only the
+/// answer for what is genuinely unclassified.
+pub(crate) fn classify_error(message: &str) -> &'static str {
+    let m = message.to_ascii_lowercase();
+    let has = |needle: &str| m.contains(needle);
+    if has("parse error") || has("unexpected token") || m.starts_with("expected ") || has("syntax error") {
+        "42601"
+    } else if has("division by zero") {
+        "22012"
+    } else if has("invalid input syntax") {
+        "22P02"
+    } else if has("out of range") || has("numeric field overflow") {
+        "22003"
+    } else if has("value too long") {
+        "22001"
+    } else if has("column") && (has("not found") || has("does not exist")) {
+        "42703"
+    } else if has("relation") && has("does not exist") || has("table") && has("does not exist") {
+        "42P01"
+    } else if has("function") && (has("not implemented") || has("does not exist")) {
+        "42883"
+    } else if has("not implemented") || has("not supported") || has("not available") {
+        "0A000"
+    } else {
+        "XX000"
+    }
+}
+
 pub(crate) fn err<T>(code: &'static str, message: impl Into<String>) -> R<T> {
     Err(DbError {
         code,
@@ -84,12 +114,10 @@ impl From<ProtocolError> for DbError {
                 }
             }
         }
-        let code = if message.contains("not found") && message.contains("olumn") {
-            "42703"
-        } else {
-            "XX000"
-        };
-        DbError { code, message }
+        DbError {
+            code: classify_error(&message),
+            message,
+        }
     }
 }
 
@@ -107,6 +135,8 @@ pub(crate) struct Col {
     pub default: Option<Expression>,
     /// Name of the owned sequence for a `SERIAL` column.
     pub serial: Option<String>,
+    /// `GENERATED ALWAYS AS (expr)`: `default` holds `expr`, recomputed from the row on every write.
+    pub generated: bool,
 }
 
 /// A hash index over one or more columns. Unique indexes hold at most one row id per key.

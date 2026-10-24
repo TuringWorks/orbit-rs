@@ -200,7 +200,7 @@ pub fn split_statements(sql: &str) -> Vec<&str> {
         .collect()
 }
 
-fn setting(name: &str) -> Option<&'static str> {
+pub(crate) fn setting(name: &str) -> Option<&'static str> {
     SETTINGS
         .iter()
         .find(|(n, _)| n.eq_ignore_ascii_case(name))

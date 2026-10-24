@@ -1,0 +1,242 @@
+# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.
+
+# Transactions, error behaviour, and the SQLSTATE codes drivers branch on.
+
+statement ok
+DROP TABLE IF EXISTS cf14_a
+
+statement ok
+CREATE TABLE cf14_a (id int PRIMARY KEY, v int NOT NULL)
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO cf14_a VALUES (1, 1)
+
+statement error (23505)
+INSERT INTO cf14_a VALUES (1, 2)
+
+statement error (25P02)
+SELECT 1
+
+statement ok
+ROLLBACK
+
+query T
+SELECT count(*) FROM cf14_a
+----
+0
+
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO cf14_a VALUES (1, 1)
+
+statement ok
+SAVEPOINT s1
+
+statement error (23505)
+INSERT INTO cf14_a VALUES (1, 2)
+
+statement ok
+ROLLBACK TO SAVEPOINT s1
+
+statement ok
+INSERT INTO cf14_a VALUES (2, 2)
+
+statement ok
+RELEASE SAVEPOINT s1
+
+statement ok
+COMMIT
+
+query TT
+SELECT id, v FROM cf14_a ORDER BY id
+----
+1 1
+2 2
+
+statement ok
+COMMIT
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN
+
+statement ok
+BEGIN
+
+statement ok
+ROLLBACK
+
+statement ok
+START TRANSACTION ISOLATION LEVEL SERIALIZABLE
+
+query T
+SHOW transaction_isolation
+----
+serializable
+
+statement ok
+COMMIT
+
+statement ok
+BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY
+
+statement error (25006)
+INSERT INTO cf14_a VALUES (9, 9)
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN
+
+statement ok
+SET LOCAL statement_timeout = '5s'
+
+query T
+SHOW statement_timeout
+----
+5s
+
+statement ok
+COMMIT
+
+statement error (23502)
+INSERT INTO cf14_a VALUES (3, NULL)
+
+statement error (22P02)
+INSERT INTO cf14_a VALUES ('x', 1)
+
+statement error (42601)
+INSERT INTO cf14_a VALUES (4, 1, 1)
+
+statement error (42P01)
+SELECT * FROM cf14_nope
+
+statement error (42703)
+SELECT nope FROM cf14_a
+
+statement error (42702)
+SELECT id FROM cf14_a a, cf14_a b
+
+statement error (42703)
+SELECT 1 FROM cf14_a GROUP BY nope
+
+statement error (42803)
+SELECT id, count(*) FROM cf14_a
+
+statement error (22012)
+SELECT 1/0
+
+statement error (22P02)
+SELECT 'x'::int
+
+statement error (42883)
+SELECT nofunc(1)
+
+statement error (42601)
+SELECT 1 +
+
+statement error (42601)
+SELECT * FROM
+
+statement error (42P07)
+CREATE TABLE cf14_a (id int)
+
+statement error (42P01)
+DROP TABLE cf14_missing
+
+statement error (42P01)
+ALTER TABLE cf14_missing ADD COLUMN x int
+
+statement error (42704)
+CREATE TABLE cf14_bad (id nosuchtype)
+
+query T rowsort
+SELECT id FROM cf14_a FOR UPDATE
+----
+1
+2
+
+query T
+SELECT id FROM cf14_a ORDER BY id FOR UPDATE SKIP LOCKED
+----
+1
+2
+
+query T
+SELECT id FROM cf14_a WHERE id = 1 FOR SHARE NOWAIT
+----
+1
+
+statement error (25P01)
+LOCK TABLE cf14_a IN ACCESS EXCLUSIVE MODE
+
+statement ok
+BEGIN
+
+statement ok
+LOCK TABLE cf14_a IN ACCESS EXCLUSIVE MODE
+
+statement ok
+COMMIT
+
+statement ok
+SET search_path TO public
+
+query T
+SHOW search_path
+----
+public
+
+statement ok
+SET application_name = 'cf'
+
+query T
+SHOW application_name
+----
+cf
+
+statement ok
+RESET application_name
+
+statement ok
+SET nosuch.setting = 1
+
+statement error (42704)
+SHOW nosuch_setting
+
+statement ok
+DISCARD ALL
+
+statement ok
+DEALLOCATE ALL
+
+statement ok
+PREPARE cf14_p (int) AS SELECT v FROM cf14_a WHERE id = $1
+
+query T
+EXECUTE cf14_p(1)
+----
+1
+
+statement ok
+DEALLOCATE cf14_p
+
+statement error (26000)
+EXECUTE cf14_p(1)
+
+query T
+EXPLAIN SELECT 1
+----
+Result  (cost=0.00..0.01 rows=1 width=4)
+
+statement ok
+DROP TABLE cf14_a
+

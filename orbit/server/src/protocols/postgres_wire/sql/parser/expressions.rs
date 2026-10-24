@@ -13,6 +13,7 @@ use crate::protocols::postgres_wire::sql::ast::{
     WindowFrameExclusion, WindowFrameMode, WindowFunctionType,
 };
 use crate::protocols::postgres_wire::sql::lexer::Token;
+use crate::protocols::postgres_wire::sql::parser::{utilities, SqlParser};
 use crate::protocols::postgres_wire::sql::types::SqlType;
 
 /// Expression parser with operator precedence handling
@@ -133,7 +134,22 @@ impl ExpressionParser {
                 *pos += 1;
             }
 
-            let right = self.parse_comparison_expression(tokens, pos)?;
+            // `x = ANY (array_or_subquery)` / `x <> ALL (...)`
+            let right = match tokens.get(*pos) {
+                Some(Token::Any) | Some(Token::Some) | Some(Token::All)
+                    if matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual) =>
+                {
+                    let quantifier = tokens[*pos].clone();
+                    *pos += 1;
+                    let inner = self.parse_primary_expression(tokens, pos)?;
+                    match quantifier {
+                        Token::All => Expression::All(Box::new(inner)),
+                        Token::Some => Expression::Some(Box::new(inner)),
+                        _ => Expression::Any(Box::new(inner)),
+                    }
+                }
+                _ => self.parse_comparison_expression(tokens, pos)?,
+            };
             left = Expression::Binary {
                 left: Box::new(left),
                 operator,
@@ -211,8 +227,7 @@ impl ExpressionParser {
                 let in_list = if *pos < tokens.len() && matches!(&tokens[*pos], Token::Select) {
                     // Parse as subquery
                     use crate::protocols::postgres_wire::sql::parser::select::SelectParser;
-                    let mut select_parser = SelectParser::new();
-                    let select_stmt = select_parser.parse_select(tokens, pos)?;
+                    let select_stmt = crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(tokens, pos)?;
 
                     if *pos >= tokens.len() || !matches!(&tokens[*pos], Token::RightParen) {
                         return Err(crate::protocols::error::ProtocolError::ParseError(
@@ -281,6 +296,14 @@ impl ExpressionParser {
                     }
                 } else {
                     match &tokens[*pos] {
+                        Token::BitwiseNot => BinaryOperator::RegexMatch,
+                        Token::RegexMatchCi => BinaryOperator::RegexMatchCaseInsensitive,
+                        Token::RegexNotMatch => BinaryOperator::RegexNotMatch,
+                        Token::RegexNotMatchCi => BinaryOperator::RegexNotMatchCaseInsensitive,
+                        Token::Question => BinaryOperator::JsonExists,
+                        Token::JsonbExistsAny => BinaryOperator::JsonExistsAny,
+                        Token::JsonbExistsAll => BinaryOperator::JsonExistsAll,
+                        Token::JsonPathExists => BinaryOperator::JsonPathExists,
                         Token::LessThan => BinaryOperator::LessThan,
                         Token::LessThanOrEqual => BinaryOperator::LessThanOrEqual,
                         Token::GreaterThan => BinaryOperator::GreaterThan,
@@ -362,13 +385,32 @@ impl ExpressionParser {
         Ok(left)
     }
 
+    /// Parse exponentiation (`^`, left-associative, binding tighter than `*`; unary minus binds tighter still)
+    fn parse_power_expression(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+    ) -> ProtocolResult<Expression> {
+        let mut left = self.parse_unary_expression(tokens, pos)?;
+        while matches!(tokens.get(*pos), Some(Token::Power)) {
+            *pos += 1;
+            let right = self.parse_unary_expression(tokens, pos)?;
+            left = Expression::Binary {
+                left: Box::new(left),
+                operator: BinaryOperator::Power,
+                right: Box::new(right),
+            };
+        }
+        Ok(left)
+    }
+
     /// Parse multiplicative expressions (*, /, %)
     fn parse_multiplicative_expression(
         &mut self,
         tokens: &[Token],
         pos: &mut usize,
     ) -> ProtocolResult<Expression> {
-        let mut left = self.parse_unary_expression(tokens, pos)?;
+        let mut left = self.parse_power_expression(tokens, pos)?;
 
         while *pos < tokens.len() {
             let operator = match &tokens[*pos] {
@@ -379,7 +421,7 @@ impl ExpressionParser {
             };
 
             *pos += 1;
-            let right = self.parse_unary_expression(tokens, pos)?;
+            let right = self.parse_power_expression(tokens, pos)?;
             left = Expression::Binary {
                 left: Box::new(left),
                 operator,
@@ -439,8 +481,7 @@ impl ExpressionParser {
                 *pos += 1;
 
                 use crate::protocols::postgres_wire::sql::parser::select::SelectParser;
-                let mut select_parser = SelectParser::new();
-                let subquery = select_parser.parse_select(tokens, pos)?;
+                let subquery = crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(tokens, pos)?;
 
                 if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
                     return Err(crate::protocols::error::ProtocolError::ParseError(
@@ -640,6 +681,12 @@ impl ExpressionParser {
                 }
             }
 
+            // LEFT(s, n) and RIGHT(s, n) share their names with the join keywords
+            Token::Left | Token::Right if matches!(tokens.get(*pos + 1), Some(Token::LeftParen)) => {
+                let func = if matches!(tokens[*pos], Token::Left) { "LEFT" } else { "RIGHT" };
+                self.parse_function_call(tokens, pos, func.to_string())
+            }
+
             // Handle aggregate function keywords
             Token::Count | Token::Sum | Token::Avg | Token::Min | Token::Max => {
                 let func_name = match &tokens[*pos] {
@@ -794,8 +841,7 @@ impl ExpressionParser {
                 // Check if this is a subquery (SELECT ...)
                 if *pos < tokens.len() && matches!(tokens[*pos], Token::Select) {
                     use crate::protocols::postgres_wire::sql::parser::select::SelectParser;
-                    let mut select_parser = SelectParser::new();
-                    let subquery = select_parser.parse_select(tokens, pos)?;
+                    let subquery = crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(tokens, pos)?;
 
                     if *pos >= tokens.len() || !matches!(tokens[*pos], Token::RightParen) {
                         return Err(crate::protocols::error::ProtocolError::ParseError(
@@ -1035,6 +1081,111 @@ impl ExpressionParser {
     }
 
     /// Parse a function call with proper DISTINCT and FILTER support
+    /// The SQL-standard function forms that use keywords instead of commas, rewritten to the plain
+    /// call the evaluator takes. Returns the (possibly renamed) function and its arguments, or
+    /// `None` arguments when `name` is an ordinary function.
+    fn parse_special_form(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+        name: String,
+    ) -> ProtocolResult<(String, Option<Vec<Expression>>)> {
+        let text = |s: &str| {
+            Expression::Literal(crate::protocols::postgres_wire::sql::types::SqlValue::Text(
+                s.to_string(),
+            ))
+        };
+        let word = |t: Option<&Token>| match t? {
+            Token::Identifier(s) | Token::StringLiteral(s) => Some(s.to_ascii_lowercase()),
+            other => Some(format!("{other:?}").to_ascii_lowercase()),
+        };
+        let expect = |this: &Self, pos: &mut usize, t: Token, what: &str| {
+            if this.matches_at(tokens, *pos, &t) {
+                *pos += 1;
+                Ok(())
+            } else {
+                Err(crate::protocols::error::ProtocolError::ParseError(format!(
+                    "Expected {what}"
+                )))
+            }
+        };
+        match name.to_ascii_uppercase().as_str() {
+            "EXTRACT" => {
+                let Some(field) = word(tokens.get(*pos)).filter(|_| {
+                    matches!(tokens.get(*pos + 1), Some(Token::From))
+                }) else {
+                    return Ok((name, None));
+                };
+                *pos += 2; // field, FROM
+                let source = self.parse_expression(tokens, pos)?;
+                Ok((name, Some(vec![text(&field), source])))
+            }
+            "TRIM" => {
+                let mode = word(tokens.get(*pos))
+                    .filter(|w| matches!(w.as_str(), "both" | "leading" | "trailing"));
+                if mode.is_none() && !matches!(tokens.get(*pos + 1), Some(Token::From)) {
+                    // TRIM(s) or TRIM(chars FROM s) -- decided after the first expression
+                    let first = self.parse_expression(tokens, pos)?;
+                    if self.matches_at(tokens, *pos, &Token::From) {
+                        *pos += 1;
+                        let source = self.parse_expression(tokens, pos)?;
+                        return Ok(("BTRIM".to_string(), Some(vec![source, first])));
+                    }
+                    return Ok((name, Some(vec![first])));
+                }
+                if mode.is_some() {
+                    *pos += 1;
+                }
+                let chars = if self.matches_at(tokens, *pos, &Token::From) {
+                    None
+                } else {
+                    Some(self.parse_expression(tokens, pos)?)
+                };
+                expect(self, pos, Token::From, "FROM in TRIM")?;
+                let source = self.parse_expression(tokens, pos)?;
+                let func = match mode.as_deref() {
+                    Some("leading") => "LTRIM",
+                    Some("trailing") => "RTRIM",
+                    _ => "BTRIM",
+                };
+                Ok((func.to_string(), Some(chars.into_iter().fold(vec![source], |mut a, c| {
+                    a.push(c);
+                    a
+                }))))
+            }
+            "POSITION" => {
+                let start = *pos;
+                let sub = self.parse_additive_expression(tokens, pos)?;
+                if !self.matches_at(tokens, *pos, &Token::In) {
+                    *pos = start; // POSITION(a, b) is not standard, but harmless
+                    return Ok((name, None));
+                }
+                *pos += 1;
+                let string = self.parse_expression(tokens, pos)?;
+                Ok((name, Some(vec![sub, string])))
+            }
+            "OVERLAY" => {
+                let start = *pos;
+                let string = self.parse_expression(tokens, pos)?;
+                if word(tokens.get(*pos)).as_deref() != Some("placing") {
+                    *pos = start;
+                    return Ok((name, None));
+                }
+                *pos += 1;
+                let replacement = self.parse_expression(tokens, pos)?;
+                expect(self, pos, Token::From, "FROM in OVERLAY")?;
+                let from = self.parse_expression(tokens, pos)?;
+                let mut args = vec![string, replacement, from];
+                if self.matches_at(tokens, *pos, &Token::For) {
+                    *pos += 1;
+                    args.push(self.parse_expression(tokens, pos)?);
+                }
+                Ok((name, Some(args)))
+            }
+            _ => Ok((name, None)),
+        }
+    }
+
     /// SQL-standard `SUBSTRING(s FROM start [FOR len])` and `SUBSTRING(s FOR len)`, appended to
     /// `args` as the `substring(s, start[, len])` call the evaluator takes (`FOR len` alone starts at 1).
     fn parse_substring_from_for(
@@ -1087,10 +1238,13 @@ impl ExpressionParser {
             false
         };
 
-        let mut args = Vec::new();
+        // EXTRACT(f FROM x), TRIM(BOTH c FROM s), POSITION(a IN b), OVERLAY(s PLACING x FROM a [FOR b])
+        let (func_name, special_args) = self.parse_special_form(tokens, pos, func_name)?;
+        let special = special_args.is_some();
+        let mut args = special_args.unwrap_or_default();
 
         // Parse arguments
-        if *pos < tokens.len() && !matches!(tokens[*pos], Token::RightParen) {
+        if !special && *pos < tokens.len() && !matches!(tokens[*pos], Token::RightParen) {
             loop {
                 // Handle special case for COUNT(*)
                 if func_name.to_uppercase() == "COUNT" && matches!(tokens[*pos], Token::Multiply) {
@@ -2032,33 +2186,40 @@ impl ExpressionParser {
                     type_name: type_name.clone(),
                 })
             }
-            _ => Err(crate::protocols::error::ProtocolError::ParseError(format!(
-                "Unexpected token in data type: {:?}",
-                tokens[*pos]
-            ))),
+            // NUMERIC(p,s), CHAR(n), BYTEA, JSON[B], UUID, INTERVAL, TIME/TIMESTAMP WITH TIME ZONE, ...:
+            // the DDL type parser already knows them, so a cast accepts exactly what a column does.
+            _ => {
+                let mut types = SqlParser {
+                    tokens: tokens.to_vec(),
+                    position: *pos,
+                    current_token: tokens.get(*pos).cloned(),
+                };
+                let ty = utilities::parse_data_type(&mut types)
+                    .map_err(crate::protocols::error::ProtocolError::from)?;
+                *pos = types.position;
+                Ok(ty)
+            }
         }
     }
 
-    /// Check for array suffix [] and wrap base type in Array if present
+    /// Check for array suffix `[]` (repeatable: `int[][]`) and wrap the base type in Array
     fn check_array_suffix(
         &mut self,
         tokens: &[Token],
         pos: &mut usize,
         base_type: SqlType,
     ) -> ProtocolResult<SqlType> {
-        // Check for [] array suffix
-        if *pos + 1 < tokens.len()
-            && matches!(tokens[*pos], Token::LeftBracket)
-            && matches!(tokens[*pos + 1], Token::RightBracket)
+        let mut ty = base_type;
+        while matches!(tokens.get(*pos), Some(Token::LeftBracket))
+            && matches!(tokens.get(*pos + 1), Some(Token::RightBracket))
         {
             *pos += 2; // consume []
-            Ok(SqlType::Array {
-                element_type: Box::new(base_type),
+            ty = SqlType::Array {
+                element_type: Box::new(ty),
                 dimensions: None,
-            })
-        } else {
-            Ok(base_type)
+            };
         }
+        Ok(ty)
     }
 }
 

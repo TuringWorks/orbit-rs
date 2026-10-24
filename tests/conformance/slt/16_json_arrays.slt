@@ -1,0 +1,207 @@
+# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.
+
+# JSON/JSONB and arrays.
+
+query TTTTT
+SELECT '{"a": 1, "b": {"c": [1,2,3]}}'::jsonb -> 'a', '{"a": 1, "b": {"c": [1,2,3]}}'::jsonb ->> 'a', '{"a": 1, "b": {"c": [1,2,3]}}'::jsonb -> 'b' -> 'c' -> 1, '{"a": 1, "b": {"c": [1,2,3]}}'::jsonb #> '{b,c,0}', '{"a": 1, "b": {"c": [1,2,3]}}'::jsonb #>> '{b,c,2}'
+----
+1 1 2 1 3
+
+query TTTT
+SELECT '{"a": 1}'::jsonb ? 'a', '{"a": 1}'::jsonb ? 'z', '{"a": 1, "b": 2}'::jsonb ?& array['a','b'], '{"a": 1}'::jsonb ?| array['z','a']
+----
+t f t t
+
+query TT
+SELECT '{"a": 1, "b": 2}'::jsonb @> '{"a": 1}'::jsonb, '{"a": 1}'::jsonb <@ '{"a": 1, "b": 2}'::jsonb
+----
+t t
+
+query TTT
+SELECT '{"a": 1}'::jsonb || '{"b": 2}'::jsonb, '{"a": 1, "b": 2}'::jsonb - 'a', '[1,2,3]'::jsonb - 1
+----
+{"a": 1, "b": 2} {"b": 2} [1, 3]
+
+query TTTT
+SELECT jsonb_build_object('a', 1, 'b', 'x'), jsonb_build_array(1, 'two', null), to_jsonb(ARRAY[1,2]), to_jsonb('s'::text)
+----
+{"a": 1, "b": "x"} [1, "two", null] [1, 2] "s"
+
+query TTTTT
+SELECT jsonb_typeof('1'::jsonb), jsonb_typeof('"s"'::jsonb), jsonb_typeof('[]'::jsonb), jsonb_typeof('{}'::jsonb), jsonb_typeof('null'::jsonb)
+----
+number string array object null
+
+query TT
+SELECT jsonb_array_length('[1,2,3]'::jsonb), jsonb_extract_path_text('{"a": {"b": "x"}}'::jsonb, 'a', 'b')
+----
+3 x
+
+query TT
+SELECT key, value FROM jsonb_each('{"a": 1, "b": "x"}'::jsonb) ORDER BY key
+----
+a 1
+b "x"
+
+query TT
+SELECT key, value FROM jsonb_each_text('{"a": 1, "b": "x"}'::jsonb) ORDER BY key
+----
+a 1
+b x
+
+query T rowsort
+SELECT jsonb_array_elements('[1,2,3]'::jsonb)
+----
+1
+2
+3
+
+query T rowsort
+SELECT jsonb_object_keys('{"a": 1, "b": 2}'::jsonb)
+----
+a
+b
+
+query TTT
+SELECT jsonb_set('{"a": 1}'::jsonb, '{b}', '2'), jsonb_set('{"a": {"b": 1}}'::jsonb, '{a,b}', '9'), jsonb_insert('[1,3]'::jsonb, '{1}', '2')
+----
+{"a": 1, "b": 2} {"a": {"b": 9}} [1, 2, 3]
+
+query TT
+SELECT jsonb_strip_nulls('{"a": null, "b": 1}'::jsonb), jsonb_pretty('{"a":1}'::jsonb) LIKE '%a%'
+----
+{"b": 1} t
+
+query TTT
+SELECT '{"a": 1, "b": [true, null]}'::jsonb::text, '{"a":1,"a":2}'::jsonb, '{"b":1,"a":2}'::jsonb
+----
+{"a": 1, "b": [true, null]} {"a": 2} {"a": 2, "b": 1}
+
+query TT
+SELECT '{"a": 1}'::json::jsonb = '{"a": 1}'::jsonb, '[1, 2]'::jsonb = '[1,2]'::jsonb
+----
+t t
+
+query TT rowsort
+SELECT '{"a": 1}'::jsonb @? '$.a', jsonb_path_query('{"a": [1,2,3]}'::jsonb, '$.a[*] ? (@ > 1)')
+----
+t 2
+t 3
+
+statement error (22P02)
+SELECT '{bad'::jsonb
+
+statement ok
+DROP TABLE IF EXISTS cf16_docs
+
+statement ok
+CREATE TABLE cf16_docs (id int PRIMARY KEY, doc jsonb)
+
+statement ok
+INSERT INTO cf16_docs VALUES (1, '{"name": "ann", "tags": ["a","b"], "n": 5}'), (2, '{"name": "bob", "tags": ["b"], "n": 7}'), (3, '{"name": "cy"}')
+
+query TT
+SELECT id, doc ->> 'name' FROM cf16_docs WHERE doc @> '{"tags": ["b"]}' ORDER BY id
+----
+1 ann
+2 bob
+
+query T
+SELECT id FROM cf16_docs WHERE (doc ->> 'n')::int > 5 ORDER BY id
+----
+2
+
+query T
+SELECT id FROM cf16_docs WHERE doc ? 'tags' ORDER BY id
+----
+1
+2
+
+query TT
+SELECT id, jsonb_array_length(doc -> 'tags') FROM cf16_docs WHERE doc ? 'tags' ORDER BY id
+----
+1 2
+2 1
+
+statement ok
+CREATE INDEX cf16_docs_gin ON cf16_docs USING gin (doc)
+
+statement ok
+UPDATE cf16_docs SET doc = jsonb_set(doc, '{n}', '10') WHERE id = 1
+
+query T
+SELECT doc -> 'n' FROM cf16_docs WHERE id = 1
+----
+10
+
+query TTTTTT
+SELECT ARRAY[1,2,3] || ARRAY[4], ARRAY[1,2,3] || 4, 0 || ARRAY[1], array_cat(ARRAY[1], ARRAY[2]), array_append(ARRAY[1], 2), array_prepend(0, ARRAY[1])
+----
+{1,2,3,4} {1,2,3,4} {0,1} {1,2} {1,2} {0,1}
+
+query TTTTTT
+SELECT (ARRAY[10,20,30])[2], (ARRAY[10,20,30])[2:3], array_length(ARRAY[1,2,3], 1), cardinality(ARRAY[1,2,3]), array_ndims(ARRAY[[1,2],[3,4]]), array_dims(ARRAY[1,2,3])
+----
+20 {20,30} 3 3 2 [1:3]
+
+query TTTT
+SELECT 2 = ANY(ARRAY[1,2,3]), 5 = ANY(ARRAY[1,2,3]), 1 = ALL(ARRAY[1,1]), 3 > ALL(ARRAY[1,2])
+----
+t f t t
+
+query TTTT
+SELECT ARRAY[1,2,3] @> ARRAY[2], ARRAY[1,2] <@ ARRAY[1,2,3], ARRAY[1,2] && ARRAY[2,3], ARRAY[1,2] = ARRAY[1,2]
+----
+t t t t
+
+query TTT
+SELECT array_position(ARRAY['a','b','c'], 'b'), array_remove(ARRAY[1,2,1], 1), array_replace(ARRAY[1,2,1], 1, 9)
+----
+2 {2} {9,2,9}
+
+query T rowsort
+SELECT unnest(ARRAY[3,1,2])
+----
+1
+2
+3
+
+query TT rowsort
+SELECT unnest(ARRAY[1,2]), unnest(ARRAY['a','b'])
+----
+1 a
+2 b
+
+query TT rowsort
+SELECT * FROM unnest(ARRAY[1,2,3]) WITH ORDINALITY
+----
+1 1
+2 2
+3 3
+
+query T
+SELECT array_agg(x ORDER BY x DESC) FROM unnest(ARRAY[3,1,2]) x
+----
+{3,2,1}
+
+query TTT
+SELECT ARRAY(SELECT g FROM generate_series(1,3) g), ARRAY[]::int[], ARRAY[NULL]::int[]
+----
+{1,2,3} {} {NULL}
+
+query TTT
+SELECT '{1,2,3}'::int[] , '{{1,2},{3,4}}'::int[][], '{a,"b c",NULL}'::text[]
+----
+{1,2,3} {{1,2},{3,4}} {a,"b c",NULL}
+
+query TTT
+SELECT array_to_string(ARRAY[1,NULL,3], ',', '*'), string_to_array('a,b,,c', ','), string_to_array('a,b', ',', 'b')
+----
+1,*,3 {a,b,"",c} {a,NULL}
+
+statement error (42601)
+SELECT ARRAY[1,2,3][0], ARRAY[1,2,3][4], (ARRAY[]::int[])[1]
+
+statement ok
+DROP TABLE cf16_docs
+

@@ -1,6 +1,7 @@
 //! `INSERT`, `UPDATE` and `DELETE`.
 
 use super::ddl::table_key;
+use crate::protocols::postgres_wire::sql::ast::ColumnRef;
 use super::fk::{self, Refs};
 use super::query::{ctx_for, rel_to_result, Rel, RelCol, Runner};
 use super::value::coerce;
@@ -32,19 +33,87 @@ fn lookup<'a>(st: &'a State, key: &str) -> R<&'a Table> {
     }
 }
 
-/// Evaluate a `RETURNING` list against `rows` of table `t`.
+/// Rewrite `RETURNING` so `old.x` / `new.x` (PostgreSQL 18) read the hidden columns `__old_x` /
+/// `__new_x`, and `*` stays the table's own columns. A bare `old.x` is still named `x`.
+fn bind_old_new(t: &Table, items: &[SelectItem]) -> R<Vec<SelectItem>> {
+    use super::query::map_expr;
+    let version = |e: &Expression| match e {
+        Expression::Column(ColumnRef { table: Some(q), name }) => {
+            match q.to_ascii_lowercase().as_str() {
+                prefix @ ("old" | "new") => Some((prefix.to_string(), name.clone())),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    let mut out = Vec::with_capacity(items.len());
+    for item in items {
+        match item {
+            SelectItem::Wildcard => out.extend(t.cols.iter().map(|c| SelectItem::Expression {
+                expr: Expression::Column(ColumnRef {
+                    table: None,
+                    name: c.name.clone(),
+                }),
+                alias: None,
+            })),
+            SelectItem::Expression { expr, alias } => {
+                let alias = alias.clone().or_else(|| version(expr).map(|(_, name)| name));
+                let expr = map_expr(expr, &mut (), &mut |_, e| {
+                    Ok(version(e).map(|(prefix, name)| {
+                        Expression::Column(ColumnRef {
+                            table: None,
+                            name: format!("__{prefix}_{name}"),
+                        })
+                    }))
+                })?;
+                out.push(SelectItem::Expression { expr, alias });
+            }
+            other => out.push(other.clone()),
+        }
+    }
+    Ok(out)
+}
+
+/// Evaluate a `RETURNING` list against `rows` of table `t`, with no old/new distinction.
 fn returning(st: &State, t: &Table, items: &[SelectItem], rows: Vec<Row>) -> R<Rel> {
+    let nulls = vec![vec![SqlValue::Null; t.cols.len()]; rows.len()];
+    returning_versions(st, t, items, rows.clone(), nulls, rows)
+}
+
+/// Evaluate a `RETURNING` list where each result row has an `old` and a `new` version of the table
+/// row (`current` is what an unqualified column means: the new row, or the old one for DELETE).
+fn returning_versions(
+    st: &State,
+    t: &Table,
+    items: &[SelectItem],
+    current: Vec<Row>,
+    old: Vec<Row>,
+    new: Vec<Row>,
+) -> R<Rel> {
+    let items = bind_old_new(t, items)?;
+    let mut cols = rel_cols(t, &t.name);
+    for prefix in ["old", "new"] {
+        cols.extend(t.cols.iter().map(|c| RelCol {
+            qual: None,
+            name: format!("__{prefix}_{}", c.name),
+            ty: Some(c.ty.clone()),
+        }));
+    }
+    let rows = current
+        .into_iter()
+        .zip(old)
+        .zip(new)
+        .map(|((mut row, old), new)| {
+            row.extend(old);
+            row.extend(new);
+            row
+        })
+        .collect();
     let mut r = Runner::new(st);
-    r.with_cte(
-        &t.name,
-        Rel {
-            cols: rel_cols(t, &t.name),
-            rows,
-        },
-    );
+    r.with_cte(&t.name, Rel { cols, rows });
     let sel = SelectStatement {
         with: None,
-        select_list: items.to_vec(),
+        select_list: items,
         distinct: None,
         from_clause: Some(FromClause::Table {
             name: crate::protocols::postgres_wire::sql::ast::TableName::new(t.name.clone()),
@@ -214,7 +283,7 @@ pub(crate) fn insert(
             given[i] = true;
         }
         for i in 0..ncols {
-            if given[i] {
+            if given[i] || cols[i].generated {
                 continue;
             }
             if let Some(seq) = &cols[i].serial {
@@ -231,6 +300,7 @@ pub(crate) fn insert(
                 })?;
             }
         }
+        fill_generated(&mut Runner::new(st), lookup(st, &key)?, &mut row)?;
         {
             let t = lookup(st, &key)?;
             not_null_check(t, &row)?;
@@ -372,8 +442,33 @@ fn apply_assignments(
             })?;
         }
     }
+    fill_generated(r, t, &mut new)?;
     not_null_check(t, &new)?;
     Ok(new)
+}
+
+/// Recompute every `GENERATED ALWAYS AS (expr)` column of `row` from the row's other columns.
+/// Evaluated on write, which is indistinguishable from PostgreSQL 18's default `VIRTUAL` columns
+/// for reads, and what its `STORED` columns do.
+fn fill_generated(r: &mut Runner, t: &Table, row: &mut Row) -> R<()> {
+    if !t.cols.iter().any(|c| c.generated) {
+        return Ok(());
+    }
+    let mut values: HashMap<String, SqlValue> = HashMap::new();
+    for (c, v) in t.cols.iter().zip(row.iter()) {
+        values.insert(format!("{}.{}", t.name, c.name), v.clone());
+        values.insert(c.name.clone(), v.clone());
+    }
+    let ctx = EvaluationContext::with_row(values);
+    for (i, c) in t.cols.iter().enumerate().filter(|(_, c)| c.generated) {
+        if let Some(expr) = &c.default {
+            row[i] = coerce(r.eval(expr, &ctx)?, &c.ty).map_err(|m| DbError {
+                code: "22P02",
+                message: m,
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// Replace row `rowid` with `new`, keeping indexes consistent and recording undo and the write.
@@ -522,13 +617,22 @@ pub(crate) fn update(st: &mut State, ops: &mut Vec<Op>, upd: &UpdateStatement) -
     };
     let count = plan.len();
     let mut after = Vec::with_capacity(count);
+    let mut before = Vec::with_capacity(count);
     let mut refs = Refs::default();
-    for (id, _old, new) in plan {
+    for (id, old, new) in plan {
         update_row(st, ops, &mut refs, &key, id, new.clone(), 0)?;
+        before.push(old);
         after.push(new);
     }
     let ret = match &upd.returning {
-        Some(items) => Some(returning(st, lookup(st, &key)?, items, after)?),
+        Some(items) => Some(returning_versions(
+            st,
+            lookup(st, &key)?,
+            items,
+            after.clone(),
+            before,
+            after,
+        )?),
         None => None,
     };
     Ok(result("UPDATE ", count, ret))
@@ -579,7 +683,11 @@ pub(crate) fn delete(st: &mut State, ops: &mut Vec<Op>, del: &DeleteStatement) -
         gone.push(row);
     }
     let ret = match &del.returning {
-        Some(items) => Some(returning(st, lookup(st, &key)?, items, gone)?),
+        Some(items) => {
+            let t = lookup(st, &key)?;
+            let nulls = vec![vec![SqlValue::Null; t.cols.len()]; gone.len()];
+            Some(returning_versions(st, t, items, gone.clone(), gone, nulls)?)
+        }
         None => None,
     };
     Ok(result("DELETE ", count, ret))

@@ -1,0 +1,276 @@
+# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.
+
+# What psql, ORMs and drivers ask a server about itself.
+
+statement ok
+DROP TABLE IF EXISTS cf15_child
+
+statement ok
+DROP TABLE IF EXISTS cf15_parent
+
+statement ok
+CREATE TABLE cf15_parent (id serial PRIMARY KEY, name varchar(40) NOT NULL, score numeric(6,2), active boolean DEFAULT true, born date)
+
+statement ok
+CREATE TABLE cf15_child (id int PRIMARY KEY, parent_id int NOT NULL REFERENCES cf15_parent (id) ON DELETE CASCADE, tag text UNIQUE)
+
+statement ok
+CREATE INDEX cf15_child_parent_idx ON cf15_child (parent_id)
+
+query TTTT
+SELECT current_database(), current_schema(), current_user, session_user
+----
+postgres public postgres postgres
+
+query TTT
+SELECT current_schemas(false), current_setting('server_version_num')::int >= 180000, current_setting('standard_conforming_strings')
+----
+{public} t on
+
+query T
+SELECT version() LIKE 'PostgreSQL 18%'
+----
+t
+
+query TTT
+SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_name LIKE 'cf15%' ORDER BY table_name
+----
+public cf15_child BASE TABLE
+public cf15_parent BASE TABLE
+
+query TTTTTTTT
+SELECT column_name, data_type, is_nullable, column_default, character_maximum_length, numeric_precision, numeric_scale, ordinal_position FROM information_schema.columns WHERE table_name = 'cf15_parent' ORDER BY ordinal_position
+----
+id integer NO nextval('cf15_parent_id_seq'::regclass) NULL 32 0 1
+name character varying NO NULL 40 NULL NULL 2
+score numeric YES NULL NULL 6 2 3
+active boolean YES true NULL NULL NULL 4
+born date YES NULL NULL NULL NULL 5
+
+query TT
+SELECT constraint_name, constraint_type FROM information_schema.table_constraints WHERE table_name = 'cf15_child' ORDER BY constraint_type, constraint_name
+----
+cf15_child_id_not_null CHECK
+cf15_child_parent_id_not_null CHECK
+cf15_child_parent_id_fkey FOREIGN KEY
+cf15_child_pkey PRIMARY KEY
+cf15_child_tag_key UNIQUE
+
+query TTT
+SELECT kcu.column_name, ccu.table_name, ccu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = kcu.constraint_name WHERE kcu.table_name = 'cf15_child' AND kcu.column_name = 'parent_id'
+----
+parent_id cf15_parent id
+
+query TTT
+SELECT c.relname, c.relkind, c.relhasindex FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname LIKE 'cf15%' ORDER BY c.relname
+----
+cf15_child r t
+cf15_child_parent_idx i f
+cf15_child_pkey i f
+cf15_child_tag_key i f
+cf15_parent r t
+cf15_parent_id_seq S f
+cf15_parent_pkey i f
+
+query TTTT
+SELECT a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull, a.attnum FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid WHERE c.relname = 'cf15_parent' AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum
+----
+id integer t 1
+name character varying(40) t 2
+score numeric(6,2) f 3
+active boolean f 4
+born date f 5
+
+query TTT
+SELECT i.relname, ix.indisunique, ix.indisprimary FROM pg_index ix JOIN pg_class i ON i.oid = ix.indexrelid JOIN pg_class t ON t.oid = ix.indrelid WHERE t.relname = 'cf15_child' ORDER BY i.relname
+----
+cf15_child_parent_idx f f
+cf15_child_pkey t t
+cf15_child_tag_key t f
+
+query TT
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'cf15_child'::regclass ORDER BY conname
+----
+cf15_child_id_not_null n
+cf15_child_parent_id_fkey f
+cf15_child_parent_id_not_null n
+cf15_child_pkey p
+cf15_child_tag_key u
+
+query T
+SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'cf15_child'::regclass AND contype = 'f'
+----
+FOREIGN KEY (parent_id) REFERENCES cf15_parent(id) ON DELETE CASCADE
+
+query T
+SELECT pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid = 'cf15_child'::regclass ORDER BY 1
+----
+CREATE INDEX cf15_child_parent_idx ON public.cf15_child USING btree (parent_id)
+CREATE UNIQUE INDEX cf15_child_pkey ON public.cf15_child USING btree (id)
+CREATE UNIQUE INDEX cf15_child_tag_key ON public.cf15_child USING btree (tag)
+
+query TTT
+SELECT 'cf15_parent'::regclass::oid IS NOT NULL, 'cf15_parent'::regclass::text, to_regclass('cf15_nope') IS NULL
+----
+t cf15_parent t
+
+query TT
+SELECT t.typname, t.typlen FROM pg_type t WHERE t.typname IN ('int4', 'text', 'bool', 'numeric', 'varchar', 'timestamptz', 'uuid', 'jsonb') ORDER BY t.typname
+----
+bool 1
+int4 4
+jsonb -1
+numeric -1
+text -1
+timestamptz 8
+uuid 16
+varchar -1
+
+query TT
+SELECT oid, typname FROM pg_type WHERE typname IN ('bool', 'int4', 'int8', 'text', 'float8') ORDER BY oid
+----
+16 bool
+20 int8
+23 int4
+25 text
+701 float8
+
+query T
+SELECT nspname FROM pg_namespace WHERE nspname IN ('public', 'pg_catalog', 'information_schema') ORDER BY nspname
+----
+information_schema
+pg_catalog
+public
+
+query TT
+SELECT schemaname, tablename FROM pg_tables WHERE tablename LIKE 'cf15%' ORDER BY tablename
+----
+public cf15_child
+public cf15_parent
+
+query TT
+SELECT schemaname, indexname FROM pg_indexes WHERE tablename = 'cf15_child' ORDER BY indexname
+----
+public cf15_child_parent_idx
+public cf15_child_pkey
+public cf15_child_tag_key
+
+query T
+SELECT count(*) > 0 FROM pg_proc WHERE proname = 'lower'
+----
+t
+
+query T
+SELECT rolname FROM pg_roles WHERE rolname = current_user
+----
+postgres
+
+query T
+SELECT datname FROM pg_database WHERE datname = current_database()
+----
+postgres
+
+query TT
+SELECT name, setting FROM pg_settings WHERE name IN ('server_version_num', 'max_connections') ORDER BY name
+----
+max_connections 100
+server_version_num 180006
+
+query TT
+SELECT pg_table_is_visible('cf15_parent'::regclass), has_table_privilege('cf15_parent', 'SELECT')
+----
+t t
+
+query T
+SELECT obj_description('cf15_parent'::regclass, 'pg_class') IS NULL
+----
+t
+
+statement ok
+COMMENT ON TABLE cf15_parent IS 'people'
+
+query T
+SELECT obj_description('cf15_parent'::regclass, 'pg_class')
+----
+people
+
+statement ok
+COMMENT ON COLUMN cf15_parent.name IS 'full name'
+
+query T
+SELECT col_description('cf15_parent'::regclass, 2)
+----
+full name
+
+query T
+SELECT pg_get_serial_sequence('cf15_parent', 'id')
+----
+public.cf15_parent_id_seq
+
+query T
+SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid = 'cf15_parent'::regclass ORDER BY adnum
+----
+nextval('cf15_parent_id_seq'::regclass)
+true
+
+query TT
+SELECT set_config('application_name', 'cf', false), current_setting('application_name')
+----
+cf cf
+
+query TTT
+SELECT pg_backend_pid() > 0, pg_postmaster_start_time() IS NOT NULL, pg_is_in_recovery()
+----
+t t f
+
+query T
+SELECT inet_server_port() IS NOT NULL OR true
+----
+t
+
+query T
+SHOW server_version_num
+----
+180006
+
+query T
+SHOW server_encoding
+----
+UTF8
+
+query T
+SHOW client_encoding
+----
+UTF8
+
+query T
+SHOW DateStyle
+----
+ISO, MDY
+
+query T
+SHOW TimeZone
+----
+Etc/UTC
+
+query T
+SHOW standard_conforming_strings
+----
+on
+
+query T
+SHOW max_identifier_length
+----
+63
+
+query T
+SHOW transaction_isolation
+----
+read committed
+
+statement error (42601)
+SHOW ALL LIKE 'nothing_matches'
+
+statement ok
+DROP TABLE cf15_child, cf15_parent
+

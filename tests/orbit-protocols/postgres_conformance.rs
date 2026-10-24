@@ -172,11 +172,10 @@ async fn run_file(url: &str, name: &'static str, file: &Path) -> FileResult {
             Ok(_) => result.passed += 1,
             Err(e) => {
                 result.failed += 1;
-                if result.failures.len() < 5 {
-                    let why = e.to_string();
+                if result.failures.len() < 400 {
                     result
                         .failures
-                        .push(format!("{at}: {}", why.lines().next().unwrap_or("")));
+                        .push(format!("{at}: {}", one_line(&e.display(false).to_string())));
                 }
             }
         }
@@ -188,7 +187,7 @@ async fn run_file(url: &str, name: &'static str, file: &Path) -> FileResult {
 /// A failure on one line, trimmed, so the report stays readable.
 fn one_line(text: &str) -> String {
     let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    flat.chars().take(260).collect()
+    flat.chars().take(420).collect()
 }
 
 async fn run_corpus(url: &str, name: &'static str) -> BTreeMap<String, FileResult> {
@@ -400,4 +399,77 @@ async fn probe() {
             Err(e) => println!("PROBE {statement}\n  => ERROR {e}"),
         }
     }
+}
+
+/// Record mode: runs the statements in `CONFORMANCE_RECORD_IN` against the reference PostgreSQL and
+/// writes the sqllogictest file `CONFORMANCE_RECORD_OUT` from what it actually returned, so the
+/// expectations are PostgreSQL's, not ours. Input: blank-line-separated statements; `#` lines are
+/// copied through. Statements must be deterministic (no `now()`, `random()`).
+///
+/// `make conformance-record IN=tests/conformance/sql/08_types.sql`
+#[tokio::test]
+#[ignore = "authoring aid; run with `make conformance-record`"]
+async fn record() {
+    let input = std::env::var("CONFORMANCE_RECORD_IN").expect("CONFORMANCE_RECORD_IN");
+    let output = std::env::var("CONFORMANCE_RECORD_OUT").expect("CONFORMANCE_RECORD_OUT");
+    let url = std::env::var("ORBIT_CONFORMANCE_REFERENCE_URL").expect("ORBIT_CONFORMANCE_REFERENCE_URL");
+    let (client, connection) = tokio_postgres::connect(&url, NoTls).await.expect("connect");
+    tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    let mut out = String::from("# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.\n\n");
+    for block in std::fs::read_to_string(&input).expect("input").split("\n\n") {
+        let block = block.trim();
+        let (comments, sql): (Vec<&str>, Vec<&str>) = block.lines().partition(|l| l.starts_with('#'));
+        comments.iter().for_each(|c| out.push_str(&format!("{c}\n")));
+        if sql.is_empty() {
+            out.push('\n');
+            continue;
+        }
+        let sql = sql.join("\n");
+        out.push_str(&record_one(&client, &sql).await);
+    }
+    std::fs::write(&output, out).expect("write output");
+}
+
+async fn record_one(client: &Client, sql: &str) -> String {
+    let messages = match client.simple_query(sql).await {
+        Ok(m) => m,
+        Err(e) => {
+            let code = PgError::from(e).sqlstate.unwrap_or_default();
+            return format!("statement error ({code})\n{sql}\n\n");
+        }
+    };
+    let described = messages.iter().any(|m| matches!(m, SimpleQueryMessage::RowDescription(_)));
+    if !described {
+        return format!("statement ok\n{sql}\n\n");
+    }
+    let mut rows: Vec<String> = messages
+        .iter()
+        .filter_map(|m| match m {
+            SimpleQueryMessage::Row(r) => Some(
+                (0..r.len())
+                    .map(|i| r.get(i).map_or_else(|| "NULL".into(), render))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
+            _ => None,
+        })
+        .collect();
+    if rows.iter().any(|r| r.contains('\n')) {
+        return format!("# skipped (multi-line value): {}\n\n", sql.replace('\n', " "));
+    }
+    let columns = messages.iter().find_map(|m| match m {
+        SimpleQueryMessage::RowDescription(c) => Some(c.len()),
+        _ => None,
+    });
+    let ordered = sql.to_ascii_uppercase().contains("ORDER BY");
+    let sort = if !ordered && rows.len() > 1 {
+        rows.sort();
+        " rowsort"
+    } else {
+        ""
+    };
+    let body = if rows.is_empty() { String::new() } else { format!("{}\n", rows.join("\n")) };
+    format!("query {}{sort}\n{sql}\n----\n{body}\n", "T".repeat(columns.unwrap_or(1)))
 }

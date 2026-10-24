@@ -9,6 +9,7 @@
 
 use super::expressions::ExpressionParser;
 use super::{utilities, ParseError, ParseResult, SqlParser};
+use crate::protocols::postgres_wire::sql::ast::ForClause;
 use crate::protocols::postgres_wire::sql::{
     ast::{
         Assignment, AssignmentTarget, ColumnRef, ConflictAction, ConflictTarget, CopyDirection,
@@ -44,6 +45,84 @@ fn parse_expression_with_parser(parser: &mut SqlParser) -> ParseResult<Expressio
     Ok(expr)
 }
 
+/// A SELECT nested in an expression or a CTE, parsed by the same grammar as a top-level one so
+/// subqueries accept everything a query does. Stops before the closing `)`.
+pub(crate) fn parse_nested_select(
+    tokens: &[Token],
+    pos: &mut usize,
+) -> crate::protocols::error::ProtocolResult<SelectStatement> {
+    let mut nested = SqlParser {
+        tokens: tokens.to_vec(),
+        position: *pos,
+        current_token: tokens.get(*pos).cloned(),
+    };
+    let statement = parse_select(&mut nested).map_err(crate::protocols::error::ProtocolError::from)?;
+    *pos = nested.position;
+    match statement {
+        Statement::Select(select) => Ok(*select),
+        _ => Err(crate::protocols::error::ProtocolError::ParseError(
+            "Expected a SELECT".to_string(),
+        )),
+    }
+}
+
+/// `VALUES (..), (..) [ORDER BY ..] [LIMIT ..]` and `TABLE name` as statements: a SELECT * over the rows or table.
+pub fn parse_values_or_table(parser: &mut SqlParser) -> ParseResult<Statement> {
+    let from_clause = if parser.matches(&[Token::Table]) {
+        parser.advance()?;
+        FromClause::Table {
+            name: utilities::parse_table_name(parser)?,
+            alias: None,
+            time_travel: None,
+        }
+    } else {
+        // reuse the `(VALUES ..)` item parser by presenting the list as parenthesised
+        parser.advance()?; // VALUES
+        let mut value_lists = Vec::new();
+        loop {
+            parser.expect(Token::LeftParen)?;
+            let mut values = vec![utilities::parse_expression(parser)?];
+            while parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+                values.push(utilities::parse_expression(parser)?);
+            }
+            parser.expect(Token::RightParen)?;
+            value_lists.push(values);
+            if !parser.matches(&[Token::Comma]) {
+                break;
+            }
+            parser.advance()?;
+        }
+        FromClause::Values {
+            values: value_lists,
+            alias: None,
+        }
+    };
+    let order_by = if parser.matches(&[Token::Order]) {
+        parser.advance()?;
+        parser.expect(Token::By)?;
+        Some(parse_order_by_clause(parser)?)
+    } else {
+        None
+    };
+    let (limit, offset) = parse_limit_offset(parser)?;
+    Ok(Statement::Select(Box::new(SelectStatement {
+        with: None,
+        select_list: vec![SelectItem::Wildcard],
+        distinct: None,
+        from_clause: Some(from_clause),
+        where_clause: None,
+        group_by: None,
+        having: None,
+        order_by,
+        limit,
+        offset,
+        for_clause: None,
+        traverse: None,
+        set_operation: None,
+    })))
+}
+
 /// Parse SELECT statement
 pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
     // Parse WITH clause using SelectParser logic
@@ -66,10 +145,25 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
 
     parser.expect(Token::Select)?;
 
-    // Parse DISTINCT clause
+    // Parse DISTINCT [ON (..)] / ALL
     let distinct = if parser.matches(&[Token::Distinct]) {
         parser.advance()?;
-        Some(DistinctClause::Distinct)
+        if parser.matches(&[Token::On]) {
+            parser.advance()?;
+            parser.expect(Token::LeftParen)?;
+            let mut exprs = vec![parse_expression_with_parser(parser)?];
+            while parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+                exprs.push(parse_expression_with_parser(parser)?);
+            }
+            parser.expect(Token::RightParen)?;
+            Some(DistinctClause::DistinctOn(exprs))
+        } else {
+            Some(DistinctClause::Distinct)
+        }
+    } else if parser.matches(&[Token::All]) {
+        parser.advance()?; // SELECT ALL is the default
+        None
     } else {
         None
     };
@@ -164,7 +258,7 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
     // Parse FROM clause
     let from_clause = if parser.matches(&[Token::From]) {
         parser.advance()?;
-        Some(parse_from_clause(parser)?)
+        Some(parse_from_list(parser)?)
     } else {
         None
     };
@@ -215,38 +309,9 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
         None
     };
 
-    // Parse LIMIT clause
-    let (limit, offset) = if parser.matches(&[Token::Limit]) {
-        parser.advance()?;
-        let limit_expr = parse_expression_with_parser(parser)?;
-
-        let offset = if parser.matches(&[Token::Offset]) {
-            parser.advance()?;
-            let offset_expr = parse_expression_with_parser(parser)?;
-            if let Expression::Literal(SqlValue::Integer(n)) = offset_expr {
-                Some(n as u64)
-            } else {
-                return Err(ParseError {
-                    message: "OFFSET must be a non-negative integer".to_string(),
-                    position: parser.position,
-                    expected: vec!["integer".to_string()],
-                    found: parser.current_token.clone(),
-                });
-            }
-        } else {
-            None
-        };
-
-        (
-            Some(LimitClause {
-                count: Some(limit_expr),
-                with_ties: false,
-            }),
-            offset,
-        )
-    } else {
-        (None, None)
-    };
+    // Parse LIMIT / OFFSET / FETCH FIRST, then a row-lock clause
+    let (limit, offset) = parse_limit_offset(parser)?;
+    let for_clause = parse_lock_clause(parser)?;
 
     // Parse TRAVERSE clause (OrbitQL extension)
     let traverse = if let Some(Token::Identifier(name)) = &parser.current_token {
@@ -278,10 +343,139 @@ pub fn parse_select(parser: &mut SqlParser) -> ParseResult<Statement> {
         order_by,
         limit,
         offset,
-        for_clause: None,
+        for_clause,
         traverse,
         set_operation,
     })))
+}
+
+/// The upper-cased text of the current token when it is a bare word or a keyword (`Token::Rows` -> "ROWS").
+/// Lets clause parsers recognise words the lexer may or may not have made keywords.
+fn word(parser: &SqlParser) -> Option<String> {
+    match parser.current_token.as_ref()? {
+        Token::Identifier(id) => Some(id.to_ascii_uppercase()),
+        Token::StringLiteral(_) | Token::NumericLiteral(_) | Token::QuotedIdentifier(_) => None,
+        other => Some(format!("{other:?}").to_ascii_uppercase()),
+    }
+}
+
+fn eat_word(parser: &mut SqlParser, w: &str) -> ParseResult<bool> {
+    let hit = word(parser).as_deref() == Some(w);
+    if hit {
+        parser.advance()?;
+    }
+    Ok(hit)
+}
+
+fn non_negative(expr: Expression, parser: &SqlParser, what: &str) -> ParseResult<u64> {
+    match expr {
+        Expression::Literal(SqlValue::Integer(n)) if n >= 0 => Ok(n as u64),
+        Expression::Literal(SqlValue::BigInt(n)) if n >= 0 => Ok(n as u64),
+        _ => Err(ParseError {
+            message: format!("{what} must be a non-negative integer"),
+            position: parser.position,
+            expected: vec!["integer".to_string()],
+            found: parser.current_token.clone(),
+        }),
+    }
+}
+
+/// `LIMIT n|ALL`, `OFFSET n [ROW|ROWS]` (either order) and `FETCH FIRST|NEXT [n] ROW|ROWS ONLY|WITH TIES`.
+/// `LIMIT ALL` is no limit at all.
+fn parse_limit_offset(parser: &mut SqlParser) -> ParseResult<(Option<LimitClause>, Option<u64>)> {
+    let (mut limit, mut offset) = (None, None);
+    loop {
+        if limit.is_none() && eat_word(parser, "LIMIT")? {
+            if !eat_word(parser, "ALL")? {
+                let count = parse_expression_with_parser(parser)?;
+                limit = Some(LimitClause {
+                    count: Some(count),
+                    with_ties: false,
+                });
+            }
+        } else if offset.is_none() && eat_word(parser, "OFFSET")? {
+            let n = parse_expression_with_parser(parser)?;
+            offset = Some(non_negative(n, parser, "OFFSET")?);
+            if !eat_word(parser, "ROW")? {
+                eat_word(parser, "ROWS")?;
+            }
+        } else if limit.is_none() && eat_word(parser, "FETCH")? {
+            if !eat_word(parser, "FIRST")? && !eat_word(parser, "NEXT")? {
+                return Err(ParseError {
+                    message: "Expected FIRST or NEXT after FETCH".to_string(),
+                    position: parser.position,
+                    expected: vec!["FIRST".to_string(), "NEXT".to_string()],
+                    found: parser.current_token.clone(),
+                });
+            }
+            let count = if matches!(word(parser).as_deref(), Some("ROW" | "ROWS")) {
+                Expression::Literal(SqlValue::Integer(1))
+            } else {
+                parse_expression_with_parser(parser)?
+            };
+            if !eat_word(parser, "ROW")? {
+                eat_word(parser, "ROWS")?;
+            }
+            let with_ties = if eat_word(parser, "WITH")? {
+                eat_word(parser, "TIES")?;
+                true
+            } else {
+                eat_word(parser, "ONLY")?;
+                false
+            };
+            limit = Some(LimitClause {
+                count: Some(count),
+                with_ties,
+            });
+        } else {
+            return Ok((limit, offset));
+        }
+    }
+}
+
+/// `FOR UPDATE | NO KEY UPDATE | SHARE | KEY SHARE [OF t, ..] [NOWAIT | SKIP LOCKED]`. The first
+/// clause is kept; naming tables with `OF` is accepted and ignored.
+fn parse_lock_clause(parser: &mut SqlParser) -> ParseResult<Option<ForClause>> {
+    let mut first = None;
+    while eat_word(parser, "FOR")? {
+        let exclusive = if eat_word(parser, "UPDATE")? {
+            true
+        } else if eat_word(parser, "SHARE")? {
+            false
+        } else if eat_word(parser, "NO")? && eat_word(parser, "KEY")? && eat_word(parser, "UPDATE")? {
+            true
+        } else if eat_word(parser, "KEY")? && eat_word(parser, "SHARE")? {
+            false
+        } else {
+            return Err(ParseError {
+                message: "Expected UPDATE, SHARE, NO KEY UPDATE or KEY SHARE after FOR".to_string(),
+                position: parser.position,
+                expected: vec!["UPDATE".to_string(), "SHARE".to_string()],
+                found: parser.current_token.clone(),
+            });
+        };
+        if eat_word(parser, "OF")? {
+            loop {
+                parser.advance()?; // a table name
+                if parser.matches(&[Token::Dot]) {
+                    parser.advance()?;
+                    parser.advance()?;
+                }
+                if !parser.matches(&[Token::Comma]) {
+                    break;
+                }
+                parser.advance()?;
+            }
+        }
+        let nowait = eat_word(parser, "NOWAIT")?;
+        let skip_locked = !nowait && eat_word(parser, "SKIP")? && eat_word(parser, "LOCKED")?;
+        first.get_or_insert(if exclusive {
+            ForClause::Update { nowait, skip_locked }
+        } else {
+            ForClause::Share { nowait, skip_locked }
+        });
+    }
+    Ok(first)
 }
 
 /// Parse a TRAVERSE clause: TRAVERSE <Direction> <Min>..<Max> STEPS ON <Edge> [TO <Alias>]
@@ -595,7 +789,7 @@ fn parse_select_inner(parser: &mut SqlParser) -> ParseResult<SelectStatement> {
     // Parse FROM clause
     let from_clause = if parser.matches(&[Token::From]) {
         parser.advance()?;
-        Some(parse_from_clause(parser)?)
+        Some(parse_from_list(parser)?)
     } else {
         None
     };
@@ -646,38 +840,9 @@ fn parse_select_inner(parser: &mut SqlParser) -> ParseResult<SelectStatement> {
         None
     };
 
-    // Parse LIMIT clause
-    let (limit, offset) = if parser.matches(&[Token::Limit]) {
-        parser.advance()?;
-        let limit_expr = parse_expression_with_parser(parser)?;
-
-        let offset = if parser.matches(&[Token::Offset]) {
-            parser.advance()?;
-            let offset_expr = parse_expression_with_parser(parser)?;
-            if let Expression::Literal(SqlValue::Integer(n)) = offset_expr {
-                Some(n as u64)
-            } else {
-                return Err(ParseError {
-                    message: "OFFSET must be a non-negative integer".to_string(),
-                    position: parser.position,
-                    expected: vec!["integer".to_string()],
-                    found: parser.current_token.clone(),
-                });
-            }
-        } else {
-            None
-        };
-
-        (
-            Some(LimitClause {
-                count: Some(limit_expr),
-                with_ties: false,
-            }),
-            offset,
-        )
-    } else {
-        (None, None)
-    };
+    // Parse LIMIT / OFFSET / FETCH FIRST, then a row-lock clause
+    let (limit, offset) = parse_limit_offset(parser)?;
+    let for_clause = parse_lock_clause(parser)?;
 
     // Check for chained set operations
     let set_operation = if parser.matches(&[Token::Union, Token::Intersect, Token::Except]) {
@@ -697,7 +862,7 @@ fn parse_select_inner(parser: &mut SqlParser) -> ParseResult<SelectStatement> {
         order_by,
         limit,
         offset,
-        for_clause: None,
+        for_clause,
         traverse: None,
         set_operation,
     })
@@ -705,80 +870,82 @@ fn parse_select_inner(parser: &mut SqlParser) -> ParseResult<SelectStatement> {
 
 /// Parse FROM clause
 fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
-    // Check for JSON_TABLE
+    let mut left = parse_table_ref(parser)?;
+    while is_join_keyword(parser) {
+        left = parse_join(parser, left)?;
+    }
+    Ok(left)
+}
+
+/// `FROM a, b, c`: the comma is a cross join. UPDATE ... FROM and DELETE ... USING keep their own
+/// lists of items, so only SELECT goes through here.
+fn parse_from_list(parser: &mut SqlParser) -> ParseResult<FromClause> {
+    use crate::protocols::postgres_wire::sql::ast::{JoinCondition, JoinType};
+    let mut left = parse_from_clause(parser)?;
+    while parser.matches(&[Token::Comma]) {
+        parser.advance()?;
+        let right = parse_from_clause(parser)?;
+        left = FromClause::Join {
+            left: Box::new(left),
+            join_type: JoinType::Cross,
+            right: Box::new(right),
+            condition: JoinCondition::Natural,
+        };
+    }
+    Ok(left)
+}
+
+/// One FROM item: `[LATERAL] (SELECT ..) alias`, `(VALUES ..) alias`, `(a JOIN b ..)`,
+/// `func(args) [WITH ORDINALITY] [alias]`, `JSON_TABLE(..)`, or `table [alias]`.
+fn parse_table_ref(parser: &mut SqlParser) -> ParseResult<FromClause> {
+    let lateral = eat_word(parser, "LATERAL")?;
+
     if let Some(Token::Identifier(name)) = &parser.current_token {
-        if name.to_uppercase() == "JSON_TABLE" {
-            // Check if next token is LeftParen
-            if let Some(Token::LeftParen) = parser.peek() {
-                return parse_json_table(parser);
-            }
+        if name.eq_ignore_ascii_case("JSON_TABLE") && matches!(parser.peek(), Some(Token::LeftParen)) {
+            return parse_json_table(parser);
         }
     }
 
-    // Check for (VALUES ...) or (SELECT ...)
     if parser.matches(&[Token::LeftParen]) {
-        if let Some(Token::Values) = parser.peek() {
-            parser.advance()?; // consume (
-            parser.advance()?; // consume VALUES
-
-            let mut value_lists = Vec::new();
-            loop {
-                parser.expect(Token::LeftParen)?;
-                let mut values = Vec::new();
-                while !parser.matches(&[Token::RightParen]) {
-                    values.push(utilities::parse_expression(parser)?);
-                    if parser.matches(&[Token::Comma]) {
-                        parser.advance()?;
-                    } else {
-                        break;
-                    }
-                }
+        return match parser.peek() {
+            Some(Token::Values) => parse_values_ref(parser),
+            Some(Token::Select) | Some(Token::With) => parse_subquery_ref(parser, lateral),
+            _ => {
+                parser.advance()?; // (
+                let inner = parse_from_clause(parser)?;
                 parser.expect(Token::RightParen)?;
-                value_lists.push(values);
-
-                if parser.matches(&[Token::Comma]) {
-                    parser.advance()?;
-                } else {
-                    break;
-                }
+                Ok(inner)
             }
-
-            parser.expect(Token::RightParen)?; // consume closing )
-
-            let alias = parse_alias_clause(parser)?;
-            return Ok(FromClause::Values {
-                values: value_lists,
-                alias,
-            });
-        } else if let Some(Token::Select) = parser.peek() {
-            parser.advance()?; // consume (
-                               // Parse subquery
-            let stmt = parse_select(parser)?;
-            parser.expect(Token::RightParen)?; // consume closing )
-
-            let alias = parse_alias_clause(parser)?;
-
-            if let Statement::Select(select_stmt) = stmt {
-                return Ok(FromClause::Subquery {
-                    query: select_stmt,
-                    alias: alias.unwrap_or_else(|| TableAlias {
-                        name: "subquery".to_string(),
-                        columns: None,
-                    }),
-                    lateral: false,
-                });
-            } else {
-                return Err(ParseError {
-                    message: "Expected SELECT statement in subquery".to_string(),
-                    position: parser.position,
-                    expected: vec!["SELECT".to_string()],
-                    found: parser.current_token.clone(),
-                });
-            }
-        }
+        };
     }
 
-    // Parse the first table reference
+    // a function in FROM is implicitly lateral: it may read the FROM items to its left
+    if matches!(&parser.current_token, Some(Token::Identifier(_)))
+        && matches!(parser.peek(), Some(Token::LeftParen))
+    {
+        if let Expression::Function(function) = parse_expression_with_parser(parser)? {
+            let with_ordinality = if parser.matches(&[Token::With]) {
+                parser.advance()?;
+                eat_word(parser, "ORDINALITY")?
+            } else {
+                false
+            };
+            let alias = parse_alias_clause(parser)?;
+            return Ok(FromClause::TableFunction {
+                function: *function,
+                alias,
+                lateral: true,
+                with_ordinality,
+            });
+        }
+        return Err(ParseError {
+            message: "Expected a function call in FROM".to_string(),
+            position: parser.position,
+            expected: vec!["function".to_string()],
+            found: parser.current_token.clone(),
+        });
+    }
+
     let table_name = utilities::parse_table_name(parser)?;
 
     // Parse time travel clause if present (comes before alias in SQL syntax)
@@ -798,21 +965,66 @@ fn parse_from_clause(parser: &mut SqlParser) -> ParseResult<FromClause> {
         tt
     };
 
-    // Check for table alias (comes after time travel clause)
     let alias = parse_alias_clause(parser)?;
-
-    let mut left = FromClause::Table {
+    Ok(FromClause::Table {
         name: table_name,
         alias,
         time_travel,
-    };
+    })
+}
 
-    // Check for JOINs and parse them recursively
-    while is_join_keyword(parser) {
-        left = parse_join(parser, left)?;
+fn parse_values_ref(parser: &mut SqlParser) -> ParseResult<FromClause> {
+    parser.advance()?; // consume (
+    parser.advance()?; // consume VALUES
+    let mut value_lists = Vec::new();
+    loop {
+        parser.expect(Token::LeftParen)?;
+        let mut values = Vec::new();
+        while !parser.matches(&[Token::RightParen]) {
+            values.push(utilities::parse_expression(parser)?);
+            if parser.matches(&[Token::Comma]) {
+                parser.advance()?;
+            } else {
+                break;
+            }
+        }
+        parser.expect(Token::RightParen)?;
+        value_lists.push(values);
+        if parser.matches(&[Token::Comma]) {
+            parser.advance()?;
+        } else {
+            break;
+        }
     }
+    parser.expect(Token::RightParen)?; // consume closing )
+    let alias = parse_alias_clause(parser)?;
+    Ok(FromClause::Values {
+        values: value_lists,
+        alias,
+    })
+}
 
-    Ok(left)
+fn parse_subquery_ref(parser: &mut SqlParser, lateral: bool) -> ParseResult<FromClause> {
+    parser.advance()?; // consume (
+    let stmt = parse_select(parser)?;
+    parser.expect(Token::RightParen)?; // consume closing )
+    let alias = parse_alias_clause(parser)?;
+    match stmt {
+        Statement::Select(query) => Ok(FromClause::Subquery {
+            query,
+            alias: alias.unwrap_or_else(|| TableAlias {
+                name: "subquery".to_string(),
+                columns: None,
+            }),
+            lateral,
+        }),
+        _ => Err(ParseError {
+            message: "Expected SELECT statement in subquery".to_string(),
+            position: parser.position,
+            expected: vec!["SELECT".to_string()],
+            found: parser.current_token.clone(),
+        }),
+    }
 }
 
 /// Check if current token is a JOIN keyword
@@ -825,86 +1037,48 @@ fn is_join_keyword(parser: &SqlParser) -> bool {
             | Some(Token::Right)
             | Some(Token::Full)
             | Some(Token::Cross)
+            | Some(Token::Natural)
     )
 }
 
-/// Parse a JOIN clause
+/// Parse a JOIN clause: `[NATURAL] [INNER|LEFT|RIGHT|FULL [OUTER]|CROSS] JOIN item [ON .. | USING (..)]`
 fn parse_join(parser: &mut SqlParser, left: FromClause) -> ParseResult<FromClause> {
     use crate::protocols::postgres_wire::sql::ast::{JoinCondition, JoinType};
 
-    // Determine join type
+    let natural = parser.matches(&[Token::Natural]);
+    if natural {
+        parser.advance()?;
+    }
     let join_type = match &parser.current_token {
-        Some(Token::Join) => {
-            parser.advance()?;
-            JoinType::Inner
-        }
-        Some(Token::Inner) => {
-            parser.advance()?;
-            parser.expect(Token::Join)?;
-            JoinType::Inner
-        }
-        Some(Token::Left) => {
-            parser.advance()?;
-            // OUTER is optional
-            if parser.matches(&[Token::Outer]) {
-                parser.advance()?;
-            }
-            parser.expect(Token::Join)?;
-            JoinType::LeftOuter
-        }
-        Some(Token::Right) => {
-            parser.advance()?;
-            // OUTER is optional
-            if parser.matches(&[Token::Outer]) {
-                parser.advance()?;
-            }
-            parser.expect(Token::Join)?;
-            JoinType::RightOuter
-        }
-        Some(Token::Full) => {
-            parser.advance()?;
-            // OUTER is optional
-            if parser.matches(&[Token::Outer]) {
-                parser.advance()?;
-            }
-            parser.expect(Token::Join)?;
-            JoinType::FullOuter
-        }
-        Some(Token::Cross) => {
-            parser.advance()?;
-            parser.expect(Token::Join)?;
-            JoinType::Cross
-        }
+        Some(Token::Join) => JoinType::Inner,
+        Some(Token::Inner) => JoinType::Inner,
+        Some(Token::Left) => JoinType::LeftOuter,
+        Some(Token::Right) => JoinType::RightOuter,
+        Some(Token::Full) => JoinType::FullOuter,
+        Some(Token::Cross) => JoinType::Cross,
         _ => {
             return Err(ParseError {
                 message: "Expected JOIN keyword".to_string(),
                 position: parser.position,
-                expected: vec![
-                    "JOIN".to_string(),
-                    "INNER JOIN".to_string(),
-                    "LEFT JOIN".to_string(),
-                    "RIGHT JOIN".to_string(),
-                    "FULL JOIN".to_string(),
-                    "CROSS JOIN".to_string(),
-                ],
+                expected: vec!["JOIN".to_string()],
                 found: parser.current_token.clone(),
             });
         }
     };
+    if !parser.matches(&[Token::Join]) {
+        parser.advance()?; // INNER / LEFT / RIGHT / FULL / CROSS
+        if parser.matches(&[Token::Outer]) {
+            parser.advance()?;
+        }
+    }
+    parser.expect(Token::Join)?;
 
-    // Parse the right table
-    let right_table_name = utilities::parse_table_name(parser)?;
-    let right_alias = parse_alias_clause(parser)?;
-    let right = FromClause::Table {
-        name: right_table_name,
-        alias: right_alias,
-        time_travel: None, // UPDATE/DELETE don't support time travel
-    };
+    let right = parse_table_ref(parser)?;
 
     // Parse join condition (ON or USING)
-    let condition = if join_type == JoinType::Cross {
-        // CROSS JOIN has no condition
-        JoinCondition::Natural // Use Natural as a placeholder for no condition
+    let condition = if join_type == JoinType::Cross || natural {
+        // CROSS JOIN has no condition; NATURAL joins on the columns the sides share
+        JoinCondition::Natural
     } else if parser.matches(&[Token::On]) {
         parser.advance()?;
         let expr = parse_expression_with_parser(parser)?;
@@ -929,13 +1103,21 @@ fn parse_join(parser: &mut SqlParser, left: FromClause) -> ParseResult<FromClaus
         parser.expect(Token::RightParen)?;
         JoinCondition::Using(columns)
     } else {
-        // Natural join
-        JoinCondition::Natural
+        return Err(ParseError {
+            message: "Expected ON or USING after JOIN".to_string(),
+            position: parser.position,
+            expected: vec!["ON".to_string(), "USING".to_string()],
+            found: parser.current_token.clone(),
+        });
     };
 
     Ok(FromClause::Join {
         left: Box::new(left),
-        join_type,
+        join_type: if natural && join_type == JoinType::Cross {
+            JoinType::Cross
+        } else {
+            join_type
+        },
         right: Box::new(right),
         condition,
     })
@@ -1168,25 +1350,20 @@ fn parse_order_by_clause(parser: &mut SqlParser) -> ParseResult<Vec<OrderByItem>
             _ => None,
         };
 
-        // Parse optional NULLS FIRST/LAST
-        let nulls = if let Some(Token::Identifier(nulls_kw)) = &parser.current_token {
-            if nulls_kw.to_uppercase() == "NULLS" {
+        // Parse optional NULLS FIRST/LAST (the lexer makes them keywords, but accept bare identifiers too)
+        let is_word = |t: &Option<Token>, kw: &Token, word: &str| match t {
+            Some(t) if t == kw => true,
+            Some(Token::Identifier(id)) => id.eq_ignore_ascii_case(word),
+            _ => false,
+        };
+        let nulls = if is_word(&parser.current_token, &Token::Nulls, "NULLS") {
+            parser.advance()?;
+            if is_word(&parser.current_token, &Token::First, "FIRST") {
                 parser.advance()?;
-                if let Some(Token::Identifier(order)) = &parser.current_token {
-                    match order.to_uppercase().as_str() {
-                        "FIRST" => {
-                            parser.advance()?;
-                            Some(NullsOrder::First)
-                        }
-                        "LAST" => {
-                            parser.advance()?;
-                            Some(NullsOrder::Last)
-                        }
-                        _ => None,
-                    }
-                } else {
-                    None
-                }
+                Some(NullsOrder::First)
+            } else if is_word(&parser.current_token, &Token::Last, "LAST") {
+                parser.advance()?;
+                Some(NullsOrder::Last)
             } else {
                 None
             }

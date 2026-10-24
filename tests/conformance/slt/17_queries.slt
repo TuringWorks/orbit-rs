@@ -1,0 +1,342 @@
+# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.
+
+# Subqueries, set operations, joins, CTEs, LATERAL, generate_series.
+
+statement ok
+DROP TABLE IF EXISTS cf17_emp
+
+statement ok
+DROP TABLE IF EXISTS cf17_dept
+
+statement ok
+CREATE TABLE cf17_dept (id int PRIMARY KEY, name text)
+
+statement ok
+CREATE TABLE cf17_emp (id int PRIMARY KEY, name text, dept_id int, boss_id int, salary int)
+
+statement ok
+INSERT INTO cf17_dept VALUES (1, 'eng'), (2, 'ops'), (3, 'empty')
+
+statement ok
+INSERT INTO cf17_emp VALUES (1,'ann',1,NULL,100), (2,'bob',1,1,80), (3,'cy',2,1,70), (4,'dee',2,3,60), (5,'eve',NULL,1,50)
+
+query TT
+SELECT e.name, d.name FROM cf17_emp e INNER JOIN cf17_dept d ON e.dept_id = d.id ORDER BY e.id
+----
+ann eng
+bob eng
+cy ops
+dee ops
+
+query TT
+SELECT e.name, d.name FROM cf17_emp e LEFT JOIN cf17_dept d ON e.dept_id = d.id ORDER BY e.id
+----
+ann eng
+bob eng
+cy ops
+dee ops
+eve NULL
+
+query TT
+SELECT e.name, d.name FROM cf17_emp e RIGHT JOIN cf17_dept d ON e.dept_id = d.id ORDER BY d.id, e.id
+----
+ann eng
+bob eng
+cy ops
+dee ops
+NULL empty
+
+query TT
+SELECT e.name, d.name FROM cf17_emp e FULL JOIN cf17_dept d ON e.dept_id = d.id ORDER BY e.id NULLS LAST, d.id
+----
+ann eng
+bob eng
+cy ops
+dee ops
+eve NULL
+NULL empty
+
+query T
+SELECT count(*) FROM cf17_emp CROSS JOIN cf17_dept
+----
+15
+
+query TT
+SELECT e.name, b.name AS boss FROM cf17_emp e LEFT JOIN cf17_emp b ON e.boss_id = b.id ORDER BY e.id
+----
+ann NULL
+bob ann
+cy ann
+dee cy
+eve ann
+
+query T
+SELECT name FROM cf17_emp NATURAL JOIN (SELECT id, 'x' AS tag FROM cf17_dept) d ORDER BY name
+----
+ann
+bob
+cy
+
+statement error (42702)
+SELECT name FROM cf17_emp JOIN cf17_dept USING (id) ORDER BY name
+
+query T
+SELECT name FROM cf17_emp WHERE salary > (SELECT avg(salary) FROM cf17_emp) ORDER BY name
+----
+ann
+bob
+
+query T
+SELECT name FROM cf17_emp e WHERE salary = (SELECT max(salary) FROM cf17_emp WHERE dept_id = e.dept_id) ORDER BY name
+----
+ann
+cy
+
+query T
+SELECT name FROM cf17_dept d WHERE EXISTS (SELECT 1 FROM cf17_emp e WHERE e.dept_id = d.id) ORDER BY name
+----
+eng
+ops
+
+query T
+SELECT name FROM cf17_dept d WHERE NOT EXISTS (SELECT 1 FROM cf17_emp e WHERE e.dept_id = d.id)
+----
+empty
+
+query TT
+SELECT name, (SELECT count(*) FROM cf17_emp e WHERE e.dept_id = d.id) FROM cf17_dept d ORDER BY d.id
+----
+eng 2
+ops 2
+empty 0
+
+query T
+SELECT name FROM cf17_emp WHERE dept_id IN (SELECT id FROM cf17_dept WHERE name = 'ops') ORDER BY name
+----
+cy
+dee
+
+query T
+SELECT name FROM cf17_emp WHERE salary > ALL (SELECT salary FROM cf17_emp WHERE dept_id = 2) ORDER BY name
+----
+ann
+bob
+
+query T
+SELECT name FROM cf17_emp WHERE salary > ANY (SELECT salary FROM cf17_emp WHERE dept_id = 2) ORDER BY name
+----
+ann
+bob
+cy
+
+query T
+SELECT id FROM cf17_emp UNION SELECT id FROM cf17_dept ORDER BY id
+----
+1
+2
+3
+4
+5
+
+query T
+SELECT dept_id FROM cf17_emp UNION ALL SELECT id FROM cf17_dept ORDER BY 1 NULLS LAST
+----
+1
+1
+1
+2
+2
+2
+3
+NULL
+
+query T
+SELECT id FROM cf17_dept INTERSECT SELECT dept_id FROM cf17_emp ORDER BY id
+----
+1
+2
+
+query T
+SELECT id FROM cf17_dept EXCEPT SELECT dept_id FROM cf17_emp
+----
+3
+
+query T
+SELECT id FROM cf17_dept EXCEPT ALL SELECT dept_id FROM cf17_emp ORDER BY id
+----
+3
+
+query TT
+WITH RECURSIVE chain AS (SELECT id, name, 0 AS depth FROM cf17_emp WHERE boss_id IS NULL UNION ALL SELECT e.id, e.name, c.depth + 1 FROM cf17_emp e JOIN chain c ON e.boss_id = c.id) SELECT name, depth FROM chain ORDER BY depth, name
+----
+ann 0
+bob 1
+cy 1
+eve 1
+dee 2
+
+query T
+WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 5) SELECT sum(i) FROM n
+----
+15
+
+query T
+WITH a AS (SELECT dept_id, sum(salary) AS s FROM cf17_emp GROUP BY dept_id), b AS (SELECT max(s) AS m FROM a) SELECT a.dept_id FROM a, b WHERE a.s = b.m
+----
+1
+
+query T
+WITH m AS MATERIALIZED (SELECT * FROM cf17_emp WHERE salary > 60) SELECT count(*) FROM m
+----
+3
+
+query TT
+SELECT d.name, e.name FROM cf17_dept d CROSS JOIN LATERAL (SELECT name FROM cf17_emp WHERE dept_id = d.id ORDER BY salary DESC LIMIT 1) e ORDER BY d.id
+----
+eng ann
+ops cy
+
+query TT
+SELECT d.name, x.cnt FROM cf17_dept d LEFT JOIN LATERAL (SELECT count(*) AS cnt FROM cf17_emp WHERE dept_id = d.id) x ON true ORDER BY d.id
+----
+eng 2
+ops 2
+empty 0
+
+query TT rowsort
+SELECT g, g * g FROM generate_series(1, 5) g
+----
+1 1
+2 4
+3 9
+4 16
+5 25
+
+query T rowsort
+SELECT g FROM generate_series(10, 1, -3) g
+----
+1
+10
+4
+7
+
+query T
+SELECT g FROM generate_series(1, 0) g
+----
+
+query TT rowsort
+SELECT * FROM generate_series(1, 3) WITH ORDINALITY AS t(v, n)
+----
+1 1
+2 2
+3 3
+
+query TT
+SELECT x, y FROM (VALUES (1, 'a'), (2, 'b')) AS t(x, y) ORDER BY x
+----
+1 a
+2 b
+
+query TT
+VALUES (1, 'a'), (2, 'b') ORDER BY 1 DESC
+----
+2 b
+1 a
+
+query TT
+SELECT * FROM (SELECT id, salary FROM cf17_emp) sub WHERE salary > 60 ORDER BY id
+----
+1 100
+2 80
+3 70
+
+query TT
+SELECT t.* FROM (SELECT 1 AS a, 2 AS b) t
+----
+1 2
+
+query TT
+SELECT name, salary FROM cf17_emp ORDER BY salary DESC LIMIT 2
+----
+ann 100
+bob 80
+
+query T
+SELECT name FROM cf17_emp ORDER BY 1 LIMIT ALL OFFSET 3
+----
+dee
+eve
+
+query T
+SELECT name FROM cf17_emp WHERE name ~ '^[a-c]' ORDER BY name
+----
+ann
+bob
+cy
+
+query TT
+SELECT dept_id, count(*) FROM cf17_emp GROUP BY dept_id ORDER BY dept_id NULLS FIRST
+----
+NULL 1
+1 2
+2 2
+
+query TTT
+SELECT 1 AS one, 2 two, 'three' "Three"
+----
+1 2 three
+
+query TTTTTTT
+SELECT e.* , d.* FROM cf17_emp e JOIN cf17_dept d ON d.id = e.dept_id WHERE e.id = 1
+----
+1 ann 1 NULL 100 1 eng
+
+query TTTTT
+SELECT * FROM cf17_emp WHERE id = ANY(ARRAY[1,3]) ORDER BY id
+----
+1 ann 1 NULL 100
+3 cy 2 1 70
+
+query TTTTT
+SELECT * FROM cf17_emp WHERE (dept_id, salary) IN ((1, 100), (2, 60)) ORDER BY id
+----
+1 ann 1 NULL 100
+4 dee 2 3 60
+
+query TTTTT
+SELECT * FROM cf17_emp WHERE name IS DISTINCT FROM 'ann' AND boss_id IS NOT DISTINCT FROM 1 ORDER BY id
+----
+2 bob 1 1 80
+3 cy 2 1 70
+5 eve NULL 1 50
+
+query T
+SELECT count(*) FROM cf17_emp TABLESAMPLE BERNOULLI (100)
+----
+5
+
+query TT
+TABLE cf17_dept ORDER BY id
+----
+1 eng
+2 ops
+3 empty
+
+query T
+SELECT ALL name FROM cf17_dept ORDER BY 1
+----
+empty
+eng
+ops
+
+statement ok
+SELECT id INTO TEMP cf17_into FROM cf17_dept
+
+query T
+SELECT count(*) FROM cf17_into
+----
+3
+
+statement ok
+DROP TABLE cf17_emp, cf17_dept
+

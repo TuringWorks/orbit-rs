@@ -534,12 +534,13 @@ fn eval_lua_blocking(
     // Setup execution guard and interrupt long-running scripts at the Lua VM
     // instruction boundary. This keeps timeout enforcement effective even
     // when the script never yields back to Tokio.
-    let guard = ExecutionGuard::new(&config.limits);
+    let guard = std::sync::Arc::new(ExecutionGuard::new(&config.limits));
+    let hook_guard = std::sync::Arc::clone(&guard);
     let timeout_ms = config.limits.timeout.as_millis() as u64;
     lua.set_hook(
         mlua::HookTriggers::new().every_nth_instruction(1_000),
         move |_lua, _debug| {
-            guard
+            hook_guard
                 .should_continue()
                 .map(|()| mlua::VmState::Continue)
                 .map_err(|error| {

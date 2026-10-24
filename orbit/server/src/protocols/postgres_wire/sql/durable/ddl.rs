@@ -71,6 +71,7 @@ fn build_col(table: &str, def: &ColumnDefinition) -> (Col, bool, bool) {
         not_null: false,
         default: None,
         serial: None,
+        generated: false,
     };
     let (mut primary, mut unique) = (false, false);
     for c in &def.constraints {
@@ -84,7 +85,8 @@ fn build_col(table: &str, def: &ColumnDefinition) -> (Col, bool, bool) {
             }
             ColumnConstraint::Unique => unique = true,
             ColumnConstraint::Generated { expression, .. } => {
-                col.default = Some(expression.clone())
+                col.default = Some(expression.clone());
+                col.generated = true;
             }
             _ => {}
         }

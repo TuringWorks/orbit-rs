@@ -514,6 +514,12 @@ pub enum Token {
     BitwiseOr,
     BitwiseXor,
     BitwiseNot,
+    /// `~*` case-insensitive regex match
+    RegexMatchCi,
+    /// `!~` regex non-match
+    RegexNotMatch,
+    /// `!~*` case-insensitive regex non-match
+    RegexNotMatchCi,
     LeftShift,
     RightShift,
 
@@ -1558,7 +1564,20 @@ impl Lexer {
                         }
                         '~' => {
                             self.advance();
+                            if self.current_char == Some('*') {
+                                self.advance();
+                                return Token::RegexMatchCi;
+                            }
                             return Token::BitwiseNot;
+                        }
+                        '!' if self.peek() == Some('~') => {
+                            self.advance();
+                            self.advance();
+                            if self.current_char == Some('*') {
+                                self.advance();
+                                return Token::RegexNotMatchCi;
+                            }
+                            return Token::RegexNotMatch;
                         }
 
                         '#' => {

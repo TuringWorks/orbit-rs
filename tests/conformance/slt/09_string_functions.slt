@@ -1,0 +1,99 @@
+# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.
+
+# String functions and operators.
+
+query TTTTTT
+SELECT length('hello'), char_length('héllo'), octet_length('héllo'), upper('abc'), lower('ABC'), initcap('hello world')
+----
+5 5 6 ABC abc Hello World
+
+query TTTTT
+SELECT substring('postgres' from 2 for 3), substring('postgres', 3), substr('postgres', 1, 4), left('postgres', 4), right('postgres', 3)
+----
+ost stgres post post res
+
+query TTT
+SELECT position('gre' in 'postgres'), strpos('postgres', 'g'), strpos('postgres', 'z')
+----
+5 5 0
+
+query TTTTT
+SELECT trim('  x  ') || '|', ltrim('  x') || '|', rtrim('x  ') || '|', trim(both 'x' from 'xxhixx'), btrim('xxhixx', 'x')
+----
+x| x| x| hi hi
+
+query TTTTT
+SELECT lpad('7', 3, '0'), rpad('7', 3, '*'), lpad('abcd', 2), repeat('ab', 3), reverse('abc')
+----
+007 7** ab ababab cba
+
+query TTT
+SELECT replace('aXbXc', 'X', '-'), translate('12345', '143', 'ax'), overlay('Txxxxas' placing 'hom' from 2 for 4)
+----
+a-b-c a2x5 Thomas
+
+query TTT
+SELECT concat('a', NULL, 'b'), concat_ws('-', 'a', NULL, 'b'), 'a' || 'b' || 'c'
+----
+ab a-b abc
+
+query TT
+SELECT split_part('a,b,c', ',', 2), split_part('a,b,c', ',', 4) = ''
+----
+b t
+
+query TT
+SELECT string_to_array('a,b,c', ','), array_to_string(ARRAY['a','b','c'], '|')
+----
+{a,b,c} a|b|c
+
+query TTTTTT
+SELECT 'abc' LIKE 'a%', 'abc' LIKE '_b_', 'abc' LIKE 'A%', 'abc' ILIKE 'A%', 'abc' NOT LIKE 'x%', 'a%c' LIKE 'a\%c'
+----
+t t f t t t
+
+query TTTT
+SELECT 'abc' ~ '^a', 'abc' ~ '^b', 'abc' ~* '^A', 'abc' !~ 'z'
+----
+t f t t
+
+query TTT
+SELECT regexp_replace('hello world', 'o', '0'), regexp_replace('hello world', 'o', '0', 'g'), regexp_match('abc123', '[0-9]+')
+----
+hell0 world hell0 w0rld {123}
+
+query TTTTT
+SELECT ascii('A'), chr(66), md5('abc'), encode('abc'::bytea, 'hex'), decode('616263', 'hex')
+----
+65 B 900150983cd24fb0d6963f7d28e17f72 616263 \x616263
+
+query TTTT
+SELECT format('%s-%s', 'a', 'b'), format('%5s|%-5s|', 'ab', 'cd'), format('%I', 'Mixed Case'), format('%L', 'it''s')
+----
+a-b    ab|cd   | "Mixed Case" 'it''s'
+
+query TTT
+SELECT quote_ident('a b'), quote_literal('it''s'), quote_nullable(NULL)
+----
+"a b" 'it''s' NULL
+
+query TT
+SELECT starts_with('postgres', 'post'), 'postgres' ^@ 'post'
+----
+t t
+
+query TTTT
+SELECT to_char(1234.5, '9999.99'), to_char(7, 'FM000'), to_hex(255), to_number('1,234.5', '9,999.9')
+----
+ 1234.50 007 ff 1234.5
+
+query TTTT
+SELECT upper(NULL) IS NULL, length('') , '' IS NULL, 'a' || '' = 'a'
+----
+t 0 f t
+
+query TTTT
+SELECT 'é' < 'z', length(E'a\tb'), 'it''s', E'line\\n'
+----
+t 3 it's line\n
+

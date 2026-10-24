@@ -215,13 +215,13 @@ impl SelectParser {
         pos: &mut usize,
     ) -> ProtocolResult<WithClause> {
         self.expect_token(tokens, pos, &Token::With)?;
-        let recursive =
-            if self.matches_at(tokens, *pos, &Token::Identifier("RECURSIVE".to_string())) {
+        let recursive = match tokens.get(*pos) {
+            Some(Token::Identifier(word)) if word.eq_ignore_ascii_case("RECURSIVE") => {
                 *pos += 1;
                 true
-            } else {
-                false
-            };
+            }
+            _ => false,
+        };
 
         let mut ctes = Vec::new();
         loop {
@@ -265,9 +265,21 @@ impl SelectParser {
 
         // Expect AS
         self.expect_token(tokens, pos, &Token::As)?;
+        // `AS [NOT] MATERIALIZED (..)` is an optimiser hint; the result is the same
+        let word = |t: Option<&Token>| match t {
+            Some(Token::Identifier(w)) => Some(w.to_ascii_uppercase()),
+            Some(Token::Not) => Some("NOT".to_string()),
+            _ => None,
+        };
+        if word(tokens.get(*pos)).as_deref() == Some("NOT") {
+            *pos += 1;
+        }
+        if word(tokens.get(*pos)).as_deref() == Some("MATERIALIZED") {
+            *pos += 1;
+        }
         self.expect_token(tokens, pos, &Token::LeftParen)?;
 
-        let query = Box::new(self.parse_select(tokens, pos)?);
+        let query = Box::new(crate::protocols::postgres_wire::sql::parser::dml::parse_nested_select(tokens, pos)?);
 
         self.expect_token(tokens, pos, &Token::RightParen)?;
 
@@ -461,6 +473,7 @@ impl SelectParser {
                         function: *func,
                         alias,
                         lateral,
+                        with_ordinality: false,
                     })
                 } else {
                     Err(crate::protocols::error::ProtocolError::ParseError(

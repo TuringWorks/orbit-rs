@@ -624,6 +624,9 @@ impl ExpressionEvaluator {
 
         match operator {
             BinaryOperator::Plus => self.arithmetic_op(&left_val, &right_val, "+"),
+            BinaryOperator::Minus if matches!(left_val, SqlValue::Json(_) | SqlValue::Jsonb(_)) => {
+                self.json_delete(&left_val, &right_val)
+            }
             BinaryOperator::Minus => self.arithmetic_op(&left_val, &right_val, "-"),
             BinaryOperator::Multiply => self.arithmetic_op(&left_val, &right_val, "*"),
             BinaryOperator::Divide => self.arithmetic_op(&left_val, &right_val, "/"),
@@ -672,6 +675,17 @@ impl ExpressionEvaluator {
             BinaryOperator::And => self.logical_and(&left_val, &right_val),
             BinaryOperator::Or => self.logical_or(&left_val, &right_val),
 
+            BinaryOperator::Concat
+                if matches!(left_val, SqlValue::Json(_) | SqlValue::Jsonb(_))
+                    || matches!(right_val, SqlValue::Json(_) | SqlValue::Jsonb(_)) =>
+            {
+                self.json_concat(&left_val, &right_val)
+            }
+            BinaryOperator::Concat
+                if matches!(left_val, SqlValue::Array(_)) || matches!(right_val, SqlValue::Array(_)) =>
+            {
+                Ok(Self::array_concat(left_val, right_val))
+            }
             BinaryOperator::Concat => self.string_concat(&left_val, &right_val),
             BinaryOperator::Like => self.pattern_match(&left_val, &right_val, false, false),
             BinaryOperator::ILike => self.pattern_match(&left_val, &right_val, true, false),
@@ -706,9 +720,19 @@ impl ExpressionEvaluator {
             BinaryOperator::JsonDeletePath => self.json_delete_path(&left_val, &right_val),
 
             // Range operators (PostgreSQL range types)
-            BinaryOperator::RangeContains => self.range_contains(&left_val, &right_val),
-            BinaryOperator::RangeContainedBy => self.range_contained_by(&left_val, &right_val),
-            BinaryOperator::RangeOverlaps => self.range_overlaps(&left_val, &right_val),
+            // `@>`, `<@` and `&&` are shared by ranges, JSONB and arrays
+            BinaryOperator::RangeContains => match Self::container_operator(&left_val, &right_val, "contains") {
+                Some(result) => result,
+                None => self.range_contains(&left_val, &right_val),
+            },
+            BinaryOperator::RangeContainedBy => match Self::container_operator(&left_val, &right_val, "contained") {
+                Some(result) => result,
+                None => self.range_contained_by(&left_val, &right_val),
+            },
+            BinaryOperator::RangeOverlaps => match Self::container_operator(&left_val, &right_val, "overlaps") {
+                Some(result) => result,
+                None => self.range_overlaps(&left_val, &right_val),
+            },
             BinaryOperator::RangeAdjacent => self.range_adjacent(&left_val, &right_val),
             BinaryOperator::RangeStrictlyLeft => self.range_strictly_left(&left_val, &right_val),
             BinaryOperator::RangeStrictlyRight => self.range_strictly_right(&left_val, &right_val),
@@ -843,6 +867,8 @@ impl ExpressionEvaluator {
             "REGR_SYY" => self.evaluate_regr_syy(&args),
             "REGR_SXY" => self.evaluate_regr_sxy(&args),
 
+            "CURRENT_SETTING" => self.evaluate_current_setting(&args),
+
             // String functions
             "LENGTH" | "CHAR_LENGTH" | "CHARACTER_LENGTH" => self.evaluate_length(&args),
             "UPPER" => self.evaluate_upper(&args),
@@ -859,7 +885,12 @@ impl ExpressionEvaluator {
             "TRIM" | "BTRIM" => self.evaluate_trim(&args),
             "LTRIM" => self.evaluate_ltrim(&args),
             "RTRIM" => self.evaluate_rtrim(&args),
-            "POSITION" | "STRPOS" => self.evaluate_position(&args),
+            "POSITION" => self.evaluate_position(&args),
+            // strpos(string, substring) takes its arguments the other way round from position(sub IN string)
+            "STRPOS" => match args.as_slice() {
+                [string, substring] => self.evaluate_position(&[substring.clone(), string.clone()]),
+                _ => self.evaluate_position(&args),
+            },
             "INITCAP" => self.evaluate_initcap(&args),
             "REPEAT" => self.evaluate_repeat(&args),
             "ASCII" => self.evaluate_ascii(&args),
@@ -2292,6 +2323,78 @@ impl ExpressionEvaluator {
             _ => Err(ProtocolError::PostgresError(
                 "LOWER requires string argument".to_string(),
             )),
+        }
+    }
+
+    /// `current_setting(name [, missing_ok])`: the session settings the server reports.
+    fn evaluate_current_setting(&self, args: &[SqlValue]) -> ProtocolResult<SqlValue> {
+        let (name, missing_ok) = match args {
+            [SqlValue::Text(n) | SqlValue::Varchar(n)] => (n, false),
+            [SqlValue::Text(n) | SqlValue::Varchar(n), SqlValue::Boolean(ok)] => (n, *ok),
+            _ => {
+                return Err(ProtocolError::PostgresError(
+                    "current_setting requires a name and optional missing_ok flag".to_string(),
+                ))
+            }
+        };
+        match crate::protocols::postgres_wire::session_compat::setting(name) {
+            Some(value) => Ok(SqlValue::Text(value.to_string())),
+            None if missing_ok => Ok(SqlValue::Null),
+            None => Err(ProtocolError::PostgresError(format!(
+                "[42704] unrecognized configuration parameter \"{name}\""
+            ))),
+        }
+    }
+
+    /// `a || b` where either side is an array: array || array concatenates, array || element appends,
+    /// element || array prepends.
+    fn array_concat(left: SqlValue, right: SqlValue) -> SqlValue {
+        match (left, right) {
+            (SqlValue::Array(mut a), SqlValue::Array(b)) => {
+                a.extend(b);
+                SqlValue::Array(a)
+            }
+            (SqlValue::Array(mut a), element) => {
+                a.push(element);
+                SqlValue::Array(a)
+            }
+            (element, SqlValue::Array(mut b)) => {
+                b.insert(0, element);
+                SqlValue::Array(b)
+            }
+            (a, _) => a,
+        }
+    }
+
+    /// The array and JSONB meanings of `@>` (contains), `<@` (contained) and `&&` (overlaps).
+    /// `None` when neither operand is an array or JSONB, so the range implementation takes over.
+    fn container_operator(
+        left: &SqlValue,
+        right: &SqlValue,
+        op: &str,
+    ) -> Option<ProtocolResult<SqlValue>> {
+        let same = |a: &SqlValue, b: &SqlValue| {
+            super::durable::value::cmp(a, b) == std::cmp::Ordering::Equal
+        };
+        match (left, right) {
+            (SqlValue::Array(a), SqlValue::Array(b)) => {
+                let holds = |hay: &[SqlValue], needles: &[SqlValue]| {
+                    needles.iter().all(|n| hay.iter().any(|h| same(h, n)))
+                };
+                Some(Ok(SqlValue::Boolean(match op {
+                    "contains" => holds(a, b),
+                    "contained" => holds(b, a),
+                    _ => a.iter().any(|x| b.iter().any(|y| same(x, y))),
+                })))
+            }
+            (SqlValue::Json(l) | SqlValue::Jsonb(l), SqlValue::Json(r) | SqlValue::Jsonb(r)) => {
+                Some(Ok(SqlValue::Boolean(match op {
+                    "contains" => json_value_contains(l, r),
+                    "contained" => json_value_contains(r, l),
+                    _ => return None,
+                })))
+            }
+            _ => None,
         }
     }
 
@@ -9335,5 +9438,21 @@ impl ExpressionEvaluator {
 impl Default for ExpressionEvaluator {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// JSONB containment (`l @> r`): objects contain a key if the value contains, arrays contain every
+/// element of `r` somewhere (a scalar counts as a one-element array), scalars compare equal.
+fn json_value_contains(l: &serde_json::Value, r: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    match (l, r) {
+        (Value::Object(a), Value::Object(b)) => b
+            .iter()
+            .all(|(k, v)| a.get(k).is_some_and(|x| json_value_contains(x, v))),
+        (Value::Array(a), Value::Array(b)) => b
+            .iter()
+            .all(|v| a.iter().any(|x| json_value_contains(x, v))),
+        (Value::Array(a), scalar) if !scalar.is_object() => a.iter().any(|x| x == scalar),
+        (a, b) => a == b,
     }
 }

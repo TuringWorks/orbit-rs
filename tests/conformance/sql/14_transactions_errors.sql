@@ -1,0 +1,143 @@
+# Transactions, error behaviour, and the SQLSTATE codes drivers branch on.
+
+DROP TABLE IF EXISTS cf14_a
+
+CREATE TABLE cf14_a (id int PRIMARY KEY, v int NOT NULL)
+
+BEGIN
+
+INSERT INTO cf14_a VALUES (1, 1)
+
+INSERT INTO cf14_a VALUES (1, 2)
+
+SELECT 1
+
+ROLLBACK
+
+SELECT count(*) FROM cf14_a
+
+BEGIN
+
+INSERT INTO cf14_a VALUES (1, 1)
+
+SAVEPOINT s1
+
+INSERT INTO cf14_a VALUES (1, 2)
+
+ROLLBACK TO SAVEPOINT s1
+
+INSERT INTO cf14_a VALUES (2, 2)
+
+RELEASE SAVEPOINT s1
+
+COMMIT
+
+SELECT id, v FROM cf14_a ORDER BY id
+
+COMMIT
+
+ROLLBACK
+
+BEGIN
+
+BEGIN
+
+ROLLBACK
+
+START TRANSACTION ISOLATION LEVEL SERIALIZABLE
+
+SHOW transaction_isolation
+
+COMMIT
+
+BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY
+
+INSERT INTO cf14_a VALUES (9, 9)
+
+ROLLBACK
+
+BEGIN
+
+SET LOCAL statement_timeout = '5s'
+
+SHOW statement_timeout
+
+COMMIT
+
+INSERT INTO cf14_a VALUES (3, NULL)
+
+INSERT INTO cf14_a VALUES ('x', 1)
+
+INSERT INTO cf14_a VALUES (4, 1, 1)
+
+SELECT * FROM cf14_nope
+
+SELECT nope FROM cf14_a
+
+SELECT id FROM cf14_a a, cf14_a b
+
+SELECT 1 FROM cf14_a GROUP BY nope
+
+SELECT id, count(*) FROM cf14_a
+
+SELECT 1/0
+
+SELECT 'x'::int
+
+SELECT nofunc(1)
+
+SELECT 1 +
+
+SELECT * FROM
+
+CREATE TABLE cf14_a (id int)
+
+DROP TABLE cf14_missing
+
+ALTER TABLE cf14_missing ADD COLUMN x int
+
+CREATE TABLE cf14_bad (id nosuchtype)
+
+SELECT id FROM cf14_a FOR UPDATE
+
+SELECT id FROM cf14_a ORDER BY id FOR UPDATE SKIP LOCKED
+
+SELECT id FROM cf14_a WHERE id = 1 FOR SHARE NOWAIT
+
+LOCK TABLE cf14_a IN ACCESS EXCLUSIVE MODE
+
+BEGIN
+
+LOCK TABLE cf14_a IN ACCESS EXCLUSIVE MODE
+
+COMMIT
+
+SET search_path TO public
+
+SHOW search_path
+
+SET application_name = 'cf'
+
+SHOW application_name
+
+RESET application_name
+
+SET nosuch.setting = 1
+
+SHOW nosuch_setting
+
+DISCARD ALL
+
+DEALLOCATE ALL
+
+PREPARE cf14_p (int) AS SELECT v FROM cf14_a WHERE id = $1
+
+EXECUTE cf14_p(1)
+
+DEALLOCATE cf14_p
+
+EXECUTE cf14_p(1)
+
+EXPLAIN SELECT 1
+
+DROP TABLE cf14_a

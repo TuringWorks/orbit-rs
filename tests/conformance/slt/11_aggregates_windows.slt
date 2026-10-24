@@ -1,0 +1,194 @@
+# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.
+
+# Aggregates, GROUP BY variants, and window functions.
+
+statement ok
+DROP TABLE IF EXISTS cf11_sales
+
+statement ok
+CREATE TABLE cf11_sales (id int PRIMARY KEY, region text, product text, qty int, price numeric(8,2), sold date)
+
+statement ok
+INSERT INTO cf11_sales VALUES (1,'east','apple',10,1.50,'2026-01-05'), (2,'east','pear',5,2.00,'2026-01-06'), (3,'west','apple',7,1.50,'2026-01-07'), (4,'west','fig',3,4.00,'2026-02-01'), (5,'north','apple',NULL,1.50,'2026-02-02'), (6,'east','apple',2,1.75,'2026-02-03')
+
+query TTTTTTT
+SELECT count(*), count(qty), count(DISTINCT product), sum(qty), avg(qty), min(qty), max(qty) FROM cf11_sales
+----
+6 5 3 27 5.4000000000000000 2 10
+
+query TTT
+SELECT region, count(*), sum(qty) FROM cf11_sales GROUP BY region ORDER BY region
+----
+east 3 17
+north 1 NULL
+west 2 10
+
+query TTT
+SELECT region, product, sum(qty * price) FROM cf11_sales GROUP BY region, product ORDER BY 1, 2
+----
+east apple 18.50
+east pear 10.00
+north apple NULL
+west apple 10.50
+west fig 12.00
+
+query TT
+SELECT region, sum(qty) FROM cf11_sales GROUP BY region HAVING sum(qty) > 8 ORDER BY region
+----
+east 17
+west 10
+
+query TTT
+SELECT product, count(*) FILTER (WHERE region = 'east'), sum(qty) FILTER (WHERE qty > 3) FROM cf11_sales GROUP BY product ORDER BY product
+----
+apple 2 17
+fig 0 NULL
+pear 1 5
+
+query TTT
+SELECT region, string_agg(product, ',' ORDER BY product), array_agg(id ORDER BY id) FROM cf11_sales GROUP BY region ORDER BY region
+----
+east apple,apple,pear {1,2,6}
+north apple {5}
+west apple,fig {3,4}
+
+query TTT
+SELECT bool_and(qty > 0), bool_or(qty > 9), every(price > 1) FROM cf11_sales
+----
+t t t
+
+query TT
+SELECT sum(qty), sum(qty) IS NULL FROM cf11_sales WHERE id > 100
+----
+NULL t
+
+query T
+SELECT count(*) FROM cf11_sales WHERE id > 100
+----
+0
+
+query TTTT
+SELECT avg(price), round(avg(price), 2), stddev_pop(price) > 0, variance(price) > 0 FROM cf11_sales
+----
+2.0416666666666667 2.04 t t
+
+query TT
+SELECT region, sum(qty) FROM cf11_sales GROUP BY ROLLUP (region) ORDER BY region NULLS LAST
+----
+east 17
+north NULL
+west 10
+NULL 27
+
+query TTT
+SELECT region, product, count(*) FROM cf11_sales GROUP BY GROUPING SETS ((region), (product), ()) ORDER BY region NULLS LAST, product NULLS LAST
+----
+east NULL 3
+north NULL 1
+west NULL 2
+NULL apple 4
+NULL fig 1
+NULL pear 1
+NULL NULL 6
+
+query TTT
+SELECT id, region, row_number() OVER (PARTITION BY region ORDER BY id) FROM cf11_sales ORDER BY id
+----
+1 east 1
+2 east 2
+3 west 1
+4 west 2
+5 north 1
+6 east 3
+
+query TTT
+SELECT id, rank() OVER (ORDER BY price), dense_rank() OVER (ORDER BY price) FROM cf11_sales ORDER BY id
+----
+1 1 1
+2 5 3
+3 1 1
+4 6 4
+5 1 1
+6 4 2
+
+query TTT
+SELECT id, sum(qty) OVER (ORDER BY id), sum(qty) OVER (PARTITION BY region ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM cf11_sales ORDER BY id
+----
+1 10 10
+2 15 15
+3 22 7
+4 25 10
+5 25 NULL
+6 27 17
+
+query TTTTT
+SELECT id, lag(qty) OVER (ORDER BY id), lead(qty, 2, -1) OVER (ORDER BY id), first_value(id) OVER (PARTITION BY region ORDER BY id), last_value(id) OVER (PARTITION BY region ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM cf11_sales ORDER BY id
+----
+1 NULL 7 1 6
+2 10 3 1 6
+3 5 NULL 3 4
+4 7 2 3 4
+5 3 -1 5 5
+6 NULL -1 1 6
+
+query TTTT
+SELECT id, ntile(3) OVER (ORDER BY id), percent_rank() OVER (ORDER BY id), cume_dist() OVER (ORDER BY id) FROM cf11_sales ORDER BY id
+----
+1 1 0 0.16666666666666666
+2 1 0.2 0.3333333333333333
+3 2 0.4 0.5
+4 2 0.6 0.6666666666666666
+5 3 0.8 0.8333333333333334
+6 3 1 1
+
+query TTT
+SELECT id, avg(price) OVER w, count(*) OVER w FROM cf11_sales WINDOW w AS (PARTITION BY region) ORDER BY id
+----
+1 1.7500000000000000 3
+2 1.7500000000000000 3
+3 2.7500000000000000 2
+4 2.7500000000000000 2
+5 1.50000000000000000000 1
+6 1.7500000000000000 3
+
+query T
+SELECT DISTINCT region FROM cf11_sales ORDER BY region
+----
+east
+north
+west
+
+query TT
+SELECT DISTINCT ON (region) region, id FROM cf11_sales ORDER BY region, id DESC
+----
+east 6
+north 5
+west 4
+
+query TT
+SELECT region, qty FROM cf11_sales ORDER BY qty DESC NULLS LAST, id LIMIT 3
+----
+east 10
+west 7
+east 5
+
+query TT
+SELECT region, qty FROM cf11_sales ORDER BY qty NULLS FIRST, id LIMIT 2 OFFSET 1
+----
+east 2
+west 3
+
+query T
+SELECT id FROM cf11_sales ORDER BY id FETCH FIRST 2 ROWS ONLY
+----
+1
+2
+
+query TT
+SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price), mode() WITHIN GROUP (ORDER BY product) FROM cf11_sales
+----
+1.625 apple
+
+statement ok
+DROP TABLE cf11_sales
+

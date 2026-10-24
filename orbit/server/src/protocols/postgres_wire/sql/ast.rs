@@ -811,6 +811,8 @@ pub enum FromClause {
         function: FunctionCall,
         alias: Option<TableAlias>,
         lateral: bool,
+        /// `WITH ORDINALITY`: a trailing 1-based `ordinality` column
+        with_ordinality: bool,
     },
     JsonTable(JsonTable),
 }

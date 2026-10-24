@@ -1,7 +1,7 @@
 # Orbit-RS Development Makefile
 # Common tasks for development workflow
 
-.PHONY: conformance conformance-probe conformance-parser conformance-reference help format check test build clean commit-ready commit-light \
+.PHONY: conformance conformance-record conformance-probe conformance-parser conformance-reference help format check test build clean commit-ready commit-light \
         pre-commit-full pre-commit-light all \
         dev run cluster cluster-stop cluster-status cluster-lb cluster-lb-stop \
         test-ignored test-include-ignored test-quick test-server test-verbose \
@@ -139,6 +139,18 @@ conformance:
 # Show what Orbit returns for ORBIT_PROBE_SQL (statements separated by ;;)
 conformance-probe:
 	@cargo test -q -p orbit-integration-tests --test postgres_conformance -- --ignored --nocapture probe 2>&1 | grep -A1 "^PROBE"
+
+# Record a sqllogictest file from real PostgreSQL 18: make conformance-record IN=tests/conformance/sql/08_x.sql
+conformance-record:
+	@test -n "$(IN)" || { echo "usage: make conformance-record IN=tests/conformance/sql/NN_name.sql"; exit 2; }; \
+	docker rm -f orbit-pg18-ref >/dev/null 2>&1; \
+	docker run -d --rm --name orbit-pg18-ref -e POSTGRES_PASSWORD=pw -p 55432:5432 postgres:18 >/dev/null && \
+	until docker exec orbit-pg18-ref pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done; sleep 2; \
+	OUT=$(CURDIR)/tests/conformance/slt/$$(basename $(IN) .sql).slt; \
+	CONFORMANCE_RECORD_IN=$(abspath $(IN)) CONFORMANCE_RECORD_OUT=$$OUT \
+	ORBIT_CONFORMANCE_REFERENCE_URL="host=127.0.0.1 port=55432 user=postgres password=pw dbname=postgres" \
+	cargo test -q -p orbit-integration-tests --test postgres_conformance -- --ignored record; \
+	status=$$?; docker rm -f orbit-pg18-ref >/dev/null 2>&1; exit $$status
 
 # Where the hand-rolled parser disagrees with PostgreSQL 18's grammar (libpg_query)
 conformance-parser:

@@ -107,6 +107,34 @@ pub(crate) fn numeric_literal(n: &str) -> Option<SqlValue> {
         .or_else(|| n.parse::<f64>().ok().map(SqlValue::DoublePrecision))
 }
 
+/// Weight (in base-10000 digits, as `numeric` stores it) and leading digit group of a non-zero number.
+fn base_10000_weight(d: Decimal) -> Option<(i32, u32)> {
+    if d.is_zero() {
+        return None;
+    }
+    let text = d.abs().normalize().to_string();
+    let (int, frac) = text.split_once('.').unwrap_or((text.as_str(), ""));
+    if int != "0" {
+        let weight = (int.len() as i32 - 1) / 4;
+        let lead = int.len() - (weight as usize) * 4;
+        return int[..lead].parse().ok().map(|g| (weight, g));
+    }
+    let zeros = frac.len() - frac.trim_start_matches('0').len();
+    let start = zeros / 4 * 4;
+    let group = format!("{:0<4}", &frac[start..frac.len().min(start + 4)]);
+    group.parse().ok().map(|g| (-((zeros / 4) as i32) - 1, g))
+}
+
+/// The scale of `x / y` in PostgreSQL's `numeric` (`select_div_scale`): at least 16 significant
+/// digits, and never fewer decimals than either operand. Capped at what `Decimal` can hold.
+fn numeric_div_scale(x: Decimal, y: Decimal) -> u32 {
+    let (w1, lead1) = base_10000_weight(x).unwrap_or((0, 0));
+    let (w2, lead2) = base_10000_weight(y).unwrap_or((0, 0));
+    let qweight = w1 - w2 - i32::from(lead1 <= lead2);
+    let scale = (16 - qweight * 4).max(x.scale() as i32).max(y.scale() as i32).max(0);
+    scale.min(28) as u32
+}
+
 /// Arithmetic on two numbers, with PostgreSQL's promotion rules: integers stay integers (`int4` unless
 /// either side is wider), anything with a numeric becomes numeric, anything with a float becomes a float.
 /// `None` when either side is not a number. The error is `"[SQLSTATE] message"`.
@@ -156,7 +184,12 @@ pub(crate) fn numeric_arith(
                     if y.is_zero() {
                         return Some(div0());
                     }
-                    x.checked_div(y).map(|d| d.round_dp(16))
+                    x.checked_div(y).map(|d| {
+                        let scale = numeric_div_scale(x, y);
+                        let mut d = d.round_dp(scale);
+                        d.rescale(scale);
+                        d
+                    })
                 }
                 "%" => {
                     if y.is_zero() {
@@ -650,5 +683,23 @@ mod tests {
     fn varchar_limit_and_bad_integers_are_errors() {
         assert!(coerce(SqlValue::Text("abcd".into()), &SqlType::Varchar(Some(3))).is_err());
         assert!(coerce(SqlValue::Text("x".into()), &SqlType::Integer).is_err());
+    }
+
+    /// Every expected string was produced by PostgreSQL 18 (`SELECT a / b` on numerics).
+    #[test]
+    fn numeric_division_scale_matches_postgresql() {
+        let d = |t: &str| SqlValue::Decimal(Decimal::from_str(t).unwrap());
+        for (a, b, want) in [
+            ("7.0", "2", "3.5000000000000000"),
+            ("1.0", "3", "0.33333333333333333333"),
+            ("10000", "3.0", "3333.3333333333333333"),
+            ("100000000.0", "3", "33333333.333333333333"),
+            ("0.0001", "3", "0.000033333333333333333333"),
+            ("1", "0.0007", "1428.5714285714285714"),
+            ("7", "10.50", "0.66666666666666666667"),
+        ] {
+            let got = numeric_arith(&d(a), &d(b), "/").unwrap().unwrap();
+            assert_eq!(got.to_postgres_string(), want, "{a} / {b}");
+        }
     }
 }

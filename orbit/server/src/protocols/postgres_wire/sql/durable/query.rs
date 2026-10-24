@@ -1,6 +1,7 @@
 //! `SELECT` execution over the committed tables.
 
 use super::pg_catalog;
+use super::table_fn;
 use super::value::{canonical, cmp, group_key, oid_of_type, oid_of_value, truthy, unique_key};
 use super::{err, Row, State, Table, R};
 use crate::protocols::postgres_wire::query_engine::QueryResult;
@@ -126,7 +127,7 @@ fn walk(e: &Expression, f: &mut dyn FnMut(&Expression)) {
 
 /// Rebuild `e`, replacing any node for which `f` returns `Some`. `cx` is handed to `f` so the
 /// callback can use the runner without borrowing it.
-fn map_expr<C>(
+pub(crate) fn map_expr<C>(
     e: &Expression,
     cx: &mut C,
     f: &mut dyn FnMut(&mut C, &Expression) -> R<Option<Expression>>,
@@ -316,6 +317,9 @@ fn has_subquery(e: &Expression) -> bool {
                 x,
                 Expression::Subquery(_)
                     | Expression::Exists(_)
+                    | Expression::Any(_)
+                    | Expression::All(_)
+                    | Expression::Some(_)
                     | Expression::In {
                         list: InList::Subquery(_),
                         ..
@@ -577,6 +581,26 @@ impl<'a> Runner<'a> {
                 Expression::Exists(s) => {
                     let rel = me.select(s, Some(&outer))?;
                     Some(Expression::Literal(SqlValue::Boolean(!rel.rows.is_empty())))
+                }
+                // `x > ALL (SELECT ..)`: the subquery's first column becomes the array being compared
+                Expression::Any(inner) | Expression::All(inner) | Expression::Some(inner)
+                    if matches!(**inner, Expression::Subquery(_)) =>
+                {
+                    let Expression::Subquery(s) = &**inner else {
+                        unreachable!("guarded by the match arm")
+                    };
+                    let rel = me.select(s, Some(&outer))?;
+                    let values = rel
+                        .rows
+                        .into_iter()
+                        .map(|r| r.into_iter().next().unwrap_or(SqlValue::Null))
+                        .collect();
+                    let array = Box::new(Expression::Literal(SqlValue::Array(values)));
+                    Some(match e {
+                        Expression::All(_) => Expression::All(array),
+                        Expression::Some(_) => Expression::Some(array),
+                        _ => Expression::Any(array),
+                    })
                 }
                 Expression::Function(f) if session_function(f).is_some() => {
                     session_function(f).map(Expression::Literal)
@@ -1441,6 +1465,12 @@ impl<'a> Runner<'a> {
                     rows,
                 })
             }
+            FromClause::TableFunction {
+                function,
+                alias,
+                with_ordinality,
+                ..
+            } => self.table_function(function, alias.as_ref(), *with_ordinality, outer),
             FromClause::Join {
                 left,
                 join_type,
@@ -1448,11 +1478,148 @@ impl<'a> Runner<'a> {
                 condition,
             } => {
                 let l = self.from(left, outer)?;
+                if matches!(
+                    **right,
+                    FromClause::TableFunction { .. } | FromClause::Subquery { lateral: true, .. }
+                ) {
+                    return self.lateral_join(l, right, join_type, condition, outer);
+                }
                 let r = self.from(right, outer)?;
                 self.join(l, r, join_type, condition, outer)
             }
             _ => err("0A000", "this FROM item is not supported"),
         }
+    }
+
+    /// A function in `FROM`: a set-returning function yields its rows, any other function yields its
+    /// value as a single row. Arguments may read the outer query's columns.
+    fn table_function(
+        &mut self,
+        function: &FunctionCall,
+        alias: Option<&crate::protocols::postgres_wire::sql::ast::TableAlias>,
+        with_ordinality: bool,
+        outer: Outer,
+    ) -> R<Rel> {
+        let name = fname(function);
+        let ctx = ctx_for(&[], &[], outer);
+        let args = function
+            .args
+            .iter()
+            .map(|a| self.eval(a, &ctx))
+            .collect::<R<Vec<_>>>()?;
+        let produced = match table_fn::call(&name, &args)? {
+            Some(p) => p,
+            None => table_fn::Produced {
+                cols: vec![(name.clone(), None)],
+                rows: vec![vec![self.eval(&Expression::Function(Box::new(function.clone())), &ctx)?]],
+            },
+        };
+        let qual = alias.map_or_else(|| name.clone(), |a| a.name.to_lowercase());
+        let given = alias.and_then(|a| a.columns.as_ref());
+        let single = produced.cols.len() == 1 && !with_ordinality;
+        let mut cols: Vec<RelCol> = produced
+            .cols
+            .into_iter()
+            .enumerate()
+            .map(|(i, (cname, ty))| RelCol {
+                qual: Some(qual.clone()),
+                // `FROM generate_series(1,3) g` names the lone column g
+                name: given
+                    .and_then(|g| g.get(i))
+                    .map(|n| n.to_lowercase())
+                    .or_else(|| alias.filter(|_| single).map(|a| a.name.to_lowercase()))
+                    .unwrap_or(cname),
+                ty,
+            })
+            .collect();
+        let mut rows = produced.rows;
+        if with_ordinality {
+            cols.push(RelCol {
+                qual: Some(qual),
+                name: given
+                    .and_then(|g| g.get(cols.len()))
+                    .map_or_else(|| "ordinality".to_string(), |n| n.to_lowercase()),
+                ty: Some(SqlType::BigInt),
+            });
+            for (i, row) in rows.iter_mut().enumerate() {
+                row.push(SqlValue::BigInt(i as i64 + 1));
+            }
+        }
+        Ok(Rel {
+            cols,
+            rows: if self.describe { Vec::new() } else { rows },
+        })
+    }
+
+    /// `l JOIN LATERAL right`: the right side is evaluated once per left row, seeing that row's columns.
+    fn lateral_join(
+        &mut self,
+        l: Rel,
+        right: &FromClause,
+        jt: &JoinType,
+        cond: &JoinCondition,
+        outer: Outer,
+    ) -> R<Rel> {
+        let scope = |row: &[SqlValue]| -> HashMap<String, SqlValue> {
+            let mut map: HashMap<String, SqlValue> = HashMap::new();
+            for (c, v) in l.cols.iter().zip(row) {
+                if let Some(q) = &c.qual {
+                    map.insert(format!("{q}.{}", c.name), v.clone());
+                }
+                map.entry(c.name.clone()).or_insert_with(|| v.clone());
+            }
+            if let Some(o) = outer {
+                for (k, v) in o {
+                    map.entry(k.clone()).or_insert_with(|| v.clone());
+                }
+            }
+            map
+        };
+        let mut out = Rel::default();
+        for row in &l.rows {
+            let r = self.from(right, Some(&scope(row)))?;
+            let one = Rel {
+                cols: l.cols.clone(),
+                rows: vec![row.clone()],
+            };
+            let joined = self.join(one, r, jt, cond, outer)?;
+            out.cols = joined.cols;
+            out.rows.extend(joined.rows);
+        }
+        if l.rows.is_empty() {
+            // no left rows: still say what the columns are, by evaluating with NULL for the left side
+            let nulls = vec![SqlValue::Null; l.cols.len()];
+            let r = self.from(right, Some(&scope(&nulls)))?;
+            out.cols = l.cols.iter().cloned().chain(r.cols).collect();
+        }
+        Ok(out)
+    }
+
+    /// `l.c = r.c AND ...` for each named column (`USING (c, ..)` and `NATURAL JOIN`).
+    fn using_condition(&self, names: &[String], l: &Rel, r: &Rel) -> Option<Expression> {
+        use crate::protocols::postgres_wire::sql::ast::ColumnRef;
+        let qual = |rel: &Rel, name: &str| rel.cols.iter().find(|c| c.name == name).and_then(|c| c.qual.clone());
+        names
+            .iter()
+            .map(|n| {
+                let name = n.to_lowercase();
+                let column = |rel: &Rel| {
+                    Box::new(Expression::Column(ColumnRef {
+                        table: qual(rel, &name),
+                        name: name.clone(),
+                    }))
+                };
+                Expression::Binary {
+                    left: column(l),
+                    operator: BinaryOperator::Equal,
+                    right: column(r),
+                }
+            })
+            .reduce(|a, b| Expression::Binary {
+                left: Box::new(a),
+                operator: BinaryOperator::And,
+                right: Box::new(b),
+            })
     }
 
     fn join(
@@ -1466,41 +1633,18 @@ impl<'a> Runner<'a> {
         let cols: Vec<RelCol> = l.cols.iter().chain(r.cols.iter()).cloned().collect();
         let on: Option<Expression> = match cond {
             JoinCondition::On(e) => Some(e.clone()),
-            JoinCondition::Using(names) => names
-                .iter()
-                .map(|n| {
-                    let lq = l
-                        .cols
-                        .iter()
-                        .find(|c| c.name == n.to_lowercase())
-                        .and_then(|c| c.qual.clone());
-                    let rq = r
-                        .cols
-                        .iter()
-                        .find(|c| c.name == n.to_lowercase())
-                        .and_then(|c| c.qual.clone());
-                    Expression::Binary {
-                        left: Box::new(Expression::Column(
-                            crate::protocols::postgres_wire::sql::ast::ColumnRef {
-                                table: lq,
-                                name: n.to_lowercase(),
-                            },
-                        )),
-                        operator: BinaryOperator::Equal,
-                        right: Box::new(Expression::Column(
-                            crate::protocols::postgres_wire::sql::ast::ColumnRef {
-                                table: rq,
-                                name: n.to_lowercase(),
-                            },
-                        )),
-                    }
-                })
-                .reduce(|a, b| Expression::Binary {
-                    left: Box::new(a),
-                    operator: BinaryOperator::And,
-                    right: Box::new(b),
-                }),
-            JoinCondition::Natural => return err("0A000", "NATURAL JOIN is not supported"),
+            JoinCondition::Using(names) => self.using_condition(names, &l, &r),
+            // CROSS JOIN carries no condition; NATURAL joins on every column name the sides share
+            JoinCondition::Natural if matches!(jt, JoinType::Cross) => None,
+            JoinCondition::Natural => {
+                let shared: Vec<String> = l
+                    .cols
+                    .iter()
+                    .filter(|c| r.cols.iter().any(|rc| rc.name == c.name))
+                    .map(|c| c.name.clone())
+                    .collect();
+                self.using_condition(&shared, &l, &r)
+            }
         };
         let cross = matches!(jt, JoinType::Cross) || on.is_none();
 

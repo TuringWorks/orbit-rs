@@ -699,33 +699,6 @@ impl SqlValue {
         })
     }
 
-    /// Parse text the way PostgreSQL's input functions do (surrounding whitespace ignored).
-    /// `None` when `target_type` is not a scalar this handles.
-    fn parse_text_scalar(text: &str, target_type: &SqlType) -> Option<Result<SqlValue, String>> {
-        let t = text.trim();
-        let invalid = |name: &str| format!("invalid input syntax for type {name}: \"{text}\"");
-        Some(match target_type {
-            SqlType::SmallInt => t.parse().map(SqlValue::SmallInt).map_err(|_| invalid("smallint")),
-            SqlType::Integer => t.parse().map(SqlValue::Integer).map_err(|_| invalid("integer")),
-            SqlType::BigInt => t.parse().map(SqlValue::BigInt).map_err(|_| invalid("bigint")),
-            SqlType::Real => t.parse().map(SqlValue::Real).map_err(|_| invalid("real")),
-            SqlType::DoublePrecision => t
-                .parse()
-                .map(SqlValue::DoublePrecision)
-                .map_err(|_| invalid("double precision")),
-            SqlType::Decimal { .. } | SqlType::Numeric { .. } => t
-                .parse()
-                .map(SqlValue::Decimal)
-                .map_err(|_| invalid("numeric")),
-            SqlType::Boolean => match t.to_ascii_lowercase().as_str() {
-                "t" | "true" | "y" | "yes" | "on" | "1" => Ok(SqlValue::Boolean(true)),
-                "f" | "false" | "n" | "no" | "off" | "0" => Ok(SqlValue::Boolean(false)),
-                _ => Err(invalid("boolean")),
-            },
-            _ => return None,
-        })
-    }
-
     /// Attempt to cast this value to another SQL type
     pub fn cast_to(&self, target_type: &SqlType) -> Result<SqlValue, String> {
         if let SqlType::Custom { type_name, .. } = target_type {
@@ -733,10 +706,18 @@ impl SqlValue {
                 return self.cast_to(&builtin);
             }
         }
-        if let SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) = self {
-            if let Some(parsed) = Self::parse_text_scalar(s, target_type) {
-                return parsed;
-            }
+        if self.is_null() {
+            return Ok(SqlValue::Null);
+        }
+        // An explicit cast to a sized character type truncates (`'abc'::varchar(2)` is 'ab'); char(n)
+        // also pads. Only an INSERT into such a column rejects the overlong value.
+        if let SqlType::Char(Some(n)) | SqlType::Varchar(Some(n)) = target_type {
+            let text = self.to_postgres_string();
+            let kept: String = text.chars().take(*n as usize).collect();
+            return Ok(match target_type {
+                SqlType::Char(_) => SqlValue::Char(format!("{kept:<width$}", width = *n as usize)),
+                _ => SqlValue::Varchar(kept),
+            });
         }
         // Handle text to interval/timestamp/vector casting
         match (self, target_type) {
@@ -787,6 +768,38 @@ impl SqlValue {
             _ => {}
         }
 
+        // The storage coercion knows how every scalar type reads and prints; the error codes follow
+        // PostgreSQL's (invalid text 22P02, out of range 22003, too long 22001).
+        if matches!(
+            target_type,
+            SqlType::SmallInt
+                | SqlType::Integer
+                | SqlType::BigInt
+                | SqlType::Real
+                | SqlType::DoublePrecision
+                | SqlType::Decimal { .. }
+                | SqlType::Numeric { .. }
+                | SqlType::Boolean
+                | SqlType::Text
+                | SqlType::Char(_)
+                | SqlType::Varchar(_)
+                | SqlType::Json
+                | SqlType::Jsonb
+                | SqlType::Time { .. }
+                | SqlType::Uuid
+                | SqlType::Bytea
+        ) {
+            return super::durable::value::coerce(self.clone(), target_type).map_err(|m| {
+                let code = if m.contains("out of range") || m.contains("overflow") {
+                    "22003"
+                } else if m.starts_with("value too long") {
+                    "22001"
+                } else {
+                    "22P02"
+                };
+                format!("[{code}] {m}")
+            });
+        }
         if self.sql_type().can_cast_to(target_type) {
             match (self, target_type) {
                 (SqlValue::SmallInt(i), SqlType::Integer) => Ok(SqlValue::Integer(*i as i32)),

@@ -1,0 +1,146 @@
+# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.
+
+# Types, literals, and casts.
+
+query TTTTTT
+SELECT 1::smallint, 2::int, 3::bigint, 4.5::numeric(10,2), 5.5::real, 6.5::double precision
+----
+1 2 3 4.50 5.5 6.5
+
+query TTTTT
+SELECT '42'::int + 1, '3.14'::numeric, '2.5'::float8, 't'::boolean, 'no'::bool
+----
+43 3.14 2.5 t f
+
+query T
+SELECT 'abc'::varchar(2)
+----
+ab
+
+query T
+SELECT 'abc'::char(5) || '|'
+----
+abc|
+
+query TTTTTTT
+SELECT 10::numeric / 4, 10 / 4, 10.0 / 4.0, 10 % 3, -7 % 3, 2 ^ 10, 2.0 ^ 0.5
+----
+2.5000000000000000 2 2.5000000000000000 1 -1 1024 1.4142135623730950
+
+query TTTTTTTTTT
+SELECT 7::int4 / 2::int4, (-7)::int / 2, abs(-7), sign(-2.5), ceil(2.1), floor(-2.1), round(2.5), round(3.5), round(2.567, 2), trunc(2.99)
+----
+3 -3 7 -1 3 -3 3 4 2.57 2
+
+query TTTTTTTTT
+SELECT 1 = 1, 1 <> 2, 1 < NULL, NULL IS NULL, NULL = NULL, NULL IS NOT DISTINCT FROM NULL, true AND NULL, false AND NULL, true OR NULL
+----
+t t NULL t NULL t NULL f t
+
+query TTTT
+SELECT 'a' < 'b', 'a' < 'B', 'abc' = 'ABC', lower('ABC') = 'abc'
+----
+t t f t
+
+query TTT
+SELECT 2147483647::int, 2147483648::bigint, 9223372036854775807::bigint
+----
+2147483647 2147483648 9223372036854775807
+
+statement error (22003)
+SELECT (2147483647::int + 1)
+
+statement error (22P02)
+SELECT 'abc'::int
+
+query TTTT
+SELECT '1e3'::float8, '1.5e-2'::numeric, 'NaN'::float8, 'Infinity'::float8
+----
+1000 0.015 NaN Infinity
+
+query TTTT
+SELECT 0.1 + 0.2, 0.1::float8 + 0.2::float8, 1.0 * 3, 1.50 + 1.5
+----
+0.3 0.30000000000000004 3.0 3.00
+
+query TTTT
+SELECT date '2026-03-15', timestamp '2026-03-15 10:30:00', time '10:30:00', interval '1 day 2 hours'
+----
+2026-03-15 2026-03-15 10:30:00 10:30:00 1 day 02:00:00
+
+query TTT
+SELECT date '2026-03-15' + 10, date '2026-03-15' - date '2026-01-01', timestamp '2026-03-15 10:30:00' + interval '90 minutes'
+----
+2026-03-25 73 2026-03-15 12:00:00
+
+query TTT
+SELECT '2026-03-15'::date, '2026-03-15 10:30:00'::timestamp, '10:30'::time
+----
+2026-03-15 2026-03-15 10:30:00 10:30:00
+
+statement error (22008)
+SELECT '2026-02-30'::date
+
+query TTTT
+SELECT true::int, false::int, 1::boolean, 0::boolean
+----
+1 0 t f
+
+statement error (42883)
+SELECT 'x'::text, 'x'::text || 1, 1 || 2, 'a' || NULL
+
+query T
+SELECT '550e8400-e29b-41d4-a716-446655440000'::uuid
+----
+550e8400-e29b-41d4-a716-446655440000
+
+query TTT
+SELECT '{"a": 1}'::json, '{"a": 1}'::jsonb, '[1,2,3]'::jsonb
+----
+{"a": 1} {"a": 1} [1, 2, 3]
+
+query T
+SELECT '\x414243'::bytea
+----
+\x414243
+
+query TTTT
+SELECT ARRAY[1,2,3], ARRAY['a','b'], ARRAY[1,2,3]::text[], '{1,2,3}'::int[]
+----
+{1,2,3} {a,b} {1,2,3} {1,2,3}
+
+query TTTTTT
+SELECT pg_typeof(1), pg_typeof(1.5), pg_typeof('a'), pg_typeof(true), pg_typeof(1::bigint), pg_typeof(now()::date)
+----
+integer numeric unknown boolean bigint date
+
+query TTT
+SELECT pg_typeof(1 + 1.5), pg_typeof(1 + 1::bigint), pg_typeof(1.5 + 1::float8)
+----
+numeric bigint double precision
+
+query TTTT
+SELECT CAST(1.9 AS int), CAST(-1.9 AS int), CAST('7' AS bigint), CAST(65 AS text)
+----
+2 -2 7 65
+
+query TTT
+SELECT 5 BETWEEN 1 AND 10, 5 NOT BETWEEN 1 AND 4, 'b' BETWEEN 'a' AND 'c'
+----
+t t t
+
+query TTTTT
+SELECT 3 IN (1,2,3), 4 NOT IN (1,2,3), NULL IN (1,2), 1 IN (1, NULL), 2 NOT IN (1, NULL)
+----
+t t NULL t NULL
+
+query TT
+SELECT CASE 2 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'many' END, CASE WHEN false THEN 1 END
+----
+two NULL
+
+query TTTTT
+SELECT coalesce(NULL, 2), nullif(5, 5), nullif(5, 6), greatest(1, 5, 3), least(4, 2, 9)
+----
+2 NULL 5 5 2
+

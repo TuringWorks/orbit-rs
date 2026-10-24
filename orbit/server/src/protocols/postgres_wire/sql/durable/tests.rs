@@ -1456,7 +1456,7 @@ mod arithmetic {
         );
         assert_eq!(
             q(&e, "SELECT i / d FROM n").await,
-            vec![vec!["0.6666666666666667"]]
+            vec![vec!["0.66666666666666666667"]]
         );
         assert_eq!(
             q(&e, "SELECT f * 2, f + i, d * f FROM n").await,

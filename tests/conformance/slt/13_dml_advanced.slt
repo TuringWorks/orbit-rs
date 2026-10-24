@@ -1,0 +1,187 @@
+# Recorded from PostgreSQL 18 by `make conformance-record`; do not edit by hand.
+
+# DML: upsert, UPDATE FROM, DELETE USING, INSERT SELECT, CTE DML, MERGE, RETURNING.
+
+statement ok
+DROP TABLE IF EXISTS cf13_stock
+
+statement ok
+DROP TABLE IF EXISTS cf13_incoming
+
+statement ok
+CREATE TABLE cf13_stock (sku text PRIMARY KEY, qty int NOT NULL DEFAULT 0, note text)
+
+statement ok
+CREATE TABLE cf13_incoming (sku text, qty int)
+
+statement ok
+INSERT INTO cf13_stock VALUES ('a', 10, 'x'), ('b', 5, NULL), ('c', 0, 'z')
+
+statement ok
+INSERT INTO cf13_incoming VALUES ('a', 5), ('b', 1), ('d', 7)
+
+statement ok
+INSERT INTO cf13_stock (sku, qty) VALUES ('a', 99) ON CONFLICT (sku) DO NOTHING
+
+query TT
+SELECT sku, qty FROM cf13_stock ORDER BY sku
+----
+a 10
+b 5
+c 0
+
+statement ok
+INSERT INTO cf13_stock (sku, qty) VALUES ('a', 99) ON CONFLICT (sku) DO UPDATE SET qty = cf13_stock.qty + excluded.qty
+
+query TT
+SELECT sku, qty FROM cf13_stock ORDER BY sku
+----
+a 109
+b 5
+c 0
+
+query TT rowsort
+INSERT INTO cf13_stock (sku, qty) VALUES ('a', 1), ('e', 2) ON CONFLICT (sku) DO UPDATE SET qty = excluded.qty WHERE cf13_stock.qty > 50 RETURNING sku, qty
+----
+a 1
+e 2
+
+statement ok
+UPDATE cf13_stock s SET qty = s.qty + i.qty FROM cf13_incoming i WHERE s.sku = i.sku
+
+query TT
+SELECT sku, qty FROM cf13_stock ORDER BY sku
+----
+a 6
+b 6
+c 0
+e 2
+
+statement ok
+INSERT INTO cf13_stock (sku, qty) SELECT sku, qty FROM cf13_incoming WHERE sku NOT IN (SELECT sku FROM cf13_stock)
+
+query TT
+SELECT sku, qty FROM cf13_stock ORDER BY sku
+----
+a 6
+b 6
+c 0
+d 7
+e 2
+
+statement ok
+DELETE FROM cf13_stock s USING cf13_incoming i WHERE s.sku = i.sku AND i.qty > 6
+
+query T
+SELECT sku FROM cf13_stock ORDER BY sku
+----
+a
+b
+c
+e
+
+query TTT rowsort
+UPDATE cf13_stock SET qty = qty * 2, note = 'bumped' WHERE qty > 5 RETURNING sku, qty, note
+----
+a 12 bumped
+b 12 bumped
+
+statement ok
+UPDATE cf13_stock SET (qty, note) = (1, 'one') WHERE sku = 'c'
+
+query TTT
+SELECT sku, qty, note FROM cf13_stock WHERE sku = 'c'
+----
+c 1 one
+
+query T
+DELETE FROM cf13_stock WHERE qty = 1 RETURNING sku
+----
+c
+
+statement error (23502)
+UPDATE cf13_stock SET qty = NULL WHERE sku = 'b'
+
+statement error (23505)
+UPDATE cf13_stock SET sku = 'a' WHERE sku = 'b'
+
+statement ok
+DELETE FROM cf13_stock WHERE sku = 'zzz'
+
+statement ok
+WITH moved AS (DELETE FROM cf13_stock WHERE sku = 'e' RETURNING sku, qty) INSERT INTO cf13_incoming SELECT sku, qty FROM moved
+
+query TT
+SELECT sku, qty FROM cf13_incoming ORDER BY sku, qty
+----
+a 5
+b 1
+d 7
+e 2
+
+query T
+WITH ins AS (INSERT INTO cf13_stock VALUES ('m', 1, 'cte') RETURNING sku) SELECT count(*) FROM ins
+----
+1
+
+statement ok
+INSERT INTO cf13_stock VALUES ('only')
+
+statement error (42601)
+INSERT INTO cf13_stock VALUES ('n', 1, 'a', 'extra')
+
+statement error (42703)
+INSERT INTO cf13_stock (sku, nope) VALUES ('n', 1)
+
+statement error (23502)
+INSERT INTO cf13_stock DEFAULT VALUES
+
+query T
+INSERT INTO cf13_stock (sku) VALUES ('def') RETURNING qty
+----
+0
+
+statement ok
+MERGE INTO cf13_stock t USING cf13_incoming s ON t.sku = s.sku WHEN MATCHED THEN UPDATE SET qty = t.qty + s.qty WHEN NOT MATCHED THEN INSERT (sku, qty) VALUES (s.sku, s.qty)
+
+query TT
+SELECT sku, qty FROM cf13_stock ORDER BY sku
+----
+a 17
+b 13
+d 7
+def 0
+e 2
+m 1
+only 0
+
+statement ok
+MERGE INTO cf13_stock t USING cf13_incoming s ON t.sku = s.sku WHEN MATCHED AND s.qty > 100 THEN DELETE WHEN MATCHED THEN DO NOTHING
+
+query T
+SELECT count(*) FROM cf13_stock
+----
+7
+
+statement ok
+INSERT INTO cf13_stock SELECT 'bulk' || g, g, NULL FROM generate_series(1, 5) g
+
+query TT
+SELECT count(*), sum(qty) FROM cf13_stock WHERE sku LIKE 'bulk%'
+----
+5 15
+
+statement ok
+DELETE FROM cf13_stock WHERE sku LIKE 'bulk%'
+
+statement ok
+TRUNCATE cf13_incoming
+
+query T
+SELECT count(*) FROM cf13_incoming
+----
+0
+
+statement ok
+DROP TABLE cf13_stock, cf13_incoming
+

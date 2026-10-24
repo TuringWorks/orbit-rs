@@ -981,9 +981,10 @@ impl PostgresWireProtocol {
             {
                 return (m[1..6].to_string(), m[8..].to_string());
             }
-            return ("XX000".to_string(), m.clone());
+            return (super::sql::durable::classify_error(m).to_string(), m.clone());
         }
-        ("XX000".to_string(), e.to_string())
+        let text = e.to_string();
+        (super::sql::durable::classify_error(&text).to_string(), text)
     }
 
     /// Handle SSL request
