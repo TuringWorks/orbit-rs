@@ -1,0 +1,9 @@
+{
+  "01_select_basics.slt": 14,
+  "02_ddl_dml.slt": 8,
+  "03_constraints_errors.slt": 10,
+  "04_joins_aggregates.slt": 6,
+  "05_transactions.slt": 16,
+  "06_catalog.slt": 4,
+  "07_postgres18.slt": 8
+}

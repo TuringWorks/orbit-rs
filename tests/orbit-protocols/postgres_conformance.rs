@@ -42,7 +42,9 @@ struct PgDb {
 
 impl PgDb {
     async fn connect(url: &str, name: &'static str) -> Result<Self, tokio_postgres::Error> {
-        let (client, connection) = tokio_postgres::connect(url, NoTls).await?;
+        let (client, connection) = tokio_postgres::connect(url, NoTls).await.inspect_err(|e| {
+            eprintln!("connect to {name}: {e:?}");
+        })?;
         tokio::spawn(async move {
             let _ = connection.await;
         });
@@ -143,6 +145,23 @@ async fn run_file(url: &str, name: &'static str, file: &Path) -> FileResult {
     result
 }
 
+/// `outer: inner: innermost`, since the database's own message is several `source()`s down.
+fn error_chain(e: &(dyn std::error::Error + 'static)) -> String {
+    let mut text = e.to_string();
+    let mut next = e.source();
+    while let Some(cause) = next {
+        text.push_str(&format!(": {cause}"));
+        next = cause.source();
+    }
+    text
+}
+
+/// A failure on one line, trimmed, so the report stays readable.
+fn one_line(text: &str) -> String {
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    flat.chars().take(260).collect()
+}
+
 async fn run_corpus(url: &str, name: &'static str) -> BTreeMap<String, FileResult> {
     let mut out = BTreeMap::new();
     for file in corpus_files() {
@@ -157,12 +176,15 @@ async fn start_orbit() -> String {
     let probe = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = probe.local_addr().unwrap().port();
     drop(probe);
-    let server = orbit_server::protocols::PostgresServer::new(format!("127.0.0.1:{port}"));
+    let server = orbit_server::protocols::PostgresServer::new(format!("127.0.0.1:{port}"))
+        .with_auth(orbit_server::protocols::postgres_wire::auth::UserStore::new(), true);
     tokio::spawn(async move {
-        let _ = server.run().await;
+        if let Err(e) = server.run().await {
+            eprintln!("orbit server stopped: {e}");
+        }
     });
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    format!("host=127.0.0.1 port={port} user=test dbname=test")
+    format!("host=127.0.0.1 port={port} user=test password=test dbname=test")
 }
 
 fn write_report(target: &str, results: &BTreeMap<String, FileResult>) {
