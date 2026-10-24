@@ -1381,12 +1381,56 @@ impl SqlExecutor {
             constraints.push(constraint_schema);
         }
 
+        let mut indexes = Vec::new();
+        for column in &stmt.columns {
+            for constraint in &column.constraints {
+                let (unique, primary) = match constraint {
+                    ColumnConstraint::PrimaryKey => (true, true),
+                    ColumnConstraint::Unique => (true, false),
+                    _ => continue,
+                };
+                indexes.push(IndexSchema {
+                    name: if primary {
+                        format!("{table_name}_pkey")
+                    } else {
+                        format!("{table_name}_{}_key", column.name)
+                    },
+                    table: table_name.clone(),
+                    columns: vec![column.name.clone()],
+                    index_type: "btree".to_string(),
+                    unique,
+                    condition: None,
+                });
+            }
+        }
+        for constraint in &constraints {
+            if matches!(
+                constraint.constraint_type.as_str(),
+                "PRIMARY KEY" | "UNIQUE"
+            ) && !indexes.iter().any(|index| {
+                index.columns == constraint.columns
+                    && index.unique
+                    && index.name == constraint.name.clone().unwrap_or_default()
+            }) {
+                indexes.push(IndexSchema {
+                    name: constraint.name.clone().unwrap_or_else(|| {
+                        format!("{table_name}_{}_key", constraint.columns.join("_"))
+                    }),
+                    table: table_name.clone(),
+                    columns: constraint.columns.clone(),
+                    index_type: "btree".to_string(),
+                    unique: true,
+                    condition: None,
+                });
+            }
+        }
+
         let table_schema = TableSchema {
             name: table_name.clone(), // Use string name
             oid: next_oid,
             columns,
             constraints,
-            indexes: Vec::new(),
+            indexes,
         };
 
         // Store table schema
@@ -5352,10 +5396,7 @@ impl SqlExecutor {
     }
 
     /// Query pg_catalog.pg_index - index metadata for indexes registered on user tables.
-    async fn query_pg_index(
-        &self,
-        columns: &[String],
-    ) -> ProtocolResult<Vec<Vec<Option<String>>>> {
+    async fn query_pg_index(&self, columns: &[String]) -> ProtocolResult<Vec<Vec<Option<String>>>> {
         self.ensure_oids_assigned().await;
         let tables = self.tables.read().await;
         let mut rows = Vec::new();
@@ -5367,17 +5408,27 @@ impl SqlExecutor {
                 values.insert("indrelid", table.oid.to_string());
                 values.insert("indnatts", index.columns.len().to_string());
                 values.insert("indnkeyatts", index.columns.len().to_string());
-                values.insert("indisunique", if index.unique { "t" } else { "f" }.to_string());
+                values.insert(
+                    "indisunique",
+                    if index.unique { "t" } else { "f" }.to_string(),
+                );
                 values.insert(
                     "indisprimary",
-                    if index.name.ends_with("_pkey") { "t" } else { "f" }.to_string(),
+                    if index.name.ends_with("_pkey") {
+                        "t"
+                    } else {
+                        "f"
+                    }
+                    .to_string(),
                 );
                 values.insert("indisvalid", "t".to_string());
                 values.insert("indkey", index.columns.join(" "));
                 rows.push(
                     columns
                         .iter()
-                        .map(|column| Some(values.get(column.as_str()).cloned().unwrap_or_default()))
+                        .map(|column| {
+                            Some(values.get(column.as_str()).cloned().unwrap_or_default())
+                        })
                         .collect(),
                 );
                 index_oid += 1;
@@ -5581,7 +5632,9 @@ impl SqlExecutor {
                 rows.push(
                     columns
                         .iter()
-                        .map(|column| Some(values.get(column.as_str()).cloned().unwrap_or_default()))
+                        .map(|column| {
+                            Some(values.get(column.as_str()).cloned().unwrap_or_default())
+                        })
                         .collect(),
                 );
             }
