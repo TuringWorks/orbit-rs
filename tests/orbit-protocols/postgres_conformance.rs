@@ -34,6 +34,33 @@ fn corpus_files() -> Vec<PathBuf> {
     files
 }
 
+/// A server error with its SQLSTATE; `tokio_postgres::Error` hides both behind "db error".
+#[derive(Debug)]
+struct PgError {
+    message: String,
+    sqlstate: Option<String>,
+}
+
+impl std::fmt::Display for PgError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.sqlstate {
+            Some(code) => write!(f, "[{code}] {}", self.message),
+            None => f.write_str(&self.message),
+        }
+    }
+}
+
+impl std::error::Error for PgError {}
+
+impl From<tokio_postgres::Error> for PgError {
+    fn from(e: tokio_postgres::Error) -> Self {
+        match e.as_db_error() {
+            Some(db) => Self { message: db.message().to_owned(), sqlstate: Some(db.code().code().to_owned()) },
+            None => Self { message: format!("{e:?}"), sqlstate: None },
+        }
+    }
+}
+
 /// A PostgreSQL connection speaking the simple query protocol; every value arrives as text.
 struct PgDb {
     client: Client,
@@ -41,10 +68,11 @@ struct PgDb {
 }
 
 impl PgDb {
-    async fn connect(url: &str, name: &'static str) -> Result<Self, tokio_postgres::Error> {
+    async fn connect(url: &str, name: &'static str) -> Result<Self, PgError> {
         let (client, connection) = tokio_postgres::connect(url, NoTls).await.inspect_err(|e| {
             eprintln!("connect to {name}: {e:?}");
-        })?;
+        })
+        .map_err(PgError::from)?;
         tokio::spawn(async move {
             let _ = connection.await;
         });
@@ -54,14 +82,14 @@ impl PgDb {
 
 #[async_trait]
 impl AsyncDB for PgDb {
-    type Error = tokio_postgres::Error;
+    type Error = PgError;
     type ColumnType = DefaultColumnType;
 
     async fn run(&mut self, sql: &str) -> Result<DBOutput<Self::ColumnType>, Self::Error> {
         let mut types = vec![];
         let mut rows = vec![];
         let mut affected = 0;
-        for message in self.client.simple_query(sql).await? {
+        for message in self.client.simple_query(sql).await.map_err(PgError::from)? {
             match message {
                 SimpleQueryMessage::Row(row) => {
                     types = vec![DefaultColumnType::Any; row.len()];
@@ -83,6 +111,10 @@ impl AsyncDB for PgDb {
     }
 
     async fn shutdown(&mut self) {}
+
+    fn error_sql_state(err: &Self::Error) -> Option<String> {
+        err.sqlstate.clone()
+    }
 
     fn engine_name(&self) -> &str {
         self.name
