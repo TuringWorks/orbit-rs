@@ -90,3 +90,9 @@ path = "orbit-protocols/postgres_dql_tests.rs"
 name = "bdd"
 path = "bdd/mod.rs"
 harness = false
+
+# Cucumber BDD: transactions and savepoints (own main, own World)
+[[test]]
+name = "bdd_transactions"
+path = "bdd_transactions/mod.rs"
+harness = false

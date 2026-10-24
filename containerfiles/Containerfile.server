@@ -1,0 +1,25 @@
+# orbit-server with the durable PostgreSQL engine (RocksDB), for Symphony.
+# Build from the repository root:  docker build -f containerfiles/Containerfile.server -t orbit-server .
+FROM docker.io/library/rust:1-bookworm AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        clang cmake pkg-config libssl-dev protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/src/target \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo build --release -p orbit-server --bin orbit-server \
+    && cp target/release/orbit-server /orbit-server
+
+FROM docker.io/library/debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 tini \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r orbit && useradd -r -g orbit orbit \
+    && mkdir -p /data && chown orbit:orbit /data
+COPY --from=build /orbit-server /usr/local/bin/orbit-server
+USER orbit
+VOLUME /data
+# PostgreSQL wire, Raft, metrics
+EXPOSE 5432 7000 9091
+# Users come from ORBIT_PG_USERS=name:password,...; add --dev-mode only for throwaway runs.
+ENTRYPOINT ["tini", "--", "orbit-server", "-c", "/nonexistent.toml", "--data-dir", "/data", "--postgres-port", "5432"]
