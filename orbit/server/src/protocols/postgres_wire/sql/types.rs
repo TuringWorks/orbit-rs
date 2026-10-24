@@ -680,8 +680,64 @@ impl SqlValue {
         }
     }
 
+    /// The built-in type a `::name` / `CAST(.. AS name)` spelling stands for, if it is one of
+    /// PostgreSQL's aliases (`int`, `int4`, `float8`, `bool`, ...).
+    fn builtin_alias(type_name: &str) -> Option<SqlType> {
+        Some(match type_name.to_ascii_lowercase().as_str() {
+            "int2" | "smallint" => SqlType::SmallInt,
+            "int" | "int4" | "integer" => SqlType::Integer,
+            "int8" | "bigint" => SqlType::BigInt,
+            "float4" | "real" => SqlType::Real,
+            "float8" | "float" | "double precision" => SqlType::DoublePrecision,
+            "bool" | "boolean" => SqlType::Boolean,
+            "text" => SqlType::Text,
+            "numeric" | "decimal" => SqlType::Numeric {
+                precision: None,
+                scale: None,
+            },
+            _ => return None,
+        })
+    }
+
+    /// Parse text the way PostgreSQL's input functions do (surrounding whitespace ignored).
+    /// `None` when `target_type` is not a scalar this handles.
+    fn parse_text_scalar(text: &str, target_type: &SqlType) -> Option<Result<SqlValue, String>> {
+        let t = text.trim();
+        let invalid = |name: &str| format!("invalid input syntax for type {name}: \"{text}\"");
+        Some(match target_type {
+            SqlType::SmallInt => t.parse().map(SqlValue::SmallInt).map_err(|_| invalid("smallint")),
+            SqlType::Integer => t.parse().map(SqlValue::Integer).map_err(|_| invalid("integer")),
+            SqlType::BigInt => t.parse().map(SqlValue::BigInt).map_err(|_| invalid("bigint")),
+            SqlType::Real => t.parse().map(SqlValue::Real).map_err(|_| invalid("real")),
+            SqlType::DoublePrecision => t
+                .parse()
+                .map(SqlValue::DoublePrecision)
+                .map_err(|_| invalid("double precision")),
+            SqlType::Decimal { .. } | SqlType::Numeric { .. } => t
+                .parse()
+                .map(SqlValue::Decimal)
+                .map_err(|_| invalid("numeric")),
+            SqlType::Boolean => match t.to_ascii_lowercase().as_str() {
+                "t" | "true" | "y" | "yes" | "on" | "1" => Ok(SqlValue::Boolean(true)),
+                "f" | "false" | "n" | "no" | "off" | "0" => Ok(SqlValue::Boolean(false)),
+                _ => Err(invalid("boolean")),
+            },
+            _ => return None,
+        })
+    }
+
     /// Attempt to cast this value to another SQL type
     pub fn cast_to(&self, target_type: &SqlType) -> Result<SqlValue, String> {
+        if let SqlType::Custom { type_name, .. } = target_type {
+            if let Some(builtin) = Self::builtin_alias(type_name) {
+                return self.cast_to(&builtin);
+            }
+        }
+        if let SqlValue::Text(s) | SqlValue::Varchar(s) | SqlValue::Char(s) = self {
+            if let Some(parsed) = Self::parse_text_scalar(s, target_type) {
+                return parsed;
+            }
+        }
         // Handle text to interval/timestamp/vector casting
         match (self, target_type) {
             (SqlValue::Text(s), SqlType::Interval)

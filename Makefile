@@ -1,7 +1,7 @@
 # Orbit-RS Development Makefile
 # Common tasks for development workflow
 
-.PHONY: conformance conformance-parser conformance-reference help format check test build clean commit-ready commit-light \
+.PHONY: conformance conformance-probe conformance-parser conformance-reference help format check test build clean commit-ready commit-light \
         pre-commit-full pre-commit-light all \
         dev run cluster cluster-stop cluster-status cluster-lb cluster-lb-stop \
         test-ignored test-include-ignored test-quick test-server test-verbose \
@@ -135,6 +135,10 @@ cluster-lb-stop:
 # PostgreSQL conformance: measure Orbit against the sqllogictest corpus (ratchet vs tests/conformance/baseline.json)
 conformance:
 	cargo test -p orbit-integration-tests --test postgres_conformance -- --ignored --nocapture orbit_does_not_regress
+
+# Show what Orbit returns for ORBIT_PROBE_SQL (statements separated by ;;)
+conformance-probe:
+	@cargo test -q -p orbit-integration-tests --test postgres_conformance -- --ignored --nocapture probe 2>&1 | grep -A1 "^PROBE"
 
 # Where the hand-rolled parser disagrees with PostgreSQL 18's grammar (libpg_query)
 conformance-parser:

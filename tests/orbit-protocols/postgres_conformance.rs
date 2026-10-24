@@ -378,3 +378,26 @@ fn hand_rolled_parser_agrees_with_postgres_grammar() {
         disagreements.len()
     );
 }
+
+/// Prints what Orbit returns for each `;;`-separated statement in `ORBIT_PROBE_SQL`, for working out
+/// why a corpus record fails: `ORBIT_PROBE_SQL="SELECT 7.0 / 2" make conformance-probe`.
+#[tokio::test]
+#[ignore = "debugging aid; run with `make conformance-probe`"]
+async fn probe() {
+    let Ok(sql) = std::env::var("ORBIT_PROBE_SQL") else {
+        panic!("set ORBIT_PROBE_SQL");
+    };
+    let url = match std::env::var("ORBIT_CONFORMANCE_URL") {
+        Ok(url) => url,
+        Err(_) => start_orbit().await,
+    };
+    let mut db = PgDb::connect(&url, "orbit").await.expect("connect");
+    for statement in sql.split(";;").map(str::trim).filter(|s| !s.is_empty()) {
+        match db.run(statement).await {
+            Ok(DBOutput::Rows { rows, .. }) => println!("PROBE {statement}\n  => {rows:?}"),
+            Ok(DBOutput::StatementComplete(n)) => println!("PROBE {statement}\n  => ok ({n})"),
+            Ok(_) => println!("PROBE {statement}\n  => ok"),
+            Err(e) => println!("PROBE {statement}\n  => ERROR {e}"),
+        }
+    }
+}

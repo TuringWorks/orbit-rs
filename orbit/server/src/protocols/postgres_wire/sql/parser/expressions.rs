@@ -153,6 +153,27 @@ impl ExpressionParser {
         let mut left = self.parse_additive_expression(tokens, pos)?;
 
         while *pos < tokens.len() {
+            // `x [NOT] BETWEEN low AND high`: the bounds bind tighter than AND, so the AND is ours.
+            let not_between = matches!(&tokens[*pos], Token::Not)
+                && matches!(tokens.get(*pos + 1), Some(Token::Between));
+            if not_between || matches!(&tokens[*pos], Token::Between) {
+                *pos += if not_between { 2 } else { 1 };
+                let low = self.parse_additive_expression(tokens, pos)?;
+                if !matches!(tokens.get(*pos), Some(Token::And)) {
+                    return Err(crate::protocols::error::ProtocolError::ParseError(
+                        "Expected AND in BETWEEN".to_string(),
+                    ));
+                }
+                *pos += 1;
+                let high = self.parse_additive_expression(tokens, pos)?;
+                left = Expression::Between {
+                    expr: Box::new(left),
+                    low: Box::new(low),
+                    high: Box::new(high),
+                    negated: not_between,
+                };
+                continue;
+            }
             // `x NOT IN (...)` puts NOT before IN
             let not_in = matches!(&tokens[*pos], Token::Not)
                 && *pos + 1 < tokens.len()
@@ -1014,6 +1035,31 @@ impl ExpressionParser {
     }
 
     /// Parse a function call with proper DISTINCT and FILTER support
+    /// SQL-standard `SUBSTRING(s FROM start [FOR len])` and `SUBSTRING(s FOR len)`, appended to
+    /// `args` as the `substring(s, start[, len])` call the evaluator takes (`FOR len` alone starts at 1).
+    fn parse_substring_from_for(
+        &mut self,
+        tokens: &[Token],
+        pos: &mut usize,
+        args: &mut Vec<Expression>,
+    ) -> ProtocolResult<()> {
+        let has_from = matches!(tokens.get(*pos), Some(Token::From));
+        if has_from {
+            *pos += 1;
+            args.push(self.parse_expression(tokens, pos)?);
+        }
+        if matches!(tokens.get(*pos), Some(Token::For)) {
+            *pos += 1;
+            if !has_from {
+                args.push(Expression::Literal(
+                    crate::protocols::postgres_wire::sql::types::SqlValue::Integer(1),
+                ));
+            }
+            args.push(self.parse_expression(tokens, pos)?);
+        }
+        Ok(())
+    }
+
     fn parse_function_call(
         &mut self,
         tokens: &[Token],
@@ -1055,6 +1101,10 @@ impl ExpressionParser {
                     }));
                 } else {
                     args.push(self.parse_expression(tokens, pos)?);
+                }
+
+                if func_name.eq_ignore_ascii_case("SUBSTRING") && args.len() == 1 {
+                    self.parse_substring_from_for(tokens, pos, &mut args)?;
                 }
 
                 // Check for ORDER BY inside function args (e.g. GROUP_CONCAT, string_agg)

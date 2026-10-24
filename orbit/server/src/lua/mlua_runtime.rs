@@ -41,7 +41,7 @@ impl MluaRuntime {
     /// Create a new Lua runtime with custom configuration
     pub fn with_config(config: SecurityConfig) -> Self {
         Self {
-            validator: ScriptValidator::new(config.limits.memory_limit),
+        validator: ScriptValidator::default(),
             config,
             function_registry: Arc::new(RwLock::new(HashMap::new())),
             script_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -465,7 +465,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // This test is slow (tests timeout by running infinite loop)
     async fn test_timeout_enforcement() {
         let config = SecurityConfig::redis_default()
             .limits
@@ -493,7 +492,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Validation not working correctly with spawn_blocking
     async fn test_script_too_large() {
         let runtime = MluaRuntime::new();
         let large_script = "x".repeat(2 * 1024 * 1024); // 2MB
@@ -533,8 +531,27 @@ fn eval_lua_blocking(
     // Set memory limit
     set_memory_limit(&lua, config.limits.memory_limit)?;
 
-    // Setup execution guard
+    // Setup execution guard and interrupt long-running scripts at the Lua VM
+    // instruction boundary. This keeps timeout enforcement effective even
+    // when the script never yields back to Tokio.
     let guard = ExecutionGuard::new(&config.limits);
+    let timeout_ms = config.limits.timeout.as_millis() as u64;
+    lua.set_hook(
+        mlua::HookTriggers::new().every_nth_instruction(1_000),
+        move |_lua, _debug| {
+            guard
+                .should_continue()
+                .map(|()| mlua::VmState::Continue)
+                .map_err(|error| {
+                    mlua::Error::RuntimeError(match error {
+                        LuaError::Timeout { .. } => {
+                            format!("Lua execution timed out after {timeout_ms}ms")
+                        }
+                        other => other.to_string(),
+                    })
+                })
+        },
+    );
 
     // Inject KEYS and ARGV into globals
     let globals = lua.globals();
@@ -564,9 +581,14 @@ fn eval_lua_blocking(
     guard.should_continue()?;
 
     // Execute chunk synchronously
-    let mlua_result: MluaValue = chunk
-        .call(())
-        .map_err(|e| LuaError::RuntimeError(e.to_string()))?;
+    let mlua_result: MluaValue = chunk.call(()).map_err(|e| {
+        let message = e.to_string();
+        if message.contains("Lua execution timed out") {
+            LuaError::Timeout { timeout_ms }
+        } else {
+            LuaError::RuntimeError(message)
+        }
+    })?;
 
     // Convert result to LuaValue
     mlua_value_to_lua(&mlua_result)
