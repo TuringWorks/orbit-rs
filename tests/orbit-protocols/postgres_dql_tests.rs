@@ -229,6 +229,53 @@ async fn test_select_single_row() {
 }
 
 #[tokio::test]
+async fn test_information_schema_lists_tables_and_columns() {
+    let executor = SqlExecutor::new().await.unwrap();
+
+    executor
+        .execute("CREATE TABLE catalog_test (id INTEGER, name TEXT)")
+        .await
+        .unwrap();
+
+    let tables = executor
+        .execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+        .await
+        .unwrap();
+    match tables {
+        ExecutionResult::Select {
+            rows, row_count, ..
+        } => {
+            assert_eq!(row_count, 1);
+            assert_eq!(rows, vec![vec![Some("catalog_test".to_string())]]);
+        }
+        _ => panic!("Expected Select result"),
+    }
+
+    let columns = executor
+        .execute(
+            "SELECT column_name, data_type FROM information_schema.columns \
+             WHERE table_name = 'catalog_test' ORDER BY ordinal_position",
+        )
+        .await
+        .unwrap();
+    match columns {
+        ExecutionResult::Select {
+            rows, row_count, ..
+        } => {
+            assert_eq!(row_count, 2);
+            assert_eq!(
+                rows,
+                vec![
+                    vec![Some("id".to_string()), Some("integer".to_string())],
+                    vec![Some("name".to_string()), Some("text".to_string())],
+                ]
+            );
+        }
+        _ => panic!("Expected Select result"),
+    }
+}
+
+#[tokio::test]
 async fn test_select_all_types() {
     let executor = SqlExecutor::new().await.unwrap();
 

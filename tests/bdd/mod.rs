@@ -146,6 +146,32 @@ async fn then_operation_succeeds(world: &mut OrbitWorld) -> Result<(), Box<dyn s
     Ok(())
 }
 
+#[then(expr = "the operation should affect {int} rows")]
+async fn then_operation_affects_rows(
+    world: &mut OrbitWorld,
+    expected_count: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let result = world
+        .last_result
+        .as_ref()
+        .ok_or("No operation result available")?;
+    let actual_count = result
+        .get("count")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or("Operation result does not contain a numeric count")?
+        as usize;
+
+    if actual_count != expected_count {
+        return Err(format!(
+            "Expected operation to affect {} rows but it affected {}",
+            expected_count, actual_count
+        )
+        .into());
+    }
+
+    Ok(())
+}
+
 #[then(expr = "the operation should fail")]
 async fn then_operation_fails(world: &mut OrbitWorld) -> Result<(), Box<dyn std::error::Error>> {
     if world.last_error.is_none() {
@@ -197,21 +223,52 @@ async fn then_result_has_rows(
     Ok(())
 }
 
+#[then(expr = "the first result should contain {string}")]
+async fn then_first_result_contains(
+    world: &mut OrbitWorld,
+    expected: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let result = world.last_result.as_ref().ok_or("No result available")?;
+    let first_row = result
+        .get("rows")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|rows| rows.first())
+        .and_then(serde_json::Value::as_array)
+        .ok_or("Result does not contain a first row")?;
+
+    if !first_row
+        .iter()
+        .any(|value| value.as_str() == Some(expected.as_str()))
+    {
+        return Err(format!("First result does not contain '{}'", expected).into());
+    }
+
+    Ok(())
+}
+
 #[then(expr = "the table {string} should have {int} rows")]
 async fn then_table_has_rows(
     world: &mut OrbitWorld,
     table_name: String,
     expected_count: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sql = format!("SELECT COUNT(*) as count FROM {}", table_name);
+    let sql = format!("SELECT * FROM {}", table_name);
     world.execute_sql(&sql).await?;
+
+    if let Some(error) = &world.last_error {
+        return Err(format!("Failed to count rows in {}: {}", table_name, error).into());
+    }
 
     let result = world
         .last_result
         .as_ref()
         .ok_or("No query result available")?;
 
-    let actual_count = extract_table_count(result)?;
+    let actual_count = result
+        .get("rows")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("Result does not contain a rows array")?
+        .len();
 
     if actual_count != expected_count {
         return Err(format!(
@@ -222,29 +279,6 @@ async fn then_table_has_rows(
     }
 
     Ok(())
-}
-
-/// Extract the count value from a table count query result
-fn extract_table_count(result: &serde_json::Value) -> Result<usize, Box<dyn std::error::Error>> {
-    let rows = result
-        .get("rows")
-        .ok_or("Result does not contain rows field")?;
-
-    let rows_array = rows.as_array().ok_or("Rows field is not an array")?;
-
-    let first_row = rows_array.first().ok_or("No rows in result")?;
-
-    let row_array = first_row.as_array().ok_or("First row is not an array")?;
-
-    let count_value = row_array.first().ok_or("No count value in first row")?;
-
-    let count_str = count_value.as_str().ok_or("Count value is not a string")?;
-
-    let count = count_str
-        .parse::<usize>()
-        .map_err(|e| format!("Failed to parse count: {}", e))?;
-
-    Ok(count)
 }
 
 // Vector similarity search step definitions

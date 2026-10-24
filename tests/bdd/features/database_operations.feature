@@ -34,6 +34,7 @@ Feature: Database Operations
       | 2  | Bob   | 200.00  |
     And I execute the SQL statement "UPDATE accounts SET balance = 150.00 WHERE id = 1"
     Then the operation should succeed
+    And the operation should affect 1 rows
 
   Scenario: Delete data from a table
     Given I have a table "temp_data" with columns "id INTEGER, value TEXT"
@@ -44,6 +45,7 @@ Feature: Database Operations
       | 3  | keep   |
     And I execute the SQL statement "DELETE FROM temp_data WHERE value = 'delete'"
     Then the operation should succeed
+    And the operation should affect 1 rows
     And the table "temp_data" should have 2 rows
 
   Scenario: Join operations
@@ -76,3 +78,10 @@ Feature: Database Operations
     Given I have a table "existing_table" with columns "id INTEGER"
     When I execute the SQL statement "CREATE TABLE IF NOT EXISTS existing_table (id INTEGER)"
     Then the operation should succeed
+
+  Scenario: Information schema exposes created tables
+    Given I have a table "catalog_test" with columns "id INTEGER, name TEXT"
+    When I execute the SQL statement "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
+    Then the operation should succeed
+    And the result should have 1 rows
+    And the first result should contain "catalog_test"

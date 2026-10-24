@@ -336,6 +336,30 @@ async fn test_update_with_integer_comparison() {
     }
 }
 
+#[tokio::test]
+async fn test_update_non_existent_row_reports_zero_count() {
+    let executor = SqlExecutor::new().await.unwrap();
+
+    executor
+        .execute("CREATE TABLE users (id INTEGER, name TEXT)")
+        .await
+        .unwrap();
+    executor
+        .execute("INSERT INTO users VALUES (1, 'Alice')")
+        .await
+        .unwrap();
+
+    let result = executor
+        .execute("UPDATE users SET name = 'Nobody' WHERE id = 99")
+        .await
+        .unwrap();
+
+    match result {
+        ExecutionResult::Update { count, .. } => assert_eq!(count, 0),
+        _ => panic!("Expected Update result"),
+    }
+}
+
 // ============================================================================
 // DELETE Tests
 // ============================================================================
